@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="theme-color" content="#000000">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cosmic Assault">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+
+    <title>Cosmic Assault</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Immediate orientation check script -->
+    <script>
+        (function () {
+            // Function to apply orientation message style
+            function applyOrientationMessage() {
+                const orientationMessage = document.getElementById('orientation-message');
+                const gameCanvas = document.getElementById('gameCanvas');
+                if (orientationMessage) orientationMessage.style.display = 'flex';
+                if (gameCanvas) gameCanvas.style.display = 'none';
+                // Optionally hide mobile controls here if needed
+                const mobileControls = document.querySelector('.mobile-controls');
+                if(mobileControls) mobileControls.style.display = 'none';
+            }
+
+            // Check user agent *once*
+            const isLikelyMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if (isLikelyMobile) {
+                // Check initial orientation
+                if (window.innerHeight > window.innerWidth) {
+                    // Portrait mode on mobile: Show message immediately or on DOMContentLoaded
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyOrientationMessage, { once: true });
+                    } else {
+                        applyOrientationMessage();
+                    }
+                }
+            }
+        })();
+    </script>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas> <!-- Dimensions set in JS -->
+
+    <!-- Modals and Overlays -->
+    <div id="orientation-message">
+        <div class="message-content">
+            <div class="rotate-icon">⟳</div>
+            <p>Please rotate your device to landscape mode</p>
+        </div>
+    </div>
+
+    <div id="fullscreen-prompt">
+        <div class="modal-content">
+            <h3>Enhanced Gaming Experience</h3>
+            <p>Play in full screen mode?</p>
+            <div class="modal-buttons">
+                <button id="enter-fullscreen">Yes, Full Screen</button>
+                <button id="skip-fullscreen">No, Thanks</button>
+            </div>
+        </div>
+    </div>
+
+     <div id="ios-homescreen-modal" style="display: none;"> <!-- Initially hidden -->
+        <div class="modal-content">
+            <h3>iOS Fullscreen Mode</h3>
+            <p>For the best experience, add to Home Screen:</p>
+            <ol>
+                <li>Tap Share [<span style="font-size: 20px;">⬆️</span>]</li>
+                <li>Scroll down, tap "Add to Home Screen"</li>
+                <li>Tap "Add"</li>
+            </ol>
+            <button id="close-ios-modal">Continue Without</button>
+        </div>
+    </div>
+
+    <!-- UI Buttons -->
+    <button id="exit-fullscreen">✕</button>
+    <button id="sound-toggle">🔊</button>
+    <button id="fullscreen-toggle">⛶</button>
+    <button id="restart-button">RESTART</button>
+    <button id="toggle-mobile">Test Mobile Controls</button> <!-- Display controlled by JS -->
+
+    <!-- Mobile Controls Container -->
+    <div class="mobile-controls" style="display: none;"> <!-- Display controlled by JS -->
+        <div id="hybrid-joystick-container">
+            <div id="joystick-base">
+                <div id="direction-indicators">
+                    <div id="up-arrow">▲</div>
+                    <div id="down-arrow">▼</div>
+                    <div id="left-arrow">◀</div>
+                    <div id="right-arrow">▶</div>
+                </div>
+                <div id="joystick-handle"></div>
+            </div>
+        </div>
+        <div id="fire-button">FIRE</div>
+    </div>
+
+    <!-- Link the main game script as a module -->
+    <script type="module" src="game.js"></script>
+
+</body>
+</html>

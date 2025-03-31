@@ -1,0 +1,62 @@
+//=============================================================================
+// GAME CONSTANTS & CONFIGURATION
+//=============================================================================
+export const SHIP_SIZE = 20;
+export const MAX_PARTICLES = 150; // Limit particles for performance
+export const SHIP_COLOR = "#39FF14"; // Neon Green
+export const PROJECTILE_COLOR = "#FF00FF"; // Magenta
+export const ASTEROID_COLOR = "#4080FF"; // Blue
+export const TEXT_COLOR = "#39FF14";
+export const BACKGROUND_COLOR = "#000000";
+export const PARTICLE_COLORS = ["#FF00FF", "#39FF14", "#FFFFFF"]; // Example particle colors
+export const DEFAULT_FONT = "'Courier New', Courier, monospace";
+
+export const POWERUP_TYPES = ["doubleShot", "rapidFire", "shield", "fieldBomb"];
+export const POWERUP_COLORS = {
+    doubleShot: "#FF00FF", // Magenta
+    rapidFire: "#FFFF00", // Yellow
+    shield: "#00FFFF", // Cyan
+    fieldBomb: "#FF5500"  // Orange
+};
+export const POWERUP_CONFIG = {
+    doubleShot: { duration: 10, color: POWERUP_COLORS.doubleShot },
+    rapidFire: { duration: 10, color: POWERUP_COLORS.rapidFire },
+    shield: { duration: 15, color: POWERUP_COLORS.shield },
+    fieldBomb: { duration: 0, color: POWERUP_COLORS.fieldBomb } // Instant
+};
+
+export const basePowerupChance = 0.15;
+export const levelReduction = 0.02;
+export const minPowerupChance = 0.05;
+
+// Effects configuration (centralized)
+export const EFFECTS = {
+    explosion: { baseSize: 30, color: ASTEROID_COLOR, speed: 100, shake: 0.5, sound: 'explosion' },
+    powerup: { baseSize: 20, color: '#FFFF00', speed: 50, shake: 0.2, sound: 'powerup' },
+    fieldBomb: { baseSize: 100, color: POWERUP_COLORS.fieldBomb, speed: 200, shake: 1.0, sound: 'nuke' },
+    shieldHit: { baseSize: 20, color: POWERUP_COLORS.shield, speed: 80, shake: 0.3, sound: 'explosion' } // Added for shield hit
+};
+
+// Notification configuration (centralized)
+export const NOTIFICATIONS = {
+    levelUp: (level, multiplier) => ({ main: `LEVEL ${level}!`, sub: `SCORE MULTIPLIER: ${multiplier.toFixed(1)}x`, color: '#FFFF00', duration: 2 }),
+    bonusRound: (multiplier) => ({ main: 'BONUS ROUND!', sub: `${multiplier}X POINTS!`, color: '#FFFF00', duration: 2 }),
+    dangerZone: () => ({ main: 'DANGER ZONE!', color: '#FF0000', duration: 2 }),
+    powerupCollected: (type) => ({ main: type.toUpperCase() + '!', color: POWERUP_COLORS[type] || '#FFFFFF', duration: 1.5 }),
+    meteorShowerIncoming: () => ({ main: 'METEOR SHOWER INCOMING!', color: '#FF0000', duration: 2 }),
+    meteorShowerEnded: () => ({ main: 'METEOR SHOWER ENDED', color: '#FFFF00', duration: 1.5 }),
+    bonusRoundEnded: () => ({ main: 'BONUS ROUND ENDED', color: '#FFFF00', duration: 1.5 }),
+    weaponUpgrade: (level) => ({ main: level === 3 ? 'MAXIMUM FIREPOWER!' : 'WEAPON UPGRADED!', color: SHIP_COLOR, duration: 1.5 }),
+    gravityWell: () => ({ main: "GRAVITY WELL", color: "#FF00FF", duration: 2 }),
+    repulsionField: () => ({ main: "REPULSION FIELD", color: "#00FFFF", duration: 2 }),
+    fieldBombDetonation: () => ({ main: "FIELD BOMB!", color: POWERUP_COLORS.fieldBomb, duration: 2 }),
+    newHighScore: () => ({ main: "NEW HIGH SCORE!", color: "#FFFF00", duration: 3 }),
+    bonusPoints: (points) => ({ main: `+${points}`, color: "#FFFF00", duration: 1 }),
+    fullscreenError: () => ({ main: "Fullscreen Failed", color: "#FF0000", duration: 1.5 }) // Added for fullscreen error
+};
+
+// Level thresholds (can be adjusted for balancing)
+export const levelThresholds = [0, 5000, 15000, 30000, 50000, 75000, 100000]; // Normal thresholds
+// export const testLevelThresholds = [0, 500, 1500, 3000, 5000, 7500, 10000]; // For testing
+
+export const testMode = false; // Set to true to enable test features like mobile controls on desktop
