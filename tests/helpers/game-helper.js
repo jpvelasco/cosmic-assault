@@ -227,6 +227,18 @@ async function screenshotCanvas(page, name) {
   await canvas.screenshot({ path: `./screenshots/${name}.png` });
 }
 
+/**
+ * Dismiss the fullscreen prompt if visible
+ * @param {import('@playwright/test').Page} page
+ */
+async function dismissFullscreenPrompt(page) {
+  const skipButton = page.locator('#skip-fullscreen');
+  if (await skipButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await skipButton.click();
+    await page.waitForTimeout(200);
+  }
+}
+
 module.exports = {
   waitForGameReady,
   getGameState,
@@ -245,5 +257,6 @@ module.exports = {
   waitForState,
   waitForCondition,
   playForDuration,
-  screenshotCanvas
+  screenshotCanvas,
+  dismissFullscreenPrompt
 };

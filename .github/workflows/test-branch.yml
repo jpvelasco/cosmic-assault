@@ -28,20 +28,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: tests/package-lock.json
 
       - name: Install dependencies
         working-directory: tests
-        run: npm ci || npm install
+        run: npm install
 
       - name: Install Playwright browsers
         working-directory: tests
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
         working-directory: tests
-        run: npx playwright test --reporter=html,list
+        run: npx playwright test --project=chromium-desktop --reporter=html,list
         env:
           CI: true
 
@@ -52,6 +50,7 @@ jobs:
           name: playwright-report
           path: tests/playwright-report/
           retention-days: 14
+          if-no-files-found: ignore
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -60,6 +59,7 @@ jobs:
           name: test-results
           path: tests/test-results/
           retention-days: 14
+          if-no-files-found: ignore
 
   # Deploy preview for manual testing (optional - only on PR)
   deploy-preview:

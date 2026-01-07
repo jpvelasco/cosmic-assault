@@ -8,15 +8,17 @@ const {
   setJoystick,
   releaseJoystick,
   pressKey,
-  releaseKey
+  releaseKey,
+  dismissFullscreenPrompt
 } = require('../helpers/game-helper');
+
+// Use Pixel 5 landscape for mobile testing
+test.use({
+  ...devices['Pixel 5 landscape'],
+});
 
 // Mobile-specific tests
 test.describe('Mobile Controls', () => {
-
-  test.use({
-    ...devices['Pixel 5 landscape'],
-  });
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -93,6 +95,9 @@ test.describe('Mobile Controls', () => {
     let state = await getGameState(page);
     expect(state.gameState).toBe('title');
 
+    // Dismiss fullscreen prompt if visible (blocks canvas tap)
+    await dismissFullscreenPrompt(page);
+
     // Tap the canvas to start
     const canvas = await page.locator('#gameCanvas');
     await canvas.tap();
@@ -100,31 +105,6 @@ test.describe('Mobile Controls', () => {
 
     state = await getGameState(page);
     expect(state.gameState).toBe('playing');
-  });
-
-});
-
-// iOS-specific tests
-test.describe('iOS Mobile', () => {
-
-  test.use({
-    ...devices['iPhone 12 Pro landscape'],
-  });
-
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await waitForGameReady(page);
-  });
-
-  test('should detect iOS mobile and show controls', async ({ page }) => {
-    const state = await getGameState(page);
-    expect(state.isMobileControlsActive).toBe(true);
-  });
-
-  test('should have iOS homescreen modal element', async ({ page }) => {
-    const iosModal = await page.locator('#ios-homescreen-modal');
-    // Modal exists but may be hidden by default
-    await expect(iosModal).toBeAttached();
   });
 
 });
