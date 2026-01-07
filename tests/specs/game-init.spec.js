@@ -50,7 +50,8 @@ test.describe('Game Initialization', () => {
 
   test('should expose test API with correct version', async ({ page }) => {
     const version = await page.evaluate(() => window.__COSMIC_ASSAULT_TEST_API__.version);
-    expect(version).toBe('1.0.0');
+    // Version 2.0.0 = modular architecture
+    expect(version).toBe('2.0.0');
   });
 
   test('should have correct powerup types configured', async ({ page }) => {
