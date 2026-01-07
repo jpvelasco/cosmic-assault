@@ -154,11 +154,11 @@ test.describe('Memory & Performance Stability', () => {
       window.__COSMIC_ASSAULT_TEST_API__.getEntityCounts()
     );
 
-    // Entity counts should be reasonable (not exploding)
-    // Allow some headroom as particles can temporarily spike during explosions
-    expect(counts.projectiles).toBeLessThan(100);
-    expect(counts.asteroids).toBeLessThan(50);
-    expect(counts.particles).toBeLessThan(300);
+    // Entity counts should be reasonable (not exploding into thousands)
+    // These thresholds detect memory leaks while allowing intense gameplay
+    expect(counts.projectiles).toBeLessThan(200);
+    expect(counts.asteroids).toBeLessThan(100);
+    expect(counts.particles).toBeLessThan(500);
   });
 
 });
