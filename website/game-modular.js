@@ -21,10 +21,45 @@ window.addEventListener('DOMContentLoaded', () => {
     // Start game loop
     game.start();
 
+    // Debug overlay for keyboard diagnostics
+    let debugMode = false;
+    const debugOverlay = document.createElement('div');
+    debugOverlay.id = 'debug-overlay';
+    debugOverlay.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(0,0,0,0.8);color:#39ff14;font-family:monospace;font-size:12px;padding:10px;border:1px solid #39ff14;z-index:10000;display:none;min-width:200px;';
+    document.body.appendChild(debugOverlay);
+
+    // Update debug display
+    function updateDebugOverlay() {
+        if (!debugMode) return;
+        const inputState = game.input.getState();
+        const keys = inputState.keys;
+        const activeKeys = Object.entries(keys).filter(([k, v]) => v).map(([k]) => k);
+        debugOverlay.innerHTML = `
+            <div><b>KEY DEBUG (Press D to hide)</b></div>
+            <div>Active keys: ${activeKeys.length > 0 ? activeKeys.join(', ') : 'none'}</div>
+            <div>---</div>
+            <div>Space: ${keys[' '] ? '✓' : '✗'}</div>
+            <div>ArrowLeft: ${keys['ArrowLeft'] ? '✓' : '✗'}</div>
+            <div>ArrowRight: ${keys['ArrowRight'] ? '✓' : '✗'}</div>
+            <div>ArrowUp: ${keys['ArrowUp'] ? '✓' : '✗'}</div>
+            <div>---</div>
+            <div>Joystick: ${inputState.joystickActive ? 'ACTIVE' : 'off'}</div>
+        `;
+        requestAnimationFrame(updateDebugOverlay);
+    }
+
     // Handle keyboard events for title/game over screens
     window.addEventListener('keydown', (e) => {
         const key = e.key.toUpperCase();
         const state = game.state.gameState;
+
+        // Toggle debug mode with 'D'
+        if (key === 'D' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            debugMode = !debugMode;
+            debugOverlay.style.display = debugMode ? 'block' : 'none';
+            if (debugMode) updateDebugOverlay();
+            return;
+        }
 
         // Start game from title
         if (state === 'title' && !e.metaKey && !e.ctrlKey && !e.altKey && key !== 'F5' && key !== 'F12') {
