@@ -83,8 +83,8 @@ export class Player extends Entity {
             this._handleKeyboardInput(deltaTime, input.keys);
         }
 
-        // Shooting
-        if (input.keys[' '] && this.shootTimer <= 0 && onShoot) {
+        // Shooting (Space or Shift to fire)
+        if (this.isFireKeyPressed(input.keys) && this.shootTimer <= 0 && onShoot) {
             this._shoot(onShoot);
         }
 
@@ -128,18 +128,28 @@ export class Player extends Entity {
      * @private
      */
     _handleKeyboardInput(deltaTime, keys) {
-        if (keys["ArrowLeft"]) {
+        // Support both Arrow keys and WASD
+        if (keys["ArrowLeft"] || keys["a"] || keys["A"]) {
             this.angle -= this.turnSpeed * deltaTime;
         }
-        if (keys["ArrowRight"]) {
+        if (keys["ArrowRight"] || keys["d"] || keys["D"]) {
             this.angle += this.turnSpeed * deltaTime;
         }
-        if (keys["ArrowUp"]) {
+        if (keys["ArrowUp"] || keys["w"] || keys["W"]) {
             this.thrusting = true;
             this.vx += Math.cos(this.angle) * this.thrustPower * deltaTime;
             this.vy += Math.sin(this.angle) * this.thrustPower * deltaTime;
         }
         this.currentJoystickDistance = 0;
+    }
+
+    /**
+     * Check if fire key is pressed (Space or Shift)
+     * @param {Object} keys
+     * @returns {boolean}
+     */
+    isFireKeyPressed(keys) {
+        return keys[' '] || keys['Shift'];
     }
 
     /**

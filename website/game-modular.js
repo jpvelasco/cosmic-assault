@@ -34,14 +34,17 @@ window.addEventListener('DOMContentLoaded', () => {
         const inputState = game.input.getState();
         const keys = inputState.keys;
         const activeKeys = Object.entries(keys).filter(([k, v]) => v).map(([k]) => k);
+        const firePressed = keys[' '] || keys['Shift'];
+        const leftPressed = keys['ArrowLeft'] || keys['a'] || keys['A'];
+        const rightPressed = keys['ArrowRight'] || keys['d'] || keys['D'];
+        const upPressed = keys['ArrowUp'] || keys['w'] || keys['W'];
         debugOverlay.innerHTML = `
-            <div><b>KEY DEBUG (Press D to hide)</b></div>
-            <div>Active keys: ${activeKeys.length > 0 ? activeKeys.join(', ') : 'none'}</div>
-            <div>---</div>
-            <div>Space: ${keys[' '] ? '✓' : '✗'}</div>
-            <div>ArrowLeft: ${keys['ArrowLeft'] ? '✓' : '✗'}</div>
-            <div>ArrowRight: ${keys['ArrowRight'] ? '✓' : '✗'}</div>
-            <div>ArrowUp: ${keys['ArrowUp'] ? '✓' : '✗'}</div>
+            <div><b>KEY DEBUG (D to hide)</b></div>
+            <div>---ARROWS or WASD---</div>
+            <div>Turn Left (←/A): ${leftPressed ? '✓' : '✗'}</div>
+            <div>Turn Right (→/D): ${rightPressed ? '✓' : '✗'}</div>
+            <div>Thrust (↑/W): ${upPressed ? '✓' : '✗'}</div>
+            <div>Fire (Space/Shift): ${firePressed ? '✓' : '✗'}</div>
             <div>---</div>
             <div>Joystick: ${inputState.joystickActive ? 'ACTIVE' : 'off'}</div>
         `;
