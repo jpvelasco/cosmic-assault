@@ -11,6 +11,9 @@ module.exports = defineConfig({
   // Run tests in parallel
   fullyParallel: true,
 
+  // Global timeout for each test
+  timeout: 60000,
+
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
 

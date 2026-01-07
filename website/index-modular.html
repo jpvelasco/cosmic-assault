@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="theme-color" content="#000000">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cosmic Assault">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+
+    <title>Cosmic Assault (Modular)</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Immediate orientation check script -->
+    <script>
+        (function () {
+            function applyOrientationMessage() {
+                const orientationMessage = document.getElementById('orientation-message');
+                const gameCanvas = document.getElementById('gameCanvas');
+                if (orientationMessage) orientationMessage.style.display = 'flex';
+                if (gameCanvas) gameCanvas.style.display = 'none';
+                const mobileControls = document.querySelector('.mobile-controls');
+                if(mobileControls) mobileControls.style.display = 'none';
+            }
+
+            const isLikelyMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if (isLikelyMobile) {
+                if (window.innerHeight > window.innerWidth) {
+                    if (document.readyState === 'loading') {
+                        document.addEventListener('DOMContentLoaded', applyOrientationMessage, { once: true });
+                    } else {
+                        applyOrientationMessage();
+                    }
+                }
+            }
+        })();
+    </script>
+</head>
+
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Modals and Overlays -->
+    <div id="orientation-message">
+        <div class="message-content">
+            <div class="rotate-icon">⟳</div>
+            <p>Please rotate your device to landscape mode</p>
+        </div>
+    </div>
+
+    <div id="fullscreen-prompt">
+        <div class="modal-content">
+            <h3>Enhanced Gaming Experience</h3>
+            <p>Play in full screen mode?</p>
+            <div class="modal-buttons">
+                <button id="enter-fullscreen">Yes, Full Screen</button>
+                <button id="skip-fullscreen">No, Thanks</button>
+            </div>
+        </div>
+    </div>
+
+     <div id="ios-homescreen-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>iOS Fullscreen Mode</h3>
+            <p>For the best experience, add to Home Screen:</p>
+            <ol>
+                <li>Tap Share [<span style="font-size: 20px;">⬆️</span>]</li>
+                <li>Scroll down, tap "Add to Home Screen"</li>
+                <li>Tap "Add"</li>
+            </ol>
+            <button id="close-ios-modal">Continue Without</button>
+        </div>
+    </div>
+
+    <!-- UI Buttons -->
+    <button id="exit-fullscreen">✕</button>
+    <button id="sound-toggle">🔊</button>
+    <button id="fullscreen-toggle">⛶</button>
+    <button id="restart-button">RESTART</button>
+    <button id="toggle-mobile">Test Mobile Controls</button>
+
+    <!-- Mobile Controls Container -->
+    <div class="mobile-controls" style="display: none;">
+        <div id="hybrid-joystick-container">
+            <div id="joystick-base">
+                <div id="direction-indicators">
+                    <div id="up-arrow">▲</div>
+                    <div id="down-arrow">▼</div>
+                    <div id="left-arrow">◀</div>
+                    <div id="right-arrow">▶</div>
+                </div>
+                <div id="joystick-handle"></div>
+            </div>
+        </div>
+        <div id="fire-button">FIRE</div>
+    </div>
+
+    <!-- Version indicator for testing -->
+    <div id="version-indicator" style="position: fixed; bottom: 5px; left: 5px; font-size: 10px; color: rgba(57, 255, 20, 0.5); font-family: monospace; z-index: 9999;">
+        MODULAR v2.0
+    </div>
+
+    <!-- Link the MODULAR game script -->
+    <script type="module" src="game-modular.js"></script>
+
+</body>
+</html>
