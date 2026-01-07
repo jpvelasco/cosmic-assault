@@ -2689,3 +2689,163 @@ function handleKeyUp(e) {
     keys[e.key] = false;
     keys[e.key.toUpperCase()] = false;
 }
+
+//=============================================================================
+// TEST API (Exposed for automated testing - does not affect gameplay)
+//=============================================================================
+
+/**
+ * Test API for automated testing with Playwright or similar tools.
+ * Provides read-only access to game state and methods to simulate input.
+ * This API is intentionally minimal and non-invasive.
+ */
+if (typeof window !== 'undefined') {
+    window.__COSMIC_ASSAULT_TEST_API__ = {
+        // Version for test compatibility checking
+        version: '1.0.0',
+
+        // Read-only state accessors
+        getState: () => ({
+            gameState,
+            score,
+            lives,
+            gameLevel,
+            scoreMultiplier,
+            weaponLevel,
+            highScore,
+            meteorShowerActive,
+            bonusRoundActive,
+            isMobileControlsActive,
+            activePowerups: { ...activePowerups },
+            powerupTimers: { ...powerupTimers }
+        }),
+
+        getPlayer: () => player ? {
+            x: player.x,
+            y: player.y,
+            angle: player.angle,
+            vx: player.vx,
+            vy: player.vy,
+            alive: player.alive,
+            invulnerable: player.invulnerable,
+            shielded: player.shielded,
+            weaponCountMultiplier: player.weaponCountMultiplier,
+            fireRateMultiplier: player.fireRateMultiplier
+        } : null,
+
+        getEntityCounts: () => ({
+            asteroids: asteroids.length,
+            projectiles: projectiles.length,
+            particles: particles.length,
+            powerups: powerups.length,
+            gravityFields: gravityFields.length,
+            dangerZones: dangerZones.length,
+            bonusTargets: bonusTargets.length
+        }),
+
+        getAsteroids: () => asteroids.map(a => ({
+            x: a.x,
+            y: a.y,
+            size: a.size,
+            radius: a.radius,
+            isMeteor: a.isMeteor
+        })),
+
+        getPowerups: () => powerups.map(p => ({
+            x: p.x,
+            y: p.y,
+            type: p.type,
+            lifespan: p.lifespan
+        })),
+
+        // Canvas dimensions
+        getCanvasDimensions: () => ({ width, height }),
+
+        // Input simulation (mimics keyboard/touch without changing game logic)
+        simulateKeyDown: (key) => {
+            keys[key] = true;
+        },
+
+        simulateKeyUp: (key) => {
+            keys[key] = false;
+        },
+
+        simulateKeyPress: (key, durationMs = 100) => {
+            keys[key] = true;
+            setTimeout(() => { keys[key] = false; }, durationMs);
+        },
+
+        // Joystick simulation for mobile testing
+        simulateJoystick: (angle, distance) => {
+            joystickActive = true;
+            joystickAngle = angle;
+            joystickDistance = distance;
+        },
+
+        releaseJoystick: () => {
+            joystickActive = false;
+            joystickAngle = 0;
+            joystickDistance = 0;
+        },
+
+        // Game flow helpers
+        startGame: () => {
+            if (gameState === 'title' || gameState === 'gameOver') {
+                startGame();
+            }
+        },
+
+        // Wait for game state (returns promise)
+        waitForState: (targetState, timeoutMs = 5000) => {
+            return new Promise((resolve, reject) => {
+                const startTime = Date.now();
+                const check = () => {
+                    if (gameState === targetState) {
+                        resolve(gameState);
+                    } else if (Date.now() - startTime > timeoutMs) {
+                        reject(new Error(`Timeout waiting for state: ${targetState}`));
+                    } else {
+                        requestAnimationFrame(check);
+                    }
+                };
+                check();
+            });
+        },
+
+        // Wait for condition (returns promise)
+        waitForCondition: (conditionFn, timeoutMs = 5000) => {
+            return new Promise((resolve, reject) => {
+                const startTime = Date.now();
+                const check = () => {
+                    try {
+                        if (conditionFn()) {
+                            resolve(true);
+                        } else if (Date.now() - startTime > timeoutMs) {
+                            reject(new Error('Timeout waiting for condition'));
+                        } else {
+                            requestAnimationFrame(check);
+                        }
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+                check();
+            });
+        },
+
+        // Configuration constants for test assertions
+        getConfig: () => ({
+            SHIP_SIZE,
+            POWERUP_TYPES: [...POWERUP_TYPES],
+            POWERUP_CONFIG: { ...POWERUP_CONFIG },
+            levelThresholds: [...levelThresholds]
+        }),
+
+        // Check if game is ready (canvas initialized, etc.)
+        isReady: () => !!(canvas && ctx && gameState)
+    };
+
+    // Signal that test API is available
+    window.__COSMIC_ASSAULT_TEST_API_READY__ = true;
+    console.log('[Cosmic Assault] Test API loaded (v1.0.0)');
+}
