@@ -29,6 +29,12 @@ export class InputSystem {
         // Callbacks
         this.onStartGame = null;
         this.onRestartGame = null;
+
+        // Ghosting detection
+        this.ghostingDetected = false;
+        this.ghostingCallback = null;
+        this._lastKeyAttempt = null;
+        this._ghostingCheckTimeout = null;
     }
 
     /**
@@ -92,6 +98,65 @@ export class InputSystem {
         if (e.key === ' ') {
             e.preventDefault();
         }
+
+        // Ghosting detection: check if user is trying problematic combos
+        this._checkForGhosting(e.key);
+    }
+
+    /**
+     * Check for keyboard ghosting
+     * @param {string} keyPressed - The key that was just pressed
+     * @private
+     */
+    _checkForGhosting(keyPressed) {
+        // Skip if already detected or dismissed
+        if (this.ghostingDetected) return;
+
+        // Check if using arrow keys (not WASD which usually doesn't ghost)
+        const arrowUp = this.keys['ArrowUp'];
+        const arrowLeft = this.keys['ArrowLeft'];
+        const arrowRight = this.keys['ArrowRight'];
+        const space = this.keys[' '];
+
+        // Detect the problematic combo: 2 arrows pressed, trying to add space
+        if (keyPressed === ' ' && (arrowUp && arrowLeft) || (arrowUp && arrowRight)) {
+            // Set up a delayed check - if space doesn't register in 50ms, it's ghosting
+            this._lastKeyAttempt = ' ';
+            clearTimeout(this._ghostingCheckTimeout);
+            this._ghostingCheckTimeout = setTimeout(() => {
+                // If space still isn't registered but arrows are, that's ghosting
+                if (!this.keys[' '] && this.keys['ArrowUp'] && (this.keys['ArrowLeft'] || this.keys['ArrowRight'])) {
+                    this._triggerGhostingWarning();
+                }
+            }, 100);
+        }
+    }
+
+    /**
+     * Trigger ghosting warning callback
+     * @private
+     */
+    _triggerGhostingWarning() {
+        if (this.ghostingDetected) return;
+        this.ghostingDetected = true;
+        if (this.ghostingCallback) {
+            this.ghostingCallback();
+        }
+    }
+
+    /**
+     * Set callback for ghosting detection
+     * @param {Function} callback
+     */
+    onGhostingDetected(callback) {
+        this.ghostingCallback = callback;
+    }
+
+    /**
+     * Reset ghosting detection (for testing)
+     */
+    resetGhostingDetection() {
+        this.ghostingDetected = false;
     }
 
     /**
