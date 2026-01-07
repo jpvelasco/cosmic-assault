@@ -92,6 +92,68 @@ test.describe('AI Stress Testing', () => {
     expect(hasErrors).toBeFalsy();
   });
 
+  test('AI key combo mode - systematic input testing', async ({ page }) => {
+    test.slow();
+
+    const ai = new AIPlayer(page, {
+      strategy: 'KEY_COMBO',
+      reactionTime: 100 // Moderate speed to observe each combo
+    });
+
+    // Track rotation changes for each combo
+    const rotationData = [];
+    let lastAngle = 0;
+    let sampleCount = 0;
+
+    const sampleInterval = setInterval(async () => {
+      try {
+        const player = await page.evaluate(() =>
+          window.__COSMIC_ASSAULT_TEST_API__.getPlayer()
+        );
+        if (player && player.alive) {
+          const angleDiff = player.angle - lastAngle;
+          rotationData.push({
+            sample: sampleCount++,
+            angle: player.angle,
+            angleDiff,
+            vx: player.vx,
+            vy: player.vy
+          });
+          lastAngle = player.angle;
+        }
+      } catch (e) {
+        // Page may have navigated
+      }
+    }, 500);
+
+    const report = await ai.play(60000); // 60 seconds to cover all combos
+    clearInterval(sampleInterval);
+
+    console.log('[AI Report - Key Combo]', report);
+    console.log('[Rotation samples]', rotationData.length);
+
+    // Verify game survived
+    const state = await getGameState(page);
+    expect(['playing', 'gameOver']).toContain(state.gameState);
+
+    // AI should have cycled through all 12 combos (10 decisions each = 120 decisions)
+    expect(report.decisions).toBeGreaterThan(100);
+
+    // Check that rotation occurred in both directions
+    const leftTurns = rotationData.filter(d => d.angleDiff < -0.01).length;
+    const rightTurns = rotationData.filter(d => d.angleDiff > 0.01).length;
+
+    console.log(`[Turn Analysis] Left turns: ${leftTurns}, Right turns: ${rightTurns}`);
+
+    // Both left and right turning should have occurred
+    expect(leftTurns).toBeGreaterThan(0);
+    expect(rightTurns).toBeGreaterThan(0);
+
+    // Check that movement occurred
+    const hasMovement = rotationData.some(d => Math.abs(d.vx) > 0.1 || Math.abs(d.vy) > 0.1);
+    expect(hasMovement).toBe(true);
+  });
+
 });
 
 test.describe('AI Extended Sessions', () => {

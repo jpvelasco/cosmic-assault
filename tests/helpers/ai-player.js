@@ -248,6 +248,9 @@ class AIPlayer {
       case 'CHAOS':
         decision = this.chaosStrategy(player, canvas);
         break;
+      case 'KEY_COMBO':
+        decision = this.keyComboStrategy(player, canvas);
+        break;
       default:
         decision = this.aggressiveStrategy(player, threats, bestPowerup, bestTarget, canvas);
     }
@@ -398,6 +401,35 @@ class AIPlayer {
       decision.turnRight = !decision.turnLeft;
       decision.shoot = true;
     }
+
+    if (decision.shoot) this.stats.shots++;
+    return decision;
+  }
+
+  /**
+   * Key combo tester strategy - systematically tests all key combinations
+   * Cycles through: shoot+left, shoot+right, shoot+thrust, all combos, etc.
+   */
+  keyComboStrategy(player, canvas) {
+    // Cycle through different key combinations
+    const combos = [
+      { shoot: true, turnLeft: true, turnRight: false, thrust: false, reason: 'shoot+left' },
+      { shoot: true, turnLeft: false, turnRight: true, thrust: false, reason: 'shoot+right' },
+      { shoot: true, turnLeft: false, turnRight: false, thrust: true, reason: 'shoot+thrust' },
+      { shoot: true, turnLeft: true, turnRight: false, thrust: true, reason: 'shoot+left+thrust' },
+      { shoot: true, turnLeft: false, turnRight: true, thrust: true, reason: 'shoot+right+thrust' },
+      { shoot: false, turnLeft: true, turnRight: false, thrust: true, reason: 'left+thrust' },
+      { shoot: false, turnLeft: false, turnRight: true, thrust: true, reason: 'right+thrust' },
+      { shoot: false, turnLeft: true, turnRight: false, thrust: false, reason: 'left only' },
+      { shoot: false, turnLeft: false, turnRight: true, thrust: false, reason: 'right only' },
+      { shoot: false, turnLeft: false, turnRight: false, thrust: true, reason: 'thrust only' },
+      { shoot: true, turnLeft: false, turnRight: false, thrust: false, reason: 'shoot only' },
+      { shoot: false, turnLeft: false, turnRight: false, thrust: false, reason: 'no input' },
+    ];
+
+    // Each combo runs for ~10 decisions before switching
+    const comboIndex = Math.floor(this.stats.decisions / 10) % combos.length;
+    const decision = { ...combos[comboIndex] };
 
     if (decision.shoot) this.stats.shots++;
     return decision;
