@@ -11,30 +11,25 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
 
-    <title>Cosmic Assault</title>
+    <title>Cosmic Assault (Modular)</title>
     <link rel="stylesheet" href="style.css">
 
     <!-- Immediate orientation check script -->
     <script>
         (function () {
-            // Function to apply orientation message style
             function applyOrientationMessage() {
                 const orientationMessage = document.getElementById('orientation-message');
                 const gameCanvas = document.getElementById('gameCanvas');
                 if (orientationMessage) orientationMessage.style.display = 'flex';
                 if (gameCanvas) gameCanvas.style.display = 'none';
-                // Optionally hide mobile controls here if needed
                 const mobileControls = document.querySelector('.mobile-controls');
                 if(mobileControls) mobileControls.style.display = 'none';
             }
 
-            // Check user agent *once*
             const isLikelyMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
             if (isLikelyMobile) {
-                // Check initial orientation
                 if (window.innerHeight > window.innerWidth) {
-                    // Portrait mode on mobile: Show message immediately or on DOMContentLoaded
                     if (document.readyState === 'loading') {
                         document.addEventListener('DOMContentLoaded', applyOrientationMessage, { once: true });
                     } else {
@@ -47,7 +42,7 @@
 </head>
 
 <body>
-    <canvas id="gameCanvas"></canvas> <!-- Dimensions set in JS -->
+    <canvas id="gameCanvas"></canvas>
 
     <!-- Modals and Overlays -->
     <div id="orientation-message">
@@ -68,7 +63,7 @@
         </div>
     </div>
 
-     <div id="ios-homescreen-modal" style="display: none;"> <!-- Initially hidden -->
+     <div id="ios-homescreen-modal" style="display: none;">
         <div class="modal-content">
             <h3>iOS Fullscreen Mode</h3>
             <p>For the best experience, add to Home Screen:</p>
@@ -86,10 +81,10 @@
     <button id="sound-toggle">🔊</button>
     <button id="fullscreen-toggle">⛶</button>
     <button id="restart-button">RESTART</button>
-    <button id="toggle-mobile">Test Mobile Controls</button> <!-- Display controlled by JS -->
+    <button id="toggle-mobile">Test Mobile Controls</button>
 
     <!-- Mobile Controls Container -->
-    <div class="mobile-controls" style="display: none;"> <!-- Display controlled by JS -->
+    <div class="mobile-controls" style="display: none;">
         <div id="hybrid-joystick-container">
             <div id="joystick-base">
                 <div id="direction-indicators">
@@ -104,7 +99,12 @@
         <div id="fire-button">FIRE</div>
     </div>
 
-    <!-- Link the main game script (modular architecture) -->
+    <!-- Version indicator for testing -->
+    <div id="version-indicator" style="position: fixed; bottom: 5px; left: 5px; font-size: 10px; color: rgba(57, 255, 20, 0.5); font-family: monospace; z-index: 9999;">
+        MODULAR v2.0
+    </div>
+
+    <!-- Link the MODULAR game script -->
     <script type="module" src="game-modular.js"></script>
 
 </body>

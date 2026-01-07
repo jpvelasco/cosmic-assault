@@ -1,0 +1,14 @@
+# Netlify configuration for branch preview deployments
+# Main site stays on GitHub Pages, Netlify is for testing branches
+
+[build]
+  publish = "website"
+  command = "echo 'Static site, no build needed'"
+
+# Branch deploy settings
+[context.branch-deploy]
+  command = "echo 'Branch preview deploy'"
+
+# Preview settings for PRs
+[context.deploy-preview]
+  command = "echo 'PR preview deploy'"
