@@ -94,10 +94,15 @@ export class Game {
         window.addEventListener('resize', () => this._handleResize());
         window.addEventListener('orientationchange', () => this._handleOrientationChange());
 
-        // Show/hide mobile controls
+        // Show/hide mobile controls and check orientation
         const mobileControlsEl = document.querySelector('.mobile-controls');
         if (mobileControlsEl) {
             mobileControlsEl.style.display = this.isMobile ? 'block' : 'none';
+        }
+
+        // Initial orientation check for mobile
+        if (this.isMobile) {
+            this._checkOrientation();
         }
 
         // Expose test API
@@ -992,7 +997,51 @@ export class Game {
      * @private
      */
     _handleOrientationChange() {
-        // Could pause game in portrait, etc.
+        // Delay to let the browser update dimensions
+        setTimeout(() => this._checkOrientation(), 100);
+    }
+
+    /**
+     * Check and handle orientation for mobile devices
+     * @private
+     */
+    _checkOrientation() {
+        const orientationMessageEl = document.getElementById('orientation-message');
+        const mobileControlsEl = document.querySelector('.mobile-controls');
+
+        if (!orientationMessageEl || !this.canvas) return;
+
+        if (this.isMobile) {
+            const isPortrait = window.innerHeight > window.innerWidth;
+
+            // Show/hide orientation message
+            orientationMessageEl.style.display = isPortrait ? 'flex' : 'none';
+
+            // Show/hide canvas
+            this.canvas.style.display = isPortrait ? 'none' : 'block';
+
+            // Show/hide mobile controls
+            if (mobileControlsEl) {
+                mobileControlsEl.style.display = isPortrait ? 'none' : 'block';
+            }
+
+            // Pause game if switching to portrait while playing
+            if (isPortrait && this.state.gameState === 'playing') {
+                this._previousGameState = this.state.gameState;
+                this.state.gameState = 'paused';
+            }
+
+            // Resume game if switching back to landscape
+            if (!isPortrait && this.state.gameState === 'paused' && this._previousGameState === 'playing') {
+                this.state.gameState = 'playing';
+                this._previousGameState = null;
+            }
+
+            // Resize canvas when switching to landscape
+            if (!isPortrait) {
+                this._resizeCanvas();
+            }
+        }
     }
 
     /**
