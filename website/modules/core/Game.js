@@ -636,9 +636,15 @@ export class Game {
         if (isGameOver) {
             this.state.player.alive = false;
             this.state.gameState = 'gameOver';
-            this.audio.play('gameover');
-            this.state.checkHighScore();
+            const isNewHighScore = this.state.checkHighScore();
             this.state.saveHighScore();
+
+            // Play different sound for new high score
+            if (isNewHighScore && this.state.score > 0) {
+                this.audio.play('highscore');
+            } else {
+                this.audio.play('gameover');
+            }
         } else {
             this.state.player.respawn(this.state.width, this.state.height);
             this.audio.play('explosion');
