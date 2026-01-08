@@ -14,16 +14,47 @@ import { EFFECTS, NOTIFICATIONS, MAX_PARTICLES, POWERUP_COLORS } from '../core/c
 export class EffectsSystem {
     constructor() {
         this.screenShake = 0;
+        this.hitFlash = 0; // 0-1, fades quickly
+        this.hitFlashColor = '#FFFFFF';
     }
 
     /**
-     * Update effects (screen shake decay)
+     * Update effects (screen shake and hit flash decay)
      * @param {number} deltaTime
      */
     update(deltaTime) {
         if (this.screenShake > 0) {
             this.screenShake = Math.max(0, this.screenShake - deltaTime * 4);
         }
+        if (this.hitFlash > 0) {
+            this.hitFlash = Math.max(0, this.hitFlash - deltaTime * 8);
+        }
+    }
+
+    /**
+     * Trigger hit flash effect
+     * @param {number} intensity - 0 to 1
+     * @param {string} color - Flash color (default white)
+     */
+    triggerHitFlash(intensity = 0.5, color = '#FF0000') {
+        this.hitFlash = Math.min(1, intensity);
+        this.hitFlashColor = color;
+    }
+
+    /**
+     * Draw hit flash overlay
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} width
+     * @param {number} height
+     */
+    drawHitFlash(ctx, width, height) {
+        if (this.hitFlash <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = this.hitFlash * 0.3;
+        ctx.fillStyle = this.hitFlashColor;
+        ctx.fillRect(0, 0, width, height);
+        ctx.restore();
     }
 
     /**
@@ -176,5 +207,6 @@ export class EffectsSystem {
      */
     reset() {
         this.screenShake = 0;
+        this.hitFlash = 0;
     }
 }

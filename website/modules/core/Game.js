@@ -287,6 +287,9 @@ export class Game {
         if (shake > 0 && state.gameState === 'playing') {
             ctx.restore();
         }
+
+        // Draw hit flash overlay (on top of everything)
+        this.effects.drawHitFlash(ctx, width, height);
     }
 
     /**
@@ -627,6 +630,7 @@ export class Game {
         if (this.state.player.invulnerable) return;
 
         this.effects.addScreenShake(0.8);
+        this.effects.triggerHitFlash(0.6, '#FF0000');
         const isGameOver = this.state.loseLife();
 
         if (isGameOver) {
