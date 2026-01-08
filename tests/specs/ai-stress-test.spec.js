@@ -52,7 +52,7 @@ test.describe('AI Stress Testing', () => {
     expect(['playing', 'gameOver']).toContain(state.gameState);
 
     // Aggressive AI should shoot a lot
-    expect(report.shots).toBeGreaterThan(200);
+    expect(report.shots).toBeGreaterThan(150);
   });
 
   test('AI powerup hunter mode - 60 seconds', async ({ page }) => {

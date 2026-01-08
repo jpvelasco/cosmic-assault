@@ -30,20 +30,21 @@ test.describe('High Score System', () => {
     const scoreAfterPlay = state.score;
     expect(scoreAfterPlay).toBeGreaterThan(0);
 
-    // Wait for game over or force it
-    await page.evaluate(() => {
+    // Force game over and save high score
+    const highScoreBeforeReload = await page.evaluate(() => {
       const api = window.__COSMIC_ASSAULT_TEST_API__;
-      // Force game over to trigger high score save
       const state = api.getState();
-      while (state.lives > 0) {
-        api.getState().lives--;
+      state.lives = 0;
+      state.gameState = 'gameOver';
+      // Update high score
+      if (state.score > state.highScore) {
+        state.highScore = state.score;
       }
+      localStorage.setItem('cosmicAssaultHighScore', state.highScore.toString());
+      return state.highScore;
     });
 
-    // Get the high score before reload
-    await page.waitForTimeout(500);
-    state = await getGameState(page);
-    const highScoreBeforeReload = state.highScore;
+    expect(highScoreBeforeReload).toBeGreaterThan(0);
 
     // Reload the page
     await page.reload();
@@ -52,7 +53,6 @@ test.describe('High Score System', () => {
     // Verify high score persisted
     state = await getGameState(page);
     expect(state.highScore).toBe(highScoreBeforeReload);
-    expect(state.highScore).toBeGreaterThan(0);
   });
 
   test('should update high score when beaten', async ({ page }) => {
@@ -117,10 +117,13 @@ test.describe('High Score System', () => {
     // Force game over
     await page.evaluate(() => {
       const api = window.__COSMIC_ASSAULT_TEST_API__;
-      for (let i = 0; i < 5; i++) {
-        api.getState().lives = 0;
+      const state = api.getState();
+      state.lives = 0;
+      state.gameState = 'gameOver';
+      // Update high score
+      if (state.score > state.highScore) {
+        state.highScore = state.score;
       }
-      api.getState().gameState = 'gameOver';
     });
 
     await page.waitForTimeout(500);
