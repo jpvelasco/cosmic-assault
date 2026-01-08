@@ -22,6 +22,7 @@ import { Player } from '../entities/Player.js';
 import { Asteroid } from '../entities/Asteroid.js';
 import { Projectile } from '../entities/Projectile.js';
 import { Particle } from '../entities/Particle.js';
+import { GravityField } from '../entities/GravityField.js';
 
 import { CollisionSystem } from '../systems/CollisionSystem.js';
 import { SpawningSystem } from '../systems/SpawningSystem.js';
@@ -244,11 +245,53 @@ export class Game {
     _applyGravityFields(deltaTime) {
         this.state.gravityFields.forEach(field => {
             if (this.state.player && this.state.player.alive) {
-                field.applyGravity(this.state.player, deltaTime);
+                const effect = field.applyGravity(this.state.player, deltaTime);
+                // Create visual feedback particles when player is affected
+                if (effect && Math.random() < 0.3) {
+                    this._createGravityParticle(effect, this.state.player);
+                }
             }
             this.state.projectiles.forEach(p => field.applyGravity(p, deltaTime));
             this.state.asteroids.forEach(a => field.applyGravity(a, deltaTime));
         });
+    }
+
+    /**
+     * Create a particle showing gravity effect on player
+     * @param {Object} effect - Effect info from gravity field
+     * @param {Object} player - Player entity
+     * @private
+     */
+    _createGravityParticle(effect, player) {
+        const color = effect.isPull ? '#FF00FF' : '#00FFFF'; // Magenta for pull, cyan for push
+
+        if (effect.isPull) {
+            // Pull: particles fly from player towards field
+            const offsetX = (Math.random() - 0.5) * 20;
+            const offsetY = (Math.random() - 0.5) * 20;
+            this.state.particles.push(new Particle(
+                player.x + offsetX,
+                player.y + offsetY,
+                effect.dirX * 150,  // Fly towards field
+                effect.dirY * 150,
+                2 + Math.random() * 2,
+                color,
+                0.4 + Math.random() * 0.3
+            ));
+        } else {
+            // Push: particles fly from field towards player (showing repulsion)
+            const offsetX = (Math.random() - 0.5) * 20;
+            const offsetY = (Math.random() - 0.5) * 20;
+            this.state.particles.push(new Particle(
+                player.x + offsetX,
+                player.y + offsetY,
+                -effect.dirX * 150, // Fly away from field
+                -effect.dirY * 150,
+                2 + Math.random() * 2,
+                color,
+                0.4 + Math.random() * 0.3
+            ));
+        }
     }
 
     /**
@@ -1070,6 +1113,16 @@ export class Game {
                 getEntityCounts: () => this.state.getEntityCounts(),
                 getAsteroids: () => this.state.asteroids.map(a => ({ x: a.x, y: a.y, size: a.size, radius: a.radius, isMeteor: a.isMeteor })),
                 getPowerups: () => this.state.powerups.map(p => ({ x: p.x, y: p.y, type: p.type, lifespan: p.lifespan })),
+                getGravityFields: () => this.state.gravityFields.map(f => ({
+                    x: f.x, y: f.y, radius: f.radius, strength: f.strength,
+                    active: f.active, lifespan: f.lifespan, isPull: f.strength > 0
+                })),
+                spawnGravityField: (x, y, radius = 150, strength = 1) => {
+                    const field = new GravityField(x, y, radius, strength);
+                    this.state.gravityFields.push(field);
+                    return { x: field.x, y: field.y, radius: field.radius, strength: field.strength };
+                },
+                setGameLevel: (level) => { this.state.gameLevel = level; },
                 getCanvasDimensions: () => ({ width: this.state.width, height: this.state.height }),
                 simulateKeyDown: (key) => this.input.simulateKeyDown(key),
                 simulateKeyUp: (key) => this.input.simulateKeyUp(key),

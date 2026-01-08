@@ -24,9 +24,10 @@ export class GravityField extends LifespanEntity {
      * Apply gravitational force to an entity
      * @param {Object} entity - Entity with x, y, vx, vy properties
      * @param {number} deltaTime
+     * @returns {Object|null} Effect info if gravity was applied, null otherwise
      */
     applyGravity(entity, deltaTime) {
-        if (!this.active) return;
+        if (!this.active) return null;
 
         const dx = this.x - entity.x;
         const dy = this.y - entity.y;
@@ -37,12 +38,23 @@ export class GravityField extends LifespanEntity {
             const distance = Math.sqrt(distSq);
             // Force falls off quadratically with distance from edge
             const falloff = Math.pow(1 - (distance / this.radius), 2);
-            const baseForce = 2500;
+            const baseForce = 8000; // Increased from 2500 for more noticeable effect
             const forceMagnitude = this.strength * falloff * baseForce * deltaTime / distance;
 
             entity.vx += (dx / distance) * forceMagnitude;
             entity.vy += (dy / distance) * forceMagnitude;
+
+            // Return info for visual feedback
+            return {
+                isPull: this.strength > 0,
+                fieldX: this.x,
+                fieldY: this.y,
+                strength: Math.abs(forceMagnitude),
+                dirX: dx / distance,
+                dirY: dy / distance
+            };
         }
+        return null;
     }
 
     /**
