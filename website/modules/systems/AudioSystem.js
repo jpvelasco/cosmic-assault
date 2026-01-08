@@ -72,11 +72,24 @@ const SOUND_DEFINITIONS = {
     highscore: {
         oscType: 'triangle',
         freq1: 523,
-        freq2: 1046,
-        gainVal: 0.35,
-        decay: 0.4,
+        freq2: 1568,
+        gainVal: 0.4,
+        decay: 0.8,
         freqDecay: 'linear',
         volDecay: 'linear'
+    },
+    thrust: {
+        oscType: 'sawtooth',
+        freq1: 80,
+        freq2: 60,
+        gainVal: 0.08,
+        decay: 0.15,
+        freqDecay: 'linear',
+        volDecay: 'linear',
+        useNoise: true,
+        noiseDuration: 0.1,
+        noiseGain: 0.05,
+        noiseDelay: 0
     }
 };
 

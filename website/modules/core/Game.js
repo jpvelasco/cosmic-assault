@@ -287,6 +287,9 @@ export class Game {
         if (shake > 0 && state.gameState === 'playing') {
             ctx.restore();
         }
+
+        // Draw hit flash overlay (on top of everything)
+        this.effects.drawHitFlash(ctx, width, height);
     }
 
     /**
@@ -627,14 +630,21 @@ export class Game {
         if (this.state.player.invulnerable) return;
 
         this.effects.addScreenShake(0.8);
+        this.effects.triggerHitFlash(0.6, '#FF0000');
         const isGameOver = this.state.loseLife();
 
         if (isGameOver) {
             this.state.player.alive = false;
             this.state.gameState = 'gameOver';
-            this.audio.play('gameover');
-            this.state.checkHighScore();
+            const isNewHighScore = this.state.checkHighScore();
             this.state.saveHighScore();
+
+            // Play different sound for new high score
+            if (isNewHighScore && this.state.score > 0) {
+                this.audio.play('highscore');
+            } else {
+                this.audio.play('gameover');
+            }
         } else {
             this.state.player.respawn(this.state.width, this.state.height);
             this.audio.play('explosion');
