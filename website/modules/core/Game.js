@@ -171,7 +171,7 @@ export class Game {
         this._updatePowerups(deltaTime);
 
         // Handle spawning
-        this.spawning.update(deltaTime, {
+        const spawnEvents = this.spawning.update(deltaTime, {
             gameLevel: this.state.gameLevel,
             bonusRoundActive: this.state.bonusRoundActive,
             player: this.state.player,
@@ -182,6 +182,9 @@ export class Game {
             width: this.state.width,
             height: this.state.height
         });
+
+        // Show notifications for spawned entities
+        this._handleSpawnNotifications(spawnEvents);
 
         // Handle game events
         this._handleGameEvents(deltaTime);
@@ -858,6 +861,20 @@ export class Game {
      */
     _createParticle(x, y, vx, vy, size, color, life) {
         this.state.particles.push(new Particle(x, y, vx, vy, size, color, life));
+    }
+
+    /**
+     * Handle spawn notifications for newly spawned entities
+     * @param {Object} spawnEvents - Events from spawning system
+     * @private
+     */
+    _handleSpawnNotifications(spawnEvents) {
+        if (spawnEvents.gravityField) {
+            const field = spawnEvents.gravityField;
+            const isPull = field.strength > 0;
+            const notificationType = isPull ? 'gravityWell' : 'repulsionField';
+            this.effects.showNotification(notificationType, field.x, field.y, this.state.particles);
+        }
     }
 
     /**

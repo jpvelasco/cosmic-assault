@@ -29,6 +29,7 @@ export class SpawningSystem {
      * Handle all spawning logic for a frame
      * @param {number} deltaTime
      * @param {Object} gameState
+     * @returns {Object} Spawning events (e.g., { gravityField: GravityField | null })
      */
     update(deltaTime, gameState) {
         const {
@@ -43,6 +44,11 @@ export class SpawningSystem {
             height
         } = gameState;
 
+        const events = {
+            gravityField: null,
+            dangerZone: null
+        };
+
         // Asteroid spawning (not during bonus round)
         if (!bonusRoundActive) {
             this._updateAsteroidSpawning(deltaTime, gameLevel, asteroids, player, width, height);
@@ -50,18 +56,20 @@ export class SpawningSystem {
 
         // Gravity field spawning (starts level 2)
         if (gameLevel >= 2) {
-            this._updateGravityFieldSpawning(deltaTime, gameLevel, gravityFields, player, width, height);
+            events.gravityField = this._updateGravityFieldSpawning(deltaTime, gameLevel, gravityFields, player, width, height);
         }
 
         // Danger zone spawning (starts level 5)
         if (gameLevel >= 5) {
-            this._updateDangerZoneSpawning(deltaTime, gameLevel, dangerZones, width, height);
+            events.dangerZone = this._updateDangerZoneSpawning(deltaTime, gameLevel, dangerZones, width, height);
         }
 
         // Bonus target spawning (during bonus round)
         if (bonusRoundActive) {
             this._updateBonusTargetSpawning(deltaTime, gameLevel, bonusTargets, width, height);
         }
+
+        return events;
     }
 
     /**
@@ -93,25 +101,31 @@ export class SpawningSystem {
     /**
      * Update gravity field spawning
      * @private
+     * @returns {GravityField|null} The spawned field, or null if none spawned
      */
     _updateGravityFieldSpawning(deltaTime, gameLevel, gravityFields, player, width, height) {
         const spawnChance = (0.001 + (gameLevel - 2) * 0.0005) * (60 * deltaTime);
         if (gravityFields.length < 2 && Math.random() < spawnChance) {
             const field = this.spawnGravityField(gameLevel, player, width, height);
             gravityFields.push(field);
+            return field;
         }
+        return null;
     }
 
     /**
      * Update danger zone spawning
      * @private
+     * @returns {DangerZone|null} The spawned zone, or null if none spawned
      */
     _updateDangerZoneSpawning(deltaTime, gameLevel, dangerZones, width, height) {
         const spawnChance = (0.002 + (gameLevel - 5) * 0.0008) * (60 * deltaTime);
         if (dangerZones.length < 2 && Math.random() < spawnChance) {
             const zone = this.spawnDangerZone(width, height);
             dangerZones.push(zone);
+            return zone;
         }
+        return null;
     }
 
     /**
