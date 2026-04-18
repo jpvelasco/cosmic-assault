@@ -96,7 +96,8 @@ cosmic-assault/
 ├── website/             # Static website files (HTML, CSS, JS)
 │   ├── index.html
 │   ├── style.css
-│   └── game.js          # etc.
+│   ├── game-modular.js  # Entry point
+│   └── modules/         # ES6 module architecture (core, entities, systems, utils)
 └── infrastructure/      # AWS CDK infrastructure code (TypeScript)
     ├── package.json
     ├── tsconfig.json
