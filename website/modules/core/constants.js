@@ -206,6 +206,41 @@ export const TIMING = {
 };
 
 //=============================================================================
+// GAME STATE ENUM
+//=============================================================================
+
+export const GAME_STATES = Object.freeze({
+    TITLE: 'title',
+    PLAYING: 'playing',
+    GAME_OVER: 'gameOver',
+    PAUSED: 'paused',
+});
+
+//=============================================================================
+// POWERUP TYPE ENUM
+//=============================================================================
+
+export const POWERUP_TYPE = Object.freeze({
+    DOUBLE_SHOT: 'doubleShot',
+    RAPID_FIRE: 'rapidFire',
+    SHIELD: 'shield',
+    FIELD_BOMB: 'fieldBomb',
+});
+
+//=============================================================================
+// WEAPON SPREAD TABLE
+//=============================================================================
+
+// Indexed by effectiveLevel (weaponLevel * weaponCountMultiplier), clamped to last entry.
+export const WEAPON_SPREAD = [
+    null,                                           // 0 (unused)
+    { count: 1, angles: [0] },                      // level 1
+    { count: 2, angles: [-0.12, 0.12] },            // level 2
+    { count: 3, angles: [0, -0.18, 0.18] },         // level 3
+    { count: 5, angles: [0, -0.18, 0.18, -0.30, 0.30] }, // level 4+
+];
+
+//=============================================================================
 // FEATURE FLAGS
 //=============================================================================
 

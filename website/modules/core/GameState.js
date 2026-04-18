@@ -3,7 +3,7 @@
  * Centralized game state management
  */
 
-import { LEVEL_THRESHOLDS, WEAPON_UPGRADE_THRESHOLDS } from './constants.js';
+import { LEVEL_THRESHOLDS, WEAPON_UPGRADE_THRESHOLDS, GAME_STATES } from './constants.js';
 
 /**
  * Game state container - holds all mutable game state
@@ -18,7 +18,7 @@ export class GameState {
      */
     reset() {
         // Game flow
-        this.gameState = 'title'; // 'title', 'playing', 'gameOver', 'paused'
+        this.gameState = GAME_STATES.TITLE;
         this.previousGameState = null;
 
         // Score and progression
