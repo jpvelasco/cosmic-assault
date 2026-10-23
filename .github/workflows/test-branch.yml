@@ -90,7 +90,7 @@ jobs:
       # For PR previews, consider using Netlify, Vercel, or similar
       # This step just prepares the artifact for potential deployment
       - name: Comment PR with test status
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.createComment({
