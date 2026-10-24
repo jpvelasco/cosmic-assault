@@ -1,9 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = new URL('../../', import.meta.url);
-const workflowPath = resolve(process.argv[2] ?? fileURLToPath(new URL('.github/workflows/ci.yml', repoRoot)));
+const workflowPath = resolve(
+  process.argv[2] ?? fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url)),
+);
+const repoRoot = resolve(dirname(workflowPath), '..', '..');
 const lines = readFileSync(workflowPath, 'utf8')
   .split(/\r?\n/)
   .map((line) => (line.trim().startsWith('#') ? '' : line.trimEnd()));
@@ -17,7 +19,8 @@ function jobBlock(id) {
 
 const jobs = Object.fromEntries(['game', 'legacy', 'deploy'].map((id) => [id, jobBlock(id)]));
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
-const hasLine = (id, entry) => jobs[id]?.some((line) => line.trim() === entry) ?? false;
+const anyLine = (id, test) => jobs[id]?.some((line) => test(line.trim())) ?? false;
+const hasLine = (id, entry) => anyLine(id, (line) => line === entry);
 
 const problems = Object.entries(jobs)
   .filter(([, block]) => block === undefined)
@@ -34,10 +37,19 @@ const checks = [
     'ci.yml: game must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
   [hasLine('legacy', 'node-version-file: .nvmrc'),
     'ci.yml: legacy must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
-  [!existsSync(new URL('website/next', repoRoot)),
-    'website/next exists and would collide with the game build published at next/; rename it'],
+  [!['game', 'legacy'].some((id) => anyLine(id, (line) => line.includes('continue-on-error:'))),
+    'ci.yml: continue-on-error is not allowed in the game/legacy jobs; a failing test must block deploy — remove it'],
+  ...['npm test', 'npm run test:e2e'].map((cmd) => [hasLine('game', `run: ${cmd}`),
+    `ci.yml: the game job must run "${cmd}"; restore the step so tests gate deploy`]),
+  [anyLine('legacy', (line) => line.startsWith('run: npx playwright test')),
+    'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
 ];
 problems.push(...checks.filter(([ok]) => !ok).map(([, message]) => message));
+
+const nextPaths = readdirSync(resolve(repoRoot, 'website'), { recursive: true })
+  .filter((path) => basename(path) === 'next');
+problems.push(...nextPaths.map((path) =>
+  `website/${path} is named "next" and is excluded by the deploy diff (diff -r … --exclude next); rename it`));
 
 if (problems.length > 0) {
   for (const problem of problems) console.error(problem);

@@ -21,7 +21,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
+    // CI already ran `npm run build` and `check:base`; locally, build first so preview is never stale.
+    command: `${isCI ? '' : 'npm run build && '}npm run preview -- --port 4173 --strictPort`,
     url: 'http://localhost:4173',
     reuseExistingServer: !isCI,
     timeout: 60000,

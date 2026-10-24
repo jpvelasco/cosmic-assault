@@ -8,4 +8,7 @@ describe('formatBuildLabel', () => {
   it('labels local builds', () => {
     expect(formatBuildLabel(undefined, '2026-10-24T18:02:11.000Z')).toBe('preview · local · 2026-10-24');
   });
+  it('labels local builds that pass an empty sha', () => {
+    expect(formatBuildLabel('', '2026-10-24T18:02:11.000Z')).toBe('preview · local · 2026-10-24');
+  });
 });
