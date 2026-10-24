@@ -32,12 +32,46 @@ export function deriveSeed(seed: number, stream: string): number {
   return (seed ^ hashString(stream)) >>> 0;
 }
 
+function assertRangeBounds(min: number, max: number): void {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    throw new RangeError(
+      `range() needs finite bounds with max > min (got min=${String(min)}, max=${String(max)}); swap or widen the bounds`,
+    );
+  }
+}
+
+function intBoundsError(minInclusive: number, maxExclusive: number): RangeError {
+  return new RangeError(
+    `int() needs finite bounds with maxExclusive > minInclusive (got ${String(minInclusive)}, ${String(maxExclusive)}); swap or widen the bounds`,
+  );
+}
+
+function assertIntBounds(minInclusive: number, maxExclusive: number): void {
+  if (!Number.isFinite(minInclusive) || !Number.isFinite(maxExclusive)) {
+    throw intBoundsError(minInclusive, maxExclusive);
+  }
+  if (!Number.isInteger(minInclusive) || !Number.isInteger(maxExclusive)) {
+    throw new RangeError(
+      `int() needs integer bounds (got ${String(minInclusive)}, ${String(maxExclusive)}); round the bounds before calling`,
+    );
+  }
+  if (maxExclusive <= minInclusive) {
+    throw intBoundsError(minInclusive, maxExclusive);
+  }
+}
+
 export function createRng(seed: number): Rng {
   const next = mulberry32(seed);
   return {
     next,
-    range: (min, max) => min + next() * (max - min),
-    int: (minInclusive, maxExclusive) => minInclusive + Math.floor(next() * (maxExclusive - minInclusive)),
+    range: (min, max) => {
+      assertRangeBounds(min, max);
+      return min + next() * (max - min);
+    },
+    int: (minInclusive, maxExclusive) => {
+      assertIntBounds(minInclusive, maxExclusive);
+      return minInclusive + Math.floor(next() * (maxExclusive - minInclusive));
+    },
     chance: (p) => next() < p,
     pick<T>(items: readonly T[]): T {
       if (items.length === 0) {

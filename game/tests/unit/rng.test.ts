@@ -70,6 +70,59 @@ describe('createRng', () => {
     expect(() => rng.pick([])).toThrow(RangeError);
     expect(() => rng.pick([])).toThrow('pick() needs at least one item');
   });
+
+  it('throws a RangeError from range() when max is not greater than min', () => {
+    const rng = createRng(1);
+    expect(() => rng.range(5, 5)).toThrow(RangeError);
+    expect(() => rng.range(5, 3)).toThrow(/needs/);
+    expect(() => rng.range(5, 3)).toThrow(
+      'range() needs finite bounds with max > min (got min=5, max=3); swap or widen the bounds',
+    );
+  });
+
+  it('throws a RangeError from range() on a non-finite bound', () => {
+    const rng = createRng(1);
+    expect(() => rng.range(0, NaN)).toThrow(RangeError);
+    expect(() => rng.range(0, NaN)).toThrow(/needs/);
+    expect(() => rng.range(-Infinity, 1)).toThrow(RangeError);
+  });
+
+  it('throws a RangeError from int() when maxExclusive is not greater than minInclusive', () => {
+    const rng = createRng(1);
+    expect(() => rng.int(5, 5)).toThrow(RangeError);
+    expect(() => rng.int(5, 5)).toThrow(/needs/);
+    expect(() => rng.int(5, 3)).toThrow(RangeError);
+    expect(() => rng.int(5, 3)).toThrow(
+      'int() needs finite bounds with maxExclusive > minInclusive (got 5, 3); swap or widen the bounds',
+    );
+  });
+
+  it('throws a RangeError from int() on a non-finite bound', () => {
+    const rng = createRng(1);
+    expect(() => rng.int(0, Infinity)).toThrow(RangeError);
+    expect(() => rng.int(0, Infinity)).toThrow(/needs/);
+  });
+
+  it('throws a RangeError from int() on a non-integer bound', () => {
+    const rng = createRng(1);
+    expect(() => rng.int(0.5, 3)).toThrow(RangeError);
+    expect(() => rng.int(0.5, 3)).toThrow(/needs/);
+    expect(() => rng.int(0.5, 3)).toThrow(
+      'int() needs integer bounds (got 0.5, 3); round the bounds before calling',
+    );
+  });
+
+  it('pins the int() sequence for seed 42 over [0, 100)', () => {
+    const rng = createRng(42);
+    const values = Array.from({ length: 5 }, () => rng.int(0, 100));
+    expect(values).toEqual([60, 44, 85, 66, 17]);
+  });
+
+  it('pins the pick() sequence for seed 42 over four items', () => {
+    const rng = createRng(42);
+    const values = Array.from({ length: 5 }, () => rng.pick(['a', 'b', 'c', 'd']));
+    expect(values).toEqual(['c', 'b', 'd', 'c', 'a']);
+  });
 });
 
 describe('hashString', () => {
@@ -77,6 +130,10 @@ describe('hashString', () => {
     expect(hashString('spawn')).toBe(975326616);
     expect(hashString('loot')).toBe(3790556855);
     expect(hashString('fx')).toBe(1294124851);
+  });
+
+  it('returns the FNV-1a offset basis for the empty string', () => {
+    expect(hashString('')).toBe(2166136261);
   });
 });
 
