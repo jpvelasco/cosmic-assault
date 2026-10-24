@@ -28,3 +28,9 @@ tests/playwright-report/
 tests/test-results/
 tests/screenshots/
 tests/.cache/
+
+# game/ package
+game/node_modules/
+game/dist/
+game/test-results/
+game/playwright-report/

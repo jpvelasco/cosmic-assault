@@ -11,24 +11,32 @@
 - `tests/` is a separate npm package containing Playwright specs and helpers.
   `tests/helpers/game-helper.js` uses the browser API exposed by
   `website/modules/core/TestAPI.js`. Preserve that contract when changing gameplay.
-- There is no root npm package or workspace. Run npm commands in the package
-  directories below. `ReadMe.md` is the README's exact filename.
+- `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
+  Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
+  Pages site.
+- There is no root npm package or workspace. Run npm commands from `game/` or
+  `tests/`, whichever package you are changing. `ReadMe.md` is the README's
+  exact filename.
 
 ## Local development and validation
 
-Use Node.js 20 to match the Playwright workflow. Install locked dependencies with
-`npm ci` in the package being worked on.
+Use Node.js 24 (the version in `.nvmrc`; local ≥22.12 works). Install locked
+dependencies with `npm ci` in `game/` or `tests/`, whichever package you are
+changing.
 
 For the website, run `npm run serve` from `tests/` after installing its
-dependencies, then open `http://localhost:8080`. No AWS credentials are needed
-for game development or local browser tests.
+dependencies, then open `http://localhost:8080`.
 
 Run applicable checks in this order: lint, typecheck, tests, verification.
 
-1. **Lint:** Neither package currently defines a lint script or a local lint
-   configuration. Report this as unavailable; do not invent a passing lint gate.
-2. **Typecheck:** There is no typecheck script yet.
-3. **Tests:** For gameplay, UI, or test changes, install Chromium with
+1. **Lint:** For `game/` changes, run `npm run lint` from `game/`. `tests/` has
+   no lint script; report its lint as unavailable rather than inventing a gate.
+2. **Typecheck:** For `game/` changes, run `npm run typecheck` from `game/`.
+   `tests/` has no typecheck script.
+3. **Tests:** For `game/` changes, run `npm test` (Vitest) and `npm run test:e2e`
+   (Playwright against a production build) from `game/`; install Chromium first
+   with `npx playwright install chromium`. For changes to `website/` gameplay,
+   UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
    browser system dependencies installed separately.
@@ -37,8 +45,8 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    For documentation-only changes, verify referenced paths and commands and run
    `git diff --check`; application suites are unnecessary.
 
-Playwright starts the local server automatically unless `TEST_URL` is set.
-Set `TEST_URL` to test an existing deployed site. The full `npm test` suite includes
+In `tests/`, Playwright starts the local server automatically unless `TEST_URL`
+is set. Set `TEST_URL` to test an existing deployed site. The full `npm test` suite includes
 Chromium, Firefox, WebKit, mobile Chrome, and mobile Safari; install the corresponding
 browsers before running it. CI currently runs only `chromium-desktop`, with one
 worker and retries. Reports and failure artifacts live under `tests/playwright-report/`
@@ -59,10 +67,12 @@ and `tests/test-results/` and are ignored by Git.
   analysis as unavailable and continue. `.codacy.yml` only lists
   exclusions; the repository is not currently analysed on Codacy. No Codecov
   configuration or coverage upload is currently committed.
-- `.github/workflows/ci.yml` contains echo-only Build and Test jobs.
-  `.github/workflows/test-branch.yml` runs real Playwright tests for PRs to `main`
-  and pushes to `feature/**` and `refactor/**`. Green placeholder jobs do not
-  replace local validation.
+- `.github/workflows/ci.yml` is the only workflow. It runs on pull requests to
+  `main`, pushes to `main`, and manual dispatch. Job `game` runs the `game/`
+  workflow guard, lint, typecheck, unit tests, build, base check, and e2e tests;
+  job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
+  `website/`. Job `deploy` runs only on pushes to `main`, and only after both
+  `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.
@@ -77,6 +87,7 @@ and `tests/test-results/` and are ignored by Git.
 
 ## Deployment context
 
-GitHub Pages is the only deployment. `.github/workflows/deploy.yml`
-publishes `website/` on pushes to `main`. There are no other hosting
-paths.
+GitHub Pages is the only deployment, published by the `deploy` job in
+`.github/workflows/ci.yml`. Pages serves `website/` at the root and `game/dist`
+at `next/`. The job fails if the published root differs from `website/`.
+There are no other hosting paths.
