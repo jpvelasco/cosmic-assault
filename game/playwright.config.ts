@@ -1,10 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = !!process.env['CI'];
+
 export default defineConfig({
   testDir: './e2e',
-  forbidOnly: !!process.env['CI'],
-  retries: process.env['CI'] ? 2 : 0,
-  reporter: process.env['CI'] ? [['html', { open: 'never' }], ['list']] : 'list',
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
+  reporter: isCI ? [['html', { open: 'never' }], ['list']] : 'list',
   use: {
     baseURL: 'http://localhost:4173',
   },
@@ -21,7 +23,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run build && npm run preview -- --port 4173 --strictPort',
     url: 'http://localhost:4173',
-    reuseExistingServer: !process.env['CI'],
+    reuseExistingServer: !isCI,
     timeout: 60000,
   },
 });
