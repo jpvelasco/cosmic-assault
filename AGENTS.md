@@ -11,10 +11,6 @@
 - `tests/` is a separate npm package containing Playwright specs and helpers.
   `tests/helpers/game-helper.js` uses the browser API exposed by
   `website/modules/core/TestAPI.js`. Preserve that contract when changing gameplay.
-- `infrastructure/` is a separate npm package containing TypeScript AWS CDK code.
-  Its entry point instantiates `WebsiteStack` from `lib/website-stack.ts`, which
-  deploys `../website` to S3 and CloudFront. `InfrastructureStack` is an unused
-  scaffold; the Jest test is currently a placeholder with no assertions.
 - There is no root npm package or workspace. Run npm commands in the package
   directories below. `ReadMe.md` is the README's exact filename.
 
@@ -31,17 +27,12 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
 
 1. **Lint:** Neither package currently defines a lint script or a local lint
    configuration. Report this as unavailable; do not invent a passing lint gate.
-2. **Typecheck:** For infrastructure changes, run `npm run build` from
-   `infrastructure/`. It runs TypeScript and writes compiled files to `dist/`.
-   There is no website or Playwright typecheck script.
-3. **Tests:** For infrastructure changes, run `npm test -- --runInBand` from
-   `infrastructure/`; its current placeholder does not validate stack resources.
-   For gameplay, UI, or test changes, install Chromium with
+2. **Typecheck:** There is no typecheck script yet.
+3. **Tests:** For gameplay, UI, or test changes, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
    browser system dependencies installed separately.
-4. **Verification:** For infrastructure changes, run `npm run cdk -- synth` from
-   `infrastructure/` after building. For game changes, check the affected desktop
+4. **Verification:** For game changes, check the affected desktop
    and mobile behavior in a browser, including browser console errors.
    For documentation-only changes, verify referenced paths and commands and run
    `git diff --check`; application suites are unnecessary.
@@ -63,9 +54,10 @@ and `tests/test-results/` and are ignored by Git.
 - Before declaring a PR ready, inspect unresolved review threads, CI logs,
   Codacy findings, and Codecov patch coverage when available. Fix actionable
   failures, and report unavailable checks explicitly.
-- Follow `.github/instructions/codacy.instructions.md` for Codacy analysis.
-  `.codacy.yml` currently enables Go analyzers despite this JavaScript/TypeScript
-  repository; do not assume that configuration proves code quality. No Codecov
+- When the Codacy MCP server is available in the session, follow
+  `.github/instructions/codacy.instructions.md`. Otherwise report Codacy
+  analysis as unavailable and continue. `.codacy.yml` only lists
+  exclusions; the repository is not currently analysed on Codacy. No Codecov
   configuration or coverage upload is currently committed.
 - `.github/workflows/ci.yml` contains echo-only Build and Test jobs.
   `.github/workflows/test-branch.yml` runs real Playwright tests for PRs to `main`
@@ -74,7 +66,8 @@ and `tests/test-results/` and are ignored by Git.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.
-  No infrastructure or billing failure exception is defined here.
+  CI failures caused by infrastructure or billing problems are not grounds
+  to merge; stop and report them.
 - Do not commit dependencies, generated build output, browser artifacts,
   credentials, or real account-specific cloud identifiers.
 - On Windows 11, load native `env-detect` and `windows-execution` skills and use
@@ -84,14 +77,6 @@ and `tests/test-results/` and are ignored by Git.
 
 ## Deployment context
 
-GitHub Pages publishes `website/` via `.github/workflows/deploy.yml` on pushes to
-`main` and the explicitly listed `feature/quick-wins` branch. `netlify.toml`
-configures static branch and PR previews. The Playwright workflow's
-`deploy-preview` job prepares an artifact and posts test status; it does not
-deploy a separate preview site.
-
-AWS CDK deployment is a separate path. Run CDK commands from `infrastructure/`
-because the app and website asset paths are relative to that directory.
-Deployment or teardown requires an explicit task authorizing that operation.
-The website bucket currently uses `RemovalPolicy.DESTROY` and
-`autoDeleteObjects: true`, so teardown deletes its contents.
+GitHub Pages is the only deployment. `.github/workflows/deploy.yml`
+publishes `website/` on pushes to `main`. There are no other hosting
+paths.

@@ -1,7 +1,4 @@
 ---
-engines:
-  govet:
-    enabled: true
-  staticcheck:
-    enabled: true
-exclude_paths: []
+exclude_paths:
+  - "game/dist/**"
+  - "**/node_modules/**"

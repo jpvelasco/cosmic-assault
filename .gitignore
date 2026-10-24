@@ -19,15 +19,10 @@ Thumbs.db
 dist/
 build/
 
-# Infrastructure specific ignores
-infrastructure/node_modules/
-infrastructure/.cdk.staging/
-infrastructure/cdk.out/
-infrastructure/dist/
-!infrastructure/jest.config.js
 *.code-workspace
 
 # Test specific ignores
+/test-results/
 tests/node_modules/
 tests/playwright-report/
 tests/test-results/
