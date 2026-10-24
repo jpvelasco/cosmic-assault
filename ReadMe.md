@@ -79,6 +79,7 @@ Phones play in landscape; the game asks you to rotate if you hold it upright.
 | --- | --- |
 | `website/` | The game: static HTML, CSS and ES modules, with no build step |
 | `tests/` | Playwright end-to-end tests and the local dev server |
+| `game/` | Work-in-progress TypeScript build |
 | `.github/` | Workflows, issue templates and contributor docs |
 | `docs/assets/` | README artwork, including this banner |
 

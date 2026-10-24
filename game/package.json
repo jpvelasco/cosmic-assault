@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "check:base": "node scripts/check-base.mjs"
+    "check:base": "node scripts/check-base.mjs",
+    "check:workflow": "node scripts/check-workflow.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
