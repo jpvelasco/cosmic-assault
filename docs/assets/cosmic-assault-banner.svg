@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="title desc">
+<title id="title">Cosmic Assault</title>
+<desc id="desc">A glossy green ship fires magenta shots at shaded rocks across a neon nebula, under the Cosmic Assault logotype.</desc>
+<defs>
+<clipPath id="frame"><rect width="1280" height="400" rx="22"/></clipPath>
+<linearGradient id="sky" x1="0" y1="0" x2="1280" y2="400" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1d0b44"/><stop offset=".55" stop-color="#0c1a4a"/><stop offset="1" stop-color="#05303d"/></linearGradient>
+<radialGradient id="neb-pink"><stop offset="0" stop-color="#ff4f9a"/><stop offset="1" stop-color="#ff4f9a" stop-opacity="0"/></radialGradient>
+<radialGradient id="neb-teal"><stop offset="0" stop-color="#18d6c4"/><stop offset="1" stop-color="#18d6c4" stop-opacity="0"/></radialGradient>
+<radialGradient id="neb-violet"><stop offset="0" stop-color="#7b5cff"/><stop offset="1" stop-color="#7b5cff" stop-opacity="0"/></radialGradient>
+<radialGradient id="glow-green"><stop offset="0" stop-color="#39ff14"/><stop offset="1" stop-color="#39ff14" stop-opacity="0"/></radialGradient>
+<radialGradient id="glow-blue"><stop offset="0" stop-color="#5b8cff"/><stop offset="1" stop-color="#5b8cff" stop-opacity="0"/></radialGradient>
+<radialGradient id="glow-magenta"><stop offset="0" stop-color="#ff4fd8"/><stop offset="1" stop-color="#ff4fd8" stop-opacity="0"/></radialGradient>
+<radialGradient id="glow-gold"><stop offset="0" stop-color="#ffd36b"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient>
+<radialGradient id="glow-cyan"><stop offset="0" stop-color="#22d3ff"/><stop offset="1" stop-color="#22d3ff" stop-opacity="0"/></radialGradient>
+<radialGradient id="vignette" cx="640.0" cy="200.0" r="794" gradientUnits="userSpaceOnUse"><stop offset="0.176" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient>
+<radialGradient id="rock" cx="0" cy="0" r="1.1" fx="-.4" fy="-.45" fr=".1" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a9bdf0"/><stop offset=".5" stop-color="#5468a8"/><stop offset="1" stop-color="#1d2448"/></radialGradient>
+<linearGradient id="hull" x1="0" y1="36" x2="0" y2="-36" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0d6b18"/><stop offset=".5" stop-color="#39ff14"/><stop offset="1" stop-color="#d9ffd0"/></linearGradient>
+<linearGradient id="flame" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#ffe15a"/><stop offset="1" stop-color="#ff5a28" stop-opacity="0"/></linearGradient>
+<radialGradient id="flash"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fff3c4" stop-opacity=".9"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient>
+<radialGradient id="cockpit" cx=".38" cy=".3" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#9ff4ff"/><stop offset="1" stop-color="#2aa9d6"/></radialGradient>
+<linearGradient id="logo" x1="230" y1="0" x2="1050" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ff"/><stop offset=".55" stop-color="#a855f7"/><stop offset="1" stop-color="#ff4fd8"/></linearGradient>
+<linearGradient id="gloss" x1="0" y1="108" x2="0" y2="182" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset=".44" stop-color="#fff" stop-opacity=".18"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+<filter id="logo-glow" x="-15%" y="-60%" width="130%" height="220%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="12" result="wide"/><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="tight"/><feMerge><feMergeNode in="wide"/><feMergeNode in="tight"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<filter id="flame-blur" x="-20%" y="-40%" width="140%" height="180%"><feGaussianBlur stdDeviation="2.5"/></filter>
+<filter id="soft" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="5"/></filter>
+</defs>
+<g clip-path="url(#frame)">
+<rect width="1280" height="400" fill="url(#sky)"/>
+<circle cx="230" cy="100" r="390" fill="url(#neb-pink)" opacity="0.3"/>
+<circle cx="1090" cy="330" r="420" fill="url(#neb-teal)" opacity="0.28"/>
+<circle cx="770" cy="220" r="300" fill="url(#neb-violet)" opacity="0.22"/>
+<g fill="#fff4ff">
+<circle cx="417.3" cy="65.9" r="1.6" opacity="0.74"/>
+<circle cx="99.6" cy="213.8" r="1.1" opacity="0.57"/>
+<circle cx="81.3" cy="202.9" r="0.7" opacity="0.37"/>
+<circle cx="556.1" cy="34.8" r="0.7" opacity="0.40"/>
+<circle cx="544.6" cy="325.5" r="0.8" opacity="0.42"/>
+<circle cx="290.2" cy="248.9" r="2" opacity="0.92"/>
+<circle cx="1242" cy="25.9" r="1.9" opacity="0.87"/>
+<circle cx="374.1" cy="63.4" r="0.8" opacity="0.42"/>
+<circle cx="397.9" cy="321.4" r="0.9" opacity="0.46"/>
+<circle cx="743.1" cy="253.3" r="1.2" opacity="0.57"/>
+<circle cx="700.3" cy="32.1" r="0.7" opacity="0.39"/>
+<circle cx="268.3" cy="269.3" r="1.2" opacity="0.61"/>
+<circle cx="405.1" cy="232.9" r="1.3" opacity="0.62"/>
+<circle cx="386.9" cy="313" r="1.6" opacity="0.77"/>
+<circle cx="316.5" cy="228.6" r="1.4" opacity="0.67"/>
+<circle cx="1114.2" cy="288.1" r="1" opacity="0.52"/>
+<circle cx="1246.9" cy="53.3" r="1.2" opacity="0.60"/>
+<circle cx="965" cy="66.4" r="1.3" opacity="0.64"/>
+<circle cx="57.6" cy="264.6" r="1.7" opacity="0.81"/>
+<circle cx="732.3" cy="344.2" r="1.1" opacity="0.54"/>
+<circle cx="886.9" cy="236.2" r="1.5" opacity="0.70"/>
+<circle cx="584.6" cy="330.5" r="2" opacity="0.92"/>
+<circle cx="607.3" cy="263" r="0.7" opacity="0.39"/>
+<circle cx="894.7" cy="256.5" r="2.1" opacity="0.95"/>
+<circle cx="1046.9" cy="117.3" r="1.2" opacity="0.58"/>
+<circle cx="853.2" cy="16.7" r="1.3" opacity="0.63"/>
+<circle cx="220.4" cy="53" r="0.7" opacity="0.39"/>
+<circle cx="979" cy="57.7" r="1" opacity="0.50"/>
+<circle cx="502.2" cy="342.6" r="0.7" opacity="0.40"/>
+<circle cx="575.8" cy="219" r="1.9" opacity="0.88"/>
+<circle cx="1043.6" cy="339.8" r="1" opacity="0.52"/>
+<circle cx="1125.6" cy="375.8" r="0.8" opacity="0.44"/>
+<circle cx="230.7" cy="97.1" r="1" opacity="0.49"/>
+<circle cx="621" cy="234.2" r="1" opacity="0.51"/>
+<circle cx="13.2" cy="168.9" r="1.2" opacity="0.57"/>
+<circle cx="723.9" cy="374" r="1.6" opacity="0.76"/>
+<circle cx="659.6" cy="245.2" r="1.6" opacity="0.76"/>
+<circle cx="76.2" cy="353.4" r="1.8" opacity="0.82"/>
+<circle cx="1113.4" cy="314.4" r="1.2" opacity="0.59"/>
+<circle cx="512.3" cy="47.8" r="1.6" opacity="0.73"/>
+<circle cx="86.7" cy="33.9" r="0.9" opacity="0.48"/>
+<circle cx="213.2" cy="138.6" r="0.7" opacity="0.38"/>
+<circle cx="8.3" cy="66.1" r="0.8" opacity="0.41"/>
+<circle cx="467.6" cy="17.8" r="1.9" opacity="0.87"/>
+<circle cx="784.2" cy="65" r="1" opacity="0.50"/>
+<circle cx="163.3" cy="334" r="2.1" opacity="0.95"/>
+<circle cx="597" cy="193.8" r="0.7" opacity="0.40"/>
+<circle cx="137.2" cy="139.6" r="1" opacity="0.51"/>
+<circle cx="1055.7" cy="70" r="0.6" opacity="0.36"/>
+<circle cx="1210" cy="210.9" r="0.8" opacity="0.44"/>
+<circle cx="694.6" cy="18.4" r="1.4" opacity="0.67"/>
+<circle cx="1244.8" cy="339.5" r="1.6" opacity="0.77"/>
+<circle cx="219.1" cy="304.4" r="1.4" opacity="0.67"/>
+<circle cx="289.9" cy="319.6" r="2.1" opacity="0.94"/>
+<circle cx="1085.7" cy="317.5" r="1.8" opacity="0.84"/>
+<circle cx="943.2" cy="95.1" r="1.4" opacity="0.66"/>
+<circle cx="457.4" cy="19.1" r="0.6" opacity="0.37"/>
+<circle cx="883.3" cy="375.3" r="1.3" opacity="0.62"/>
+<circle cx="1192.4" cy="387.4" r="2" opacity="0.92"/>
+<circle cx="468.9" cy="92.7" r="0.9" opacity="0.49"/>
+</g>
+<path d="M372 49L373.6 56.4L381 58L373.6 59.6L372 67L370.4 59.6L363 58L370.4 56.4Z" fill="#fff4ff" opacity=".85"/>
+<path d="M1062 39L1063.3 44.7L1069 46L1063.3 47.3L1062 53L1060.7 47.3L1055 46L1060.7 44.7Z" fill="#fff4ff" opacity=".85"/>
+<path d="M520 358L521.1 362.9L526 364L521.1 365.1L520 370L518.9 365.1L514 364L518.9 362.9Z" fill="#fff4ff" opacity=".85"/>
+<path d="M1250 190L1251.1 194.9L1256 196L1251.1 197.1L1250 202L1248.9 197.1L1244 196L1248.9 194.9Z" fill="#fff4ff" opacity=".85"/>
+<circle cx="1152" cy="284" r="116" fill="url(#glow-blue)" opacity=".28"/>
+<circle cx="1214" cy="78" r="65" fill="url(#glow-blue)" opacity=".28"/>
+<circle cx="88" cy="92" r="51" fill="url(#glow-blue)" opacity=".28"/>
+<circle cx="980" cy="352" r="32" fill="url(#glow-blue)" opacity=".28"/>
+<g transform="translate(1152 284)">
+<g transform="scale(68)"><polygon points="0.797,-0.087 0.825,0.583 0.266,0.843 -0.193,0.961 -0.502,0.793 -0.965,0.134 -0.822,-0.324 -0.721,-0.659 -0.198,-0.960 0.484,-0.710 0.841,-0.584" fill="url(#rock)"/>
+<circle cx="0.189" cy="-0.277" r="0.109" fill="#0f1432" fill-opacity=".38"/>
+<path d="M0.102 -0.239A0.109 0.109 0 0 0 0.276 -0.239" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="-0.293" cy="0.340" r="0.156" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.418 0.395A0.156 0.156 0 0 0 -0.168 0.395" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="-0.297" cy="0.274" r="0.169" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.432 0.333A0.169 0.169 0 0 0 -0.162 0.333" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+</g>
+<polygon points="54.2,-5.9 56.1,39.7 18.1,57.3 -13.1,65.3 -34.1,53.9 -65.6,9.1 -55.9,-22 -49,-44.8 -13.4,-65.3 32.9,-48.3 57.2,-39.7" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="1.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(1214 78)">
+<g transform="scale(38)"><polygon points="0.844,0.048 0.648,0.433 0.585,0.849 -0.175,0.881 -0.665,0.561 -0.976,0.149 -0.802,-0.147 -0.576,-0.572 -0.091,-0.813 0.303,-0.718 0.771,-0.348" fill="url(#rock)"/>
+<circle cx="-0.035" cy="0.070" r="0.163" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.166 0.127A0.163 0.163 0 0 0 0.095 0.127" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="-0.067" cy="0.351" r="0.135" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.175 0.398A0.135 0.135 0 0 0 0.041 0.398" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="0.027" cy="0.020" r="0.101" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.054 0.055A0.101 0.101 0 0 0 0.108 0.055" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+</g>
+<polygon points="32.1,1.8 24.6,16.4 22.2,32.3 -6.7,33.5 -25.3,21.3 -37.1,5.7 -30.5,-5.6 -21.9,-21.8 -3.5,-30.9 11.5,-27.3 29.3,-13.2" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="1.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(88 92)">
+<g transform="scale(30)"><polygon points="0.795,-0.017 0.905,0.375 0.458,0.754 -0.201,0.884 -0.543,0.712 -0.941,0.256 -0.899,-0.130 -0.593,-0.571 -0.040,-0.891 0.422,-0.871 0.796,-0.358" fill="url(#rock)"/>
+<circle cx="0.095" cy="0.005" r="0.136" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.014 0.052A0.136 0.136 0 0 0 0.203 0.052" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="0.162" cy="-0.040" r="0.137" fill="#0f1432" fill-opacity=".38"/>
+<path d="M0.052 0.008A0.137 0.137 0 0 0 0.272 0.008" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="-0.018" cy="0.371" r="0.149" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.138 0.423A0.149 0.149 0 0 0 0.101 0.423" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+</g>
+<polygon points="23.8,-0.5 27.2,11.2 13.7,22.6 -6,26.5 -16.3,21.4 -28.2,7.7 -27,-3.9 -17.8,-17.1 -1.2,-26.7 12.6,-26.1 23.9,-10.7" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="1.6" stroke-linejoin="round"/>
+</g>
+<g transform="translate(980 352)">
+<g transform="scale(19)"><polygon points="1.013,0.138 0.803,0.423 0.263,0.956 -0.009,0.776 -0.487,0.586 -0.708,0.282 -0.917,-0.331 -0.425,-0.662 -0.061,-0.936 0.297,-0.960 0.741,-0.316" fill="url(#rock)"/>
+<circle cx="0.380" cy="-0.085" r="0.134" fill="#0f1432" fill-opacity=".38"/>
+<path d="M0.273 -0.039A0.134 0.134 0 0 0 0.487 -0.039" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="0.411" cy="0.279" r="0.111" fill="#0f1432" fill-opacity=".38"/>
+<path d="M0.322 0.318A0.111 0.111 0 0 0 0.501 0.318" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+<circle cx="-0.058" cy="0.013" r="0.124" fill="#0f1432" fill-opacity=".38"/>
+<path d="M-0.157 0.056A0.124 0.124 0 0 0 0.041 0.056" fill="none" stroke="#c9d6ff" stroke-opacity=".22" stroke-width="0.050"/>
+</g>
+<polygon points="19.3,2.6 15.3,8 5,18.2 -0.2,14.8 -9.2,11.1 -13.4,5.4 -17.4,-6.3 -8.1,-12.6 -1.2,-17.8 5.6,-18.2 14.1,-6" fill="none" stroke="#fff" stroke-opacity=".28" stroke-width="1.6" stroke-linejoin="round"/>
+</g>
+<circle cx="1088" cy="290" r="46" fill="url(#glow-gold)" opacity=".55"/>
+<circle cx="1088" cy="290" r="22" fill="url(#flash)"/>
+<circle cx="1088" cy="290" r="28" fill="none" stroke="#ffd36b" stroke-width="3" opacity=".7"/>
+<g stroke="#ffe9a8" stroke-width="3" stroke-linecap="round">
+<line x1="1058.6" y1="307.0" x2="1043.0" y2="316.0"/>
+<line x1="1052.0" y1="288.7" x2="1028.0" y2="287.9"/>
+<line x1="1059.2" y1="272.0" x2="1045.6" y2="263.5"/>
+<line x1="1068.5" y1="317.9" x2="1061.6" y2="327.7"/>
+<line x1="1070.0" y1="261.2" x2="1064.7" y2="252.7"/>
+</g>
+<g transform="translate(1040 258) rotate(20)"><rect x="-4.5" y="-4.5" width="9" height="6.3" fill="#8fa6e8"/><rect x="-4.5" y="-4.5" width="9" height="1.2" fill="#fff" fill-opacity=".7"/></g>
+<g transform="translate(1030 318) rotate(-35)"><rect x="-3.5" y="-3.5" width="7" height="4.9" fill="#8fa6e8"/><rect x="-3.5" y="-3.5" width="7" height="1.2" fill="#fff" fill-opacity=".7"/></g>
+<g transform="translate(1060 336) rotate(55)"><rect x="-3.0" y="-3.0" width="6" height="4.2" fill="#8fa6e8"/><rect x="-3.0" y="-3.0" width="6" height="1.2" fill="#fff" fill-opacity=".7"/></g>
+<circle cx="419.9" cy="311.8" r="44" fill="url(#glow-magenta)" opacity=".85"/>
+<g transform="translate(419.9 311.8) rotate(-2.0)" stroke-linecap="round"><line x1="-26" y1="0" x2="26" y2="0" stroke="#ff7be3" stroke-width="13"/><line x1="-24" y1="0" x2="24" y2="0" stroke="#fff" stroke-width="5"/></g>
+<circle cx="679.7" cy="302.8" r="44" fill="url(#glow-magenta)" opacity=".85"/>
+<g transform="translate(679.7 302.8) rotate(-2.0)" stroke-linecap="round"><line x1="-26" y1="0" x2="26" y2="0" stroke="#ff7be3" stroke-width="13"/><line x1="-24" y1="0" x2="24" y2="0" stroke="#fff" stroke-width="5"/></g>
+<circle cx="939.5" cy="293.7" r="44" fill="url(#glow-magenta)" opacity=".85"/>
+<g transform="translate(939.5 293.7) rotate(-2.0)" stroke-linecap="round"><line x1="-26" y1="0" x2="26" y2="0" stroke="#ff7be3" stroke-width="13"/><line x1="-24" y1="0" x2="24" y2="0" stroke="#fff" stroke-width="5"/></g>
+<circle cx="186" cy="320" r="170" fill="url(#glow-green)" opacity=".3"/>
+<g transform="translate(186 320) rotate(-2.0)">
+<circle cx="-72" cy="0" r="56" fill="url(#glow-gold)" opacity=".45"/>
+<g filter="url(#flame-blur)"><polygon points="-42,-27.0 -138,0 -42,27.0" fill="url(#flame)"/>
+<polygon points="-42,-12 -86,0 -42,12" fill="url(#flame)" opacity=".9"/></g>
+<polygon points="84,0 -60,-54 -36,0 -60,54" fill="url(#hull)" stroke="#fff" stroke-opacity=".7" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="78,-3.5999999999999996 -54,-48" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.5" stroke-linecap="round"/>
+<ellipse cx="12" cy="0" rx="21.0" ry="12" fill="url(#cockpit)" stroke="#e8fdff" stroke-opacity=".8" stroke-width="2"/>
+</g>
+<text x="640" y="178" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="92" textLength="820" lengthAdjust="spacingAndGlyphs" fill="#090322" opacity=".55" transform="translate(0 7)" filter="url(#soft)">COSMIC ASSAULT</text>
+<g filter="url(#logo-glow)"><text x="640" y="178" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="92" textLength="820" lengthAdjust="spacingAndGlyphs" fill="url(#logo)">COSMIC ASSAULT</text></g>
+<text x="640" y="178" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="92" textLength="820" lengthAdjust="spacingAndGlyphs" fill="url(#gloss)">COSMIC ASSAULT</text>
+<text x="640" y="178" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="92" textLength="820" lengthAdjust="spacingAndGlyphs" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.5">COSMIC ASSAULT</text>
+<rect x="340" y="212" width="600" height="46" rx="23" fill="#fff" fill-opacity=".09" stroke="#fff" stroke-opacity=".2"/>
+<text x="640" y="244" text-anchor="middle" font-family="ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="25" textLength="540" lengthAdjust="spacingAndGlyphs" fill="#eafcff">A neon space shooter for desktop and phone</text>
+<rect width="1280" height="400" fill="url(#vignette)"/>
+</g>
+</svg>

@@ -1,154 +1,103 @@
-# Cosmic Assault - Space Shooter Game
+<p align="center">
+  <img src="docs/assets/cosmic-assault-banner.svg" width="100%" alt="Cosmic Assault: a neon space shooter">
+</p>
 
-A fast-paced space shooter game built with HTML5 Canvas, JavaScript, and modern web technologies. Play as a space pilot defending against waves of asteroids while collecting powerups and achieving high scores.
+<p align="center">
+  <b>Steer, thrust and blast your way through neon rock fields, right in your browser, on desktop or phone.</b>
+</p>
 
-## Features
+<p align="center">
+  <a href="#-launch">🚀 Launch</a> ·
+  <a href="#-controls">🎮 Controls</a> ·
+  <a href="#-features">✨ Features</a> ·
+  <a href="#-how-it-plays">🌌 How it plays</a> ·
+  <a href="#%EF%B8%8F-behind-the-hangar">🛠️ Behind the hangar</a> ·
+  <a href="#-license">📜 License</a>
+</p>
 
-- 🚀 Smooth 2D space shooter gameplay
-- 🎮 Responsive controls for both desktop and mobile
-- 🌟 Powerups including Shield, Double Shot, Rapid Fire, and Field Bomb
-- 💥 Dynamic particle effects and screen shake
-- 🎵 Sound effects and background music
-- 🏆 High score tracking
-- 🌠 Bonus rounds and meteor showers
-- 📱 Mobile-friendly interface with virtual joystick
-- 🎮 Fullscreen support for better immersion
+## 🚀 Launch
 
-## Getting Started
+- **Play online:** <https://jpvelasco.github.io/cosmic-assault/>
+- **On iPhone or iPad:** open the game in Safari, tap **Share**, then **Add to Home Screen** for a full-screen launch from your home screen.
+- **Run locally:**
 
-### Prerequisites
+  ```bash
+  cd tests && npm ci && npm run serve
+  ```
 
-- Modern web browser (Chrome, Firefox, Safari recommended)
-- Node.js (LTS version recommended)
-- npm (comes with Node.js)
-- AWS CLI (configured with appropriate permissions)
-- AWS Account
+  Then open `http://localhost:8080`. No accounts or cloud setup are needed.
 
-### Setup and Deployment
+## 🎮 Controls
 
-These steps cover cloning the repository, installing dependencies, building the infrastructure code, and deploying the stack to AWS.
+**Desktop**
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/jpvelasco/cosmic-assault
-    cd cosmic-assault
-    ```
+| Action | Keys |
+| --- | --- |
+| Turn | `←` `→` or `A` `D` |
+| Thrust | `↑` or `W` |
+| Fire | `Space` or `Shift` |
+| Start | Any key on the title screen |
+| Restart | `R` after game over |
 
-2.  **Navigate to Infrastructure Directory:**
-    ```bash
-    cd infrastructure
-    ```
+**Touch**
 
-3.  **Install Dependencies:** Install the required Node.js packages for the CDK project.
-    ```bash
-    npm install
-    ```
+| Action | Control |
+| --- | --- |
+| Steer and thrust | Virtual joystick: push the way you want to fly |
+| Fire | **FIRE** button |
+| Start | Tap the screen |
+| Restart | **RESTART** button after game over |
 
-4.  **Build Infrastructure Code:** Compile the TypeScript code into JavaScript. This is necessary before running any CDK commands.
-    ```bash
-    npm run build
-    ```
+Phones play in landscape; the game asks you to rotate if you hold it upright.
 
-5.  **(Optional) Configure AWS Credentials:** Ensure your AWS CLI is configured with the necessary permissions if you haven't already.
-    ```bash
-    aws configure
-    ```
+> **Tip:** some keyboards drop `Space` while two arrow keys are held (keyboard ghosting). Fly with **WASD + Space**, or keep the arrows and fire with **Shift**. The game spots this and suggests the same.
 
-6.  **Deploy to AWS:** Deploy the infrastructure stack (S3 bucket, CloudFront distribution) and the website content.
-    ```bash
-    cdk deploy
-    ```
+## ✨ Features
 
-    *Note: You might be prompted to approve IAM policy changes during the first deployment.*
-    *After deployment, the CloudFront distribution URL will be displayed as an output.*
+- 🛡️ **Power-ups** drop from shattered rocks: **Shield**, **Double Shot**, **Rapid Fire** and **Field Bomb**, which blasts away the rocks around you.
+- 🔫 **Weapon upgrades** widen your spread as your score climbs.
+- 🌀 **Gravity wells and repulsion fields** pull and push your ship, your shots and the rocks.
+- ⚠️ **Danger zones** flash a warning, then cost you a life if you fly into them.
+- ☄️ **Meteor showers** rain fast rocks down the screen.
+- 🎯 **Bonus rounds** fill the sky with targets worth multiplied points.
+- 💥 **Particle effects and screen shake** on every hit and blast.
+- 🔊 **Synthesized sound**, generated live with the Web Audio API.
+- 🏆 **High score** saved in this browser on this device, so it persists across reloads.
 
-This deployment process will:
-- Create the necessary AWS infrastructure (S3 bucket, CloudFront distribution, etc.).
-- Upload the static website files from the `../website` directory to the S3 bucket.
-- Configure the CloudFront distribution to serve the website.
+## 🌌 How it plays
 
-## Game Controls
+- You start with three lives. Shots split rocks into two smaller, faster pieces, and smaller rocks are worth more: 20, 50, 100 and 150 points.
+- Your score unlocks new levels at 5,000, 15,000, 30,000 points and beyond. Each level adds 0.4× to your score multiplier and sends more, faster rocks.
+- Weapon upgrades arrive at 8,000 and 25,000 points, adding a shot to every volley.
+- New hazards join as you climb: gravity wells and repulsion fields from level 2, meteor showers from level 3, bonus rounds from level 4 and danger zones from level 5.
+- A hit costs a life; you respawn blinking, with three seconds of invulnerability. A Shield absorbs one hit for you.
+- The screen wraps at every edge, so whatever leaves one side comes back on the other.
 
-### Desktop
-- Arrow keys: Move/rotate ship
-- Spacebar: Shoot
-- F: Toggle fullscreen
-- M: Toggle sound
-- R: Restart game (when game over)
+## 🛠️ Behind the hangar
 
-### Mobile
-- Virtual joystick: Move ship
-- Fire button: Shoot
-- Restart button: Restart game (when game over)
+| Path | What lives there |
+| --- | --- |
+| `website/` | The game: static HTML, CSS and ES modules, with no build step |
+| `tests/` | Playwright end-to-end tests and the local dev server |
+| `.github/` | Workflows, issue templates and contributor docs |
+| `docs/assets/` | README artwork, including this banner |
 
-## Game Mechanics
-
-- Destroy asteroids to earn points
-- Collect powerups to enhance your ship
-- Avoid collisions with asteroids and danger zones
-- Survive bonus rounds and meteor showers
-- Aim for the highest score!
-
-## Project Structure
-
-```
-cosmic-assault/
-├── website/             # Static website files (HTML, CSS, JS)
-│   ├── index.html
-│   ├── style.css
-│   ├── game-modular.js  # Entry point
-│   └── modules/         # ES6 module architecture (core, entities, systems, utils)
-└── infrastructure/      # AWS CDK infrastructure code (TypeScript)
-    ├── package.json
-    ├── tsconfig.json
-    ├── cdk.json         # CDK configuration
-    ├── bin/             # CDK entry point script
-    ├── lib/             # CDK stack definitions
-    └── dist/            # Compiled JavaScript output (generated by `npm run build`)
-```
-
-## Development Tools
-
-### Website/Game
-- HTML5 Canvas
-- JavaScript (ES6+)
-- CSS3
-
-### Infrastructure
-- AWS CDK for Infrastructure as Code (IaC)
-- TypeScript for defining infrastructure resources
-- AWS CloudFormation (used by CDK for deployment)
-- Jest for testing infrastructure code (if applicable)
-
-## Contributing
-
-1. Fork the repository (https://github.com/jpvelasco/cosmic-assault)
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Useful CDK Commands (Run from `infrastructure` directory)
+**Tests**
 
 ```bash
-# Synthesize CloudFormation template
-cdk synth
-
-# Compare local changes with deployed stack
-cdk diff
-
-# Deploy changes to AWS
-cdk deploy
-
-# Destroy the deployed infrastructure
-cdk destroy
+cd tests && npx playwright install chromium && npm test -- --project=chromium-desktop
 ```
 
-## License
+**CI:** every pull request to `main` runs the Playwright suite in desktop Chromium.
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+**Deploy:** GitHub Pages publishes `website/` on every merge to `main`.
 
-## Acknowledgments
+Working on the code? Start with [`AGENTS.md`](AGENTS.md) and [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md).
 
-- Thanks to all contributors and testers
-- Special thanks to the open-source community
+## 📜 License
+
+Released under the [MIT License](LICENSE).
+
+---
+
+<p align="center">Built with Canvas, WebAudio and too much coffee ☕</p>
