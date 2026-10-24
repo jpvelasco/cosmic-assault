@@ -19,7 +19,7 @@
 
 - **Play online:** <https://jpvelasco.github.io/cosmic-assault/>
 - **On iPhone or iPad:** open the game in Safari, tap **Share**, then **Add to Home Screen** for a full-screen launch from your home screen.
-- **Run locally:**
+- **Run locally** (Node.js 20 or newer):
 
   ```bash
   cd tests && npm ci && npm run serve
@@ -36,7 +36,7 @@
 | Turn | `←` `→` or `A` `D` |
 | Thrust | `↑` or `W` |
 | Fire | `Space` or `Shift` |
-| Start | Any key on the title screen |
+| Start | Press a key (for example `Space`) on the title screen |
 | Restart | `R` after game over |
 
 **Touch**
@@ -85,7 +85,7 @@ Phones play in landscape; the game asks you to rotate if you hold it upright.
 **Tests**
 
 ```bash
-cd tests && npx playwright install chromium && npm test -- --project=chromium-desktop
+cd tests && npm ci && npx playwright install chromium && npm test -- --project=chromium-desktop
 ```
 
 **CI:** every pull request to `main` runs the Playwright suite in desktop Chromium.

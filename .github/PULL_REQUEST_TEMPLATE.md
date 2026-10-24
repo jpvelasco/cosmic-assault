@@ -10,7 +10,7 @@ Brief description of what this PR does.
 - [ ] Tested on: (OS/environment)
 
 ## Documentation
-- [ ] Updated README.md (if applicable)
+- [ ] Updated ReadMe.md (if applicable)
 - [ ] Updated AGENTS.md (if applicable)
 
 ## Related Issues
