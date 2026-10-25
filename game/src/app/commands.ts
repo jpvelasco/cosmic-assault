@@ -8,9 +8,10 @@ export type Command =
   | { readonly kind: 'togglePause' }
   | { readonly kind: 'toTitle' };
 
-const START: Command = { kind: 'start' };
+/** Starts a run from the title, or restarts one from the game-over card. */
+export const START: Command = { kind: 'start' };
+export const TO_TITLE: Command = { kind: 'toTitle' };
 const TOGGLE_PAUSE: Command = { kind: 'togglePause' };
-const TO_TITLE: Command = { kind: 'toTitle' };
 const START_KEYS: ReadonlySet<string> = new Set([...GAME_KEY_CODES, 'Enter']);
 const PAUSE_KEYS: ReadonlySet<string> = new Set(['Escape', 'KeyP']);
 const RESTART_KEY = 'KeyR';

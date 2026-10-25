@@ -27,7 +27,7 @@ interface PointerTracker {
 interface PointerHandlers {
   onStart(e: PointerEvent): void;
   onMove?(e: PointerEvent): void;
-  onRelease(): void;
+  onRelease?(): void;
 }
 
 function styled<K extends keyof HTMLElementTagNameMap>(
@@ -52,7 +52,7 @@ function trackSinglePointer(el: HTMLElement, handlers: PointerHandlers): Pointer
   const release = (): void => {
     if (activeId === null) return;
     activeId = null;
-    handlers.onRelease();
+    handlers.onRelease?.();
   };
   const onDown = (e: PointerEvent): void => {
     if (activeId !== null) return;
@@ -95,24 +95,28 @@ const FIRE_CSS = `position:absolute;right:${inset('right', 20)};bottom:${inset('
 const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('right', 16)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;background:rgba(232,236,255,0.12);border:2px solid rgba(232,236,255,0.5);color:#e8ecff;font:bold 16px sans-serif;letter-spacing:-1px;${TOUCH_CSS}`;
 const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:1000';
 
-function pauseButton(onPause: () => void): HTMLButtonElement {
+function pauseButton(): HTMLButtonElement {
   const button = styled('button', PAUSE_CSS, 'touch-pause');
   button.type = 'button';
   button.textContent = 'II';
   button.setAttribute('aria-label', 'Pause');
-  button.addEventListener('click', onPause);
   return button;
 }
 
-/** Joystick, FIRE and a pause button; `onPause` runs when the pause button is tapped. */
+/**
+ * Joystick, FIRE and a pause button. `onPause` runs as a finger lands on the pause button: on
+ * pointerdown rather than click, because a phone sends no click for a second finger while the
+ * thumb is on the stick.
+ */
 export function attachTouchControls(root: HTMLElement, onPause: () => void): TouchControls {
   const layer = styled('div', LAYER_CSS);
   const base = styled('div', BASE_CSS, 'touch-joystick');
   const handle = styled('div', HANDLE_CSS);
   const fireButton = styled('div', FIRE_CSS, 'touch-fire');
   fireButton.textContent = 'FIRE';
+  const pause = pauseButton();
   base.append(handle);
-  layer.append(base, fireButton, pauseButton(onPause));
+  layer.append(base, fireButton, pause);
   root.append(layer);
 
   let stick: Stick | null = null;
@@ -148,9 +152,10 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
     },
   });
 
+  const trackers = [stickTracker, fireTracker, trackSinglePointer(pause, { onStart: onPause })];
+
   const releaseAll = (): void => {
-    stickTracker.release();
-    fireTracker.release();
+    for (const tracker of trackers) tracker.release();
   };
   const show = (visible: boolean): void => {
     layer.style.display = visible ? '' : 'none';
@@ -167,8 +172,7 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
     },
     show,
     dispose() {
-      stickTracker.detach();
-      fireTracker.detach();
+      for (const tracker of trackers) tracker.detach();
       layer.remove();
     },
   };

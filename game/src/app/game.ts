@@ -3,13 +3,15 @@ import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
 import { createRenderer } from '../render/renderer';
+import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createOverlay } from '../ui/overlay';
-import { commandForKey, type Command } from './commands';
-import { clockSeed, seedOverride } from './seed';
+import { commandForKey, START, TO_TITLE, type Command } from './commands';
+import { passesGameOverGuard } from './gameOverGuard';
+import { clockSeed, runOverrides } from './seed';
 
 export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
 
@@ -28,8 +30,6 @@ export interface App {
   dispose(): void;
 }
 
-/** The game-over card ignores input this long, so a held key or tap cannot skip it. */
-const GAME_OVER_GUARD_MS = 700;
 /** The renderer draws the latest state; M1 does not interpolate between steps. */
 const LATEST_STATE_ALPHA = 1;
 
@@ -47,18 +47,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const touch = attachTouchControls(root, pause);
   const loop = createFixedStepLoop();
   const coarsePointer = window.matchMedia('(pointer: coarse)');
-  const fixedSeed = seedOverride();
-  const overlay = createOverlay(root, {
-    tap: () => {
-      afterGuard(performance.now(), start);
-    },
-    selectLevel,
-    resume,
-    quit,
-    toTitle: () => {
-      afterGuard(performance.now(), quit);
-    },
-  });
+  const overrides = runOverrides();
+  const button = (command: Command) => (): void => {
+    applyCommand(command, performance.now());
+  };
+  const overlay = createOverlay(root, { start: button(START), selectLevel, resume, quit, toTitle: button(TO_TITLE) });
 
   let mode: AppMode = 'title';
   let world: World | null = null;
@@ -99,7 +92,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     if (field === null) {
       throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
     }
-    world = new World({ seed: fixedSeed ?? clockSeed(), field, practiceLevel });
+    world = new World({
+      seed: overrides.seed ?? clockSeed(),
+      field,
+      practiceLevel,
+      startLives: overrides.startLives ?? PLAYER.startLives,
+    });
     startKeys.latch(keyboard.held);
     loop.reset();
     setMode('playing');
@@ -128,19 +126,15 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     syncView();
   }
 
-  /** Runs a player action unless the game-over guard is still ignoring input. */
-  function afterGuard(now: number, action: () => void): void {
-    if (mode === 'gameOver' && now - gameOverAt < GAME_OVER_GUARD_MS) return;
-    action();
-  }
-
+  /** Runs a key or button command unless the game-over guard is still ignoring it. */
   function applyCommand(command: Command, now: number): void {
+    if (!passesGameOverGuard(mode, command, now - gameOverAt)) return;
     switch (command.kind) {
       case 'start':
-        afterGuard(now, start);
+        start();
         break;
       case 'toTitle':
-        afterGuard(now, quit);
+        quit();
         break;
       case 'selectLevel':
         selectLevel(command.level);

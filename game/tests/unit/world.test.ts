@@ -5,7 +5,7 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import type { Ship } from '../../src/sim/ship';
-import { isPracticeLevel, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
+import { isPracticeLevel, isStartLives, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
@@ -133,6 +133,27 @@ describe('World start of a run', () => {
   it('accepts exactly the integer practice levels 1 to 7', () => {
     expect([1, 2, 3, 4, 5, 6, 7].every(isPracticeLevel)).toBe(true);
     expect([0, 8, 1.5, Number.NaN, -1].some(isPracticeLevel)).toBe(false);
+  });
+
+  it.each([1, 2, 3])('starts with startLives %i', (startLives) => {
+    expect(world({ startLives }).lives).toBe(startLives);
+  });
+
+  it('ends the run on the first hit with startLives 1', () => {
+    const w = world({ startLives: 1, initialAsteroids: [still(CENTRE.x, CENTRE.y, 3)] });
+    const events = stepIntoVulnerability(w, NO_CONTROLS);
+    expect(events.map((e) => e.type)).toEqual(['shipHit', 'gameOver']);
+    expect(w.status).toBe('gameOver');
+  });
+
+  it.each([0, 4, 1.5, Number.NaN])('rejects startLives %s with a RangeError', (startLives) => {
+    expect(() => world({ startLives })).toThrow(RangeError);
+    expect(() => world({ startLives })).toThrow(/startLives must be an integer from 1 to 3/);
+  });
+
+  it('accepts exactly the integer start lives 1 to 3', () => {
+    expect([1, 2, 3].every(isStartLives)).toBe(true);
+    expect([0, 4, 1.5, Number.NaN, -1].some(isStartLives)).toBe(false);
   });
 
   it('accepts exactly the unsigned 32-bit integer seeds', () => {

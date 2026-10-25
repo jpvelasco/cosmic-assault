@@ -42,10 +42,13 @@ export interface WorldOptions {
   readonly initialShip?: ShipPlacement;
   /** Replaces the 3 practice spawns at the start of the run. */
   readonly initialAsteroids?: readonly AsteroidPlacement[];
+  /** Integer 1–3; defaults to 3. */
+  readonly startLives?: number;
 }
 
 export const MIN_PRACTICE_LEVEL = 1;
 export const MAX_PRACTICE_LEVEL = 7;
+const MIN_START_LIVES = 1;
 const START_ASTEROIDS = 3;
 export const UINT32_MAX = 0xffffffff;
 /** Absorbs float residue from summing dt steps so the timer fires on the step its interval ends. */
@@ -75,6 +78,19 @@ function assertPracticeLevel(level: number): void {
   if (!isPracticeLevel(level)) {
     throw new RangeError(
       `World practiceLevel must be an integer from ${String(MIN_PRACTICE_LEVEL)} to ${String(MAX_PRACTICE_LEVEL)} (got ${String(level)}); clamp or round it first`,
+    );
+  }
+}
+
+/** A run starts with an integer 1–3 lives. */
+export function isStartLives(lives: number): boolean {
+  return Number.isInteger(lives) && lives >= MIN_START_LIVES && lives <= PLAYER.startLives;
+}
+
+function assertStartLives(lives: number): void {
+  if (!isStartLives(lives)) {
+    throw new RangeError(
+      `World startLives must be an integer from ${String(MIN_START_LIVES)} to ${String(PLAYER.startLives)} (got ${String(lives)}); omit it for the default ${String(PLAYER.startLives)}`,
     );
   }
 }
@@ -164,7 +180,7 @@ export class World {
   /** Live `SpawningSystem.reset()` zeroes the timer, so the first step spawns at once. */
   private spawnTimer = 0;
   private scoreValue = 0;
-  private livesValue: number = PLAYER.startLives;
+  private livesValue: number;
   private statusValue: WorldStatus = 'playing';
   private elapsedValue = 0;
 
@@ -173,6 +189,8 @@ export class World {
     assertField(opts.field);
     this.level = opts.practiceLevel ?? MIN_PRACTICE_LEVEL;
     assertPracticeLevel(this.level);
+    this.livesValue = opts.startLives ?? PLAYER.startLives;
+    assertStartLives(this.livesValue);
     this.practice = practiceSettings(this.level);
     this.currentField = opts.field;
     this.spawnRng = createRng(deriveSeed(opts.seed, 'spawn'));
