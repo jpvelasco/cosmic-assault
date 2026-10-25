@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SpriteCache } from '../../src/render/spriteCache';
 
 function makeCache(capacity: number) {
@@ -35,6 +35,19 @@ describe('SpriteCache', () => {
     cache.set('c', 3);
     expect(evicted).toEqual([['b', 2]]);
     expect(cache.get('a')).toBe(1);
+  });
+
+  it('a hit only stamps the entry: it never deletes or re-inserts, so the map order stays put', () => {
+    const { cache } = makeCache(3);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    const set = vi.spyOn(Map.prototype, 'set');
+    const remove = vi.spyOn(Map.prototype, 'delete');
+    for (let i = 0; i < 100; i++) cache.get(i % 2 === 0 ? 'a' : 'b');
+    expect(set).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    set.mockRestore();
+    remove.mockRestore();
   });
 
   it('replacing a key releases the old value and refreshes recency', () => {
