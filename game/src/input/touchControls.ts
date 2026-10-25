@@ -33,9 +33,11 @@ interface PointerHandlers {
 function styled<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   css: string,
+  testId?: string,
 ): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
   el.style.cssText = css;
+  if (testId !== undefined) el.dataset['testid'] = testId;
   return el;
 }
 
@@ -94,7 +96,7 @@ const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('righ
 const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:1000';
 
 function pauseButton(onPause: () => void): HTMLButtonElement {
-  const button = styled('button', PAUSE_CSS);
+  const button = styled('button', PAUSE_CSS, 'touch-pause');
   button.type = 'button';
   button.textContent = 'II';
   button.setAttribute('aria-label', 'Pause');
@@ -105,9 +107,9 @@ function pauseButton(onPause: () => void): HTMLButtonElement {
 /** Joystick, FIRE and a pause button; `onPause` runs when the pause button is tapped. */
 export function attachTouchControls(root: HTMLElement, onPause: () => void): TouchControls {
   const layer = styled('div', LAYER_CSS);
-  const base = styled('div', BASE_CSS);
+  const base = styled('div', BASE_CSS, 'touch-joystick');
   const handle = styled('div', HANDLE_CSS);
-  const fireButton = styled('div', FIRE_CSS);
+  const fireButton = styled('div', FIRE_CSS, 'touch-fire');
   fireButton.textContent = 'FIRE';
   base.append(handle);
   layer.append(base, fireButton, pauseButton(onPause));
