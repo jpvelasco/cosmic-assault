@@ -11,6 +11,7 @@ import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createOverlay } from '../ui/overlay';
 import { commandForKey, START, TO_TITLE, type Command } from './commands';
 import { passesGameOverGuard } from './gameOverGuard';
+import { HitStop } from './hitStop';
 import { clockSeed, runOverrides } from './seed';
 
 export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
@@ -46,7 +47,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pause);
   const loop = createFixedStepLoop();
+  const hitStop = new HitStop();
   const coarsePointer = window.matchMedia('(pointer: coarse)');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const overrides = runOverrides();
   const button = (command: Command) => (): void => {
     applyCommand(command, performance.now());
@@ -100,11 +103,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     });
     startKeys.latch(keyboard.held);
     loop.reset();
+    hitStop.clear();
     setMode('playing');
   }
 
   function pause(): void {
-    if (mode === 'playing') setMode('paused');
+    if (mode !== 'playing') return;
+    hitStop.clear();
+    setMode('paused');
   }
 
   function resume(): void {
@@ -117,6 +123,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     if (world === null) return;
     world.endRun();
     world = null;
+    hitStop.clear();
     setMode('title');
   }
 
@@ -153,8 +160,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
 
   function stepWorld(run: World, frameSeconds: number, now: number): void {
     const controls = readControls();
-    loop.advance(frameSeconds, (dt) => {
-      run.step(dt, controls);
+    // A freeze triggered by a step in this frame takes effect from the next frame's consume().
+    loop.advance(hitStop.consume(frameSeconds), (dt) => {
+      hitStop.trigger(run.step(dt, controls));
     });
     if (run.status === 'gameOver') {
       gameOverAt = now;
@@ -181,6 +189,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     }
   }
 
+  const syncReducedMotion = (): void => {
+    hitStop.reducedMotion = reducedMotion.matches;
+  };
+  syncReducedMotion();
   const markResize = (): void => {
     resizePending = true;
   };
@@ -191,6 +203,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const unlisteners = [
     listen(window, 'resize', markResize),
     listen(window, 'orientationchange', markResize),
+    listen(reducedMotion, 'change', syncReducedMotion),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
   ];
