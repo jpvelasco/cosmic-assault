@@ -129,7 +129,7 @@ describe('stepShip', () => {
     ship.vx = 400;
     ship.vy = 300;
     stepShip(ship, NO_CONTROLS, DT, FIELD);
-    expect(Math.hypot(ship.vx, ship.vy)).toBeLessThanOrEqual(PLAYER.maxSpeed + 1e-9);
+    expect(Math.hypot(ship.vx, ship.vy)).toBeCloseTo(PLAYER.maxSpeed, 9);
   });
 
   it('clears invulnerability once the timer runs out', () => {
@@ -187,17 +187,49 @@ describe('thrustCompensation', () => {
     expect(thrustCompensation(1, 1 / 120)).toBe(1);
   });
 
-  it.each([1 / 120, 1 / 144])('gives the same 5 s of full-thrust speed as 1/60 at dt %f', (dt) => {
+  it.each([
+    ['keyboard', withControls({ thrust: true })],
+    ['stick at distance 90 (drag relieved to 0.99)', withControls({ stick: { angle: 0, distance: 90 } })],
+  ])('gives the same 5 s of %s speed as 1/60 at any step size', (_name, controls) => {
     const speedAfter = (step: number): number => {
       const ship = idleShip();
       ship.angle = 0;
       const steps = Math.round(5 / step);
       for (let i = 0; i < steps; i++) {
-        stepShip(ship, withControls({ thrust: true }), step, { width: 1e9, height: 1e9 });
+        stepShip(ship, controls, step, { width: 1e9, height: 1e9 });
       }
       return ship.vx;
     };
-    expect(speedAfter(dt)).toBeCloseTo(speedAfter(1 / 60), 9);
+    expect(speedAfter(1 / 120)).toBeCloseTo(speedAfter(1 / 60), 9);
+    expect(speedAfter(1 / 144)).toBeCloseTo(speedAfter(1 / 60), 9);
+  });
+
+  it('is 1 for a zero-length step so velocity stays finite', () => {
+    expect(thrustCompensation(0.98, 0)).toBe(1);
+    const ship = idleShip();
+    ship.vx = 12;
+    ship.vy = -7;
+    stepShip(ship, withControls({ thrust: true }), 0, FIELD);
+    expect(ship.vx).toBe(12);
+    expect(ship.vy).toBe(-7);
+  });
+});
+
+describe('firing while moving', () => {
+  it('uses the pre-physics position and half the post-thrust, pre-drag velocity', () => {
+    const ship = idleShip(100, 200);
+    ship.angle = 0.5;
+    ship.vx = 30;
+    ship.vy = -40;
+    const [shot] = stepShip(ship, withControls({ thrust: true, fire: true }), DT, FIELD);
+
+    const thrustedVx = 30 + Math.cos(0.5) * PLAYER.thrust * DT;
+    const thrustedVy = -40 + Math.sin(0.5) * PLAYER.thrust * DT;
+    expect(shot?.x).toBeCloseTo(100 + Math.cos(0.5) * PLAYER.noseOffset, 9);
+    expect(shot?.y).toBeCloseTo(200 + Math.sin(0.5) * PLAYER.noseOffset, 9);
+    expect(shot?.vx).toBeCloseTo(thrustedVx * 0.5 + Math.cos(0.5) * PLAYER.projectileSpeed, 9);
+    expect(shot?.vy).toBeCloseTo(thrustedVy * 0.5 + Math.sin(0.5) * PLAYER.projectileSpeed, 9);
+    expect(ship.x).not.toBeCloseTo(100, 1);
   });
 });
 

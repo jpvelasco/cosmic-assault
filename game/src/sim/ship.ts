@@ -55,13 +55,21 @@ export function respawnShip(ship: Ship, field: Field): void {
  * Scales per-step thrust so any step size follows the same per-1/60 s linear
  * map (thrust then drag) as the live 60 Hz game; exactly 1 at dt = 1/60.
  */
-export function thrustCompensation(drag: number, dt: number): number {
-  if (drag >= 1) {
+export function thrustCompensation(
+  drag: number,
+  dt: number,
+  perStepDrag: number = Math.pow(drag, FRAMES_PER_SECOND_REFERENCE * dt),
+): number {
+  const frames = FRAMES_PER_SECOND_REFERENCE * dt;
+  if (drag >= 1 || frames <= 0) {
     return 1;
   }
-  const frames = FRAMES_PER_SECOND_REFERENCE * dt;
-  const perStepDrag = Math.pow(drag, frames);
   return (drag * (1 - perStepDrag)) / (frames * perStepDrag * (1 - drag));
+}
+
+function thrustAlong(ship: Ship, magnitude: number, compensation: number, dt: number): void {
+  ship.vx += Math.cos(ship.angle) * PLAYER.thrust * magnitude * compensation * dt;
+  ship.vy += Math.sin(ship.angle) * PLAYER.thrust * magnitude * compensation * dt;
 }
 
 function steerWithStick(ship: Ship, stick: Stick, compensation: number, dt: number): void {
@@ -70,17 +78,14 @@ function steerWithStick(ship: Ship, stick: Stick, compensation: number, dt: numb
   }
   ship.angle = stick.angle;
   ship.thrusting = true;
-  const thrustMagnitude = Math.min(stick.distance / STICK.fullThrust, 1);
-  ship.vx += Math.cos(ship.angle) * PLAYER.thrust * thrustMagnitude * compensation * dt;
-  ship.vy += Math.sin(ship.angle) * PLAYER.thrust * thrustMagnitude * compensation * dt;
+  thrustAlong(ship, Math.min(stick.distance / STICK.fullThrust, 1), compensation, dt);
 }
 
 function steerWithKeyboard(ship: Ship, controls: Controls, compensation: number, dt: number): void {
   ship.angle += PLAYER.turnSpeed * dt * controls.turn;
   if (controls.thrust) {
     ship.thrusting = true;
-    ship.vx += Math.cos(ship.angle) * PLAYER.thrust * compensation * dt;
-    ship.vy += Math.sin(ship.angle) * PLAYER.thrust * compensation * dt;
+    thrustAlong(ship, 1, compensation, dt);
   }
 }
 
@@ -108,10 +113,9 @@ function dragPerFrame(stick: Stick | null): number {
   return Math.min(base + relief * (1 - base), STICK.maxDrag);
 }
 
-function applyPhysics(ship: Ship, frameDrag: number, dt: number): void {
-  const drag = Math.pow(frameDrag, FRAMES_PER_SECOND_REFERENCE * dt);
-  ship.vx *= drag;
-  ship.vy *= drag;
+function applyPhysics(ship: Ship, stepDrag: number, dt: number): void {
+  ship.vx *= stepDrag;
+  ship.vy *= stepDrag;
 
   const speed = Math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy);
   if (speed > PLAYER.maxSpeed) {
@@ -136,7 +140,8 @@ export function stepShip(ship: Ship, controls: Controls, dt: number, field: Fiel
   }
 
   const frameDrag = dragPerFrame(controls.stick);
-  const compensation = thrustCompensation(frameDrag, dt);
+  const stepDrag = Math.pow(frameDrag, FRAMES_PER_SECOND_REFERENCE * dt);
+  const compensation = thrustCompensation(frameDrag, dt, stepDrag);
   ship.thrusting = false;
   if (controls.stick === null) {
     steerWithKeyboard(ship, controls, compensation, dt);
@@ -146,7 +151,7 @@ export function stepShip(ship: Ship, controls: Controls, dt: number, field: Fiel
 
   const shots = controls.fire && ship.fireCooldown <= COOLDOWN_EPSILON ? fireShots(ship) : NO_SHOTS;
 
-  applyPhysics(ship, frameDrag, dt);
+  applyPhysics(ship, stepDrag, dt);
   wrapPosition(ship, field);
   return shots;
 }

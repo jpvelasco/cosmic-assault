@@ -12,6 +12,11 @@ interface FixtureFrame {
   shots: Shot[];
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
 interface Fixture {
   scenario: string;
   dt: number;
@@ -43,7 +48,9 @@ function controlsFor(input: FixtureFrame['input']): Controls {
 function startShip(fixture: Fixture): Ship {
   const ship = createShip(fixture.start.x, fixture.start.y);
   ship.angle = fixture.start.angle;
-  if (fixture.scenario !== 'invulnerability') {
+  // A fresh 3 s timer cannot expire within one frame, so the ship starts
+  // invulnerable exactly when the recorded first frame is still invulnerable.
+  if (fixture.frames[0]?.ship.invulnerable !== true) {
     ship.invulnerable = false;
     ship.invulnerableFor = 0;
   }
@@ -51,7 +58,7 @@ function startShip(fixture: Fixture): Ship {
 }
 
 /** Distance on the wrapped field: the two runs may cross a wrap edge on adjacent frames. */
-function wrappedDistance(a: Shot, b: Shot, field: Field): number {
+function wrappedDistance(a: Point, b: Point, field: Field): number {
   const axis = (delta: number, size: number): number => {
     const d = Math.abs(delta);
     const period = size + 2 * WRAP_MARGIN;
@@ -116,6 +123,7 @@ describe('trace parity with the live game', () => {
         expect(steps, `frame ${String(index)} steps`).toBe(2);
 
         const label = `frame ${String(index)}`;
+        expect(ship.invulnerable, `${label} invulnerable`).toBe(frame.ship.invulnerable);
         expect(Math.abs(ship.angle - frame.ship.angle), `${label} angle`).toBeLessThanOrEqual(1e-9);
         const speed = Math.hypot(ship.vx, ship.vy);
         const wantSpeed = Math.hypot(frame.ship.vx, frame.ship.vy);
