@@ -39,6 +39,13 @@ describe('craterLayout', () => {
     expect(craterLayout(42, 40)).not.toEqual(craterLayout(43, 40));
   });
 
+  it('keeps the layout it has always drawn for an id', () => {
+    expect(craterLayout(1, 40)).toEqual([
+      { x: -6.090271208901983, y: 12.336100609752222, r: 8.558787885680793 },
+      { x: 9.091579617917331, y: -9.783580514574991, r: 8.06939064078033 },
+    ]);
+  });
+
   it('keeps crater centres at least 1.1 × their summed radii apart', () => {
     for (let id = 1; id <= 400; id++) {
       const craters = craterLayout(id, ASTEROID.radii[id % 4] ?? 0);
@@ -79,6 +86,11 @@ describe('shapeFingerprint', () => {
     const other = createAsteroid(createRng(2), 0, 0, 1, 0, 1, createRng(2), 5);
     expect(shapeFingerprint(twin)).toBe(shapeFingerprint(a));
     expect(shapeFingerprint(other)).not.toBe(shapeFingerprint(a));
+  });
+
+  it('keeps the key it has always made for a shape', () => {
+    const rng = createRng(5);
+    expect(shapeFingerprint(createAsteroid(rng, 300, 300, 0, 0, 1, rng, 5))).toBe('927cc616');
   });
 });
 

@@ -1,7 +1,6 @@
 import { WRAP_MARGIN } from '../sim/config';
 import type { Field } from '../sim/field';
-
-const TAU = Math.PI * 2;
+import { TAU } from '../sim/math';
 
 export interface Pose {
   readonly x: number;

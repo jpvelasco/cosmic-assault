@@ -1,5 +1,6 @@
 import { ASTEROID, WRAP_MARGIN } from './config';
 import type { Field } from './field';
+import { TAU } from './math';
 import type { Rng } from './rng';
 import type { Ship } from './ship';
 import { wrapPosition } from './wrap';
@@ -35,7 +36,6 @@ export interface PracticeSettings {
 }
 
 const TINY: AsteroidSize = 3;
-const TWO_PI = Math.PI * 2;
 /** Live `circleCollision(x, y, 80, ship.x, ship.y, 150)`: the spawn point counts as an 80-radius circle. */
 const SPAWN_POINT_RADIUS = 80;
 const TARGET_BAND = [0.3, 0.7] as const;
@@ -49,7 +49,7 @@ function createVertices(rng: Rng, radius: number): { x: number; y: number }[] {
   const count = rng.int(minCount, maxCount + 1);
   const vertices: { x: number; y: number }[] = [];
   for (let i = 0; i < count; i++) {
-    const angle = (i / count) * TWO_PI;
+    const angle = (i / count) * TAU;
     const distance = radius * (1 + rng.range(-ASTEROID.jaggedness, ASTEROID.jaggedness));
     vertices.push({ x: Math.cos(angle) * distance, y: Math.sin(angle) * distance });
   }
@@ -67,7 +67,7 @@ export function createAsteroid(
   shapeRng: Rng = rng,
   id = 0,
 ): Asteroid {
-  const rotation = rng.range(0, TWO_PI);
+  const rotation = rng.range(0, TAU);
   const spin = rng.range(-ASTEROID.spinMax, ASTEROID.spinMax);
   const radius = ASTEROID.radii[size];
   const [jitterMin, jitterMax] = ASTEROID.speedJitter;

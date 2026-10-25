@@ -7,8 +7,14 @@ export interface Rng {
 }
 
 const UINT32_RANGE = 4294967296;
-const FNV_OFFSET_BASIS = 0x811c9dc5;
+/** FNV-1a's 32-bit starting hash; fold values into it with `fnv1aStep`. */
+export const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
+
+/** One FNV-1a step: folds the 32-bit integer `value` into `hash`. */
+export function fnv1aStep(hash: number, value: number): number {
+  return Math.imul(hash ^ value, FNV_PRIME);
+}
 
 export function mulberry32(seed: number): () => number {
   let a = seed | 0;
@@ -23,7 +29,7 @@ export function mulberry32(seed: number): () => number {
 export function hashString(text: string): number {
   let hash = FNV_OFFSET_BASIS;
   for (let i = 0; i < text.length; i++) {
-    hash = Math.imul(hash ^ text.charCodeAt(i), FNV_PRIME);
+    hash = fnv1aStep(hash, text.charCodeAt(i));
   }
   return hash >>> 0;
 }

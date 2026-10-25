@@ -1,3 +1,4 @@
+import { TAU } from '../sim/math';
 import type { FieldPen } from './fieldPen';
 import type { Particle, ParticlePool } from './particles';
 import type { SpriteBaker } from './sprites';
@@ -9,7 +10,6 @@ export interface ParticlePass {
   drawBursts(): void;
 }
 
-const TAU = Math.PI * 2;
 const WHITE = '#ffffff';
 /** The field is larger on screen than the mockup's, so rings run thicker to read at the same weight. */
 const RING_MAX_WIDTH = 6;

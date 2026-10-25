@@ -1,4 +1,6 @@
 import type { Asteroid } from '../sim/asteroid';
+import { TAU } from '../sim/math';
+import { FNV_OFFSET_BASIS, fnv1aStep, mulberry32 } from '../sim/rng';
 import { mix, rgba } from './color';
 import { get2dContext } from './context';
 import type { Palette } from './palette';
@@ -52,7 +54,6 @@ interface Point {
   readonly y: number;
 }
 
-const TWO_PI = Math.PI * 2;
 const WHITE = '#ffffff';
 const DEFAULT_CAPACITY = 256;
 /** Device pixels of transparent margin around every bake, so antialiased edges never clip. */
@@ -112,30 +113,22 @@ export function snapFlameLength(length: number): number {
   return Math.max(FLAME_STEP * 2, Math.round(length / FLAME_STEP) * FLAME_STEP);
 }
 
-/** mulberry32: a tiny integer hash stream, so crater layout depends only on the asteroid id. */
-function hashStream(seed: number): () => number {
-  let state = (seed ^ 0x9e3779b9) | 0;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/** Mixed into the asteroid id to seed its crater stream, so the layout depends only on the id. */
+const CRATER_SEED_MIX = 0x9e3779b9;
 
 /**
  * Two or three craters for asteroid `id`, spread around the centre, kept within `CRATER_REACH × radius`
  * and apart from each other. A crater that finds no free spot in `CRATER_TRIES` draws is dropped.
  */
 export function craterLayout(id: number, radius: number): readonly Crater[] {
-  const next = hashStream(id);
+  const next = mulberry32(id ^ CRATER_SEED_MIX);
   const count = next() < 0.5 ? 2 : 3;
-  const start = next() * TWO_PI;
+  const start = next() * TAU;
   const craters: Crater[] = [];
   for (let i = 0; i < count; i++) {
     for (let attempt = 0; attempt < CRATER_TRIES; attempt++) {
       const size = 0.12 + next() * 0.12;
-      const angle = start + ((i + (next() - 0.5) * 0.3) / count) * TWO_PI;
+      const angle = start + ((i + (next() - 0.5) * 0.3) / count) * TAU;
       const distance = (0.5 + 0.5 * next()) * (CRATER_REACH - size) * radius;
       const crater = { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, r: size * radius };
       if (craters.every((other) => !cratersOverlap(crater, other))) {
@@ -153,9 +146,9 @@ export function cratersOverlap(a: Crater, b: Crater): boolean {
 
 /** FNV-1a over the radius and vertices rounded to 1e-3, so rocks that share an id but not a shape get distinct keys. */
 export function shapeFingerprint(a: Readonly<Asteroid>): string {
-  let hash = 0x811c9dc5;
+  let hash = FNV_OFFSET_BASIS;
   const add = (value: number): void => {
-    hash = Math.imul(hash ^ Math.round(value * 1000), 0x01000193);
+    hash = fnv1aStep(hash, Math.round(value * 1000));
   };
   add(a.radius);
   for (const v of a.vertices) {
@@ -215,7 +208,7 @@ function paintShip(ctx: CanvasRenderingContext2D, p: Palette): void {
 
 function paintCockpit(ctx: CanvasRenderingContext2D, color: string): void {
   ctx.beginPath();
-  ctx.ellipse(2, 0, 3.5, 2, 0, 0, TWO_PI);
+  ctx.ellipse(2, 0, 3.5, 2, 0, 0, TAU);
   ctx.fillStyle = addStops(ctx.createRadialGradient(1.1, -0.8, 0, 1.6, 0, 4), [WHITE, color, mix(color, '#0066b0', 0.6)], [0, 0.35, 1]);
   ctx.fill();
   ctx.strokeStyle = rgba(mix(color, WHITE, 0.6), 0.8);
@@ -245,7 +238,7 @@ function paintCraters(ctx: CanvasRenderingContext2D, craters: readonly Crater[],
   const lip = rgba(mix(p.rock[0], WHITE, 0.35), 0.2);
   for (const c of craters) {
     ctx.beginPath();
-    ctx.arc(c.x, c.y, c.r, 0, TWO_PI);
+    ctx.arc(c.x, c.y, c.r, 0, TAU);
     ctx.fillStyle = pit;
     ctx.fill();
     ctx.beginPath();

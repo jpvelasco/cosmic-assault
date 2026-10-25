@@ -1,5 +1,6 @@
 import { ASTEROID } from '../sim/config';
 import type { SimEvent } from '../sim/events';
+import { TAU } from '../sim/math';
 import { createRng, type Rng } from '../sim/rng';
 import type { World } from '../sim/world';
 import { DRIFT, type Palette } from './palette';
@@ -31,7 +32,6 @@ export interface Effects {
   reducedMotion: boolean;
 }
 
-const TAU = Math.PI * 2;
 const HIT_TINT = '#ff5a5a';
 const SMOKE_COLOR = '#5a5550';
 const FLAME_COLORS = ['#ffb347', '#ff6a3c'] as const;

@@ -1,4 +1,5 @@
 import type { Field } from '../sim/field';
+import { TAU } from '../sim/math';
 import { createRng } from '../sim/rng';
 
 export interface StarLayers {
@@ -27,7 +28,6 @@ export const PARALLAX_FACTOR = 0.04;
 export const AMBIENT_DRIFT_X = -12;
 
 const STAR_COLOR = '#fff4ff';
-const TAU = Math.PI * 2;
 const TWINKLE_RATE = 2.5;
 /** Stars per layer on the mockup's 480x300 panel: far, mid, near. */
 const LAYERS = [
