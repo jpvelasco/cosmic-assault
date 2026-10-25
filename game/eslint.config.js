@@ -39,6 +39,18 @@ export default defineConfig(
     },
   },
   {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "MemberExpression[property.name='shadowBlur']",
+          message: 'Bake glow into sprites instead of setting shadowBlur per frame',
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.js', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
