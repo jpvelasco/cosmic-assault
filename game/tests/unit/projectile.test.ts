@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { PROJECTILE, WRAP_MARGIN } from '../../src/sim/config';
+import { PROJECTILE, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
 import { projectileFromShot, stepProjectile, type Projectile } from '../../src/sim/projectile';
 
 const FIELD: Field = { width: 1280, height: 720 };
-const DT = 1 / 100;
 
 function stepFor(p: Projectile, steps: number): boolean {
   let alive = true;
   for (let i = 0; i < steps; i++) {
-    alive = stepProjectile(p, DT, FIELD);
+    alive = stepProjectile(p, STEP_SECONDS, FIELD);
   }
   return alive;
 }
@@ -46,20 +45,21 @@ describe('stepProjectile', () => {
     expect(p.x).toBeCloseTo(-WRAP_MARGIN + 9, 9);
   });
 
-  it('is still alive at 1.19 s', () => {
+  it('is still alive after 142 and 143 real steps (1.183 s, 1.192 s)', () => {
     const p = projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 });
-    expect(stepFor(p, 119)).toBe(true);
-    expect(p.life).toBeGreaterThan(0);
+    expect(stepFor(p, 142)).toBe(true);
+    expect(stepFor(p, 1)).toBe(true);
   });
 
-  it('is gone at 1.2 s despite float residue', () => {
+  it('is gone after 144 real steps (1.2 s) despite float residue', () => {
     const p = projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 });
-    expect(stepFor(p, 120)).toBe(false);
+    expect(stepFor(p, 143)).toBe(true);
+    expect(stepFor(p, 1)).toBe(false);
   });
 
   it('stays gone after 1.2 s', () => {
     const p = projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 });
-    expect(stepFor(p, 130)).toBe(false);
+    expect(stepFor(p, 150)).toBe(false);
   });
 
   it('expires at exactly the lifespan in one step', () => {

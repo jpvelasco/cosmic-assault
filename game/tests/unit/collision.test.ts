@@ -140,4 +140,51 @@ describe('SpatialHash', () => {
       hash.forEachCandidate(0, 0, Number.POSITIVE_INFINITY, () => undefined);
     }).toThrow(RangeError);
   });
+
+  it('throws a clear error when a query is nested in another query', () => {
+    const hash = new SpatialHash(CELL);
+    hash.insert(0, 10, 10, 5);
+    hash.insert(1, 20, 20, 5);
+    hash.insert(2, 900, 900, 5);
+    const seen: number[] = [];
+    expect(() => {
+      hash.forEachCandidate(15, 15, 10, (i) => {
+        seen.push(i);
+        hash.forEachCandidate(900, 900, 5, () => undefined);
+      });
+    }).toThrow(/another query on the same SpatialHash is running/);
+    expect(seen).toEqual([0]);
+    // The failed query must not leave the hash stuck busy.
+    expect(candidates(hash, 15, 15, 10).sort()).toEqual([0, 1]);
+  });
+
+  it('rejects invalid indices', () => {
+    const hash = new SpatialHash(CELL);
+    for (const bad of [-1, 1.5, Number.NaN]) {
+      expect(() => {
+        hash.insert(bad, 0, 0, 5);
+      }).toThrow(/non-negative integer index/);
+    }
+  });
+
+  it('survives a hash-key collision between different cells without false overlaps', () => {
+    // Cells (-1, 19) and (1, -19) share a key with the 73856093 / 19349663 hash.
+    const hash = new SpatialHash(CELL);
+    const item: Circle = { x: -64, y: 19 * CELL + 64, r: 10 };
+    const query: Circle = { x: 192, y: -19 * CELL + 64, r: 10 };
+    hash.insert(0, item.x, item.y, item.r);
+    expect(candidates(hash, query.x, query.y, query.r)).toEqual([0]);
+    expect(hashed(hash, [item], query)).toEqual([]);
+    expect(hashed(hash, [item], item)).toEqual([0]);
+  });
+
+  it('finds an item whose edge lies exactly on a cell boundary', () => {
+    const hash = new SpatialHash(CELL);
+    const item: Circle = { x: CELL - 10, y: 64, r: 10 }; // right edge exactly at x = 128
+    hash.insert(0, item.x, item.y, item.r);
+    const touching: Circle = { x: CELL + 4, y: 64, r: 6 }; // left edge at 122 -> overlaps
+    expect(hashed(hash, [item], touching)).toEqual([0]);
+    const tangent: Circle = { x: CELL + 10, y: 64, r: 10 }; // exactly touching: candidate, not a hit
+    expect(hashed(hash, [item], tangent)).toEqual([]);
+  });
 });
