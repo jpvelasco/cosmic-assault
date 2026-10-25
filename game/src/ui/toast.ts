@@ -6,17 +6,20 @@ export interface Toast {
 
 export const TOAST_MS = 1200;
 
-/** A short status pill over every screen, announced politely to screen readers. */
+/**
+ * A short status pill over every screen. The live region stays in the accessibility tree
+ * (hidden by opacity, not `hidden`) and gets its text afterwards, so screen readers announce it.
+ */
 export function createToast(root: HTMLElement): Toast {
   const el = document.createElement('p');
   el.className = 'toast';
   el.setAttribute('role', 'status');
-  el.hidden = true;
   root.append(el);
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const hide = (): void => {
-    el.hidden = true;
+  const clear = (): void => {
+    el.classList.remove('toast--shown');
+    el.textContent = '';
     timer = null;
   };
 
@@ -24,8 +27,8 @@ export function createToast(root: HTMLElement): Toast {
     show(text) {
       if (timer !== null) clearTimeout(timer);
       el.textContent = text;
-      el.hidden = false;
-      timer = setTimeout(hide, TOAST_MS);
+      el.classList.add('toast--shown');
+      timer = setTimeout(clear, TOAST_MS);
     },
     dispose() {
       if (timer !== null) clearTimeout(timer);

@@ -37,13 +37,17 @@ class FakeNode {
 let contexts: FakeContext[] = [];
 
 class FakeContext {
-  state: 'running' | 'suspended' | 'closed' = 'running';
+  /** What a new context starts as, and whether `resume()` gets it running (a browser may refuse without a user gesture). */
+  static startState: 'running' | 'suspended' = 'running';
+  static resumeSucceeds = true;
+  static failBuild = false;
+  state: 'running' | 'suspended' | 'closed' = FakeContext.startState;
   currentTime = 0;
   sampleRate = 8000;
   readonly nodes: FakeNode[] = [];
   readonly destination = new FakeNode('destination');
   readonly resume = vi.fn(() => {
-    this.state = 'running';
+    if (FakeContext.resumeSucceeds) this.state = 'running';
     return Promise.resolve();
   });
   readonly suspend = vi.fn(() => {
@@ -66,7 +70,10 @@ class FakeContext {
     this.nodes.push(node);
     return node;
   }
-  createGain = () => this.make('gain');
+  createGain = () => {
+    if (FakeContext.failBuild) throw new Error('graph refused');
+    return this.make('gain');
+  };
   createBiquadFilter = () => this.make('biquad');
   createDynamicsCompressor = () => this.make('compressor');
   createOscillator = () => this.make('oscillator');
@@ -78,7 +85,7 @@ let visibility: 'visible' | 'hidden';
 let win: EventTarget;
 let doc: EventTarget;
 
-function press(type: 'keydown' | 'pointerdown' = 'keydown'): void {
+function press(type: 'keydown' | 'pointerdown' | 'pointerup' | 'touchend' = 'keydown'): void {
   win.dispatchEvent(new Event(type));
 }
 
@@ -103,6 +110,9 @@ const nodesOf = (kind: string): FakeNode[] => ctx().nodes.filter((n) => n.kind =
 
 beforeEach(() => {
   contexts = [];
+  FakeContext.startState = 'running';
+  FakeContext.resumeSucceeds = true;
+  FakeContext.failBuild = false;
   visibility = 'visible';
   win = new EventTarget();
   doc = new EventTarget();
@@ -132,8 +142,78 @@ describe('unlocking', () => {
     press('keydown');
     press('pointerdown');
     expect(contexts).toHaveLength(1);
-    expect(ctx().resume).toHaveBeenCalledTimes(1);
     expect(e.state).toBe('running');
+  });
+
+  it('keeps listening while the browser leaves the context suspended, and a later gesture resumes it', async () => {
+    FakeContext.startState = 'suspended';
+    FakeContext.resumeSucceeds = false;
+    const e = engine();
+    press('pointerdown');
+    expect(e.state).toBe('suspended');
+    expect(ctx().resume).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    press('pointerup');
+    expect(ctx().resume).toHaveBeenCalledTimes(2);
+    expect(contexts).toHaveLength(1);
+
+    FakeContext.resumeSucceeds = true;
+    press('touchend');
+    await vi.waitFor(() => {
+      expect(e.state).toBe('running');
+    });
+    const resumes = ctx().resume.mock.calls.length;
+    press('keydown');
+    press('pointerdown');
+    expect(ctx().resume).toHaveBeenCalledTimes(resumes);
+  });
+
+  it('listens for pointerdown, pointerup, touchend and keydown', () => {
+    for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const) {
+      contexts = [];
+      const e = engine();
+      press(type);
+      expect(contexts).toHaveLength(1);
+      e.dispose();
+    }
+  });
+
+  it('removes its four gesture listeners once the context is running', () => {
+    const remove = vi.spyOn(win, 'removeEventListener');
+    engine();
+    press();
+    expect(remove.mock.calls.map(([type]) => type).sort()).toEqual(['keydown', 'pointerdown', 'pointerup', 'touchend']);
+  });
+
+  it('keeps the listeners while the context stays suspended, and removes them on dispose', async () => {
+    FakeContext.startState = 'suspended';
+    FakeContext.resumeSucceeds = false;
+    const remove = vi.spyOn(win, 'removeEventListener');
+    const e = engine();
+    press();
+    await Promise.resolve();
+    expect(remove).not.toHaveBeenCalled();
+    e.dispose();
+    expect(remove).toHaveBeenCalledTimes(4);
+  });
+
+  it('never lets a refused resume() reach the console as an unhandled rejection', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    FakeContext.startState = 'suspended';
+    const e = engine();
+    press();
+    ctx().resume.mockRejectedValue(new Error('NotAllowedError'));
+    press();
+    e.setMuted(true);
+    e.setMuted(false);
+    setVisibility('hidden');
+    ctx().suspend.mockRejectedValue(new Error('InvalidStateError'));
+    setVisibility('hidden');
+    vi.useRealTimers();
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
   });
 
   it('reports a context the browser left suspended as suspended', () => {
@@ -332,7 +412,8 @@ describe('mute and visibility', () => {
     setVisibility('hidden');
     expect(ctx().suspend).toHaveBeenCalledTimes(1);
     setVisibility('visible');
-    expect(ctx().resume).toHaveBeenCalledTimes(2);
+    expect(ctx().resume).toHaveBeenCalledTimes(1);
+    expect(ctx().state).toBe('running');
   });
 
   it('stays suspended on return while muted, and wakes on unmute', () => {
@@ -341,9 +422,9 @@ describe('mute and visibility', () => {
     e.setMuted(true);
     setVisibility('hidden');
     setVisibility('visible');
-    expect(ctx().resume).toHaveBeenCalledTimes(1);
+    expect(ctx().resume).not.toHaveBeenCalled();
     e.setMuted(false);
-    expect(ctx().resume).toHaveBeenCalledTimes(2);
+    expect(ctx().resume).toHaveBeenCalledTimes(1);
   });
 
   it('ignores visibility changes before any gesture', () => {
@@ -351,6 +432,138 @@ describe('mute and visibility', () => {
     setVisibility('hidden');
     setVisibility('visible');
     expect(contexts).toHaveLength(0);
+  });
+});
+
+const voiceNodes = (): FakeNode[] => [...nodesOf('oscillator'), ...nodesOf('bufferSource')];
+const voiceCount = (): number => voiceNodes().length;
+/** Start times of the voices built since `known` was taken. */
+const startsSince = (known: ReadonlySet<FakeNode>): number[] =>
+  voiceNodes()
+    .filter((n) => !known.has(n))
+    .map((n) => n.start.mock.calls[0]?.[0] as number);
+
+/** Runs `seconds` of the 25 ms music timer, advancing the fake audio clock only while the context runs. */
+function runClock(seconds: number): void {
+  for (let i = 0; i < seconds * 40; i++) {
+    if (ctx().state === 'running') ctx().currentTime += 0.025;
+    vi.advanceTimersByTime(25);
+  }
+}
+
+describe('no nodes while suspended or muted', () => {
+  it('builds no voices while the browser holds the context suspended', () => {
+    FakeContext.startState = 'suspended';
+    FakeContext.resumeSucceeds = false;
+    const e = engine();
+    press();
+    e.handle([SHOT, { type: 'shipHit', x: 0, y: 0, livesLeft: 1 }]);
+    e.play('uiClick');
+    runClock(2);
+    expect(voiceCount()).toBe(0);
+  });
+
+  it('starts playing once a later gesture gets the context running', () => {
+    FakeContext.startState = 'suspended';
+    FakeContext.resumeSucceeds = false;
+    const e = engine();
+    press();
+    runClock(1);
+    FakeContext.resumeSucceeds = true;
+    press('pointerup');
+    e.play('uiClick');
+    runClock(1);
+    expect(voiceCount()).toBeGreaterThan(5);
+  });
+
+  it('builds no sound or music while muted, even with the context running', () => {
+    const e = engine({ ...DEFAULT_SETTINGS, muted: true });
+    press();
+    e.handle([SHOT]);
+    e.play('gameOver');
+    runClock(2);
+    expect(ctx().state).toBe('running');
+    expect(voiceCount()).toBe(0);
+  });
+
+  it('builds nothing after a mute, a tab switch and a return, and wakes cleanly on unmute', () => {
+    const e = engine();
+    press();
+    runClock(1);
+    e.setMuted(true);
+    setVisibility('hidden');
+    setVisibility('visible');
+    expect(ctx().state).toBe('suspended');
+    const before = voiceCount();
+    const known = new Set(voiceNodes());
+    for (let i = 0; i < 50; i++) e.play('boomLarge');
+    runClock(3);
+    expect(voiceCount()).toBe(before);
+
+    e.setMuted(false);
+    expect(ctx().state).toBe('running');
+    const resumedAt = ctx().currentTime;
+    e.play('uiClick');
+    runClock(1);
+    // One second of music plus one click: tens of voices at most, not a backlog of the muted minutes.
+    expect(voiceCount() - before).toBeLessThan(45);
+    for (const t of startsSince(known)) expect(t).toBeGreaterThanOrEqual(resumedAt - 0.001);
+  });
+
+  it('skips the muted stretch of music on unmute instead of replaying it', () => {
+    const e = engine();
+    press();
+    runClock(1);
+    e.setMuted(true);
+    const before = voiceCount();
+    const known = new Set(voiceNodes());
+    runClock(60);
+    expect(voiceCount()).toBe(before);
+    const unmutedAt = ctx().currentTime;
+    e.setMuted(false);
+    runClock(1);
+    const starts = startsSince(known);
+    expect(starts.length).toBeGreaterThan(0);
+    expect(starts.length).toBeLessThan(40);
+    for (const t of starts) expect(t).toBeGreaterThanOrEqual(unmutedAt - 0.001);
+  });
+});
+
+describe('failure cleanup', () => {
+  it('closes the context once when a call throws, and dispose does not close it again', () => {
+    const e = engine();
+    press();
+    ctx().createOscillator = () => {
+      throw new Error('out of voices');
+    };
+    e.play('uiClick');
+    expect(ctx().close).toHaveBeenCalledTimes(1);
+    e.dispose();
+    expect(ctx().close).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes a context whose graph could not be built', () => {
+    FakeContext.failBuild = true;
+    const onFailure = vi.fn();
+    const e = engine(DEFAULT_SETTINGS, onFailure);
+    press();
+    expect(contexts).toHaveLength(1);
+    expect(ctx().close).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(e.state).toBe('none');
+    press();
+    expect(contexts).toHaveLength(1);
+  });
+
+  it('survives a close() that throws', () => {
+    const e = engine();
+    press();
+    ctx().close.mockImplementation(() => {
+      throw new Error('already closed');
+    });
+    expect(() => {
+      e.dispose();
+    }).not.toThrow();
   });
 });
 

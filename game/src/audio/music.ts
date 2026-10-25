@@ -70,15 +70,23 @@ export interface MusicPlayer {
 /**
  * Plays Drift into `out`. A 25 ms timer hands the audio clock the next 0.1 s of notes, so timer
  * jitter never reaches the beat; after a stall it picks up at the present instead of catching up.
- * `guard` runs each tick so a failing audio call is the caller's to contain.
+ * `guard` runs each tick so a failing audio call is the caller's to contain. While `audible()` is
+ * false (suspended or muted) nothing is scheduled; the beat clock keeps running, so music resumes
+ * at the present through the same skip-ahead as a stall.
  */
-export function createMusicPlayer(bed: VoiceBed, out: AudioNode, guard: (work: () => void) => void): MusicPlayer {
+export function createMusicPlayer(
+  bed: VoiceBed,
+  out: AudioNode,
+  guard: (work: () => void) => void,
+  audible: () => boolean,
+): MusicPlayer {
   let timer: ReturnType<typeof setInterval> | null = null;
   let startTime = 0;
   let nextBeat = 0;
 
   const tick = (): void => {
     guard(() => {
+      if (!audible()) return;
       const batch = scheduleWindow(DRIFT, DRIFT_BPM, nextBeat, bed.ctx.currentTime + LOOKAHEAD_SECONDS, startTime);
       nextBeat = batch.nextBeat;
       for (const note of batch.events) playNote(bed, out, note);

@@ -48,6 +48,20 @@ function createNoise(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
+/** Contexts already told to close, so a failure followed by dispose closes each one once. */
+const closing = new WeakSet<AudioContext>();
+
+/** Releases the audio device. A refusal (already closed, or the browser is mid-failure) leaves nothing more to do. */
+function closeContext(ctx: AudioContext): void {
+  if (closing.has(ctx)) return;
+  closing.add(ctx);
+  try {
+    ctx.close().catch(() => undefined);
+  } catch {
+    // The context is unusable and being abandoned; there is no one left to tell.
+  }
+}
+
 function ramp(param: AudioParam, ctx: AudioContext, value: number, smoothing: number): void {
   param.setTargetAtTime(value, ctx.currentTime, smoothing);
 }
@@ -55,7 +69,10 @@ function ramp(param: AudioParam, ctx: AudioContext, value: number, smoothing: nu
 /**
  * Synthesized sound and music. No AudioContext exists until the first pointer or key press (browsers
  * only allow audio after a gesture), and a missing or blocked WebAudio turns every call into a
- * no-op, so the game never depends on sound.
+ * no-op, so the game never depends on sound. Gesture listeners stay until the context is running,
+ * because some gestures (a touch's pointerdown, Escape) do not grant permission to start audio.
+ * Nothing is built while the context is not running or while muted: a suspended clock never ends a
+ * voice, so queued voices would pile up and then all sound at once.
  *
  * Graph: sfx gain ─────────────────┐
  *        music gain → 2.6 kHz lowpass ┴→ master gain → compressor (−14 dB, 4:1) → output
@@ -75,7 +92,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       work();
     } catch (error) {
       broken = true;
-      graph?.player.stop();
+      if (graph !== null) {
+        graph.player.stop();
+        closeContext(graph.ctx);
+      }
       onFailure(
         `Sound is off: the browser's audio failed (${error instanceof Error ? error.message : String(error)}). Reload the page or try another browser to get sound back.`,
       );
@@ -83,12 +103,21 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   }
 
   /** Fire-and-forget for promise-returning audio calls: a refusal leaves the context's state as the record. */
-  function settle(promise: Promise<void>): void {
-    promise.catch(() => undefined);
+  function settle(promise: Promise<void>, onDone?: () => void): void {
+    promise.then(onDone).catch(() => undefined);
   }
 
   function buildGraph(): Graph {
     const ctx = new AudioContext();
+    try {
+      return wireGraph(ctx);
+    } catch (error) {
+      closeContext(ctx);
+      throw error;
+    }
+  }
+
+  function wireGraph(ctx: AudioContext): Graph {
     const master = ctx.createGain();
     const sfx = ctx.createGain();
     const music = ctx.createGain();
@@ -105,23 +134,37 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     music.connect(lowpass).connect(master);
     master.connect(compressor).connect(ctx.destination);
     const bed: VoiceBed = { ctx, noise: createNoise(ctx) };
-    return { ctx, bed, master, sfx, music, player: createMusicPlayer(bed, music, guard) };
+    return { ctx, bed, master, sfx, music, player: createMusicPlayer(bed, music, guard, audible) };
   }
 
-  const unlockEvents = ['pointerdown', 'keydown'] as const;
-  function removeUnlockListeners(): void {
-    for (const type of unlockEvents) window.removeEventListener(type, unlock);
+  /** Whether sound should be made right now: the context is running and the player has not muted. */
+  function audible(): boolean {
+    return !muted && graph?.ctx.state === 'running';
   }
 
-  function unlock(): void {
-    removeUnlockListeners();
-    if (graph !== null || broken || disposed) return;
+  const gestureEvents = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
+  function removeGestureListeners(): void {
+    for (const type of gestureEvents) window.removeEventListener(type, onGesture);
+  }
+
+  /** Starts or wakes the context from a gesture; the listeners go once it is running. */
+  function onGesture(): void {
+    if (broken || disposed) {
+      removeGestureListeners();
+      return;
+    }
     guard(() => {
-      if (typeof AudioContext === 'undefined') throw new Error('this browser has no AudioContext');
-      const built = buildGraph();
-      graph = built;
-      settle(built.ctx.resume());
-      built.player.start();
+      if (graph === null) {
+        if (typeof AudioContext === 'undefined') throw new Error('this browser has no AudioContext');
+        graph = buildGraph();
+        graph.player.start();
+      }
+      const { ctx } = graph;
+      const doneIfRunning = (): void => {
+        if (ctx.state === 'running') removeGestureListeners();
+      };
+      if (ctx.state === 'running') doneIfRunning();
+      else settle(ctx.resume(), doneIfRunning);
     });
   }
 
@@ -134,11 +177,11 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     });
   }
 
-  for (const type of unlockEvents) window.addEventListener(type, unlock);
+  for (const type of gestureEvents) window.addEventListener(type, onGesture);
   document.addEventListener('visibilitychange', onVisibilityChange);
 
   function play(name: SfxName): void {
-    if (graph === null) return;
+    if (graph === null || !audible()) return;
     if (name === 'shoot' && ++shotsThisFrame > MAX_SHOTS_PER_FRAME) return;
     const { bed, sfx } = graph;
     guard(() => {
@@ -185,15 +228,13 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     },
     dispose() {
       disposed = true;
-      removeUnlockListeners();
+      removeGestureListeners();
       document.removeEventListener('visibilitychange', onVisibilityChange);
       const current = graph;
       graph = null;
       if (current === null) return;
       current.player.stop();
-      guard(() => {
-        settle(current.ctx.close());
-      });
+      closeContext(current.ctx);
     },
   };
 }

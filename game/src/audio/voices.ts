@@ -1,7 +1,7 @@
 import type { NoteEvent, VoiceName } from './sequencer';
 import type { SfxName } from './sfx';
 
-/** What every synthesized sound needs: the context to build nodes in and one shared second of noise. */
+/** What every synthesized sound needs: the context to build nodes in and one shared buffer of noise. */
 export interface VoiceBed {
   readonly ctx: AudioContext;
   readonly noise: AudioBuffer;

@@ -9,21 +9,21 @@ const toast = (page: Page) => page.getByRole('status');
 const expectMuted = (page: Page, muted: boolean): Promise<void> =>
   expect.poll(async () => (await gameState(page)).muted).toBe(muted);
 
-test('creates no audio context until the first key press, then runs or is held suspended by the browser', async ({ page }) => {
+test('creates no audio context until the first key press, then runs', async ({ page }) => {
   await openGame(page);
   await nextFrames(page, 5);
   expect((await gameState(page)).audioState).toBe('none');
 
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
-  await expect.poll(async () => (await gameState(page)).audioState).toMatch(/^(running|suspended)$/);
+  await expect.poll(async () => (await gameState(page)).audioState).toBe('running');
   // Fixture teardown fails the test on any console or page error.
 });
 
 test('a pointer press also unlocks audio', async ({ page }) => {
   await openGame(page);
   await page.mouse.click(300, 300);
-  await expect.poll(async () => (await gameState(page)).audioState).not.toBe('none');
+  await expect.poll(async () => (await gameState(page)).audioState).toBe('running');
 });
 
 test('M toggles mute in every mode, shows a toast, and never starts the game', async ({ page }) => {
@@ -34,7 +34,8 @@ test('M toggles mute in every mode, shows a toast, and never starts the game', a
   await expectMuted(page, true);
   await expectMode(page, 'title');
   await expect(toast(page)).toHaveText('Muted');
-  await expect(toast(page)).toBeHidden({ timeout: TOAST_MS + 1500 });
+  // The live region stays in the page; it is emptied (and invisible) when the toast ends.
+  await expect(toast(page)).toHaveText('', { timeout: TOAST_MS + 1500 });
 
   await page.keyboard.press('KeyM');
   await expectMuted(page, false);

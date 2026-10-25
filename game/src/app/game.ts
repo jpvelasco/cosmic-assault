@@ -73,7 +73,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const renderer = createRenderer(canvas);
   const keyboard = attachKeyboard(window);
   const startKeys = createKeyLatch();
-  const touch = attachTouchControls(root, pause);
+  const touch = attachTouchControls(root, pauseByPlayer);
   const safeArea = createSafeAreaProbe(root);
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
@@ -128,7 +128,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   }
 
   function setMode(next: AppMode): void {
-    if ((mode === 'playing' && next === 'paused') || (mode === 'paused' && next === 'playing')) audio.play('pause');
     mode = next;
     audio.setMusicLevel(MUSIC_LEVEL[next]);
     redrawPending = true;
@@ -175,8 +174,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     setMode('paused');
   }
 
+  /** The pause button or key: unlike a blur or hidden tab, it blips. */
+  function pauseByPlayer(): void {
+    if (mode !== 'playing') return;
+    audio.play('pause');
+    pause();
+  }
+
   function resume(): void {
     if (mode !== 'paused') return;
+    audio.play('pause');
     loop.reset();
     setMode('playing');
   }
@@ -219,7 +226,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
         selectLevel(command.level);
         break;
       case 'togglePause':
-        if (mode === 'playing') pause();
+        if (mode === 'playing') pauseByPlayer();
         else resume();
         break;
       case 'toggleMute':

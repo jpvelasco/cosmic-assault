@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { browserStorage, DEFAULT_SETTINGS, loadSettings, saveSettings, SETTINGS_KEY } from '../../src/app/settings';
 
 const storing = (raw: string | null): Pick<Storage, 'getItem'> => ({ getItem: () => raw });
@@ -72,7 +72,30 @@ describe('saveSettings', () => {
 });
 
 describe('browserStorage', () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  afterEach(() => {
+    if (original === undefined) Reflect.deleteProperty(globalThis, 'localStorage');
+    else Object.defineProperty(globalThis, 'localStorage', original);
+  });
+
+  it('is the browser storage when it is available', () => {
+    const fake = { getItem: vi.fn(), setItem: vi.fn() };
+    Object.defineProperty(globalThis, 'localStorage', { value: fake, configurable: true });
+    expect(browserStorage()).toBe(fake);
+  });
+
+  it('is null where reading localStorage throws, as with blocked site data', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new Error('SecurityError');
+      },
+    });
+    expect(browserStorage()).toBeNull();
+  });
+
   it('is null where localStorage does not exist', () => {
+    Reflect.deleteProperty(globalThis, 'localStorage');
     expect(browserStorage()).toBeNull();
   });
 });
