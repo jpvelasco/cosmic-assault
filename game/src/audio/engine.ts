@@ -85,6 +85,9 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let musicLevel: MusicLevel = 'menu';
   let shotsThisFrame = 0;
 
+  /** The music bus gain for `level`: the saved volume scaled by the mode's level. */
+  const musicGain = (level: MusicLevel): number => initial.musicVolume * MUSIC_LEVELS[level];
+
   /** Runs WebAudio work; a failure disables sound for good (once, with a warning) instead of throwing into the game. */
   function guard(work: () => void): void {
     if (broken) return;
@@ -125,7 +128,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     const compressor = ctx.createDynamicsCompressor();
     master.gain.value = muted ? 0 : 1;
     sfx.gain.value = initial.sfxVolume;
-    music.gain.value = initial.musicVolume * MUSIC_LEVELS[musicLevel];
+    music.gain.value = musicGain(musicLevel);
     lowpass.type = 'lowpass';
     lowpass.frequency.value = MUSIC_LOWPASS_HZ;
     compressor.threshold.value = -14;
@@ -223,7 +226,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       if (graph === null) return;
       const { ctx, music } = graph;
       guard(() => {
-        ramp(music.gain, ctx, initial.musicVolume * MUSIC_LEVELS[level], LEVEL_SMOOTHING);
+        ramp(music.gain, ctx, musicGain(level), LEVEL_SMOOTHING);
       });
     },
     dispose() {
