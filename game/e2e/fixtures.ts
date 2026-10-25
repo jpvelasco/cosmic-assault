@@ -1,4 +1,5 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import { E2E_SEED } from './seed';
 
 /**
  * Fails every test that logs a console error or throws an uncaught page error.
@@ -26,12 +27,9 @@ export { expect };
 /** The title screen's build label in a `vite preview` build. */
 export const BUILD_LABEL = /^preview · (local|[0-9a-f]{7}) · \d{4}-\d{2}-\d{2}$/;
 
-/** A seed whose practice asteroids stay clear of the ship's firing lanes for the specs' first seconds. */
-const SEED = 4;
-
 /** Opens the e2e build with a fixed seed and waits for the test bridge, which loads after an `import()`. */
 export async function openGame(page: Page): Promise<void> {
-  await page.goto(`/?seed=${String(SEED)}`);
+  await page.goto(`/?seed=${String(E2E_SEED)}`);
   await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
 }
 

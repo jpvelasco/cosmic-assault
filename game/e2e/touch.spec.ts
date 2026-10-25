@@ -39,6 +39,8 @@ function touchscreen(cdp: CDPSession) {
   };
 }
 
+test.skip(({ browserName }) => browserName !== 'chromium', 'CDP touch needs Chromium');
+
 async function tapToStart(page: Page): Promise<void> {
   await openGame(page);
   await page.getByRole('heading', { name: 'Cosmic Assault' }).tap();
