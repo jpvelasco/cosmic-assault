@@ -14,13 +14,33 @@
 - `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
   Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
   Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
-  carries the test bridge and the `?seed=`/`?lives=` URL overrides, and checks
-  that it does), `check:no-bridge` (fails if the release `dist/` contains the
-  bridge or that URL parsing), and `record:parity` (records the parity traces).
+  carries the test bridge and the `?seed=`/`?lives=`/`?quality=` URL overrides,
+  and checks that it does), `check:no-bridge` (fails if the release `dist/`
+  contains the bridge or that URL parsing), and `record:parity` (records the
+  parity traces). Dev builds also honour the URL overrides; release builds never
+  parse them.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
   enforces it. Ship handling is pinned to recorded traces of the live game in
   `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
   without owner approval.
+- In `game/src/`, `app/` owns the mode machine, commands, hit-stop, frame
+  monitor and settings; `render/` owns drawing; `audio/` owns sound; `input/`
+  and `ui/` own keyboard, touch and DOM overlays.
+  - `render/` draws from interpolated sim poses. Sprites are baked once into a
+    bounded LRU cache (`spriteCache.ts`, `sprites.ts`); glows are baked or
+    additive sprites. Never set `shadowBlur` (ESLint bans it) or a canvas
+    `filter` per frame. Effects (`effects.ts`) drive a pooled particle system,
+    shake and flash, and honour `prefers-reduced-motion`.
+  - `render/quality.ts` steps through `QUALITY_LEVELS` from measured frame
+    time with hysteresis; the lowest levels add the `lite` body class, which
+    turns off CSS backdrop blur. `?quality=` pins a level in e2e and dev builds.
+  - `audio/` is all synthesized WebAudio: no audio files. The `AudioContext` is
+    created on the first user gesture, suspended while the tab is hidden, and
+    builds no nodes while suspended or muted. `M` or the sound chip toggles mute.
+  - Settings persist in `localStorage` under the single key
+    `cosmic-assault.v2.settings` (`app/settings.ts`). Loading sanitizes field by
+    field and never throws. New stored data must use the `cosmic-assault.v2.`
+    prefix, because the legacy site shares the origin.
 - There is no root npm package or workspace. Run npm commands from `game/` or
   `tests/`, whichever package you are changing. `ReadMe.md` is the README's
   exact filename.
@@ -88,6 +108,8 @@ and `tests/test-results/` and are ignored by Git.
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
   `website/`. Job `deploy` runs only on pushes to `main`, and only after both
   `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.
+  Job `perf` builds both bundles and runs `npm run test:perf`; it is not a
+  required check and does not gate deployment.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.
