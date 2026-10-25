@@ -32,8 +32,12 @@ export const WARMUP_MS = 3000;
 export const MAX_SAMPLE_MS = 250;
 /** Idle frame time (title, pause) averaged into each measure of the display's own frame interval. */
 export const IDLE_WINDOW_MS = 1000;
+/** Idle frame time skipped at the start of each idle stretch: the screen change, its redraw and a card popping in. */
+export const IDLE_SETTLE_MS = 500;
 /** The display interval the mean thresholds are written for (60 Hz). A faster display is still judged at 60 Hz. */
 const REFERENCE_INTERVAL_MS = 1000 / 60;
+/** The slowest display interval believed (30 Hz, low-power caps), so a misread idle stretch cannot hide real load. */
+const SLOWEST_INTERVAL_MS = 1000 / 30;
 /** Step down once this much frame time averages over `DOWN_MEAN_MS`. */
 export const DOWN_WINDOW_MS = 1200;
 export const DOWN_MEAN_MS = 21;
@@ -79,8 +83,9 @@ class FrameWindow {
  * Slow is relative to the display's own frame interval, measured on idle screens (title, pause),
  * where the game does almost no work: a display or browser capped at 30 Hz (low-power modes) shows
  * 33 ms idle frames, so 33 ms play frames are not load there. The mean thresholds are written for
- * 60 Hz and scale with that interval; they never tighten below the 60 Hz values. Until an idle
- * second has been measured, the display is taken to be 60 Hz.
+ * 60 Hz and scale with that interval, clamped between the 60 Hz and 30 Hz values. Each idle
+ * stretch skips its first `IDLE_SETTLE_MS`; until an idle second has been measured after that, the
+ * display is taken to be 60 Hz.
  *
  * A step that changes the pixel ratio re-bakes every sprite in one frame after the resize debounce;
  * that one-frame spike is accepted.
@@ -96,9 +101,11 @@ export class QualityScaler {
   /** Frame time left to skip after `startRun()`. */
   private warmupLeft = 0;
   private readonly idle = new FrameWindow();
+  /** Idle frame time left to skip before the current idle stretch is measured. */
+  private idleSettleLeft = IDLE_SETTLE_MS;
   /** The fastest idle window of the current idle stretch; a play frame ends the stretch. */
   private idleBest = Number.POSITIVE_INFINITY;
-  /** The display's own frame interval as last measured, never under the 60 Hz reference. */
+  /** The display's own frame interval as last measured, between the 60 Hz and 30 Hz intervals. */
   private displayMs = REFERENCE_INTERVAL_MS;
 
   constructor(start = 0) {
@@ -129,10 +136,14 @@ export class QualityScaler {
   /** Feeds a frame from an idle screen (title, pause), which measures the display's own frame interval. */
   sampleIdle(frameMs: number): void {
     if (this.pinned || !(frameMs >= 0 && frameMs <= MAX_SAMPLE_MS)) return;
+    if (this.idleSettleLeft > 0) {
+      this.idleSettleLeft -= frameMs;
+      return;
+    }
     this.idle.add(frameMs);
     if (this.idle.ms < IDLE_WINDOW_MS) return;
     this.idleBest = Math.min(this.idleBest, this.idle.mean);
-    this.displayMs = Math.max(REFERENCE_INTERVAL_MS, this.idleBest);
+    this.displayMs = Math.min(SLOWEST_INTERVAL_MS, Math.max(REFERENCE_INTERVAL_MS, this.idleBest));
     this.idle.reset();
   }
 
@@ -167,6 +178,7 @@ export class QualityScaler {
   /** The next idle screen measures afresh; until it completes a window the last interval holds. */
   private endIdleStretch(): void {
     this.idle.reset();
+    this.idleSettleLeft = IDLE_SETTLE_MS;
     this.idleBest = Number.POSITIVE_INFINITY;
   }
 

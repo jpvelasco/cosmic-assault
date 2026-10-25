@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IDLE_WINDOW_MS, QUALITY_LEVELS, QualityScaler, UP_WAIT_MS, WARMUP_MS } from '../../src/render/quality';
+import { IDLE_SETTLE_MS, IDLE_WINDOW_MS, QUALITY_LEVELS, QualityScaler, UP_WAIT_MS, WARMUP_MS } from '../../src/render/quality';
 
 /** Feeds `ms` of `frameMs`-long frames, stopping early if the level changes; returns ms fed. */
 function feed(scaler: QualityScaler, frameMs: number, ms: number): number {
@@ -217,11 +217,26 @@ describe('QualityScaler', () => {
       expect(scaler.index).toBe(1);
     });
 
-    it('takes the fastest idle window, so a slow first second (page load, a fading card) does not count', () => {
+    it('takes the fastest idle window, so a slow stretch start (page load) does not count', () => {
       const scaler = new QualityScaler();
-      idle(scaler, VSYNC_30_MS, IDLE_WINDOW_MS);
+      idle(scaler, VSYNC_30_MS, IDLE_SETTLE_MS + IDLE_WINDOW_MS);
       idle(scaler, VSYNC_60_MS, IDLE_WINDOW_MS);
       feed(scaler, 25, 1300);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('skips the start of each idle stretch (the screen change, a card popping in)', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_30_MS, IDLE_SETTLE_MS);
+      idle(scaler, VSYNC_60_MS, IDLE_WINDOW_MS);
+      feed(scaler, 25, 1300);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('never judges against a rate slower than 30 Hz, so a misread idle stretch cannot hide load', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, 200, 3000);
+      feed(scaler, 45, 1300);
       expect(scaler.index).toBe(1);
     });
 
