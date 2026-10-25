@@ -78,6 +78,33 @@ describe('createHud', () => {
     expect(score?.width).toBeGreaterThanOrEqual(190);
   });
 
+  it('keeps the right pill off the score pill, dropping it below the lives pill when the top row is too narrow', () => {
+    const hud = createHud(DRIFT);
+    const { ctx } = fakeContext();
+    hud.resize(320, 390);
+    hud.setBounds({ ...NONE, topRight: { width: 60, height: 60 } });
+    // 7 digits format to at least 7 characters (70 px): the score pill ends at 12 + 60 + 70 or later.
+    hud.draw(ctx, { score: 1_234_567, lives: 3, practiceLevel: 4 } as World);
+    const [score, lives, practice] = hud.rects;
+    if (score === undefined || lives === undefined || practice === undefined) throw new Error('expected three pills');
+    expect(practice.x).toBe(12);
+    expect(practice.y).toBe(lives.y + lives.height + 6);
+    for (const other of [score, lives]) {
+      const apart = practice.y >= other.y + other.height || practice.x >= other.x + other.width;
+      expect(apart).toBe(true);
+    }
+  });
+
+  it('keeps the right pill on the top row, right of the score pill, when there is room', () => {
+    const hud = createHud(DRIFT);
+    const { ctx } = fakeContext();
+    hud.resize(844, 390);
+    hud.draw(ctx, { score: 1_234_567, lives: 3, practiceLevel: 4 } as World);
+    const [score, , practice] = hud.rects;
+    expect(practice?.y).toBe(12);
+    expect(practice?.x).toBeGreaterThanOrEqual((score?.x ?? 0) + (score?.width ?? 0) + 8);
+  });
+
   it('measures text only when the score or level changes', () => {
     const hud = createHud(DRIFT);
     const { ctx, measured } = fakeContext();

@@ -57,8 +57,8 @@ const LIVES_H = 20;
 const LIFE_FIRST_X = 14;
 const LIFE_SPACING = 16;
 const LIFE_ICON_SCALE = 0.5;
-/** Room between the right pill and the corner box it avoids. */
-const CORNER_GAP = 8;
+/** Room between the right pill and the score pill or the corner box it avoids. */
+const PILL_GAP = 8;
 /** The HUD grows with the viewport height, from 1 at this height up to MAX_SCALE. */
 const SCALE_HEIGHT = 480;
 const MAX_SCALE = 1.5;
@@ -147,9 +147,13 @@ export function createHud(palette: Palette): Hud {
       height: LIVES_H * s,
     });
     const width = levelWidth + 2 * PILL_PAD * s;
+    const right = rightPillEdge(cssWidth, top, edge, bounds, PILL_GAP * s);
+    // Never over the score pill: when the top row is too narrow, the level drops below the lives pill.
+    const x = Math.max(right - width, score.x + score.width + PILL_GAP * s);
+    const fits = x + width <= right;
     Object.assign(practice, {
-      x: rightPillEdge(cssWidth, top, edge, bounds, CORNER_GAP * s) - width,
-      y: top,
+      x: fits ? x : left,
+      y: fits ? top : lives.y + lives.height + LIVES_GAP * s,
       width,
       height: PILL_H * s,
     });
