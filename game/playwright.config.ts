@@ -21,8 +21,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // CI already ran `npm run build` and `check:base`; locally, build first so preview is never stale.
-    command: `${isCI ? '' : 'npm run build && '}npm run preview -- --port 4173 --strictPort`,
+    // Specs drive the e2e build, which carries the test bridge. CI builds it in an earlier
+    // step; locally, build first so preview is never stale.
+    command: `${isCI ? '' : 'npm run build:e2e && '}npm run preview -- --outDir dist-e2e --port 4173 --strictPort`,
     url: 'http://localhost:4173',
     reuseExistingServer: !isCI,
     timeout: 60000,

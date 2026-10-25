@@ -1,0 +1,41 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { clockSeed, parseSeed } from '../../src/app/seed';
+
+describe('parseSeed', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns undefined without warning when no seed is given', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(parseSeed(null)).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['0', 0],
+    ['42', 42],
+    ['4294967295', 0xffffffff],
+  ])('accepts the uint32 %s', (raw, seed) => {
+    expect(parseSeed(raw)).toBe(seed);
+  });
+
+  it('reads leading digits the way Number.parseInt does', () => {
+    expect(parseSeed('12abc')).toBe(12);
+  });
+
+  it.each(['', 'abc', '-1', '4294967296'])('warns (not errors) and ignores %j', (raw) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error');
+    expect(parseSeed(raw)).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('must be an integer from 0 to 4294967295'));
+    expect(error).not.toHaveBeenCalled();
+  });
+});
+
+describe('clockSeed', () => {
+  it('is an unsigned 32-bit integer', () => {
+    const seed = clockSeed();
+    expect(Number.isInteger(seed) && seed >= 0 && seed <= 0xffffffff).toBe(true);
+  });
+});

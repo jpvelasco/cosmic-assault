@@ -44,17 +44,22 @@ export interface WorldOptions {
   readonly initialAsteroids?: readonly AsteroidPlacement[];
 }
 
-const MIN_PRACTICE_LEVEL = 1;
-const MAX_PRACTICE_LEVEL = 7;
+export const MIN_PRACTICE_LEVEL = 1;
+export const MAX_PRACTICE_LEVEL = 7;
 const START_ASTEROIDS = 3;
-const UINT32_MAX = 0xffffffff;
+export const UINT32_MAX = 0xffffffff;
 /** Absorbs float residue from summing dt steps so the timer fires on the step its interval ends. */
 const SPAWN_EPSILON = 1e-9;
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 const ASTEROID_SIZES: readonly AsteroidSize[] = [0, 1, 2, 3];
 
+/** World seeds are unsigned 32-bit integers. */
+export function isWorldSeed(seed: number): boolean {
+  return Number.isInteger(seed) && seed >= 0 && seed <= UINT32_MAX;
+}
+
 function assertSeed(seed: number): void {
-  if (!(Number.isInteger(seed) && seed >= 0 && seed <= UINT32_MAX)) {
+  if (!isWorldSeed(seed)) {
     throw new RangeError(
       `World needs an unsigned 32-bit integer seed (got ${String(seed)}); pass e.g. hashString(text) or value >>> 0`,
     );

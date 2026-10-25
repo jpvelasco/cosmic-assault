@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 const SIM_PURITY_MESSAGE = 'sim/ must be deterministic and DOM-free: use the injected Rng and dt instead';
 
 export default defineConfig(
-  { ignores: ['dist', 'playwright-report', 'test-results'] },
+  { ignores: ['dist', 'dist-e2e', 'playwright-report', 'test-results'] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {

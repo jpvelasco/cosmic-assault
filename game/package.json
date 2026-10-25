@@ -8,12 +8,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:e2e": "vite build --mode e2e",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check:base": "node scripts/check-base.mjs",
+    "check:no-bridge": "node scripts/check-no-bridge.mjs",
     "check:workflow": "node scripts/check-workflow.mjs",
     "record:parity": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/record-parity-traces.mjs"
   },
