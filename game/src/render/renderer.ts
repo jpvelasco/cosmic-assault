@@ -1,8 +1,8 @@
 import { PROJECTILE } from '../sim/config';
-import type { Field } from '../sim/field';
+import { isPositiveFiniteSize, type Field } from '../sim/field';
 import type { World } from '../sim/world';
 import { get2dContext } from './context';
-import { bakeStarfield } from './starfield';
+import { BACKGROUND, bakeStarfield } from './starfield';
 
 export interface Renderer {
   resize(cssWidth: number, cssHeight: number, field: Field): void;
@@ -14,7 +14,6 @@ export interface Renderer {
 }
 
 const MAX_DPR = 2;
-const BACKGROUND = '#05060f';
 const ASTEROID_FILL = '#5468a8';
 const ASTEROID_STROKE = '#a9bdf0';
 const ASTEROID_STROKE_WIDTH = 1.5;
@@ -88,7 +87,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   let layout: Layout | null = null;
 
   function resize(cssWidth: number, cssHeight: number, field: Field): void {
-    if (!(cssWidth > 0 && cssHeight > 0 && Number.isFinite(cssWidth) && Number.isFinite(cssHeight))) {
+    if (!isPositiveFiniteSize(cssWidth, cssHeight)) {
       throw new RangeError(
         `Renderer.resize() needs positive finite sizes (got ${String(cssWidth)}×${String(cssHeight)}); wait for layout first`,
       );

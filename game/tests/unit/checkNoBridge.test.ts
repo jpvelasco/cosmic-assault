@@ -1,25 +1,13 @@
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { guardScript } from '../helpers/guardScript';
 
-const gameDir = fileURLToPath(new URL('../../', import.meta.url));
-const tempRoots: string[] = [];
-
-function runGuard(distDir: string) {
-  const { status, stdout, stderr } = spawnSync('node', ['scripts/check-no-bridge.mjs', distDir], {
-    cwd: gameDir,
-    encoding: 'utf8',
-  });
-  return { status, output: stdout + stderr };
-}
+const { run: runGuard, tempRoot } = guardScript('check-no-bridge.mjs', 'check-no-bridge-');
 
 /** Writes `files` (relative path → contents) into a fresh temp dist directory. */
 function writeDist(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), 'check-no-bridge-'));
-  tempRoots.push(root);
+  const root = tempRoot();
   for (const [path, text] of Object.entries(files)) {
     const full = join(root, path);
     mkdirSync(join(full, '..'), { recursive: true });
@@ -27,10 +15,6 @@ function writeDist(files: Record<string, string>): string {
   }
   return root;
 }
-
-afterAll(() => {
-  for (const root of tempRoots) rmSync(root, { recursive: true, force: true });
-});
 
 describe('check-no-bridge', () => {
   it('passes a build without the bridge', () => {

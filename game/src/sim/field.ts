@@ -5,8 +5,13 @@ export interface Field {
   readonly height: number;
 }
 
+/** True for a width and height that are both finite and greater than zero. */
+export function isPositiveFiniteSize(width: number, height: number): boolean {
+  return width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height);
+}
+
 export function fieldForViewport(cssWidth: number, cssHeight: number): Field {
-  if (!(cssWidth > 0 && cssHeight > 0 && Number.isFinite(cssWidth) && Number.isFinite(cssHeight))) {
+  if (!isPositiveFiniteSize(cssWidth, cssHeight)) {
     throw new RangeError(
       `fieldForViewport() needs positive finite sizes (got ${String(cssWidth)}×${String(cssHeight)}); wait for layout before sizing the field`,
     );

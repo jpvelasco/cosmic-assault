@@ -12,7 +12,7 @@ import { circlesOverlap, SpatialHash } from './collision';
 import { ASTEROID, PLAYER, PROJECTILE } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
-import type { Field } from './field';
+import { isPositiveFiniteSize, type Field } from './field';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
 import { createShip, respawnShip, stepShip, type Ship, type Shot } from './ship';
@@ -81,7 +81,7 @@ function assertPracticeLevel(level: number): void {
 
 function assertField(field: Field): void {
   const { width, height } = field;
-  if (!(width > 0 && height > 0 && Number.isFinite(width) && Number.isFinite(height))) {
+  if (!isPositiveFiniteSize(width, height)) {
     throw new RangeError(
       `World needs a field with positive finite width and height (got ${String(width)}×${String(height)}); build it with fieldForViewport()`,
     );
@@ -104,10 +104,6 @@ function assertFinite(owner: string, values: Readonly<Record<string, number>>): 
       );
     }
   }
-}
-
-function assertShipPlacement(p: ShipPlacement): void {
-  assertFinite('WorldOptions.initialShip', { x: p.x, y: p.y, angle: p.angle });
 }
 
 function assertAsteroidPlacement(p: AsteroidPlacement, index: number): void {
@@ -271,7 +267,7 @@ export class World {
     if (placement === undefined) {
       return createShip(field.width / 2, field.height / 2);
     }
-    assertShipPlacement(placement);
+    assertFinite('WorldOptions.initialShip', { x: placement.x, y: placement.y, angle: placement.angle });
     const ship = createShip(placement.x, placement.y);
     ship.angle = placement.angle;
     return ship;

@@ -3,7 +3,8 @@ import { get2dContext } from './context';
 import { createRng } from '../sim/rng';
 
 const STAR_SEED = 0x57a7f1e1;
-const BACKGROUND = '#05060f';
+/** The canvas clear colour, shared with the renderer so the baked sky blends in. */
+export const BACKGROUND = '#05060f';
 /** One star per this many logical square units. */
 const AREA_PER_STAR = 3500;
 const STAR_COLORS = ['#ffffff', '#cfd8ff', '#9fb2ff'] as const;

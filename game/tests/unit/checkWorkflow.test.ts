@@ -1,27 +1,15 @@
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { gameDir, guardScript } from '../helpers/guardScript';
 
-const gameDir = fileURLToPath(new URL('../../', import.meta.url));
+const { run: runGuard, tempRoot } = guardScript('check-workflow.mjs', 'check-workflow-');
 const realWorkflow = join(gameDir, '..', '.github', 'workflows', 'ci.yml');
 const realText = readFileSync(realWorkflow, 'utf8');
-const tempRoots: string[] = [];
-
-function runGuard(workflowPath: string) {
-  const { status, stdout, stderr } = spawnSync('node', ['scripts/check-workflow.mjs', workflowPath], {
-    cwd: gameDir,
-    encoding: 'utf8',
-  });
-  return { status, output: stdout + stderr };
-}
 
 /** Lays out <tmp>/.github/workflows/ci.yml and <tmp>/website/, returning the workflow path. */
 function writeFixture(text: string, websiteDirs: string[] = []): string {
-  const root = mkdtempSync(join(tmpdir(), 'check-workflow-'));
-  tempRoots.push(root);
+  const root = tempRoot();
   mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
   mkdirSync(join(root, 'website'));
   for (const dir of websiteDirs) mkdirSync(join(root, 'website', dir), { recursive: true });
@@ -100,10 +88,6 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
 ];
 
 describe('check-workflow guard', () => {
-  afterAll(() => {
-    for (const root of tempRoots) rmSync(root, { recursive: true, force: true });
-  });
-
   it('accepts the real ci.yml', () => {
     const { status, output } = runGuard(realWorkflow);
     expect(output).toContain('workflow ok');
