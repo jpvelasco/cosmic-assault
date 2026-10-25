@@ -32,7 +32,9 @@
     `filter` per frame. Effects (`effects.ts`) drive a pooled particle system,
     shake and flash, and honour `prefers-reduced-motion`.
   - `render/quality.ts` steps through `QUALITY_LEVELS` from measured frame
-    time with hysteresis; the lowest levels add the `lite` body class, which
+    time with hysteresis, judged against the display's own frame interval as
+    measured on idle screens (so a 30 Hz-capped display is not read as
+    overloaded); the lowest levels add the `lite` body class, which
     turns off CSS backdrop blur. `?quality=` pins a level in e2e and dev builds.
   - `audio/` is all synthesized WebAudio: no audio files. The `AudioContext` is
     created on the first user gesture, suspended while the tab is hidden, and

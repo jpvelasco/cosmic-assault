@@ -70,7 +70,9 @@ function ramp(param: AudioParam, ctx: AudioContext, value: number, smoothing: nu
  * Synthesized sound and music. No AudioContext exists until the first pointer or key press (browsers
  * only allow audio after a gesture), and a missing or blocked WebAudio turns every call into a
  * no-op, so the game never depends on sound. Gesture listeners stay until the context is running,
- * because some gestures (a touch's pointerdown, Escape) do not grant permission to start audio.
+ * because some gestures (a touch's pointerdown, Escape) do not grant permission to start audio, and
+ * they come back whenever it stops again while sound is wanted (a refused resume on returning to the
+ * tab, or an interruption such as a phone call).
  * Nothing is built while the context is not running or while muted: a suspended clock never ends a
  * voice, so queued voices would pile up and then all sound at once.
  *
@@ -105,9 +107,9 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     }
   }
 
-  /** Fire-and-forget for promise-returning audio calls: a refusal leaves the context's state as the record. */
+  /** Fire-and-forget for promise-returning audio calls: a refusal leaves the context's state as the record, which `onDone` then reads. */
   function settle(promise: Promise<void>, onDone?: () => void): void {
-    promise.then(onDone).catch(() => undefined);
+    promise.then(onDone, onDone).catch(() => undefined);
   }
 
   function buildGraph(): Graph {
@@ -136,6 +138,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     sfx.connect(master);
     music.connect(lowpass).connect(master);
     master.connect(compressor).connect(ctx.destination);
+    // A call or Siri (`interrupted`) or the system can stop the context long after it first ran.
+    ctx.onstatechange = () => {
+      syncGestureListeners(ctx);
+    };
     const bed: VoiceBed = { ctx, noise: createNoise(ctx) };
     return { ctx, bed, master, sfx, music, player: createMusicPlayer(bed, music, guard, audible) };
   }
@@ -146,8 +152,24 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   }
 
   const gestureEvents = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
+  function addGestureListeners(): void {
+    for (const type of gestureEvents) window.addEventListener(type, onGesture);
+  }
   function removeGestureListeners(): void {
     for (const type of gestureEvents) window.removeEventListener(type, onGesture);
+  }
+
+  /** Gestures are only needed while sound is wanted but the context is not running; adding twice is harmless. */
+  function syncGestureListeners(ctx: AudioContext): void {
+    if (ctx.state === 'running') removeGestureListeners();
+    else if (!muted && !broken && !disposed && ctx.state !== 'closed') addGestureListeners();
+  }
+
+  /** Asks the context to run, then listens for gestures again if the browser refused. */
+  function resumeContext(ctx: AudioContext): void {
+    settle(ctx.resume(), () => {
+      syncGestureListeners(ctx);
+    });
   }
 
   /** Starts or wakes the context from a gesture; the listeners go once it is running. */
@@ -163,11 +185,8 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
         graph.player.start();
       }
       const { ctx } = graph;
-      const doneIfRunning = (): void => {
-        if (ctx.state === 'running') removeGestureListeners();
-      };
       if (ctx.state === 'running') removeGestureListeners();
-      else settle(ctx.resume(), doneIfRunning);
+      else resumeContext(ctx);
     });
   }
 
@@ -176,11 +195,11 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     if (current === null) return;
     guard(() => {
       if (document.visibilityState === 'hidden') settle(current.ctx.suspend());
-      else if (!muted) settle(current.ctx.resume());
+      else if (!muted) resumeContext(current.ctx);
     });
   }
 
-  for (const type of gestureEvents) window.addEventListener(type, onGesture);
+  addGestureListeners();
   document.addEventListener('visibilitychange', onVisibilityChange);
 
   function play(name: SfxName): void {
@@ -218,7 +237,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       guard(() => {
         ramp(master.gain, ctx, next ? 0 : 1, MUTE_SMOOTHING);
         // The page is visible when the player presses M; a context suspended while muted wakes here.
-        if (!next && document.visibilityState === 'visible') settle(ctx.resume());
+        if (!next && document.visibilityState === 'visible') resumeContext(ctx);
       });
     },
     setMusicLevel(level) {

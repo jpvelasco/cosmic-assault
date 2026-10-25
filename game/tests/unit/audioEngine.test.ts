@@ -43,7 +43,8 @@ class FakeContext {
   /** When set, `resume()` rejects with it, as a browser does when it refuses to start audio. */
   static resumeError: Error | null = null;
   static failBuild = false;
-  state: 'running' | 'suspended' | 'closed' = FakeContext.startState;
+  state: 'running' | 'suspended' | 'interrupted' | 'closed' = FakeContext.startState;
+  onstatechange: (() => void) | null = null;
   currentTime = 0;
   sampleRate = 8000;
   readonly nodes: FakeNode[] = [];
@@ -237,6 +238,68 @@ describe('unlocking', () => {
     e.dispose();
     press();
     expect(contexts).toHaveLength(0);
+  });
+
+  describe('after the context first runs', () => {
+    /** A context that ran, so the gesture listeners went, and a spy on the ones added after. */
+    async function ranOnce(): Promise<{ e: AudioEngine; added: () => string[] }> {
+      const e = engine();
+      press();
+      await Promise.resolve();
+      const add = vi.spyOn(win, 'addEventListener');
+      return { e, added: () => add.mock.calls.map(([type]) => type).sort() };
+    }
+
+    it('listens for gestures again when a resume on return to the tab is refused', async () => {
+      const { added } = await ranOnce();
+      setVisibility('hidden');
+      FakeContext.resumeSucceeds = false;
+      setVisibility('visible');
+      await vi.waitFor(() => {
+        expect(added()).toEqual(['keydown', 'pointerdown', 'pointerup', 'touchend']);
+      });
+      FakeContext.resumeSucceeds = true;
+      press('touchend');
+      await vi.waitFor(() => {
+        expect(ctx().state).toBe('running');
+      });
+    });
+
+    it('listens for gestures again when a rejected resume on return leaves the context suspended', async () => {
+      const { added } = await ranOnce();
+      setVisibility('hidden');
+      FakeContext.resumeError = new Error('NotAllowedError');
+      setVisibility('visible');
+      await vi.waitFor(() => {
+        expect(added()).toHaveLength(4);
+      });
+    });
+
+    it.each(['interrupted', 'suspended'] as const)('listens for gestures again when the context turns %s by itself', async (state) => {
+      const { added } = await ranOnce();
+      ctx().state = state;
+      ctx().onstatechange?.();
+      expect(added()).toEqual(['keydown', 'pointerdown', 'pointerup', 'touchend']);
+      FakeContext.resumeSucceeds = true;
+      const remove = vi.spyOn(win, 'removeEventListener');
+      press();
+      await vi.waitFor(() => {
+        expect(remove).toHaveBeenCalledTimes(4);
+      });
+    });
+
+    it('does not listen again while muted, or once the context runs again', async () => {
+      const { e, added } = await ranOnce();
+      e.setMuted(true);
+      ctx().state = 'interrupted';
+      ctx().onstatechange?.();
+      ctx().state = 'running';
+      ctx().onstatechange?.();
+      setVisibility('hidden');
+      setVisibility('visible');
+      await Promise.resolve();
+      expect(added()).toEqual([]);
+    });
   });
 
   it('closes the context on dispose', () => {

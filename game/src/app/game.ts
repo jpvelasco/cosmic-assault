@@ -279,6 +279,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     }
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
+    const settling = mode === 'gameOver' && renderer.hasActiveParticles();
+    // Still screens cost next to nothing, so their frame interval is the display's own rate.
+    if (mode !== 'playing' && !settling) scaler.sampleIdle(frameMs);
     if (world === null) return;
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
     const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
@@ -290,7 +293,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       const frozen = hitStop.frozen;
       stepWorld(world, frameSeconds, now);
       renderer.advance(visualSeconds, world, frozen);
-    } else if (mode === 'gameOver' && renderer.hasActiveParticles()) {
+    } else if (settling) {
       // The death burst plays out under the card; redrawing stops once the last particle is gone.
       renderer.settle(visualSeconds, world);
       redrawPending = true;

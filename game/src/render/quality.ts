@@ -30,6 +30,10 @@ export const LITE_FROM_INDEX = 2;
 export const WARMUP_MS = 3000;
 /** Frames longer than this are stalls (a hidden tab, a debugger), not load, so they are ignored. */
 export const MAX_SAMPLE_MS = 250;
+/** Idle frame time (title, pause) averaged into each measure of the display's own frame interval. */
+export const IDLE_WINDOW_MS = 1000;
+/** The display interval the mean thresholds are written for (60 Hz). A faster display is still judged at 60 Hz. */
+const REFERENCE_INTERVAL_MS = 1000 / 60;
 /** Step down once this much frame time averages over `DOWN_MEAN_MS`. */
 export const DOWN_WINDOW_MS = 1200;
 export const DOWN_MEAN_MS = 21;
@@ -71,6 +75,15 @@ class FrameWindow {
 /**
  * Walks the quality ladder from measured frame times: down fast when frames run slow, up slowly
  * once there is headroom. Time is the sum of the frames it was given, so it needs no clock.
+ *
+ * Slow is relative to the display's own frame interval, measured on idle screens (title, pause),
+ * where the game does almost no work: a display or browser capped at 30 Hz (low-power modes) shows
+ * 33 ms idle frames, so 33 ms play frames are not load there. The mean thresholds are written for
+ * 60 Hz and scale with that interval; they never tighten below the 60 Hz values. Until an idle
+ * second has been measured, the display is taken to be 60 Hz.
+ *
+ * A step that changes the pixel ratio re-bakes every sprite in one frame after the resize debounce;
+ * that one-frame spike is accepted.
  */
 export class QualityScaler {
   private current: number;
@@ -82,6 +95,11 @@ export class QualityScaler {
   private upgradedAt: number | null = null;
   /** Frame time left to skip after `startRun()`. */
   private warmupLeft = 0;
+  private readonly idle = new FrameWindow();
+  /** The fastest idle window of the current idle stretch; a play frame ends the stretch. */
+  private idleBest = Number.POSITIVE_INFINITY;
+  /** The display's own frame interval as last measured, never under the 60 Hz reference. */
+  private displayMs = REFERENCE_INTERVAL_MS;
 
   constructor(start = 0) {
     assertLevel(start);
@@ -108,8 +126,20 @@ export class QualityScaler {
     this.warmupLeft = WARMUP_MS;
   }
 
+  /** Feeds a frame from an idle screen (title, pause), which measures the display's own frame interval. */
+  sampleIdle(frameMs: number): void {
+    if (this.pinned || !(frameMs >= 0 && frameMs <= MAX_SAMPLE_MS)) return;
+    this.idle.add(frameMs);
+    if (this.idle.ms < IDLE_WINDOW_MS) return;
+    this.idleBest = Math.min(this.idleBest, this.idle.mean);
+    this.displayMs = Math.max(REFERENCE_INTERVAL_MS, this.idleBest);
+    this.idle.reset();
+  }
+
+  /** Feeds a frame of play. */
   sample(frameMs: number): void {
     if (this.pinned || !(frameMs >= 0)) return;
+    this.endIdleStretch();
     if (this.warmupLeft > 0) {
       this.warmupLeft -= frameMs;
       return;
@@ -120,13 +150,24 @@ export class QualityScaler {
     this.fast.add(frameMs);
     this.settleUpgrade();
     if (this.slow.ms >= DOWN_WINDOW_MS) {
-      if (this.slow.mean > DOWN_MEAN_MS && this.current < LOWEST) this.stepDown();
+      if (this.slow.mean > DOWN_MEAN_MS * this.displayScale && this.current < LOWEST) this.stepDown();
       this.slow.reset();
     }
     if (this.fast.ms >= this.upWait) {
-      if (this.fast.mean < UP_MEAN_MS && this.current > 0) this.stepUp();
+      if (this.fast.mean < UP_MEAN_MS * this.displayScale && this.current > 0) this.stepUp();
       this.fast.reset();
     }
+  }
+
+  /** How many 60 Hz frame intervals one display interval lasts: the mean thresholds stretch by it. */
+  private get displayScale(): number {
+    return this.displayMs / REFERENCE_INTERVAL_MS;
+  }
+
+  /** The next idle screen measures afresh; until it completes a window the last interval holds. */
+  private endIdleStretch(): void {
+    this.idle.reset();
+    this.idleBest = Number.POSITIVE_INFINITY;
   }
 
   /** An upgrade that has held past `QUICK_DOWN_MS` earns back the normal wait. */

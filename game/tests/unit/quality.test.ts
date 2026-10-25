@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUALITY_LEVELS, QualityScaler, UP_WAIT_MS, WARMUP_MS } from '../../src/render/quality';
+import { IDLE_WINDOW_MS, QUALITY_LEVELS, QualityScaler, UP_WAIT_MS, WARMUP_MS } from '../../src/render/quality';
 
 /** Feeds `ms` of `frameMs`-long frames, stopping early if the level changes; returns ms fed. */
 function feed(scaler: QualityScaler, frameMs: number, ms: number): number {
@@ -11,6 +11,14 @@ function feed(scaler: QualityScaler, frameMs: number, ms: number): number {
   }
   return fed;
 }
+
+/** Feeds `ms` of idle frames (title, pause) `frameMs` apart. */
+function idle(scaler: QualityScaler, frameMs: number, ms: number): void {
+  for (let fed = 0; fed < ms; fed += frameMs) scaler.sampleIdle(frameMs);
+}
+
+const VSYNC_30_MS = 1000 / 30;
+const VSYNC_60_MS = 1000 / 60;
 
 describe('QUALITY_LEVELS', () => {
   it('lists high, medium, low and lowest with falling cost', () => {
@@ -154,6 +162,84 @@ describe('QualityScaler', () => {
     it('is not needed: a scaler never told a run started adapts at once', () => {
       const scaler = new QualityScaler();
       for (let i = 0; i < 48; i++) scaler.sample(25);
+      expect(scaler.index).toBe(1);
+    });
+  });
+
+  describe('display rate', () => {
+    it('holds its level on a display capped at 30 Hz, however long the run', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_30_MS, 2000);
+      scaler.startRun();
+      for (let i = 0; i < 1800; i++) scaler.sample(VSYNC_30_MS);
+      expect(scaler.index).toBe(0);
+    });
+
+    it('still steps down on a 60 Hz display once frames run 40 ms', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_60_MS, 2000);
+      scaler.startRun();
+      feed(scaler, 40, WARMUP_MS + 1300);
+      expect(scaler.index).toBe(1);
+      for (let i = 0; i < 500; i++) scaler.sample(42);
+      expect(scaler.index).toBe(3);
+    });
+
+    it('steps down on a 30 Hz display whose frames really run long', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_30_MS, 2000);
+      feed(scaler, 2 * VSYNC_30_MS, 1300);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('steps a lowered level back up on a 30 Hz display that keeps its rate', () => {
+      const scaler = new QualityScaler(3);
+      idle(scaler, VSYNC_30_MS, 2000);
+      expect(feed(scaler, VSYNC_30_MS, UP_WAIT_MS + 100)).toBeLessThan(UP_WAIT_MS + 100);
+      expect(scaler.index).toBe(2);
+    });
+
+    it('re-learns the rate at each idle stretch, so a display capped mid-session recovers', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_60_MS, 2000);
+      feed(scaler, VSYNC_30_MS, 1300);
+      expect(scaler.index).toBe(1);
+      idle(scaler, VSYNC_30_MS, 2000);
+      feed(scaler, VSYNC_30_MS, UP_WAIT_MS + 100);
+      expect(scaler.index).toBe(0);
+    });
+
+    it('keeps the last rate through an idle stretch too short to measure', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_60_MS, 2000);
+      idle(scaler, VSYNC_30_MS, IDLE_WINDOW_MS - 100);
+      feed(scaler, VSYNC_30_MS, 1300);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('takes the fastest idle window, so a slow first second (page load, a fading card) does not count', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, VSYNC_30_MS, IDLE_WINDOW_MS);
+      idle(scaler, VSYNC_60_MS, IDLE_WINDOW_MS);
+      feed(scaler, 25, 1300);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('never judges against a rate faster than 60 Hz', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, 1000 / 120, 2000);
+      for (let i = 0; i < 400; i++) scaler.sample(20);
+      expect(scaler.index).toBe(0);
+      feed(scaler, 25, 1300);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('ignores idle stalls over 250 ms and bad idle times', () => {
+      const scaler = new QualityScaler();
+      idle(scaler, 300, 3000);
+      scaler.sampleIdle(Number.NaN);
+      scaler.sampleIdle(-5);
+      feed(scaler, 25, 1300);
       expect(scaler.index).toBe(1);
     });
   });
