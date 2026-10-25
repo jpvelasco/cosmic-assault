@@ -120,6 +120,11 @@ describe('World start of a run', () => {
     expect(shape(5)).not.toEqual(shape(6));
   });
 
+  it('exposes the practice level it was created with, defaulting to 1', () => {
+    expect(world({ practiceLevel: 5 }).practiceLevel).toBe(5);
+    expect(world().practiceLevel).toBe(1);
+  });
+
   it.each([0, 8, 1.5, Number.NaN])('rejects practice level %s with a RangeError', (practiceLevel) => {
     expect(() => world({ practiceLevel })).toThrow(/practiceLevel.*1.*7/);
     expect(() => world({ practiceLevel })).toThrow(RangeError);
@@ -247,9 +252,7 @@ describe('World scoring', () => {
   ] as const)('destroying a size-%i asteroid adds %i', (size, points) => {
     const w = world({ initialShip: SHOOTER, initialAsteroids: [still(260, 360, size)] });
     const events = stepUntil(w, FIRE, (e) => ofType(e, 'asteroidDestroyed').length > 0);
-    expect(ofType(events, 'asteroidDestroyed')).toEqual([
-      { type: 'asteroidDestroyed', x: 260, y: 360, size, points },
-    ]);
+    expect(ofType(events, 'asteroidDestroyed')).toEqual([{ type: 'asteroidDestroyed', x: 260, y: 360, size, points }]);
     expect(w.score).toBe(points);
   });
 
@@ -321,7 +324,10 @@ describe('World overlap order', () => {
   // The World's hash cells are 120 wide, so x = 240 is a cell boundary: the asteroid in the left
   // cell is visited first even though it has the higher index.
   it('the ship takes the highest-indexed overlap even when the hash visits it first', () => {
-    const w = world({ initialShip: { x: 240, y: 60, angle: 0 }, initialAsteroids: [still(262, 60, 3), still(218, 60, 3)] });
+    const w = world({
+      initialShip: { x: 240, y: 60, angle: 0 },
+      initialAsteroids: [still(262, 60, 3), still(218, 60, 3)],
+    });
     const [right, left] = w.asteroids;
     const events = stepIntoVulnerability(w, NO_CONTROLS);
     expect(ofType(events, 'shipHit')).toHaveLength(1);

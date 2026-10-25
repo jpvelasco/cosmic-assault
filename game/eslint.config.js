@@ -43,10 +43,14 @@ export default defineConfig(
     rules: {
       'no-restricted-syntax': [
         'error',
-        {
-          selector: "MemberExpression[property.name='shadowBlur']",
+        ...[
+          "MemberExpression[property.name='shadowBlur']",
+          "MemberExpression[property.value='shadowBlur']",
+          "Property[key.name='shadowBlur']",
+        ].map((selector) => ({
+          selector,
           message: 'Bake glow into sprites instead of setting shadowBlur per frame',
-        },
+        })),
       ],
     },
   },

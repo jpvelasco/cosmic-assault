@@ -13,11 +13,6 @@ export interface Renderer {
   draw(world: World, alpha: number): void;
 }
 
-export interface RendererOptions {
-  /** Shown in the HUD as "Practice L<n>"; the run's level is fixed, so it is set once here. */
-  readonly practiceLevel?: number;
-}
-
 const MAX_DPR = 2;
 const BACKGROUND = '#05060f';
 const ASTEROID_FILL = '#5468a8';
@@ -27,8 +22,13 @@ const PROJECTILE_FILL = '#ff4fd8';
 const SHIP_FILL = '#39ff14';
 const FLAME_FILL = '#ffb02e';
 const HUD_COLOR = '#e8ecff';
-const HUD_FONT = '600 20px ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-const HUD_MARGIN = 16;
+const HUD_FONT_FAMILY = 'ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+/** Minimums in field units; on small screens they grow so the HUD stays at least this many CSS px. */
+const HUD_MIN_FONT = 20;
+const HUD_MIN_FONT_CSS_PX = 14;
+const HUD_MIN_MARGIN = 16;
+const HUD_MIN_MARGIN_CSS_PX = 12;
+const HUD_LINE_HEIGHT = 1.3;
 const BLINK_HZ = 10;
 const TWO_PI = Math.PI * 2;
 
@@ -55,6 +55,9 @@ interface Layout {
   readonly offsetX: number;
   readonly offsetY: number;
   readonly dpr: number;
+  readonly hudFont: string;
+  readonly hudMargin: number;
+  readonly hudLine: number;
   readonly stars: HTMLCanvasElement;
 }
 
@@ -68,18 +71,20 @@ function tracePolygon(
 ): void {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  points.forEach((p, i) => {
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i] as Point;
     const sx = x + p.x * cos - p.y * sin;
     const sy = y + p.x * sin + p.y * cos;
     if (i === 0) ctx.moveTo(sx, sy);
     else ctx.lineTo(sx, sy);
-  });
+  }
   ctx.closePath();
 }
 
-export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions = {}): Renderer {
+export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   const ctx = get2dContext(canvas);
-  const practiceLabel = `Practice L${String(options.practiceLevel ?? 1)}`;
+  let labelLevel = 0;
+  let practiceLabel = '';
   let layout: Layout | null = null;
 
   function resize(cssWidth: number, cssHeight: number, field: Field): void {
@@ -88,18 +93,23 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         `Renderer.resize() needs positive finite sizes (got ${String(cssWidth)}×${String(cssHeight)}); wait for layout first`,
       );
     }
-    const dpr = Math.min(Math.max(globalThis.devicePixelRatio, 1), MAX_DPR);
+    const deviceRatio = globalThis.devicePixelRatio;
+    const dpr = Math.min(Number.isFinite(deviceRatio) && deviceRatio > 0 ? deviceRatio : 1, MAX_DPR);
     canvas.style.width = `${String(cssWidth)}px`;
     canvas.style.height = `${String(cssHeight)}px`;
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
     const scale = Math.min(cssWidth / field.width, cssHeight / field.height);
+    const hudFontSize = Math.max(HUD_MIN_FONT, HUD_MIN_FONT_CSS_PX / scale);
     layout = {
       field,
       scale,
       offsetX: (cssWidth - field.width * scale) / 2,
       offsetY: (cssHeight - field.height * scale) / 2,
       dpr,
+      hudFont: `600 ${String(hudFontSize)}px ${HUD_FONT_FAMILY}`,
+      hudMargin: Math.max(HUD_MIN_MARGIN, HUD_MIN_MARGIN_CSS_PX / scale),
+      hudLine: hudFontSize * HUD_LINE_HEIGHT,
       stars: bakeStarfield(field, scale * dpr),
     };
   }
@@ -144,15 +154,19 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     ctx.fill();
   }
 
-  function drawHud(world: World, field: Field): void {
+  function drawHud(world: World, { field, hudFont, hudMargin, hudLine }: Layout): void {
+    if (world.practiceLevel !== labelLevel) {
+      labelLevel = world.practiceLevel;
+      practiceLabel = `Practice L${String(labelLevel)}`;
+    }
     ctx.fillStyle = HUD_COLOR;
-    ctx.font = HUD_FONT;
+    ctx.font = hudFont;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
-    ctx.fillText(`Score ${String(world.score)}`, HUD_MARGIN, HUD_MARGIN);
-    ctx.fillText(`Lives ${String(world.lives)}`, HUD_MARGIN, HUD_MARGIN + 26);
+    ctx.fillText(`Score ${String(world.score)}`, hudMargin, hudMargin);
+    ctx.fillText(`Lives ${String(world.lives)}`, hudMargin, hudMargin + hudLine);
     ctx.textAlign = 'right';
-    ctx.fillText(practiceLabel, field.width - HUD_MARGIN, HUD_MARGIN);
+    ctx.fillText(practiceLabel, field.width - hudMargin, hudMargin);
     if (world.status === 'gameOver') {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -180,7 +194,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     drawAsteroids(world);
     drawProjectiles(world);
     drawShip(world);
-    drawHud(world, field);
+    drawHud(world, layout);
     ctx.restore();
   }
 

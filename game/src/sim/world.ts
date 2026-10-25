@@ -212,6 +212,11 @@ export class World {
     return this.elapsedValue;
   }
 
+  /** The level this run was created with (1–7). */
+  get practiceLevel(): number {
+    return this.level;
+  }
+
   get field(): Field {
     return this.currentField;
   }
