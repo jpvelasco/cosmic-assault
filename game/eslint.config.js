@@ -3,6 +3,8 @@ import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+const SIM_PURITY_MESSAGE = 'sim/ must be deterministic and DOM-free: use the injected Rng and dt instead';
+
 export default defineConfig(
   { ignores: ['dist', 'playwright-report', 'test-results'] },
   js.configs.recommended,
@@ -11,6 +13,19 @@ export default defineConfig(
     languageOptions: {
       globals: globals.browser,
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  {
+    files: ['src/sim/**/*.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        ...['window', 'document', 'performance', 'requestAnimationFrame', 'Date'].map((name) => ({
+          name,
+          message: SIM_PURITY_MESSAGE,
+        })),
+      ],
+      'no-restricted-properties': ['error', { object: 'Math', property: 'random', message: SIM_PURITY_MESSAGE }],
     },
   },
   {
