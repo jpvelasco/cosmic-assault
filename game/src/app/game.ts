@@ -75,7 +75,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     syncView();
   }
 
-  /** Applies the latest viewport size once per frame; the renderer re-bakes its starfield on each resize. */
+  /** Applies the latest viewport size once per frame; the renderer re-bakes its sky on each resize. */
   function applyPendingResize(): void {
     const { clientWidth, clientHeight } = root;
     if (!resizePending || clientWidth === 0 || clientHeight === 0) return;

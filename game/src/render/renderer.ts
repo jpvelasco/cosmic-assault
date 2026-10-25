@@ -2,7 +2,9 @@ import { PROJECTILE } from '../sim/config';
 import { isPositiveFiniteSize, type Field } from '../sim/field';
 import type { World } from '../sim/world';
 import { get2dContext } from './context';
-import { BACKGROUND, bakeStarfield } from './starfield';
+import { BACKGROUND, DRIFT } from './palette';
+import { bakeSky } from './sky';
+import { createStarLayers } from './starfieldLayers';
 
 export interface Renderer {
   resize(cssWidth: number, cssHeight: number, field: Field): void;
@@ -30,6 +32,11 @@ const HUD_MIN_MARGIN_CSS_PX = 12;
 const HUD_LINE_HEIGHT = 1.3;
 const BLINK_HZ = 10;
 const TWO_PI = Math.PI * 2;
+/** Render-only seed for the star layers; the sim never reads it. */
+const STAR_SEED = 0x57a7f1e1;
+const STAR_COUNT_SCALE = 1;
+/** Caps the star step after a stalled frame or tab switch so stars never jump. */
+const MAX_STAR_STEP = 0.1;
 
 interface Point {
   readonly x: number;
@@ -57,7 +64,7 @@ interface Layout {
   readonly hudFont: string;
   readonly hudMargin: number;
   readonly hudLine: number;
-  readonly stars: HTMLCanvasElement;
+  readonly sky: HTMLCanvasElement;
 }
 
 /** Adds a closed polygon, rotated by `angle` and moved to (x, y), to the current path. */
@@ -85,6 +92,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   let labelLevel = 0;
   let practiceLabel = '';
   let layout: Layout | null = null;
+  const starLayers = createStarLayers(STAR_SEED, STAR_COUNT_SCALE);
+  let lastDrawMs = 0;
 
   function resize(cssWidth: number, cssHeight: number, field: Field): void {
     if (!isPositiveFiniteSize(cssWidth, cssHeight)) {
@@ -109,8 +118,17 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       hudFont: `600 ${String(hudFontSize)}px ${HUD_FONT_FAMILY}`,
       hudMargin: Math.max(HUD_MIN_MARGIN, HUD_MIN_MARGIN_CSS_PX / scale),
       hudLine: hudFontSize * HUD_LINE_HEIGHT,
-      stars: bakeStarfield(field, scale * dpr),
+      sky: bakeSky(field, scale * dpr, DRIFT),
     };
+    starLayers.resize(field);
+  }
+
+  /** Steps the stars by real time between draws, so drift is smooth at any refresh rate; frozen unless playing. */
+  function stepStars(world: World): void {
+    const now = performance.now();
+    const dt = Math.min((now - lastDrawMs) / 1000, MAX_STAR_STEP);
+    lastDrawMs = now;
+    if (world.status === 'playing') starLayers.step(dt, world.ship.vx, world.ship.vy);
   }
 
   function drawAsteroids(world: World): void {
@@ -173,14 +191,16 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     if (layout === null) {
       throw new Error('Renderer.draw() called before resize(); call resize() once the canvas has a size');
     }
-    const { field, scale, offsetX, offsetY, dpr, stars } = layout;
+    const { field, scale, offsetX, offsetY, dpr, sky } = layout;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = BACKGROUND;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const k = scale * dpr;
     ctx.setTransform(k, 0, 0, k, offsetX * dpr, offsetY * dpr);
-    ctx.drawImage(stars, 0, 0, field.width, field.height);
+    ctx.drawImage(sky, 0, 0, field.width, field.height);
+    stepStars(world);
+    starLayers.draw(ctx, world.elapsed);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, field.width, field.height);

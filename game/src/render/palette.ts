@@ -1,5 +1,8 @@
 import { rgba } from './color';
 
+/** The canvas clear colour, shared with the renderer so the baked sky blends in at the edges. */
+export const BACKGROUND = '#05060f';
+
 export interface Palette {
   readonly id: string;
   /** Top-left to bottom-right sky gradient stops (at 0, 0.55 and 1). */
