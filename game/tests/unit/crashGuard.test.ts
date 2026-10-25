@@ -84,6 +84,20 @@ describe('createCrashGuard', () => {
     expect(messages[1]).toContain('card broke');
   });
 
+  it('keeps the message when the stack lacks it, as in Firefox and Safari', () => {
+    const { guard, log } = setup();
+    const error = new Error('boom');
+    error.stack = `run@${OURS}:1:1\nframe@${OURS}:2:2`;
+    guard.run(thrower(error));
+    expect(log.entries()[0]?.message).toBe(`Error: boom\nrun@${OURS}:1:1\nframe@${OURS}:2:2`);
+  });
+
+  it('does not repeat the message when the stack already starts with it', () => {
+    const { guard, log } = setup();
+    guard.run(thrower(stackedError('boom', OURS)));
+    expect(log.entries()[0]?.message).toBe(`Error: boom\n    at run (${OURS}:1:1)`);
+  });
+
   it('describes non-Error throws', () => {
     const { guard, log } = setup();
     guard.run(thrower('plain text'));
@@ -107,6 +121,14 @@ describe('attachGlobal', () => {
     expect(guard.tripped).toBe(false);
     expect(onCrash).not.toHaveBeenCalled();
     expect(log.entries()).toHaveLength(1);
+  });
+
+  it('logs only the message of a third-party error, with no stack or extension URL', () => {
+    const { win, log } = setup();
+    const url = 'chrome-extension://abcdef/content.js';
+    win.dispatchEvent(errorEvent({ message: 'ext', filename: url, error: stackedError('ext failed', url) }));
+    win.dispatchEvent(rejection(stackedError('ext rejected', url)));
+    expect(log.entries().map((entry) => entry.message)).toEqual(['Error: ext failed', 'Error: ext rejected']);
   });
 
   it('does not trip on a same-origin script outside our base path', () => {
@@ -147,6 +169,7 @@ describe('attachGlobal', () => {
     const { win, detach, log } = setup();
     detach();
     win.dispatchEvent(errorEvent({ message: 'late', filename: OURS }));
+    win.dispatchEvent(rejection(stackedError('late', OURS)));
     expect(log.entries()).toHaveLength(0);
   });
 });

@@ -20,6 +20,7 @@ import { createOverlay } from '../ui/overlay';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
 import { commandForKey, START, TO_TITLE, type Command } from './commands';
+import { e2eSeam } from './e2eSeam';
 import { passesGameOverGuard } from './gameOverGuard';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
@@ -50,8 +51,6 @@ export interface App {
   readonly audioState: AudioState;
   /** What the game has noticed: mode changes, long stalls and errors. Kept in memory only. */
   readonly log: RingLog;
-  /** Runs at the start of every guarded frame; the e2e bridge sets it to make a frame throw. */
-  beforeFrame: (() => void) | null;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -132,7 +131,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   let frameId = 0;
   /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
   let pauseCorner: CornerBox | null = null;
-  let beforeFrame: (() => void) | null = null;
 
   /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
   function applyQuality(): void {
@@ -157,6 +155,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   }
 
   function setMode(next: AppMode): void {
+    // After a crash the log and the report's mode stay as they were when the game stopped.
+    if (guard.tripped) return;
     mode = next;
     log.add('mode', next, performance.now());
     audio.setMusicLevel(MUSIC_LEVEL[next]);
@@ -304,7 +304,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   }
 
   function runFrame(): void {
-    beforeFrame?.();
+    if (import.meta.env.MODE === 'e2e') e2eSeam.e2eBeforeFrame?.();
     const now = performance.now();
     const frameMs = now - lastFrameAt;
     const frameSeconds = frameMs / 1000;
@@ -400,12 +400,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       return audio.state;
     },
     log,
-    get beforeFrame() {
-      return beforeFrame;
-    },
-    set beforeFrame(hook) {
-      beforeFrame = hook;
-    },
     start,
     pause,
     resume,

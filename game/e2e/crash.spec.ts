@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { SETTINGS_KEY } from '../src/app/settings';
 import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
 
 const DELIBERATE_CRASH = 'e2e: deliberate crash';
@@ -26,21 +27,44 @@ test('a crash mid-run shows the recovery card, stops drawing and logs the error'
   await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused();
   await page.screenshot({ path: SCREENSHOT });
 
-  expect((await gameState(page)).logSize).toBeGreaterThan(before);
+  const afterCrash = (await gameState(page)).logSize;
+  expect(afterCrash).toBeGreaterThan(before);
+  // Losing focus would pause a live run; after a crash the log and the reported mode stay as they were.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  expect(await gameState(page)).toMatchObject({ logSize: afterCrash, mode: 'playing' });
   const drawn = (await gameState(page)).drawCount;
   await nextFrames(page, 3);
   expect((await gameState(page)).drawCount).toBe(drawn);
   expect(consoleErrors.filter((message) => message.includes(DELIBERATE_CRASH))).toHaveLength(1);
 });
 
-test('a crash silences audio without saving the sound setting', async ({ page }) => {
+test('a crash silences audio without changing the saved settings', async ({ page }) => {
+  const saved = { muted: false, musicVolume: 0.3, sfxVolume: 0.4 };
+  await page.addInitScript(([key, value]) => {
+    localStorage.setItem(key, value);
+  }, [SETTINGS_KEY, JSON.stringify(saved)] as const);
   await openGame(page);
   await crash(page);
   await expect(card(page)).toBeVisible();
 
   expect((await gameState(page)).muted).toBe(true);
-  const saved = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
-  expect(JSON.stringify(saved)).not.toContain('"muted":true');
+  const stored = await page.evaluate((key) => localStorage.getItem(key), SETTINGS_KEY);
+  expect(JSON.parse(stored ?? 'null')).toEqual(saved);
+});
+
+test('Tab stays inside the crash card', async ({ page }) => {
+  await openGame(page);
+  await crash(page);
+  const tryAgain = page.getByRole('button', { name: 'Try again' });
+  const copy = page.getByRole('button', { name: 'Copy report' });
+  await expect(tryAgain).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  await expect(copy).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(tryAgain).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(copy).toBeFocused();
 });
 
 test('Copy report puts the log, with the error in it, on the clipboard', async ({ page, context }) => {

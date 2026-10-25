@@ -1,3 +1,4 @@
+import { e2eSeam } from './app/e2eSeam';
 import type { App } from './app/game';
 import type { World } from './sim/world';
 
@@ -36,8 +37,8 @@ export function exposeTestBridge(app: App): void {
     version: 3,
     getState: () => snapshot(app),
     crash() {
-      app.beforeFrame = () => {
-        app.beforeFrame = null;
+      e2eSeam.e2eBeforeFrame = () => {
+        e2eSeam.e2eBeforeFrame = null;
         throw new Error(DELIBERATE_CRASH);
       };
     },

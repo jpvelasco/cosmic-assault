@@ -15,9 +15,15 @@ export interface CrashGuard {
   attachGlobal(win: GlobalErrorTarget): () => void;
 }
 
+/** Just `Name: message`: enough to tell what failed, with no file URLs. */
+function summarizeError(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+/** Message and stack. Only V8 starts its stack with the message, so Firefox and Safari get it added. */
 function describeError(error: unknown): string {
-  if (error instanceof Error) return error.stack ?? `${error.name}: ${error.message}`;
-  return String(error);
+  if (!(error instanceof Error) || !error.stack) return summarizeError(error);
+  return error.stack.includes(error.message) ? error.stack : `${summarizeError(error)}\n${error.stack}`;
 }
 
 function field(event: Event, key: string): unknown {
@@ -31,8 +37,9 @@ function field(event: Event, key: string): unknown {
 export function createCrashGuard(log: RingLog, onCrash: (error: unknown) => void, now: () => number = () => performance.now()): CrashGuard {
   let tripped = false;
 
-  const record = (error: unknown): void => {
-    log.add('error', describeError(error), now());
+  /** Our own errors are logged in full; a third party's keep only their message, so the report carries no extension IDs or URLs. */
+  const record = (error: unknown, ours: boolean): void => {
+    log.add('error', ours ? describeError(error) : summarizeError(error), now());
   };
 
   const trip = (error: unknown): void => {
@@ -51,7 +58,7 @@ export function createCrashGuard(log: RingLog, onCrash: (error: unknown) => void
       try {
         return fn();
       } catch (error) {
-        record(error);
+        record(error, true);
         trip(error);
         return undefined;
       }
@@ -66,13 +73,16 @@ export function createCrashGuard(log: RingLog, onCrash: (error: unknown) => void
       const onError = (event: Event): void => {
         const error = field(event, 'error');
         const message = field(event, 'message');
-        record(error ?? message);
-        if (isOurs(field(event, 'filename'), error instanceof Error && error.stack)) trip(error ?? message);
+        const failure = error ?? message;
+        const ours = isOurs(field(event, 'filename'), error instanceof Error && error.stack);
+        record(failure, ours);
+        if (ours) trip(failure);
       };
       const onRejection = (event: Event): void => {
         const reason = field(event, 'reason');
-        record(reason);
-        if (isOurs(reason instanceof Error && reason.stack)) trip(reason);
+        const ours = isOurs(reason instanceof Error && reason.stack);
+        record(reason, ours);
+        if (ours) trip(reason);
       };
       win.addEventListener('error', onError);
       win.addEventListener('unhandledrejection', onRejection);
