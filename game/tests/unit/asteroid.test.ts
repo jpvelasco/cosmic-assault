@@ -313,7 +313,20 @@ describe('spawnPracticeAsteroid', () => {
 
 describe('shape randomness', () => {
   function gameplayOf(a: Asteroid): Omit<Asteroid, 'vertices'> {
-    return { x: a.x, y: a.y, vx: a.vx, vy: a.vy, rotation: a.rotation, spin: a.spin, size: a.size, radius: a.radius };
+    return {
+      id: a.id,
+      x: a.x,
+      y: a.y,
+      vx: a.vx,
+      vy: a.vy,
+      px: a.px,
+      py: a.py,
+      rotation: a.rotation,
+      protation: a.protation,
+      spin: a.spin,
+      size: a.size,
+      radius: a.radius,
+    };
   }
 
   function expectShapeOnlyDiffers(make: (shapeSeed: number) => readonly Asteroid[]): void {

@@ -179,6 +179,8 @@ export class World {
   private readonly children: Asteroid[] = [];
   /** Live `SpawningSystem.reset()` zeroes the timer, so the first step spawns at once. */
   private spawnTimer = 0;
+  /** Last id handed out; asteroids and projectiles share it. Consumes no RNG. */
+  private lastId = 0;
   private scoreValue = 0;
   private livesValue: number;
   private statusValue: WorldStatus = 'playing';
@@ -205,7 +207,16 @@ export class World {
       opts.initialAsteroids.forEach((a, i) => {
         assertAsteroidPlacement(a, i);
         this.asteroidList.push(
-          createAsteroid(this.spawnRng, a.x, a.y, a.size, a.angle, a.speedMultiplier, this.shapeRng),
+          createAsteroid(
+            this.spawnRng,
+            a.x,
+            a.y,
+            a.size,
+            a.angle,
+            a.speedMultiplier,
+            this.shapeRng,
+            this.nextId(),
+          ),
         );
       });
     }
@@ -261,6 +272,7 @@ export class World {
     if (this.statusValue === 'gameOver') {
       return this.events;
     }
+    this.rememberPoses();
     this.elapsedValue += dt;
     this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField));
     this.moveEntities(dt);
@@ -287,6 +299,8 @@ export class World {
     for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) {
       e.x = rescale(e.x, old.width, field.width);
       e.y = rescale(e.y, old.height, field.height);
+      e.px = rescale(e.px, old.width, field.width);
+      e.py = rescale(e.py, old.height, field.height);
     }
   }
 
@@ -302,12 +316,34 @@ export class World {
     assertFinite('WorldOptions.initialShip', { x: placement.x, y: placement.y, angle: placement.angle });
     const ship = createShip(placement.x, placement.y);
     ship.angle = placement.angle;
+    ship.pangle = placement.angle;
     return ship;
+  }
+
+  private nextId(): number {
+    return ++this.lastId;
+  }
+
+  /** Stores every entity's pose before anything moves, so the renderer can interpolate from it. */
+  private rememberPoses(): void {
+    const ship = this.shipState;
+    ship.px = ship.x;
+    ship.py = ship.y;
+    ship.pangle = ship.angle;
+    for (const a of this.asteroidList) {
+      a.px = a.x;
+      a.py = a.y;
+      a.protation = a.rotation;
+    }
+    for (const p of this.projectileList) {
+      p.px = p.x;
+      p.py = p.y;
+    }
   }
 
   private addProjectiles(shots: readonly Shot[]): void {
     for (const shot of shots) {
-      this.projectileList.push(projectileFromShot(shot));
+      this.projectileList.push(projectileFromShot(shot, this.nextId()));
       this.events.push({ type: 'shot', x: shot.x, y: shot.y });
     }
   }
@@ -388,7 +424,7 @@ export class World {
         const a = this.markBroken(index);
         const points = ASTEROID.scores[a.size];
         this.scoreValue += points;
-        this.events.push({ type: 'asteroidDestroyed', x: a.x, y: a.y, size: a.size, points });
+        this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
       }
     }
     removeFlagged(projectiles, this.spentFlags);
@@ -397,7 +433,8 @@ export class World {
   /** Removes broken asteroids and appends their children in break order, like the live splice-and-push. */
   private breakAsteroids(): void {
     for (const index of this.broken) {
-      this.children.push(...splitAsteroid(this.splitRng, this.asteroidList[index] as Asteroid, this.shapeRng));
+      const parent = this.asteroidList[index] as Asteroid;
+      this.children.push(...splitAsteroid(this.splitRng, parent, this.shapeRng, () => this.nextId()));
     }
     removeFlagged(this.asteroidList, this.brokenFlags);
     this.asteroidList.push(...this.children);
@@ -418,7 +455,15 @@ export class World {
 
   private spawnAsteroid(awayFromShip: boolean): void {
     this.asteroidList.push(
-      spawnPracticeAsteroid(this.spawnRng, this.level, this.currentField, this.shipState, awayFromShip, this.shapeRng),
+      spawnPracticeAsteroid(
+        this.spawnRng,
+        this.level,
+        this.currentField,
+        this.shipState,
+        awayFromShip,
+        this.shapeRng,
+        this.nextId(),
+      ),
     );
   }
 }

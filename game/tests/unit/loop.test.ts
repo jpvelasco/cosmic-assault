@@ -116,4 +116,46 @@ describe('createFixedStepLoop', () => {
       expect(() => createFixedStepLoop({ maxSteps })).toThrow(/needs/);
     }
   });
+
+  describe('alpha', () => {
+    it('is 0 before any frame and after reset()', () => {
+      const loop = createFixedStepLoop();
+      const { onStep } = recordSteps();
+      expect(loop.alpha()).toBe(0);
+      loop.advance(1 / 240, onStep);
+      loop.reset();
+      expect(loop.alpha()).toBe(0);
+    });
+
+    it('is the carried fraction of a step: 0.5 after half a step', () => {
+      const loop = createFixedStepLoop();
+      const { onStep } = recordSteps();
+      loop.advance(1 / 240, onStep);
+      expect(loop.alpha()).toBeCloseTo(0.5, 9);
+    });
+
+    it('returns to the remainder after whole steps run', () => {
+      const loop = createFixedStepLoop();
+      const { onStep } = recordSteps();
+      expect(loop.advance(1 / 240 + STEP_SECONDS, onStep)).toBe(1);
+      expect(loop.alpha()).toBeCloseTo(0.5, 9);
+    });
+
+    it('is 0 after the max-steps backlog is dropped', () => {
+      const loop = createFixedStepLoop();
+      const { onStep } = recordSteps();
+      loop.advance(0.2, onStep);
+      expect(loop.alpha()).toBe(0);
+    });
+
+    it('stays within [0, 1) over a long run of uneven frames', () => {
+      const loop = createFixedStepLoop();
+      const { onStep } = recordSteps();
+      for (let frame = 0; frame < 5000; frame++) {
+        loop.advance(((frame * 7) % 13) / 700, onStep);
+        expect(loop.alpha()).toBeGreaterThanOrEqual(0);
+        expect(loop.alpha()).toBeLessThan(1);
+      }
+    });
+  });
 });

@@ -324,7 +324,7 @@ describe('World scoring', () => {
   ] as const)('destroying a size-%i asteroid adds %i', (size, points) => {
     const w = world({ initialShip: SHOOTER, initialAsteroids: [still(260, 360, size)] });
     const events = stepUntil(w, FIRE, (e) => ofType(e, 'asteroidDestroyed').length > 0);
-    expect(ofType(events, 'asteroidDestroyed')).toEqual([{ type: 'asteroidDestroyed', x: 260, y: 360, size, points }]);
+    expect(ofType(events, 'asteroidDestroyed')).toEqual([{ type: 'asteroidDestroyed', id: 1, x: 260, y: 360, size, points }]);
     expect(w.score).toBe(points);
   });
 
@@ -385,7 +385,7 @@ describe('World splitting and removal', () => {
     const [lower] = w.asteroids;
     const events = w.step(STEP_SECONDS, FIRE);
     expect(ofType(events, 'asteroidDestroyed')).toEqual([
-      { type: 'asteroidDestroyed', x: 227, y: 360, size: 3, points: ASTEROID.scores[3] },
+      { type: 'asteroidDestroyed', id: 2, x: 227, y: 360, size: 3, points: ASTEROID.scores[3] },
     ]);
     expect(w.asteroids[0]).toBe(lower);
     expect(w.projectiles).toHaveLength(0);
@@ -414,7 +414,7 @@ describe('World overlap order', () => {
     });
     const events = w.step(STEP_SECONDS, FIRE);
     expect(ofType(events, 'asteroidDestroyed')).toEqual([
-      { type: 'asteroidDestroyed', x: 224, y: 280, size: 3, points: ASTEROID.scores[3] },
+      { type: 'asteroidDestroyed', id: 2, x: 224, y: 280, size: 3, points: ASTEROID.scores[3] },
     ]);
   });
 
@@ -552,6 +552,148 @@ describe('World practice spawning', () => {
       w.step(STEP_SECONDS, NO_CONTROLS);
     }
     expect(w.asteroids.length).toBeGreaterThanOrEqual(practiceSettings(7).minAsteroids);
+  });
+});
+
+describe('World render hooks', () => {
+  /** Everything the renderer reads, by entity id. */
+  function poses(w: World) {
+    return new Map([...w.asteroids, ...w.projectiles].map((e) => [e.id, { x: e.x, y: e.y }]));
+  }
+
+  it('numbers the opening asteroids 1, 2, 3 and scenario asteroids in order', () => {
+    expect(world().asteroids.map((a) => a.id)).toEqual([1, 2, 3]);
+    const w = world({ initialAsteroids: [still(10, 10, 3), still(20, 20, 3)] });
+    expect(w.asteroids.map((a) => a.id)).toEqual([1, 2]);
+  });
+
+  it('never reuses an id and only hands out larger ones, across asteroids and projectiles', () => {
+    const w = world({ seed: 7, practiceLevel: 7 });
+    const seen = new Set<number>();
+    let highest = 0;
+    runScript(w, 10, () => {
+      for (const e of [...w.asteroids, ...w.projectiles]) {
+        if (!seen.has(e.id)) {
+          expect(e.id).toBeGreaterThan(highest);
+          seen.add(e.id);
+        }
+      }
+      highest = Math.max(highest, ...seen);
+    });
+    expect(seen.size).toBeGreaterThan(20);
+    const live = [...w.asteroids, ...w.projectiles].map((e) => e.id);
+    expect(new Set(live).size).toBe(live.length);
+  });
+
+  it('gives split children fresh ids and reports the destroyed id on the event', () => {
+    const w = world({ initialShip: SHOOTER, initialAsteroids: [still(260, 360, 0)] });
+    const parentId = w.asteroids[0]?.id;
+    const events = stepUntil(w, FIRE, (e) => ofType(e, 'asteroidDestroyed').length > 0);
+    expect(ofType(events, 'asteroidDestroyed').map((e) => e.id)).toEqual([parentId]);
+    const children = w.asteroids.filter((a) => a.x === 260 && a.y === 360);
+    expect(children).toHaveLength(2);
+    expect(children.map((a) => a.id)).not.toContain(parentId);
+    expect(new Set(children.map((a) => a.id)).size).toBe(2);
+    expect(w.asteroids.map((a) => a.id)).not.toContain(parentId);
+  });
+
+  it('keeps px/py/pangle/protation at the pose from before the latest step', () => {
+    const w = world({ seed: 7, practiceLevel: 7 });
+    let checked = 0;
+    for (let i = 0; i < 6 * STEPS_PER_SECOND; i++) {
+      const before = poses(w);
+      const ship = { x: w.ship.x, y: w.ship.y, angle: w.ship.angle };
+      const rotations = new Map(w.asteroids.map((a) => [a.id, a.rotation]));
+      w.step(STEP_SECONDS, scriptedControls(i));
+      expect(w.ship).toMatchObject({ px: ship.x, py: ship.y, pangle: ship.angle });
+      for (const e of [...w.asteroids, ...w.projectiles]) {
+        const was = before.get(e.id);
+        if (was !== undefined) {
+          expect([e.px, e.py]).toEqual([was.x, was.y]);
+          checked++;
+        }
+      }
+      for (const a of w.asteroids) {
+        const was = rotations.get(a.id);
+        if (was !== undefined) expect(a.protation).toBe(was);
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+  });
+
+  it('starts new projectiles at their muzzle pose and new asteroids at their spawn pose', () => {
+    const w = world({ initialShip: SHOOTER, initialAsteroids: [still(1000, 100, 3)] });
+    const [shot] = ofType(w.step(STEP_SECONDS, FIRE), 'shot');
+    const projectile = w.projectiles[0];
+    expect([projectile?.px, projectile?.py]).toEqual([shot?.x, shot?.y]);
+
+    const spawned = world({ seed: 4 });
+    const firstIds = new Set(spawned.asteroids.map((a) => a.id));
+    spawned.step(STEP_SECONDS, NO_CONTROLS);
+    const fresh = spawned.asteroids.filter((a) => !firstIds.has(a.id));
+    expect(fresh.length).toBeGreaterThan(0);
+    for (const a of fresh) expect([a.px, a.py, a.protation]).toEqual([a.x, a.y, a.rotation]);
+  });
+
+  it('gives split children their parent pose as previous pose', () => {
+    const w = world({ initialShip: SHOOTER, initialAsteroids: [still(260, 360, 0)] });
+    stepUntil(w, FIRE, (e) => ofType(e, 'asteroidDestroyed').length > 0);
+    for (const c of w.asteroids.filter((a) => a.x === 260 && a.y === 360)) {
+      expect([c.px, c.py, c.protation]).toEqual([c.x, c.y, c.rotation]);
+    }
+  });
+
+  it('snaps the previous pose to the respawn pose so the ship does not streak', () => {
+    const w = world({ initialShip: PARKED, initialAsteroids: [still(300, 300, 1)] });
+    stepUntil(w, NO_CONTROLS, (e) => ofType(e, 'shipHit').length > 0);
+    expect(w.ship).toMatchObject({ x: CENTRE.x, y: CENTRE.y, px: CENTRE.x, py: CENTRE.y, pangle: w.ship.angle });
+  });
+
+  it('starts the ship with its previous pose equal to its pose', () => {
+    expect(world({ initialShip: PARKED }).ship).toMatchObject({ px: 300, py: 300, pangle: 0, angle: 0 });
+    expect(world().ship).toMatchObject({ px: CENTRE.x, py: CENTRE.y, pangle: -Math.PI / 2 });
+  });
+
+  it('rescales the previous position exactly like the position on resize', () => {
+    const w = new World({ seed: 7, field: { width: 960, height: 720 }, practiceLevel: 7 });
+    runScript(w, 3);
+    w.resize({ width: 1680, height: 540 });
+    expect(w.asteroids.length).toBeGreaterThan(0);
+    const p = w.asteroids[0];
+    const old = new World({ seed: 7, field: { width: 960, height: 720 }, practiceLevel: 7 });
+    runScript(old, 3);
+    const o = old.asteroids[0];
+    const map = (v: number, from: number, to: number) =>
+      ((v + WRAP_MARGIN) * (to + 2 * WRAP_MARGIN)) / (from + 2 * WRAP_MARGIN) - WRAP_MARGIN;
+    expect(p?.px).toBe(map(o?.px ?? 0, 960, 1680));
+    expect(p?.py).toBe(map(o?.py ?? 0, 720, 540));
+  });
+
+  it('leaves the seed-2 event log exactly as it was before the hooks existed', () => {
+    const log = runScript(world({ seed: 2 }), 5).map((e) => {
+      const r = e as { type: string; x?: number; y?: number; size?: number; points?: number };
+      return { type: r.type, x: r.x, y: r.y, size: r.size, points: r.points };
+    });
+    const shot = (x: number, y: number) => ({ type: 'shot', x, y, size: undefined, points: undefined });
+    const kill = (x: number, y: number) => ({ type: 'asteroidDestroyed', x, y, size: 3, points: 150 });
+    expect(log).toEqual([
+      shot(639.3335262178236, 344.0138868796173),
+      shot(619.5371682151705, 353.8273655557581),
+      shot(610.2888789118482, 360.7893642503523),
+      shot(597.8248920978847, 358.78350471502625),
+      shot(578.8900879661678, 340.3827033649238),
+      shot(551.63491276749, 317.89135960580575),
+      shot(522.2885782263027, 323.56978922585165),
+      shot(506.53453334420504, 327.71485760060165),
+      kill(284.82433271841234, 326.8762479437502),
+      shot(489.6386135846498, 323.790013231187),
+      shot(467.6846321419521, 304.08193680668194),
+      kill(424.04726872724774, 275.020060025341),
+      shot(436.62973474017224, 279.94534945497855),
+      shot(406.4378655916802, 285.2576706279805),
+      shot(390.10781495016295, 289.1533339845942),
+      shot(372.81950127554063, 285.0585867801763),
+    ]);
   });
 });
 

@@ -8,11 +8,17 @@ import { wrapPosition } from './wrap';
 export type AsteroidSize = 0 | 1 | 2 | 3;
 
 export interface Asteroid {
+  /** Assigned by `World` from one counter shared with projectiles; 0 outside a World. */
+  readonly id: number;
   x: number;
   y: number;
   vx: number;
   vy: number;
+  /** Position and rotation before the latest `World.step`, for interpolated drawing. */
+  px: number;
+  py: number;
   rotation: number;
+  protation: number;
   spin: number;
   size: AsteroidSize;
   radius: number;
@@ -31,6 +37,9 @@ const TWO_PI = Math.PI * 2;
 const SPAWN_POINT_RADIUS = 80;
 const TARGET_BAND = [0.3, 0.7] as const;
 const AIM_JITTER = 0.4;
+
+/** Id source for asteroids made outside a `World`. */
+const noId = (): number => 0;
 
 function createVertices(rng: Rng, radius: number): { x: number; y: number }[] {
   const [minCount, maxCount] = ASTEROID.vertexCount;
@@ -53,6 +62,7 @@ export function createAsteroid(
   speedMultiplier: number,
   /** Draws only the vertex count and radii, so outline changes never shift gameplay draws. */
   shapeRng: Rng = rng,
+  id = 0,
 ): Asteroid {
   const rotation = rng.range(0, TWO_PI);
   const spin = rng.range(-ASTEROID.spinMax, ASTEROID.spinMax);
@@ -60,11 +70,15 @@ export function createAsteroid(
   const [jitterMin, jitterMax] = ASTEROID.speedJitter;
   const speed = ASTEROID.baseSpeeds[size] * speedMultiplier * rng.range(jitterMin, jitterMax);
   return {
+    id,
     x,
     y,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
+    px: x,
+    py: y,
     rotation,
+    protation: rotation,
     spin,
     size,
     radius,
@@ -79,7 +93,12 @@ export function stepAsteroid(a: Asteroid, dt: number, field: Field): void {
   wrapPosition(a, field);
 }
 
-export function splitAsteroid(rng: Rng, a: Asteroid, shapeRng: Rng = rng): readonly Asteroid[] {
+export function splitAsteroid(
+  rng: Rng,
+  a: Asteroid,
+  shapeRng: Rng = rng,
+  nextId: () => number = noId,
+): readonly Asteroid[] {
   if (a.size === TINY) {
     return [];
   }
@@ -89,7 +108,7 @@ export function splitAsteroid(rng: Rng, a: Asteroid, shapeRng: Rng = rng): reado
   for (let i = 0; i < 2; i++) {
     const angle = a.rotation + rng.range(-spread, spread);
     const boost = 1 + rng.range(0, ASTEROID.childSpeedBoostMax);
-    children.push(createAsteroid(rng, a.x, a.y, childSize, angle, boost, shapeRng));
+    children.push(createAsteroid(rng, a.x, a.y, childSize, angle, boost, shapeRng, nextId()));
   }
   return children;
 }
@@ -181,13 +200,15 @@ export function spawnPracticeAsteroid(
   ship: Ship | null,
   awayFromShip: boolean,
   shapeRng: Rng = rng,
+  id = 0,
 ): Asteroid {
   const point = pickSpawnPoint(rng, field, awayFromShip ? ship : null);
   const targetX = field.width * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
   const targetY = field.height * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
   const angle = Math.atan2(targetY - point.y, targetX - point.x) + rng.range(-AIM_JITTER, AIM_JITTER);
   const size = sizeForLevel(rng, level);
-  const asteroid = createAsteroid(rng, point.x, point.y, size, angle, practiceSettings(level).speedMultiplier, shapeRng);
+  const speedMultiplier = practiceSettings(level).speedMultiplier;
+  const asteroid = createAsteroid(rng, point.x, point.y, size, angle, speedMultiplier, shapeRng, id);
   headInward(asteroid, point.edge);
   return asteroid;
 }
