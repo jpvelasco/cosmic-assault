@@ -18,6 +18,7 @@ function snapshot(app: App): CosmicAssaultTestState {
     projectileCount: world?.projectiles.length ?? 0,
     hudRects: app.hudRects.map(({ x, y, width, height }) => ({ x, y, width, height })),
     drawCount: app.drawCount,
+    visualScale: app.visualScale,
     quality: { index: app.quality.index, name: app.quality.level.name },
     frameStats: app.frameStats,
     muted: app.muted,

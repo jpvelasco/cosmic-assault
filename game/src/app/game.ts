@@ -6,6 +6,7 @@ import { attachTouchControls } from '../input/touchControls';
 import type { CornerBox, HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
+import type { VisualScale } from '../render/visualScale';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
@@ -33,6 +34,8 @@ export interface App {
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
+  /** How much larger than their field size sprites are drawn on this screen. */
+  readonly visualScale: VisualScale;
   /** The quality level in force: its index in QUALITY_LEVELS and its settings. */
   readonly quality: { readonly index: number; readonly level: QualityLevel };
   /** Frame times of the current run, less its first 3 s. */
@@ -343,6 +346,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     },
     get drawCount() {
       return renderer.drawCount;
+    },
+    get visualScale() {
+      return renderer.visualScale;
     },
     get quality() {
       return { index: scaler.index, level: scaler.level };

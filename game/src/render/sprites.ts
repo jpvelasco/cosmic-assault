@@ -5,8 +5,9 @@ import { mix, rgba } from './color';
 import { get2dContext } from './context';
 import type { Palette } from './palette';
 import { SpriteCache } from './spriteCache';
+import { UNIT_VISUAL, type VisualScale } from './visualScale';
 
-/** A baked offscreen canvas. `halfW`/`halfH` are field units: draw it centred on its anchor. */
+/** A baked offscreen canvas. `halfW`/`halfH` are field units, visual scale included: draw it centred on its anchor. */
 export interface Sprite {
   readonly canvas: HTMLCanvasElement;
   readonly halfW: number;
@@ -30,8 +31,12 @@ export interface SpriteBaker {
    * body. Its colours are fixed; `palette` only scopes the cache entry. `length` snaps to steps of 2.
    */
   flame(palette: Palette, length: number): Sprite;
-  /** Device pixels per field unit are `pixelsPerUnit × dpr`; a change clears the cache. */
-  setScale(pixelsPerUnit: number, dpr: number): void;
+  /**
+   * Device pixels per field unit are `pixelsPerUnit × dpr`. `visual` draws the ship, flame, rocks and shots
+   * larger than their field size (a sprite's `halfW`/`halfH` then report the drawn size); glows take their
+   * size from the caller. A change clears the cache.
+   */
+  setScale(pixelsPerUnit: number, dpr: number, visual?: VisualScale): void;
   /** Drops every sprite baked for this asteroid id. */
   forget(asteroidId: number): void;
   /** Frees every baked sprite, for example when a new run starts. */
@@ -319,8 +324,8 @@ interface RockKey {
 }
 
 /**
- * Keys are `kind|palette or colour|size(|asteroid id|shape)`. They omit the scale because `setScale`
- * clears the cache, so every live entry was baked at the current scale.
+ * Keys are `kind|palette or colour|size(|asteroid id|shape)`. They omit the scale and visual scale because
+ * `setScale` clears the cache, so every live entry was baked at the current ones.
  */
 export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
   /** Cache keys per asteroid id, so `forget` finds every entry; eviction keeps it in step. */
@@ -338,6 +343,7 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
   const keys = new Map<string, Map<string, Map<number, string>>>();
   let pixelsPerUnit = 1;
   let dpr = 1;
+  let visual = UNIT_VISUAL;
 
   function keyOf(kind: string, name: string, size: number): string {
     const bySize = inner(inner(keys, kind), name);
@@ -349,15 +355,19 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     return key;
   }
 
-  /** Bakes `paint` (in field units, origin at the centre) onto a canvas spanning ±halfW × ±halfH plus edge padding. */
-  function bake(halfW: number, halfH: number, paint: (ctx: CanvasRenderingContext2D) => void): Sprite {
+  /**
+   * Bakes `paint` (in the art's own units, origin at the centre) onto a canvas spanning ±halfW × ±halfH plus
+   * edge padding, drawn `zoom` times larger than those units on the field.
+   */
+  function bake(halfW: number, halfH: number, zoom: number, paint: (ctx: CanvasRenderingContext2D) => void): Sprite {
     const k = pixelsPerUnit * dpr;
-    const pad = EDGE_PAD_PX / k;
+    const kArt = k * zoom;
+    const pad = EDGE_PAD_PX / kArt;
     const canvas = document.createElement('canvas');
-    canvas.width = Math.ceil(2 * (halfW + pad) * k);
-    canvas.height = Math.ceil(2 * (halfH + pad) * k);
+    canvas.width = Math.ceil(2 * (halfW + pad) * kArt);
+    canvas.height = Math.ceil(2 * (halfH + pad) * kArt);
     const ctx = get2dContext(canvas);
-    ctx.setTransform(k, 0, 0, k, canvas.width / 2, canvas.height / 2);
+    ctx.setTransform(kArt, 0, 0, kArt, canvas.width / 2, canvas.height / 2);
     paint(ctx);
     return { canvas, halfW: canvas.width / (2 * k), halfH: canvas.height / (2 * k) };
   }
@@ -384,7 +394,7 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
 
   function bakeAsteroid(a: Readonly<Asteroid>, p: Palette): Sprite {
     const extent = maxDistance(a.vertices) + ROCK_RIM_WIDTH / 2;
-    return bake(extent, extent, (ctx) => {
+    return bake(extent, extent, visual.rock, (ctx) => {
       paintAsteroid(ctx, a, p);
     });
   }
@@ -398,7 +408,7 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
         cache.get(key)?.sprite ??
         store(
           key,
-          bake(size / 2, size / 2, (ctx) => {
+          bake(size / 2, size / 2, 1, (ctx) => {
             paintGlow(ctx, color, 0, 0, size / 2);
           }),
         )
@@ -411,7 +421,7 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
         cache.get(key)?.sprite ??
         store(
           key,
-          bake(maxDistance(SHIP_HULL) + half, SHIP_HALF_BEAM + half, (ctx) => {
+          bake(maxDistance(SHIP_HULL) + half, SHIP_HALF_BEAM + half, visual.ship, (ctx) => {
             paintShip(ctx, p);
           }),
         )
@@ -428,7 +438,7 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
         cache.get(key)?.sprite ??
         store(
           key,
-          bake(Math.max(glowRadius, SHOT_LENGTH + SHOT_WIDTH / 2), glowRadius, (ctx) => {
+          bake(Math.max(glowRadius, SHOT_LENGTH + SHOT_WIDTH / 2), glowRadius, visual.shot, (ctx) => {
             paintShot(ctx, p);
           }),
         )
@@ -442,18 +452,28 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
         cache.get(key)?.sprite ??
         store(
           key,
-          bake(-FLAME_BASE_X + Math.max(size, glowReach), flameGlowRadius(size), (ctx) => {
+          bake(-FLAME_BASE_X + Math.max(size, glowReach), flameGlowRadius(size), visual.ship, (ctx) => {
             paintFlame(ctx, size);
           }),
         )
       );
     },
-    setScale(nextPixelsPerUnit, nextDpr) {
+    setScale(nextPixelsPerUnit, nextDpr, nextVisual = UNIT_VISUAL) {
       requirePositive('pixelsPerUnit', nextPixelsPerUnit);
       requirePositive('dpr', nextDpr);
-      if (nextPixelsPerUnit === pixelsPerUnit && nextDpr === dpr) return;
+      const { ship, rock, shot } = visual;
+      if (
+        nextPixelsPerUnit === pixelsPerUnit &&
+        nextDpr === dpr &&
+        nextVisual.ship === ship &&
+        nextVisual.rock === rock &&
+        nextVisual.shot === shot
+      ) {
+        return;
+      }
       pixelsPerUnit = nextPixelsPerUnit;
       dpr = nextDpr;
+      visual = nextVisual;
       cache.clear();
     },
     forget(asteroidId) {

@@ -15,6 +15,7 @@ import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
 import { createSpriteBaker, type Sprite, type SpriteBaker } from './sprites';
 import { createStarLayers } from './starfieldLayers';
+import { UNIT_VISUAL, type VisualScale } from './visualScale';
 
 export interface Renderer {
   resize(cssWidth: number, cssHeight: number, field: Field): void;
@@ -47,6 +48,8 @@ export interface Renderer {
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
+  /** How much larger than their field size sprites are drawn at the current layout; 1 across the board before the first `resize`. */
+  readonly visualScale: VisualScale;
   /** Cancels a pending re-bake and frees every sprite and particle. */
   dispose(): void;
 }
@@ -155,24 +158,24 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
-  /** Writes the asteroid's interpolated pose into `pose` and returns its glow's reach, which covers its body too. */
-  function rockPose(a: Readonly<Asteroid>, alpha: number, field: Field): number {
+  /** Writes the asteroid's interpolated pose into `pose` and returns its drawn glow's reach, which covers its body too. */
+  function rockPose(a: Readonly<Asteroid>, alpha: number, field: Field, visual: VisualScale): number {
     interpolatePose(a.px, a.py, a.protation, a.x, a.y, a.rotation, alpha, field, pose);
-    return (a.radius * ROCK_GLOW_SCALE) / 2;
+    return (a.radius * ROCK_GLOW_SCALE * visual.rock) / 2;
   }
 
-  function drawRockGlows(world: World, alpha: number, field: Field): void {
+  function drawRockGlows(world: World, alpha: number, field: Field, visual: VisualScale): void {
     ctx.globalAlpha = ROCK_GLOW_ALPHA * quality.glow;
     for (const a of world.asteroids) {
-      const reach = rockPose(a, alpha, field);
+      const reach = rockPose(a, alpha, field, visual);
       stamp(baker.glow(palette.rockGlow, reach * 2), pose.x, pose.y, 1, 0, reach, field);
     }
     ctx.globalAlpha = 1;
   }
 
-  function drawRocks(world: World, alpha: number, field: Field): void {
+  function drawRocks(world: World, alpha: number, field: Field, visual: VisualScale): void {
     for (const a of world.asteroids) {
-      const reach = rockPose(a, alpha, field);
+      const reach = rockPose(a, alpha, field, visual);
       stamp(baker.asteroid(a, palette), pose.x, pose.y, Math.cos(pose.angle), Math.sin(pose.angle), reach, field);
     }
   }
@@ -187,7 +190,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
-  function drawShip(world: World, alpha: number, field: Field): void {
+  function drawShip(world: World, alpha: number, field: Field, visual: VisualScale): void {
     const { ship } = world;
     // A lost last life leaves only its burst.
     if (world.status === 'gameOver') return;
@@ -196,10 +199,11 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const { x, y } = pose;
     const cos = Math.cos(pose.angle);
     const sin = Math.sin(pose.angle);
-    const radius = SHIP_GLOW_DIAMETER / 2;
+    const glowDiameter = SHIP_GLOW_DIAMETER * visual.ship;
+    const radius = glowDiameter / 2;
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = SHIP_GLOW_ALPHA * quality.glow;
-    stamp(baker.glow(palette.ship[1], SHIP_GLOW_DIAMETER), x, y, 1, 0, radius, field);
+    stamp(baker.glow(palette.ship[1], glowDiameter), x, y, 1, 0, radius, field);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     if (ship.thrusting) {
@@ -220,17 +224,17 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   }
 
   /** Steps 3–8: the shaken scene. */
-  function drawScene(world: World, alpha: number, { field, k, fieldX, fieldY }: Layout): void {
+  function drawScene(world: World, alpha: number, { field, k, fieldX, fieldY, visual }: Layout): void {
     pen.aim(k, fieldX + k * effects.shakeX, fieldY + k * effects.shakeY);
     ctx.globalCompositeOperation = 'lighter';
-    drawRockGlows(world, alpha, field);
-    particlePass.drawRings();
+    drawRockGlows(world, alpha, field, visual);
+    particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
-    drawRocks(world, alpha, field);
+    drawRocks(world, alpha, field, visual);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
-    drawShip(world, alpha, field);
-    particlePass.drawBursts();
+    drawShip(world, alpha, field, visual);
+    particlePass.drawBursts(visual.effect);
   }
 
   /** Steps 9–10, in device pixels: the vignette, then the flash. */
@@ -314,6 +318,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     get drawCount() {
       return drawCount;
+    },
+    get visualScale() {
+      return layout?.visual ?? UNIT_VISUAL;
     },
     dispose() {
       backdrop.dispose();
