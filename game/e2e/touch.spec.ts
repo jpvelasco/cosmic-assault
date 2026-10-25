@@ -141,3 +141,24 @@ test('taps on the game-over card outside its buttons keep the score; Restart res
   await page.getByRole('button', { name: 'Restart' }).tap();
   await expectMode(page, 'playing');
 });
+
+test('a tap on the sound chip mutes without resuming the run or starting one', async ({ page }) => {
+  await tapToStart(page);
+  await page.getByTestId('touch-pause').tap();
+  await expectMode(page, 'paused');
+  const chip = page.getByTestId('sound-toggle');
+
+  await chip.tap();
+  await expect.poll(async () => (await gameState(page)).muted).toBe(true);
+  await expect(chip).toHaveText('Sound: off');
+  await nextFrames(page, 3);
+  expect((await gameState(page)).mode).toBe('paused');
+
+  await page.getByRole('button', { name: 'Quit' }).tap();
+  await expectMode(page, 'title');
+  await chip.tap();
+  await expect.poll(async () => (await gameState(page)).muted).toBe(false);
+  await expect(chip).toHaveText('Sound: on');
+  await nextFrames(page, 3);
+  expect((await gameState(page)).mode).toBe('title');
+});

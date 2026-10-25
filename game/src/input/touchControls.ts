@@ -32,12 +32,15 @@ interface PointerHandlers {
   onRelease?(): void;
 }
 
+/** `css` holds the geometry, which the stick maths depends on; `className` picks the look from index.html. */
 function styled<K extends keyof HTMLElementTagNameMap>(
   tag: K,
+  className: string,
   css: string,
   testId?: string,
 ): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag);
+  el.className = className;
   el.style.cssText = css;
   if (testId !== undefined) el.dataset['testid'] = testId;
   return el;
@@ -91,14 +94,14 @@ function trackSinglePointer(el: HTMLElement, handlers: PointerHandlers): Pointer
   };
 }
 
-const BASE_CSS = `position:absolute;left:${inset('left', 35)};bottom:${inset('bottom', 35)};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;background:rgba(57,255,20,0.1);border:2px solid rgba(57,255,20,0.5);${TOUCH_CSS}`;
-const HANDLE_CSS = `position:absolute;left:50%;top:50%;width:${String(HANDLE_SIZE_PX)}px;height:${String(HANDLE_SIZE_PX)}px;margin:-${String(HANDLE_SIZE_PX / 2)}px 0 0 -${String(HANDLE_SIZE_PX / 2)}px;border-radius:50%;background:rgba(57,255,20,0.5);pointer-events:none`;
-const FIRE_CSS = `position:absolute;right:${inset('right', 20)};bottom:${inset('bottom', 20)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;background:rgba(255,0,255,0.5);border:2px solid rgba(255,0,255,0.8);color:#fff;font:bold 16px sans-serif;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
-const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('right', 16)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;background:rgba(232,236,255,0.12);border:2px solid rgba(232,236,255,0.5);color:#e8ecff;font:bold 16px sans-serif;letter-spacing:-1px;${TOUCH_CSS}`;
+const BASE_CSS = `position:absolute;left:${inset('left', 35)};bottom:${inset('bottom', 35)};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
+const HANDLE_CSS = `position:absolute;left:50%;top:50%;width:${String(HANDLE_SIZE_PX)}px;height:${String(HANDLE_SIZE_PX)}px;margin:-${String(HANDLE_SIZE_PX / 2)}px 0 0 -${String(HANDLE_SIZE_PX / 2)}px;border-radius:50%;pointer-events:none`;
+const FIRE_CSS = `position:absolute;right:${inset('right', 20)};bottom:${inset('bottom', 20)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
+const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('right', 16)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
 const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:1000';
 
 function pauseButton(): HTMLButtonElement {
-  const button = styled('button', PAUSE_CSS, 'touch-pause');
+  const button = styled('button', 'touch-pause', PAUSE_CSS, 'touch-pause');
   button.type = 'button';
   button.textContent = 'II';
   button.setAttribute('aria-label', 'Pause');
@@ -111,10 +114,10 @@ function pauseButton(): HTMLButtonElement {
  * thumb is on the stick.
  */
 export function attachTouchControls(root: HTMLElement, onPause: () => void): TouchControls {
-  const layer = styled('div', LAYER_CSS);
-  const base = styled('div', BASE_CSS, 'touch-joystick');
-  const handle = styled('div', HANDLE_CSS);
-  const fireButton = styled('div', FIRE_CSS, 'touch-fire');
+  const layer = styled('div', '', LAYER_CSS);
+  const base = styled('div', 'touch-stick', BASE_CSS, 'touch-joystick');
+  const handle = styled('div', 'touch-knob', HANDLE_CSS);
+  const fireButton = styled('div', 'touch-fire', FIRE_CSS, 'touch-fire');
   fireButton.textContent = 'FIRE';
   const pause = pauseButton();
   base.append(handle);

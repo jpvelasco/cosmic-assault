@@ -4,6 +4,7 @@ import { SETTINGS_KEY } from '../src/app/settings';
 import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
 
 const toast = (page: Page) => page.getByRole('status');
+const soundChip = (page: Page) => page.getByTestId('sound-toggle');
 
 /** Keys are applied on the next animation frame, so state follows a press a frame later. */
 const expectMuted = (page: Page, muted: boolean): Promise<void> =>
@@ -50,6 +51,37 @@ test('M toggles mute in every mode, shows a toast, and never starts the game', a
   await expectMode(page, 'paused');
   await page.keyboard.press('KeyM');
   await expectMuted(page, false);
+});
+
+test('the sound chip mutes on the title and pause cards without starting or resuming', async ({ page }) => {
+  await openGame(page);
+  const chip = soundChip(page);
+  await expect(chip).toHaveText('Sound: on');
+  await expect(chip).toHaveAttribute('aria-pressed', 'false');
+
+  await chip.click();
+  await expectMuted(page, true);
+  await expect(chip).toHaveText('Sound: off');
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(toast(page)).toHaveText('Muted');
+  await nextFrames(page, 3);
+  await expectMode(page, 'title');
+
+  // M and the chip share one toggle, so the chip follows the key.
+  await page.keyboard.press('KeyM');
+  await expectMuted(page, false);
+  await expect(chip).toHaveText('Sound: on');
+
+  await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+  await expect(chip).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expectMode(page, 'paused');
+  await chip.click();
+  await expectMuted(page, true);
+  await expect(chip).toHaveText('Sound: off');
+  await nextFrames(page, 3);
+  await expectMode(page, 'paused');
 });
 
 test('mute survives a reload, and storage holds only the settings key', async ({ page }) => {

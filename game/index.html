@@ -5,15 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Cosmic Assault</title>
     <style>
+      /* The Drift palette (src/render/palette.ts; tests/unit/indexStyles.test.ts keeps them in step) and the glass look built on it. */
+      :root {
+        --space: #05060f;
+        --ink: #e8ecff;
+        --sky-1: #1d0b44;
+        --sky-2: #0c1a4a;
+        --sky-3: #05303d;
+        --nebula-pink: #ff4f9a;
+        --nebula-orange: #ff9a3c;
+        --nebula-teal: #18d6c4;
+        --nebula-violet: #7b5cff;
+        --accent-1: #22d3ff;
+        --accent-2: #a855f7;
+        --accent-3: #ff4fd8;
+        --font-rounded: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        --accent-gradient: linear-gradient(90deg, var(--accent-1), var(--accent-2) 55%, var(--accent-3));
+        /* The canvas HUD pills' fill and stroke, over a dark tint that keeps text legible on bright sky. */
+        --glass-fill: linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.09));
+        --glass-stroke: rgba(255, 255, 255, 0.18);
+        --glass-tint: color-mix(in srgb, var(--sky-1) 55%, transparent);
+        --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 45%);
+        --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        --glass: var(--glass-sheen), var(--glass-fill), var(--glass-tint);
+        --gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.12) 44%, rgba(255, 255, 255, 0) 50%);
+        --glow: 0 0 28px color-mix(in srgb, var(--accent-2) 45%, transparent);
+        --glow-small: 0 0 14px color-mix(in srgb, var(--accent-2) 40%, transparent);
+        --gloss-edge: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        --drop: 0 6px 16px rgba(0, 0, 0, 0.35);
+        --text-drop: 0 1px 2px color-mix(in srgb, var(--sky-1) 70%, transparent);
+        --pop: cubic-bezier(0.2, 1.4, 0.4, 1);
+      }
+      /* Low quality levels (src/render/quality.ts) drop the backdrop blur for a more opaque fill. */
+      body.lite {
+        --glass-tint: color-mix(in srgb, var(--sky-1) 92%, transparent);
+      }
       html,
       body {
         margin: 0;
         height: 100%;
         overflow: hidden;
         overscroll-behavior: none;
-        background: #05060f;
-        color: #e8ecff;
-        font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: var(--space);
+        color: var(--ink);
+        font-family: var(--font-rounded);
       }
       #app {
         position: fixed;
@@ -37,104 +72,270 @@
         display: grid;
         place-content: center;
         justify-items: center;
-        gap: clamp(8px, 2.5vmin, 16px);
-        padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-          max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+        padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+          max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
         text-align: center;
       }
       .overlay[hidden] {
         display: none;
       }
+      /* The title has no run behind it, so it paints the Drift sky itself. */
       .overlay--title {
-        background: #05060f;
+        background:
+          radial-gradient(circle 73vh at 18% 25%, color-mix(in srgb, var(--nebula-pink) 30%, transparent), transparent),
+          radial-gradient(circle 53vh at 35% 10%, color-mix(in srgb, var(--nebula-orange) 20%, transparent), transparent),
+          radial-gradient(circle 77vh at 85% 80%, color-mix(in srgb, var(--nebula-teal) 28%, transparent), transparent),
+          radial-gradient(circle 53vh at 60% 55%, color-mix(in srgb, var(--nebula-violet) 22%, transparent), transparent),
+          linear-gradient(to bottom right, var(--sky-1), var(--sky-2) 55%, var(--sky-3));
+      }
+      /* A sparse starfield: small tiles of different sizes, so the repeat never lines up. */
+      .overlay--title::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(1.6px 1.6px at 41px 67px, rgba(255, 255, 255, 0.85), transparent),
+          radial-gradient(1px 1px at 233px 191px, rgba(255, 255, 255, 0.5), transparent),
+          radial-gradient(1.2px 1.2px at 347px 29px, rgba(255, 255, 255, 0.65), transparent),
+          radial-gradient(1px 1px at 113px 301px, rgba(255, 255, 255, 0.55), transparent),
+          radial-gradient(2px 2px at 389px 127px, rgba(255, 255, 255, 0.9), transparent),
+          radial-gradient(1.2px 1.2px at 503px 419px, rgba(255, 255, 255, 0.6), transparent),
+          radial-gradient(1px 1px at 257px 557px, rgba(255, 255, 255, 0.5), transparent),
+          radial-gradient(1.4px 1.4px at 601px 251px, rgba(255, 255, 255, 0.75), transparent),
+          radial-gradient(1px 1px at 19px 433px, rgba(255, 255, 255, 0.45), transparent);
+        background-size:
+          409px 347px,
+          409px 347px,
+          409px 347px,
+          541px 463px,
+          541px 463px,
+          541px 463px,
+          683px 601px,
+          683px 601px,
+          683px 601px;
       }
       .overlay--pause {
-        background: rgba(5, 6, 15, 0.7);
+        background: color-mix(in srgb, var(--space) 45%, transparent);
+      }
+      .overlay--game-over {
+        background: color-mix(in srgb, var(--space) 25%, transparent);
       }
       .overlay p,
       .overlay h1,
       .overlay h2 {
         margin: 0;
       }
+      .card {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        gap: clamp(8px, 2vmin, 14px);
+        padding: clamp(14px, 3.5vmin, 28px) clamp(14px, 4vw, 36px);
+        border: 1px solid var(--glass-stroke);
+        border-radius: 22px;
+        background: var(--glass);
+        box-shadow: var(--glass-edge), var(--glow), 0 20px 50px rgba(0, 0, 0, 0.45);
+        -webkit-backdrop-filter: blur(10px) saturate(1.3);
+        backdrop-filter: blur(10px) saturate(1.3);
+        animation: pop-in 360ms var(--pop) both;
+      }
+      @keyframes pop-in {
+        from {
+          opacity: 0;
+          transform: scale(0.92);
+        }
+      }
+      /* The logotype, as on the banner: accent gradient, a gloss over its top half, a thin light edge and a glow. */
       .title {
-        font-size: clamp(2rem, 9vmin, 4rem);
-        letter-spacing: 0.02em;
+        font-size: clamp(2rem, 9vmin, 4.25rem);
+        font-weight: 900;
+        line-height: 1.1;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: transparent;
+        background: var(--gloss), var(--accent-gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-stroke: 1px rgba(255, 255, 255, 0.35);
+        filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent-2) 70%, transparent))
+          drop-shadow(0 3px 0 color-mix(in srgb, var(--space) 60%, transparent));
       }
       .heading {
         font-size: clamp(1.5rem, 6vmin, 2.25rem);
+        font-weight: 900;
+        letter-spacing: 0.02em;
       }
       .label {
-        font-weight: 600;
+        font-weight: 700;
+        font-size: 0.8rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        opacity: 0.85;
       }
       .hint {
         opacity: 0.8;
       }
       .score {
         font-size: 1.25rem;
-        font-weight: 600;
+        font-weight: 800;
       }
       .build {
         font-size: 0.75rem;
         opacity: 0.5;
       }
-      .card {
-        display: grid;
-        justify-items: center;
-        gap: 12px;
-        padding: 24px 32px;
-        border: 1px solid rgba(169, 189, 240, 0.35);
-        border-radius: 16px;
-        background: #05060f;
-      }
       .chips {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 8px;
+        gap: 6px;
+      }
+      .sound-slot {
+        display: contents;
       }
       .overlay button {
         font: inherit;
-        font-weight: 600;
+        font-weight: 800;
         color: inherit;
-        background: rgba(169, 189, 240, 0.08);
-        border: 2px solid rgba(169, 189, 240, 0.4);
+        border: 1px solid var(--glass-stroke);
         border-radius: 999px;
+        background: var(--glass);
+        box-shadow: var(--glass-edge);
         cursor: pointer;
+        transition:
+          transform 160ms var(--pop),
+          filter 160ms ease;
       }
       .overlay button:focus-visible {
-        outline: 2px solid #ff4fd8;
-        outline-offset: 2px;
+        outline: 2px solid var(--accent-3);
+        outline-offset: 3px;
       }
-      .chip {
-        width: 44px;
-        height: 44px;
+      @media (hover: hover) {
+        .overlay button:hover {
+          filter: brightness(1.18);
+        }
       }
-      .chip[aria-pressed='true'] {
-        color: #39ff14;
-        border-color: #39ff14;
-        background: rgba(57, 255, 20, 0.12);
+      .overlay button:active {
+        transform: scale(0.95);
+      }
+      /* Primary actions and the chosen level wear the accent gradient. */
+      .overlay .menu-button--primary,
+      .overlay .level-chip[aria-pressed='true'] {
+        color: white;
+        text-shadow: var(--text-drop);
+        border-color: rgba(255, 255, 255, 0.45);
+        background: var(--gloss), var(--accent-gradient);
+        box-shadow:
+          var(--gloss-edge),
+          0 0 18px color-mix(in srgb, var(--accent-2) 55%, transparent),
+          var(--drop);
+      }
+      .level-chip {
+        width: clamp(38px, 10.5vw, 44px);
+        height: clamp(38px, 10.5vw, 44px);
+        padding: 0;
       }
       .menu-button {
-        min-width: 160px;
+        min-width: 168px;
         padding: 10px 24px;
+      }
+      .sound-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 16px 0 12px;
+        font-size: 0.875rem;
+      }
+      .sound-toggle::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent-1);
+        box-shadow: 0 0 8px var(--accent-1);
+      }
+      .sound-toggle[aria-pressed='true'] {
+        color: color-mix(in srgb, var(--ink) 70%, transparent);
+      }
+      .sound-toggle[aria-pressed='true']::before {
+        background: transparent;
+        box-shadow: inset 0 0 0 1.5px currentColor;
       }
       .toast {
         position: absolute;
+        z-index: 1;
         top: max(12px, env(safe-area-inset-top));
         left: 50%;
         transform: translateX(-50%);
         margin: 0;
         padding: 6px 16px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        border: 1px solid var(--glass-stroke);
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.09);
+        background: var(--glass);
+        box-shadow: var(--glass-edge), var(--glow-small);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
         font-size: 0.85rem;
         font-weight: 800;
         pointer-events: none;
         opacity: 0;
+        transition: opacity 160ms ease;
       }
       .toast--shown {
         opacity: 1;
+      }
+      body.lite .card,
+      body.lite .toast {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+      /* Touch controls: positions and sizes are inline in src/input/touchControls.ts; this is only their look. */
+      .touch-stick,
+      .touch-fire,
+      .touch-pause {
+        border-style: solid;
+        box-shadow: var(--glass-edge), var(--glow-small);
+        font: 900 16px/1 var(--font-rounded);
+      }
+      .touch-stick {
+        border-color: color-mix(in srgb, var(--accent-1) 55%, transparent);
+        background:
+          radial-gradient(circle closest-side, transparent 60%, color-mix(in srgb, var(--accent-1) 22%, transparent)),
+          var(--glass-fill),
+          color-mix(in srgb, var(--sky-1) 30%, transparent);
+      }
+      .touch-knob {
+        background: radial-gradient(circle at 38% 30%, white, var(--accent-1) 45%, var(--accent-2));
+        box-shadow:
+          inset 0 -3px 6px color-mix(in srgb, var(--sky-1) 45%, transparent),
+          0 0 14px color-mix(in srgb, var(--accent-1) 60%, transparent);
+      }
+      .touch-fire {
+        border-color: rgba(255, 255, 255, 0.5);
+        background: var(--gloss), linear-gradient(135deg, var(--accent-2), var(--accent-3));
+        box-shadow:
+          var(--gloss-edge),
+          0 0 22px color-mix(in srgb, var(--accent-3) 55%, transparent),
+          var(--drop);
+        color: white;
+        letter-spacing: 0.06em;
+        text-shadow: var(--text-drop);
+      }
+      .touch-pause {
+        border-color: var(--glass-stroke);
+        background: var(--glass);
+        color: var(--ink);
+        letter-spacing: -1px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .card {
+          animation: none;
+        }
+        .overlay button,
+        .toast {
+          transition: none;
+        }
       }
     </style>
   </head>

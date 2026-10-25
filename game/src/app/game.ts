@@ -90,7 +90,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const button = (command: Command) => (): void => {
     applyCommand(command, performance.now());
   };
-  const overlay = createOverlay(root, { start: button(START), selectLevel, resume, quit, toTitle: button(TO_TITLE) });
+  const overlay = createOverlay(root, {
+    start: button(START),
+    selectLevel,
+    resume,
+    quit,
+    toTitle: button(TO_TITLE),
+    toggleMute,
+  });
 
   let mode: AppMode = 'title';
   let world: World | null = null;
@@ -112,7 +119,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   }
 
   function syncView(): void {
-    overlay.update({ mode, practiceLevel, score: world?.score ?? 0 });
+    overlay.update({ mode, practiceLevel, score: world?.score ?? 0, muted: audio.muted });
     touch.show(mode === 'playing' && coarsePointer.matches);
     syncHudBounds();
   }
@@ -204,9 +211,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     syncView();
   }
 
+  /** The M key and the sound chip. */
   function toggleMute(): void {
     audio.setMuted(!audio.muted);
     toast.show(audio.muted ? TOAST_MUTED : TOAST_SOUND_ON);
+    syncView();
     if (!saveSettings(storage, { ...settings, muted: audio.muted })) {
       console.warn('Could not save the sound setting, so it will reset on reload. Allow site storage for this page to keep it.');
     }
