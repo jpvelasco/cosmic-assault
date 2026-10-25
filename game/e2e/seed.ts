@@ -6,7 +6,16 @@
  * Chosen as the lowest seed in 0-299 that clears every lane (tests/helpers/e2eLanes.ts);
  * tests/unit/e2eSeed.test.ts guards it. If that test fails because spawning or RNG
  * consumption changed, re-pick: from game/, run
- * `E2E_SEED_SCAN=0-300 npx vitest run tests/unit/e2eSeed.test.ts --reporter=verbose`, set E2E_SEED to
- * the lowest seed it prints, then rerun the test without the variable.
+ * `E2E_SEED_SCAN=0-300 npx vitest run tests/unit/e2eSeed.test.ts --reporter=verbose`
+ * (PowerShell: `$env:E2E_SEED_SCAN='0-300'; npx vitest run tests/unit/e2eSeed.test.ts --reporter=verbose`),
+ * set E2E_SEED to the lowest lane-clear seed it prints, then rerun the test without the variable.
  */
 export const E2E_SEED = 3;
+
+/**
+ * The `?seed=` the game-over specs load with `?lives=1`: an idle ship at the centre is hit
+ * soon after its 3 s of invulnerability on both e2e fields (3.1 s on desktop, 3.5 s on the phone).
+ * Chosen as the lowest such seed in 0-299; tests/unit/e2eSeed.test.ts guards it and its scan
+ * prints replacements.
+ */
+export const GAME_OVER_SEED = 1;

@@ -14,8 +14,9 @@
 - `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
   Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
   Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
-  carries the test bridge), `check:no-bridge` (fails if the release `dist/`
-  contains the bridge), and `record:parity` (records the parity traces).
+  carries the test bridge and the `?seed=`/`?lives=` URL overrides, and checks
+  that it does), `check:no-bridge` (fails if the release `dist/` contains the
+  bridge or that URL parsing), and `record:parity` (records the parity traces).
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
   enforces it. Ship handling is pinned to recorded traces of the live game in
   `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
@@ -42,7 +43,8 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
 3. **Tests:** For `game/` changes, run `npm test` (Vitest) and `npm run test:e2e`
    (Playwright against the e2e build, plus a smoke test of the release build)
    from `game/`; install Chromium first with `npx playwright install chromium`.
-   Locally, `test:e2e` builds both before serving them. For changes to
+   Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
+   4318 (release), clear of Vite's default preview port. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's

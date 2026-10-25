@@ -6,6 +6,8 @@ import { World } from '../../src/sim/world';
 
 /** The fire assertions finish within about 1 s of a run starting; this leaves slow CI hosts headroom. */
 const GUARD_SECONDS = 2.5;
+/** The game-over specs wait for the idle ship's only life to go; past this they are slow to reach the card. */
+export const MAX_DEATH_SECONDS = 6;
 
 export interface Lane {
   readonly name: string;
@@ -35,9 +37,27 @@ export function lanesStayClear(seed: number, lane: Lane): boolean {
   return true;
 }
 
+/** Seeds in [from, to) for which `keep` holds on every lane, lowest first. */
+function seedsOnEveryLane(from: number, to: number, keep: (seed: number, lane: Lane) => boolean): number[] {
+  return Array.from({ length: to - from }, (_, i) => from + i).filter((seed) => LANES.every((lane) => keep(seed, lane)));
+}
+
 /** Seeds in [from, to) that keep every lane clear, lowest first. */
 export function clearSeeds(from: number, to: number): number[] {
-  return Array.from({ length: to - from }, (_, i) => from + i).filter((seed) =>
-    LANES.every((lane) => lanesStayClear(seed, lane)),
-  );
+  return seedsOnEveryLane(from, to, lanesStayClear);
+}
+
+/** Sim seconds until an idle ship with one life is hit in the e2e run on the lane's field; Infinity if not within MAX_DEATH_SECONDS. */
+export function idleDeathSeconds(seed: number, lane: Lane): number {
+  const world = new World({ seed, field: lane.field, practiceLevel: 1, startLives: 1 });
+  for (let step = 1; step * STEP_SECONDS <= MAX_DEATH_SECONDS; step++) {
+    world.step(STEP_SECONDS, NO_CONTROLS);
+    if (world.status === 'gameOver') return step * STEP_SECONDS;
+  }
+  return Number.POSITIVE_INFINITY;
+}
+
+/** Seeds in [from, to) whose idle ship dies within MAX_DEATH_SECONDS on every e2e field, lowest first. */
+export function gameOverSeeds(from: number, to: number): number[] {
+  return seedsOnEveryLane(from, to, (seed, lane) => idleDeathSeconds(seed, lane) <= MAX_DEATH_SECONDS);
 }

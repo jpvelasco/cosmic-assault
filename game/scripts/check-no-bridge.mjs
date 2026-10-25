@@ -2,24 +2,39 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BRIDGE = '__COSMIC_ASSAULT_TEST_API__';
-const distDir = resolve(process.argv[2] ?? fileURLToPath(new URL('../dist', import.meta.url)));
+// Usage: check-no-bridge.mjs [dist]         fails if the release build carries any e2e-only code;
+//        check-no-bridge.mjs --e2e [dist-e2e] fails if the e2e build lacks a mark, which would blind the first check.
+const MARKS = [
+  { text: '__COSMIC_ASSAULT_TEST_API__', what: 'the e2e test bridge', owner: 'src/main.ts' },
+  { text: '__E2E_QUERY__', what: 'the e2e ?seed= and ?lives= parsing', owner: 'src/app/seed.ts' },
+];
 
-if (!existsSync(distDir)) {
-  console.error(`${distDir} does not exist; run npm run build first`);
+const e2e = process.argv[2] === '--e2e';
+const [defaultDir, buildScript] = e2e ? ['../dist-e2e', 'build:e2e'] : ['../dist', 'build'];
+const dir = resolve(process.argv[e2e ? 3 : 2] ?? fileURLToPath(new URL(defaultDir, import.meta.url)));
+
+if (!existsSync(dir)) {
+  console.error(`${dir} does not exist; run npm run ${buildScript} first`);
   process.exit(1);
 }
 
-const offenders = readdirSync(distDir, { recursive: true, withFileTypes: true })
+const files = readdirSync(dir, { recursive: true, withFileTypes: true })
   .filter((entry) => entry.isFile())
   .map((entry) => join(entry.parentPath, entry.name))
-  .filter((path) => readFileSync(path, 'latin1').includes(BRIDGE));
+  .map((path) => ({ path, text: readFileSync(path, 'latin1') }));
 
-if (offenders.length > 0) {
-  console.error(
-    'dist/ contains the e2e test bridge; release builds must not — check the import.meta.env.MODE guard in src/main.ts',
-  );
-  for (const path of offenders) console.error(`  ${path}`);
+const problems = MARKS.flatMap(({ text, what, owner }) => {
+  const carriers = files.filter((file) => file.text.includes(text)).map((file) => `  ${file.path}`);
+  if (e2e) {
+    return carriers.length > 0 ? []
+      : [`e2e build ${dir} lacks ${what} (${text}); the release check scans for that mark, so keep it in ${owner} or update scripts/check-no-bridge.mjs`];
+  }
+  return carriers.length === 0 ? []
+    : [`release build ${dir} contains ${what}; release builds must not — check the import.meta.env.MODE guard in ${owner}`, ...carriers];
+});
+
+if (problems.length > 0) {
+  for (const problem of problems) console.error(problem);
   process.exit(1);
 }
-console.log('bridge absent');
+console.log(`e2e bridge and query parsing ${e2e ? 'present' : 'absent'}`);

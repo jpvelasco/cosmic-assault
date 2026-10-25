@@ -114,6 +114,16 @@ test('losing focus pauses and forgets a held key', async ({ page }) => {
   await expect.poll(async () => (await shipState(page)).thrusting).toBe(false);
 });
 
+test('hiding the tab pauses the run', async ({ page }) => {
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+
+  await expectMode(page, 'paused');
+});
+
 test('Quit on the pause menu returns to the title screen', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expectMode(page, 'paused');

@@ -1,8 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const isCI = !!process.env['CI'];
-const E2E_URL = 'http://localhost:4173';
-const RELEASE_URL = 'http://localhost:4174';
+// Off Vite's default preview port (4173), so a stray `npm run preview` is never mistaken for these builds.
+const E2E_URL = 'http://localhost:4317';
+const RELEASE_URL = 'http://localhost:4318';
 const desktopChrome = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } };
 
 /** Serves a built `outDir`. CI builds it in an earlier step; locally, build first so preview is never stale. */
@@ -28,7 +29,7 @@ export default defineConfig({
     // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts'],
       use: desktopChrome,
     },
     {

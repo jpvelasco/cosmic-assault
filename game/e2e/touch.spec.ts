@@ -1,5 +1,16 @@
 import type { CDPSession, Locator, Page } from '@playwright/test';
-import { expect, expectMode, gameState, openGame, shipState, test } from './fixtures';
+import {
+  expect,
+  expectMode,
+  gameState,
+  nextFrames,
+  openGame,
+  openGameOverRun,
+  shipState,
+  test,
+  waitForGameOver,
+  waitOutGameOverGuard,
+} from './fixtures';
 
 interface Point {
   readonly x: number;
@@ -12,6 +23,7 @@ interface TouchPoint extends Point {
 
 const STICK_FINGER = 1;
 const FIRE_FINGER = 2;
+const PAUSE_FINGER = 3;
 const DRAG_PX = 50;
 
 async function centreOf(locator: Locator): Promise<Point> {
@@ -41,8 +53,8 @@ function touchscreen(cdp: CDPSession) {
 
 test.skip(({ browserName }) => browserName !== 'chromium', 'CDP touch needs Chromium');
 
-async function tapToStart(page: Page): Promise<void> {
-  await openGame(page);
+async function tapToStart(page: Page, open: (page: Page) => Promise<void> = openGame): Promise<void> {
+  await open(page);
   await page.getByRole('heading', { name: 'Cosmic Assault' }).tap();
   await expectMode(page, 'playing');
 }
@@ -96,4 +108,36 @@ test('the pause button pauses, and Quit returns to the title screen', async ({ p
 
   await expectMode(page, 'title');
   expect((await gameState(page)).ship).toBeNull();
+});
+
+test('a second finger on the pause button pauses while the thumb holds the stick', async ({ page }) => {
+  await tapToStart(page);
+  const fingers = touchscreen(await page.context().newCDPSession(page));
+  const stick = await centreOf(page.getByTestId('touch-joystick'));
+  const pause = await centreOf(page.getByTestId('touch-pause'));
+
+  await fingers.press({ id: STICK_FINGER, ...stick });
+  await fingers.move({ id: STICK_FINGER, x: stick.x + DRAG_PX, y: stick.y });
+  await expect.poll(async () => (await shipState(page)).thrusting).toBe(true);
+  await fingers.press({ id: PAUSE_FINGER, ...pause });
+
+  await expectMode(page, 'paused');
+  await fingers.releaseAll();
+});
+
+test('taps on the game-over card outside its buttons keep the score; Restart restarts', async ({ page }) => {
+  await tapToStart(page, openGameOverRun);
+  await waitForGameOver(page);
+  await waitOutGameOverGuard(page);
+
+  const viewport = page.viewportSize();
+  if (viewport === null) throw new Error('The mobile project has no viewport; set one in playwright.config.ts');
+  for (const tap of [() => page.touchscreen.tap(40, viewport.height / 2), () => page.getByText(/^Score \d+$/).tap()]) {
+    await tap();
+    await nextFrames(page, 3);
+    expect((await gameState(page)).mode).toBe('gameOver');
+  }
+
+  await page.getByRole('button', { name: 'Restart' }).tap();
+  await expectMode(page, 'playing');
 });

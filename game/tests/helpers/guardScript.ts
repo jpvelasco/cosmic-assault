@@ -8,7 +8,7 @@ import { afterAll } from 'vitest';
 export const gameDir = fileURLToPath(new URL('../../', import.meta.url));
 
 /**
- * Test harness for a `scripts/*.mjs` guard: `run` executes it from game/ with one path argument,
+ * Test harness for a `scripts/*.mjs` guard: `run` executes it from game/ with the given arguments,
  * and `tempRoot` makes a directory that is removed after the file's tests.
  * Call it at the top level of a test file so the cleanup hook registers there.
  */
@@ -18,8 +18,8 @@ export function guardScript(script: string, tempPrefix: string) {
     for (const root of tempRoots) rmSync(root, { recursive: true, force: true });
   });
   return {
-    run: (pathArg: string) => {
-      const { status, stdout, stderr } = spawnSync('node', [`scripts/${script}`, pathArg], {
+    run: (...args: string[]) => {
+      const { status, stdout, stderr } = spawnSync('node', [`scripts/${script}`, ...args], {
         cwd: gameDir,
         encoding: 'utf8',
       });
