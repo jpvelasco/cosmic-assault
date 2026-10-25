@@ -26,6 +26,8 @@ export interface App {
   readonly practiceLevel: number;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
+  /** Frames drawn so far. */
+  readonly drawCount: number;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -203,11 +205,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       const command = commandForKey(mode, code);
       if (command !== null) applyCommand(command, now);
     }
+    // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
+    if (renderer.consumeRedrawRequest()) redrawPending = true;
     if (world === null) return;
+    // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
+    const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
     if (mode === 'playing') {
+      const frozen = hitStop.frozen;
       stepWorld(world, frameSeconds, now);
-      // Visuals keep moving through a hit-stop freeze, on real frame time rather than sim time.
-      renderer.advance(Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS), world);
+      renderer.advance(visualSeconds, world, frozen);
+    } else if (mode === 'gameOver' && renderer.hasActiveParticles()) {
+      // The death burst plays out under the card; redrawing stops once the last particle is gone.
+      renderer.settle(visualSeconds, world);
+      redrawPending = true;
     }
     if (mode === 'playing' || redrawPending) {
       renderer.draw(world, loop.alpha());
@@ -250,6 +260,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     },
     get hudRects() {
       return renderer.hudRects;
+    },
+    get drawCount() {
+      return renderer.drawCount;
     },
     start,
     pause,

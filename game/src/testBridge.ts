@@ -17,6 +17,7 @@ function snapshot(app: App): CosmicAssaultTestState {
     asteroidCount: world?.asteroids.length ?? 0,
     projectileCount: world?.projectiles.length ?? 0,
     hudRects: app.hudRects.map(({ x, y, width, height }) => ({ x, y, width, height })),
+    drawCount: app.drawCount,
   };
 }
 

@@ -1,3 +1,6 @@
+/** The pool size at the highest quality; the trail runs at its full rate from this size up. */
+export const DEFAULT_PARTICLE_CAPACITY = 400;
+
 export type ParticleKind = 'shard' | 'spark' | 'ring' | 'smoke' | 'glow';
 
 export interface Particle {

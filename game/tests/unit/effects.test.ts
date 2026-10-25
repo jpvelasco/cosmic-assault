@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { burstFor, createEffects } from '../../src/render/effects';
-import { ParticlePool, type Particle } from '../../src/render/particles';
+import { DEFAULT_PARTICLE_CAPACITY, ParticlePool, type Particle } from '../../src/render/particles';
 import { DRIFT } from '../../src/render/palette';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -198,6 +198,29 @@ describe('createEffects', () => {
     for (let i = 0; i < 24; i++) fx.step(1 / 120, w);
     expect(pool.count).toBeGreaterThanOrEqual(22);
     expect(pool.count).toBeLessThanOrEqual(24);
+  });
+
+  it('trails nothing while frozen by hit-stop, and resumes without a catch-up burst', () => {
+    const pool = new ParticlePool(2000);
+    const fx = createEffects(pool, 1);
+    const w = makeWorld();
+    w.step(STEP_SECONDS, THRUST);
+    for (let i = 0; i < 12; i++) fx.step(1 / 60, w, true);
+    expect(pool.count).toBe(0);
+    fx.step(1 / 60, w);
+    expect(pool.count).toBeLessThanOrEqual(1);
+  });
+
+  it('runs the full trail rate from the default pool size up', () => {
+    const run = (capacity: number) => {
+      const pool = new ParticlePool(capacity);
+      const fx = createEffects(pool, 1);
+      const w = makeWorld();
+      w.step(STEP_SECONDS, THRUST);
+      for (let i = 0; i < 30; i++) fx.step(1 / 60, w);
+      return pool.count;
+    };
+    expect(run(DEFAULT_PARTICLE_CAPACITY)).toBe(run(4000));
   });
 
   it('emits fewer trail particles from a smaller pool', () => {

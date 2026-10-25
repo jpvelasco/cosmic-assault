@@ -3,7 +3,7 @@ import type { SimEvent } from '../sim/events';
 import { createRng, type Rng } from '../sim/rng';
 import type { World } from '../sim/world';
 import { DRIFT, type Palette } from './palette';
-import type { ParticlePool } from './particles';
+import { DEFAULT_PARTICLE_CAPACITY, type ParticlePool } from './particles';
 
 export interface BurstSpec {
   readonly shards: number;
@@ -18,8 +18,11 @@ export interface BurstSpec {
 export interface Effects {
   /** Turns simulation events into particles, shake and flash. Reads the world, never writes it. */
   handle(events: readonly SimEvent[], world: World): void;
-  /** Advances shake, flash and the thruster trail by `dt` seconds. */
-  step(dt: number, world: World): void;
+  /**
+   * Advances shake, flash and the thruster trail by `dt` seconds. While `frozen` (hit-stop) the ship
+   * stands still, so it trails nothing.
+   */
+  step(dt: number, world: World, frozen?: boolean): void;
   readonly shakeX: number;
   readonly shakeY: number;
   readonly flash: number;
@@ -42,8 +45,6 @@ const SHAKE_FREQ_Y = 49;
 const FLASH_DECAY_PER_SECOND = 3;
 
 const TRAIL_PER_SECOND = 60;
-/** A pool at least this big gets the full trail rate; smaller ones get proportionally less. */
-const TRAIL_FULL_RATE_CAPACITY = 512;
 const TRAIL_OFFSET = 12;
 const RING_STAGGER_SECONDS = 0.12;
 
@@ -163,13 +164,14 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
     }
   };
 
-  const emitTrail = (world: World, dt: number): void => {
+  const emitTrail = (world: World, dt: number, frozen: boolean): void => {
     const { ship } = world;
-    if (!ship.thrusting || world.status !== 'playing') {
+    if (frozen || !ship.thrusting || world.status !== 'playing') {
       trailBudget = 0;
       return;
     }
-    trailBudget += dt * TRAIL_PER_SECOND * Math.min(1, pool.capacity / TRAIL_FULL_RATE_CAPACITY);
+    // A pool smaller than the default gets a proportionally thinner trail.
+    trailBudget += dt * TRAIL_PER_SECOND * Math.min(1, pool.capacity / DEFAULT_PARTICLE_CAPACITY);
     const dx = -Math.cos(ship.angle);
     const dy = -Math.sin(ship.angle);
     for (; trailBudget >= 1; trailBudget--) {
@@ -199,12 +201,12 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         kick(spec);
       }
     },
-    step(dt, world) {
+    step(dt, world, frozen = false) {
       time += dt;
       shake *= SHAKE_DECAY ** dt;
       if (shake < SHAKE_REST) shake = 0;
       flash = Math.max(0, flash - dt * FLASH_DECAY_PER_SECOND);
-      emitTrail(world, dt);
+      emitTrail(world, dt, frozen);
     },
     // At rest these are exactly 0, never -0, so the renderer's transform stays on whole pixels.
     get shakeX() {

@@ -28,6 +28,8 @@ interface CosmicAssaultTestState {
   readonly projectileCount: number;
   /** The HUD pills drawn on the last frame; empty before the first run is drawn. */
   readonly hudRects: readonly CosmicAssaultTestRect[];
+  /** Frames the renderer has drawn; a still screen (paused, game over) draws only when something changes. */
+  readonly drawCount: number;
 }
 
 interface CosmicAssaultTestApi {
