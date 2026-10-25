@@ -14,7 +14,10 @@ export interface Asteroid {
   y: number;
   vx: number;
   vy: number;
-  /** Position and rotation before the latest `World.step`, for interpolated drawing. */
+  /**
+   * Position and rotation before the latest `World.step`, for interpolated drawing. `px`/`py` are the
+   * raw position before the latest step; not wrap-adjusted — a renderer must not interpolate across a wrap.
+   */
   px: number;
   py: number;
   rotation: number;

@@ -9,7 +9,10 @@ export interface Ship {
   vx: number;
   vy: number;
   angle: number;
-  /** Pose before the latest `World.step`, for interpolated drawing. */
+  /**
+   * Pose before the latest `World.step`, for interpolated drawing. `px`/`py` are the raw position
+   * before the latest step; not wrap-adjusted — a renderer must not interpolate across a wrap.
+   */
   px: number;
   py: number;
   pangle: number;

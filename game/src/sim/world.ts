@@ -265,6 +265,8 @@ export class World {
   /**
    * Advances the run by `dt` seconds. The returned array is reused: it is valid only
    * until the next `step`, so copy any events you need to keep.
+   *
+   * Once `status` is `'gameOver'`, `step` is a no-op and previous poses are not refreshed — draw at alpha = 1.
    */
   step(dt: number, controls: Controls): readonly SimEvent[] {
     assertDt(dt);
