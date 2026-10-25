@@ -42,7 +42,6 @@ export const ASTEROID = {
   jaggedness: 0.3,
   childAngleSpread: 1.5,
   childSpeedBoostMax: 0.3,
-  spawnEdgeMargin: 100,
   safeRadius: 150,
 } as const;
 

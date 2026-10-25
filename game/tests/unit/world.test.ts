@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { practiceSettings, type AsteroidSize } from '../../src/sim/asteroid';
-import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { ASTEROID, PLAYER, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
@@ -219,19 +219,60 @@ describe('World.step', () => {
     expect(w.projectiles).toHaveLength(0);
   });
 
-  it('keeps entities when resized', () => {
-    const w = world();
-    w.step(STEP_SECONDS, FIRE);
-    const before = { ship: { ...w.ship }, asteroids: w.asteroids.length, projectiles: w.projectiles.length };
-    const wide: Field = { width: 1680, height: 720 };
-    w.resize(wide);
-    expect(w.field).toEqual(wide);
-    expect(w.ship).toEqual(before.ship);
-    expect(w.asteroids).toHaveLength(before.asteroids);
-    expect(w.projectiles).toHaveLength(before.projectiles);
+  it('rejects a resize to an empty field with a RangeError', () => {
     expect(() => {
-      w.resize({ width: 0, height: 720 });
+      world().resize({ width: 0, height: 720 });
     }).toThrow(RangeError);
+  });
+
+  describe.each<[string, number, number]>([
+    ['shrink', 1680, 960],
+    ['grow', 960, 1680],
+  ])('resize (%s %i → %i)', (_name, from, to) => {
+    function resized() {
+      const w = new World({ seed: 7, field: { width: from, height: 720 }, practiceLevel: 7 });
+      runScript(w, 3);
+      const before = { ship: { ...w.ship }, asteroids: w.asteroids.map((a) => a.x), projectiles: w.projectiles.length };
+      const field: Field = { width: to, height: 720 };
+      w.resize(field);
+      return { w, field, before };
+    }
+
+    it('keeps every entity within the new wrap band', () => {
+      const { w, field, before } = resized();
+      expect(w.field).toEqual(field);
+      expect(before.projectiles).toBeGreaterThan(0);
+      for (const e of [w.ship, ...w.asteroids, ...w.projectiles]) {
+        expect(e.x).toBeGreaterThanOrEqual(-WRAP_MARGIN);
+        expect(e.x).toBeLessThanOrEqual(field.width + WRAP_MARGIN);
+        expect(e.y).toBeGreaterThanOrEqual(-WRAP_MARGIN);
+        expect(e.y).toBeLessThanOrEqual(field.height + WRAP_MARGIN);
+      }
+    });
+
+    it('keeps asteroids on the wrap lines on them', () => {
+      const edges = [still(-WRAP_MARGIN, 100, 3), still(from + WRAP_MARGIN, 200, 3)];
+      const w = new World({ seed: 1, field: { width: from, height: 720 }, initialAsteroids: edges });
+      w.resize({ width: to, height: 720 });
+      expect(w.asteroids.map((a) => a.x)).toEqual([-WRAP_MARGIN, to + WRAP_MARGIN]);
+    });
+
+    it('keeps the asteroids in left-to-right order without collapsing them onto one line', () => {
+      const { w, before } = resized();
+      const order = (xs: readonly number[]) => xs.map((_, i) => i).sort((i, j) => (xs[i] ?? 0) - (xs[j] ?? 0));
+      const after = w.asteroids.map((a) => a.x);
+      expect(after).toHaveLength(before.asteroids.length);
+      expect(order(after)).toEqual(order(before.asteroids));
+      const spread = (xs: readonly number[]) => Math.max(...xs) - Math.min(...xs);
+      expect(spread(after)).toBeGreaterThan(spread(before.asteroids) * (to / from) * 0.9);
+    });
+
+    it('keeps the ship at the same fraction of the wrap band', () => {
+      const { w, field, before } = resized();
+      const fraction = (x: number, width: number) => (x + WRAP_MARGIN) / (width + 2 * WRAP_MARGIN);
+      expect(fraction(w.ship.x, field.width)).toBeCloseTo(fraction(before.ship.x, from), 9);
+      expect(w.ship.y).toBe(before.ship.y);
+    });
   });
 });
 
@@ -490,6 +531,96 @@ describe('World practice spawning', () => {
       w.step(STEP_SECONDS, NO_CONTROLS);
     }
     expect(w.asteroids.length).toBeGreaterThanOrEqual(practiceSettings(7).minAsteroids);
+  });
+});
+
+describe('World shape wiring', () => {
+  // Golden outlines: dropping this.shapeRng at any World creation call site draws vertices from
+  // the gameplay stream instead, which changes these values.
+  const outline = (a: { vertices: readonly { x: number; y: number }[] }) =>
+    a.vertices.map(({ x, y }) => `${x.toFixed(9)} ${y.toFixed(9)}`);
+
+  it('pins the first 3 practice spawns of seed 2, level 7', () => {
+    const w = world({ seed: 2, practiceLevel: 7 });
+    expect(w.asteroids.slice(0, 3).map(outline)).toMatchInlineSnapshot(`
+      [
+        [
+          "10.561899565 0.000000000",
+          "11.740173612 11.740173612",
+          "0.000000000 11.580139993",
+          "-7.487840160 7.487840160",
+          "-14.711133258 0.000000000",
+          "-12.006865177 -12.006865177",
+          "-0.000000000 -14.472416578",
+          "11.313860043 -11.313860043",
+        ],
+        [
+          "18.797364436 0.000000000",
+          "10.031859400 12.579553800",
+          "-3.438845412 15.066566180",
+          "-14.007318269 6.745568956",
+          "-11.783108394 -5.674445933",
+          "-3.954451351 -17.325583400",
+          "8.904545196 -11.165946500",
+        ],
+        [
+          "28.977758500 0.000000000",
+          "14.210890046 10.324815979",
+          "5.526268739 17.008106320",
+          "-8.119067520 24.987920445",
+          "-24.507846686 17.805992887",
+          "-26.641947476 0.000000000",
+          "-16.904191094 -12.281613732",
+          "-5.506795877 -16.948175014",
+          "6.731197043 -20.716494324",
+          "18.497154328 -13.438969266",
+        ],
+      ]
+    `);
+  });
+
+  it('pins a scenario asteroid and the children it splits into', () => {
+    const w = world({ seed: 2, practiceLevel: 7, initialShip: SHOOTER, initialAsteroids: [still(260, 360, 0)] });
+    const parent = outline(w.asteroids[0] ?? { vertices: [] });
+    stepUntil(w, FIRE, (e) => ofType(e, 'asteroidDestroyed').length > 0);
+    const children = w.asteroids.filter((a) => a.x === 260 && a.y === 360).map(outline);
+    expect({ parent, children }).toMatchInlineSnapshot(`
+      {
+        "children": [
+          [
+            "50.126305163 0.000000000",
+            "26.751625066 33.545476800",
+            "-9.170254432 40.177509813",
+            "-37.352848718 17.988183883",
+            "-31.421622383 -15.131855821",
+            "-10.545203603 -46.201555732",
+            "23.745453855 -29.775857334",
+          ],
+          [
+            "46.364413600 0.000000000",
+            "22.737424074 16.519705567",
+            "8.842029982 27.212970112",
+            "-12.990508033 39.980672711",
+            "-39.212554698 28.489588620",
+            "-42.627115961 0.000000000",
+            "-27.046705751 -19.650581970",
+            "-8.810873404 -27.117080022",
+            "10.769915268 -33.146390918",
+            "29.595446925 -21.502350826",
+          ],
+        ],
+        "parent": [
+          "42.247598260 0.000000000",
+          "46.960694447 46.960694447",
+          "0.000000000 46.320559974",
+          "-29.951360640 29.951360640",
+          "-58.844533031 0.000000000",
+          "-48.027460710 -48.027460710",
+          "-0.000000000 -57.889666311",
+          "45.255440173 -45.255440173",
+        ],
+      }
+    `);
   });
 });
 

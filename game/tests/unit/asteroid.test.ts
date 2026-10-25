@@ -8,22 +8,42 @@ import {
   type Asteroid,
   type AsteroidSize,
 } from '../../src/sim/asteroid';
-import { ASTEROID, WRAP_MARGIN } from '../../src/sim/config';
+import { ASTEROID, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
 import { createRng } from '../../src/sim/rng';
-import { createShip } from '../../src/sim/ship';
+import { createShip, type Ship } from '../../src/sim/ship';
 
 const FIELD: Field = { width: 1280, height: 720 };
+/** The narrowest, the e2e desktop and the widest field. */
+const FIELDS: readonly Field[] = [{ width: 960, height: 720 }, FIELD, { width: 1680, height: 720 }];
 const SIZES: readonly AsteroidSize[] = [0, 1, 2, 3];
 const SEEDS = 1000;
+/** Live `circleCollision(x, y, 80, ship.x, ship.y, 150)`: a spawn this close to the ship is flipped. */
+const FLIP_REACH = 80 + ASTEROID.safeRadius;
+
+type Edge = 0 | 1 | 2 | 3;
+const OPPOSITE: Readonly<Record<Edge, Edge>> = { 0: 2, 1: 3, 2: 0, 3: 1 };
 
 function speedOf(a: Asteroid): number {
   return Math.hypot(a.vx, a.vy);
 }
 
-function isOnSpawnEdge(a: Asteroid): boolean {
-  const margin = ASTEROID.spawnEdgeMargin;
-  return a.x === -margin || a.x === FIELD.width + margin || a.y === -margin || a.y === FIELD.height + margin;
+function distance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** The edge (0 top, 1 right, 2 bottom, 3 left) whose wrap line the asteroid sits on, or null. */
+function edgeOf(a: Asteroid, field: Field): Edge | null {
+  if (a.y === -WRAP_MARGIN) return 0;
+  if (a.x === field.width + WRAP_MARGIN) return 1;
+  if (a.y === field.height + WRAP_MARGIN) return 2;
+  if (a.x === -WRAP_MARGIN) return 3;
+  return null;
+}
+
+/** The coordinate along the spawn edge: x on the top and bottom edges, y on the sides. */
+function alongEdge(a: Asteroid, edge: Edge): number {
+  return edge % 2 === 0 ? a.x : a.y;
 }
 
 describe('createAsteroid', () => {
@@ -163,46 +183,72 @@ describe('practiceSettings', () => {
 });
 
 describe('spawnPracticeAsteroid', () => {
-  it('always spawns exactly 100 outside one edge', () => {
-    for (let seed = 0; seed < SEEDS; seed++) {
-      const a = spawnPracticeAsteroid(createRng(seed), 1 + (seed % 7), FIELD, null, false);
-      expect(isOnSpawnEdge(a)).toBe(true);
-    }
-  });
-
-  it('keeps the flipped spawn exactly 100 outside an edge too', () => {
+  it('always spawns exactly on the wrap line outside one edge, flipped or not', () => {
     const ship = createShip(FIELD.width / 2, FIELD.height / 2);
     for (let seed = 0; seed < SEEDS; seed++) {
-      const a = spawnPracticeAsteroid(createRng(seed), 3, FIELD, ship, true);
-      expect(isOnSpawnEdge(a)).toBe(true);
+      const level = 1 + (seed % 7);
+      expect(edgeOf(spawnPracticeAsteroid(createRng(seed), level, FIELD, null, false), FIELD)).not.toBeNull();
+      expect(edgeOf(spawnPracticeAsteroid(createRng(seed), level, FIELD, ship, true), FIELD)).not.toBeNull();
     }
   });
 
-  it('never spawns within the safe radius of a centred ship when spawning away from it', () => {
-    for (const field of [FIELD, { width: 960, height: 720 }, { width: 1680, height: 720 }]) {
-      const ship = createShip(field.width / 2, field.height / 2);
-      let closest = Infinity;
+  it('enters without a wrap jump and clears the ship, wherever the ship is', () => {
+    // A spawn this close to the ship is flipped to the opposite edge, which is then always clear:
+    // the two edges are H + 100 or W + 100 apart, more than twice the reach, so no ship position
+    // (wrap band included) is within reach of both and no "best of two bad edges" case exists.
+    expect(2 * FLIP_REACH).toBeLessThan(Math.min(...FIELDS.map((f) => f.height)) + 2 * WRAP_MARGIN);
+    const shipRng = createRng(12345);
+    let spawns = 0;
+    for (const field of FIELDS) {
       for (let seed = 0; seed < SEEDS; seed++) {
-        const a = spawnPracticeAsteroid(createRng(seed), 1 + (seed % 7), field, ship, true);
-        const distance = Math.hypot(a.x - ship.x, a.y - ship.y);
-        expect(distance).toBeGreaterThan(ASTEROID.safeRadius + a.radius);
-        closest = Math.min(closest, distance - (ASTEROID.safeRadius + a.radius));
+        const ship = createShip(
+          shipRng.range(-WRAP_MARGIN, field.width + WRAP_MARGIN),
+          shipRng.range(-WRAP_MARGIN, field.height + WRAP_MARGIN),
+        );
+        for (const awayFromShip of [true, false]) {
+          const a = spawnPracticeAsteroid(createRng(seed), 1 + (seed % 7), field, ship, awayFromShip);
+          if (awayFromShip) expect(distance(a, ship)).toBeGreaterThanOrEqual(ASTEROID.safeRadius + a.radius);
+          const maxStep = speedOf(a) * STEP_SECONDS * 1.01;
+          for (let i = 0; i < 3; i++) {
+            const before = { x: a.x, y: a.y };
+            stepAsteroid(a, STEP_SECONDS, field);
+            expect(distance(a, before)).toBeLessThanOrEqual(maxStep);
+          }
+          spawns++;
+        }
       }
-      expect(closest).toBeGreaterThan(0);
     }
+    expect(spawns).toBeGreaterThanOrEqual(2000);
   });
 
-  it('flips a spawn that lands near an off-centre ship to the opposite edge', () => {
-    const margin = ASTEROID.spawnEdgeMargin;
-    const ship = createShip(FIELD.width / 2, -margin + 20);
+  it('mirrors a spawn whose aim jitter points back out through its edge', () => {
+    // Seed 1 at 21:9 aims 0.067 rad from the bottom-left corner: down and out, past the wrap line.
+    const wide = { width: 1680, height: 720 };
+    const a = spawnPracticeAsteroid(createRng(1), 2, wide, null, false);
+    expect(edgeOf(a, wide)).toBe(2);
+    expect(a.vy).toBeLessThan(0);
+    expect(Math.atan2(-a.vy, a.vx)).toBeCloseTo(0.067, 3);
+  });
+
+  it.each<[string, Edge, (f: Field) => { x: number; y: number }]>([
+    ['top', 0, (f) => ({ x: f.width / 2, y: 0 })],
+    ['right', 1, (f) => ({ x: f.width, y: f.height / 2 })],
+    ['bottom', 2, (f) => ({ x: f.width / 2, y: f.height })],
+    ['left', 3, (f) => ({ x: 0, y: f.height / 2 })],
+  ])('flips a spawn near a ship by the %s edge to the opposite edge', (_name, edge, at) => {
+    const { x, y } = at(FIELD);
+    const ship: Ship = createShip(x, y);
     let flipped = 0;
     for (let seed = 0; seed < SEEDS; seed++) {
+      const unflipped = spawnPracticeAsteroid(createRng(seed), 1, FIELD, ship, false);
       const a = spawnPracticeAsteroid(createRng(seed), 1, FIELD, ship, true);
-      if (a.y === FIELD.height + margin) {
+      if (edgeOf(unflipped, FIELD) === edge && distance(unflipped, ship) < FLIP_REACH) {
         flipped++;
-      }
-      if (a.y === -margin) {
-        expect(Math.hypot(a.x - ship.x, a.y - ship.y)).toBeGreaterThanOrEqual(80 + ASTEROID.safeRadius);
+        expect(edgeOf(a, FIELD)).toBe(OPPOSITE[edge]);
+        expect(alongEdge(a, OPPOSITE[edge])).toBe(alongEdge(unflipped, edge));
+        expect(distance(a, ship)).toBeGreaterThanOrEqual(FLIP_REACH);
+      } else {
+        expect(a).toEqual(unflipped);
       }
     }
     expect(flipped).toBeGreaterThan(0);
@@ -233,12 +279,27 @@ describe('spawnPracticeAsteroid', () => {
     expect(sizesAt(6)).toEqual(new Set([0, 1, 2, 3]));
   });
 
-  it('aims the spawn into the field and scales speed with level', () => {
+  it('scales speed with level', () => {
     for (let seed = 0; seed < SEEDS; seed++) {
       const a = spawnPracticeAsteroid(createRng(seed), 7, FIELD, null, false);
       const base = ASTEROID.baseSpeeds[a.size] * 1.6;
       expect(speedOf(a)).toBeGreaterThanOrEqual(base * 0.8 - 1e-9);
       expect(speedOf(a)).toBeLessThanOrEqual(base * 1.2 + 1e-9);
+    }
+  });
+
+  it('heads within 0.4 rad of the [0.3, 0.7] target box seen from the spawn point', () => {
+    const wrapAngle = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle));
+    for (const field of FIELDS) {
+      const corners = [0.3, 0.7].flatMap((fx) => [0.3, 0.7].map((fy) => ({ x: field.width * fx, y: field.height * fy })));
+      for (let seed = 0; seed < SEEDS; seed++) {
+        const a = spawnPracticeAsteroid(createRng(seed), 1 + (seed % 7), field, null, false);
+        const centre = Math.atan2(field.height / 2 - a.y, field.width / 2 - a.x);
+        const offsets = corners.map((c) => wrapAngle(Math.atan2(c.y - a.y, c.x - a.x) - centre));
+        const heading = wrapAngle(Math.atan2(a.vy, a.vx) - centre);
+        expect(heading).toBeGreaterThanOrEqual(Math.min(...offsets) - 0.4 - 1e-9);
+        expect(heading).toBeLessThanOrEqual(Math.max(...offsets) + 0.4 + 1e-9);
+      }
     }
   });
 

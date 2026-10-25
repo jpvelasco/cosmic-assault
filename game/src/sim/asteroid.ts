@@ -1,4 +1,4 @@
-import { ASTEROID } from './config';
+import { ASTEROID, WRAP_MARGIN } from './config';
 import type { Field } from './field';
 import type { Rng } from './rng';
 import type { Ship } from './ship';
@@ -109,36 +109,68 @@ function sizeForLevel(rng: Rng, level: number): AsteroidSize {
   return TINY;
 }
 
-/** Picks a point `edgeMargin` outside a random edge; returns the edge so it can be flipped. */
-function pickEdgePoint(rng: Rng, field: Field): { edge: number; x: number; y: number } {
-  const margin = ASTEROID.spawnEdgeMargin;
-  const edge = rng.int(0, 4);
+/** 0 top, 1 right, 2 bottom, 3 left. */
+type Edge = 0 | 1 | 2 | 3;
+
+const EDGE_COUNT = 4;
+
+function oppositeEdge(edge: Edge): Edge {
+  return ((edge + 2) % EDGE_COUNT) as Edge;
+}
+
+interface SpawnPoint {
+  readonly edge: Edge;
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * The point on `edge`'s wrap line at `along` (x on the top and bottom edges, y on the sides).
+ * The live game spawns 100 out, wraps there on the first frame and back on the next, entering
+ * at the wrap line; spawning on it gives the same entry without the jump across the field.
+ */
+function edgePoint(edge: Edge, along: number, field: Field): SpawnPoint {
   switch (edge) {
     case 0:
-      return { edge, x: rng.range(0, field.width), y: -margin };
+      return { edge, x: along, y: -WRAP_MARGIN };
     case 1:
-      return { edge, x: field.width + margin, y: rng.range(0, field.height) };
+      return { edge, x: field.width + WRAP_MARGIN, y: along };
     case 2:
-      return { edge, x: rng.range(0, field.width), y: field.height + margin };
-    default:
-      return { edge, x: -margin, y: rng.range(0, field.height) };
+      return { edge, x: along, y: field.height + WRAP_MARGIN };
+    case 3:
+      return { edge, x: -WRAP_MARGIN, y: along };
   }
 }
 
-function flipToOppositeEdge(point: { edge: number; x: number; y: number }, field: Field): void {
-  const margin = ASTEROID.spawnEdgeMargin;
-  switch (point.edge) {
+/** Picks a random edge and a point on its wrap line, flipped to the opposite edge when it lands near the ship. */
+function pickSpawnPoint(rng: Rng, field: Field, ship: Ship | null): SpawnPoint {
+  const edge = rng.int(0, EDGE_COUNT) as Edge;
+  const along = rng.range(0, edge % 2 === 0 ? field.width : field.height);
+  const point = edgePoint(edge, along, field);
+  const reach = SPAWN_POINT_RADIUS + ASTEROID.safeRadius;
+  if (ship !== null && Math.hypot(point.x - ship.x, point.y - ship.y) < reach) {
+    return edgePoint(oppositeEdge(edge), along, field);
+  }
+  return point;
+}
+
+/**
+ * On wide fields the aim jitter can point a top or bottom spawn slightly back out (about 0.2% of
+ * spawns at 21:9), which would wrap it across the field on its first step; mirror it inward instead.
+ */
+function headInward(a: Asteroid, edge: Edge): void {
+  switch (edge) {
     case 0:
-      point.y = field.height + margin;
+      a.vy = Math.abs(a.vy);
       break;
     case 1:
-      point.x = -margin;
+      a.vx = -Math.abs(a.vx);
       break;
     case 2:
-      point.y = -margin;
+      a.vy = -Math.abs(a.vy);
       break;
-    default:
-      point.x = field.width + margin;
+    case 3:
+      a.vx = Math.abs(a.vx);
   }
 }
 
@@ -150,16 +182,12 @@ export function spawnPracticeAsteroid(
   awayFromShip: boolean,
   shapeRng: Rng = rng,
 ): Asteroid {
-  const point = pickEdgePoint(rng, field);
-  if (awayFromShip && ship !== null) {
-    const reach = SPAWN_POINT_RADIUS + ASTEROID.safeRadius;
-    if (Math.hypot(point.x - ship.x, point.y - ship.y) < reach) {
-      flipToOppositeEdge(point, field);
-    }
-  }
+  const point = pickSpawnPoint(rng, field, awayFromShip ? ship : null);
   const targetX = field.width * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
   const targetY = field.height * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
   const angle = Math.atan2(targetY - point.y, targetX - point.x) + rng.range(-AIM_JITTER, AIM_JITTER);
   const size = sizeForLevel(rng, level);
-  return createAsteroid(rng, point.x, point.y, size, angle, practiceSettings(level).speedMultiplier, shapeRng);
+  const asteroid = createAsteroid(rng, point.x, point.y, size, angle, practiceSettings(level).speedMultiplier, shapeRng);
+  headInward(asteroid, point.edge);
+  return asteroid;
 }

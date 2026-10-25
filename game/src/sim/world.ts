@@ -9,7 +9,7 @@ import {
   type PracticeSettings,
 } from './asteroid';
 import { circlesOverlap, SpatialHash } from './collision';
-import { ASTEROID, PLAYER, PROJECTILE } from './config';
+import { ASTEROID, PLAYER, PROJECTILE, WRAP_MARGIN } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
 import { isPositiveFiniteSize, type Field } from './field';
@@ -123,6 +123,12 @@ function removeFlagged(items: unknown[], flagged: readonly boolean[]): void {
     }
   }
   items.length = kept;
+}
+
+/** Maps a coordinate from a `from`-sized wrap band onto a `to`-sized one; unchanged sizes keep it exact. */
+function rescale(value: number, from: number, to: number): number {
+  if (from === to) return value;
+  return ((value + WRAP_MARGIN) * (to + 2 * WRAP_MARGIN)) / (from + 2 * WRAP_MARGIN) - WRAP_MARGIN;
 }
 
 function resetFlags(flags: boolean[], length: number): void {
@@ -252,10 +258,18 @@ export class World {
     return this.events;
   }
 
-  /** Keeps every entity where it is; nothing is clamped into the new field. */
+  /**
+   * Stretches the layout to the new field: every entity keeps its fraction of the wrap band
+   * (the field plus the wrap margin on each side), so nothing leaves it or jumps across.
+   */
   resize(field: Field): void {
     assertField(field);
+    const old = this.currentField;
     this.currentField = field;
+    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) {
+      e.x = rescale(e.x, old.width, field.width);
+      e.y = rescale(e.y, old.height, field.height);
+    }
   }
 
   /** Ends the run without emitting anything (used by "Quit"). */
