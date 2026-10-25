@@ -1,0 +1,2801 @@
+{
+  "scenario": "fire-held",
+  "dt": 0.016666666666666666,
+  "field": {
+    "width": 1280,
+    "height": 720
+  },
+  "start": {
+    "x": 640,
+    "y": 360,
+    "angle": -1.5707963267948966
+  },
+  "frames": [
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 640,
+          "y": 344,
+          "vx": 2.7554552980815446e-14,
+          "vy": -450
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " "
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.5707963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.6541296601282298,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.737462993461563,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.8207963267948963,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.9041296601282296,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -1.9874629934615629,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.070796326794896,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.1541296601282296,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.237462993461563,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.3207963267948966,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.40412966012823,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.4874629934615635,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.570796326794897,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.6541296601282305,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.737462993461564,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": [
+        {
+          "x": 625.2888803319399,
+          "y": 353.7085011235783,
+          "vx": -413.7502406641899,
+          "vy": -176.94840589936075
+        }
+      ]
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.8207963267948974,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.904129660128231,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -2.9874629934615644,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.070796326794898,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.1541296601282314,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.237462993461565,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.3207963267948983,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.404129660128232,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.4874629934615653,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.570796326794899,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.6541296601282323,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.7374629934615657,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.8207963267948992,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.9041296601282327,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -3.987462993461566,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          " ",
+          "ArrowLeft"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 360,
+        "vx": 0,
+        "vy": 0,
+        "angle": -4.070796326794899,
+        "thrusting": false,
+        "invulnerable": false
+      },
+      "shots": []
+    }
+  ]
+}

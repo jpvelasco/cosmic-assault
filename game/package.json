@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check:base": "node scripts/check-base.mjs",
-    "check:workflow": "node scripts/check-workflow.mjs"
+    "check:workflow": "node scripts/check-workflow.mjs",
+    "record:parity": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/record-parity-traces.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
