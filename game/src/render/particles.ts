@@ -80,6 +80,12 @@ export class ParticlePool {
     this.live = kept;
   }
 
+  /** Drops every particle, keeping the slots for reuse. */
+  clear(): void {
+    this.head = 0;
+    this.live = 0;
+  }
+
   emit(
     kind: ParticleKind,
     x: number,

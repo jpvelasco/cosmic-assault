@@ -143,7 +143,8 @@ function runWithHitStop(): Run {
   const frames = [1 / 60, 1 / 144, 1 / 30, 0.04, 1 / 75];
   const log: SimEvent[][] = [];
   let frozenFrames = 0;
-  for (let f = 0; log.length < SIX_SECONDS_OF_STEPS; f++) {
+  // The frame cap turns a consume() that stops spending time into a failure instead of a hang.
+  for (let f = 0; log.length < SIX_SECONDS_OF_STEPS && f < 100_000; f++) {
     if (hs.frozen) frozenFrames++;
     const unfrozen = hs.consume(frames[f % frames.length] ?? 1 / 60);
     loop.advance(unfrozen, (dt) => {

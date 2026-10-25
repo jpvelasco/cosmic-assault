@@ -117,9 +117,18 @@ describe('createEffects', () => {
     expect(fx.flash).toBeGreaterThan(0.3);
     expect(fx.flash).toBeLessThanOrEqual(0.45);
     for (let t = 0; t < 1.5; t += 1 / 60) fx.step(1 / 60, w);
-    expect(Math.abs(fx.shakeX)).toBeLessThan(0.01);
-    expect(Math.abs(fx.shakeY)).toBeLessThan(0.01);
+    expect(Object.is(fx.shakeX, 0)).toBe(true);
+    expect(Object.is(fx.shakeY, 0)).toBe(true);
     expect(fx.flash).toBe(0);
+  });
+
+  it('reports a shake of exactly 0, never -0, before any burst', () => {
+    const fx = createEffects(new ParticlePool(10), 1);
+    const w = makeWorld();
+    for (let i = 0; i < 40; i++) {
+      fx.step(1 / 60, w);
+      expect([Object.is(fx.shakeX, 0), Object.is(fx.shakeY, 0)]).toEqual([true, true]);
+    }
   });
 
   it('does not stack simultaneous shake beyond the largest burst', () => {

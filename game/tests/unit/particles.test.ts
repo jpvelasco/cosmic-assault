@@ -121,4 +121,15 @@ describe('ParticlePool', () => {
     emitAt(pool, 9);
     expect(snapshot(pool).map((p) => p.x)).toEqual([5, 7, 8, 9]);
   });
+
+  it('clear() empties the pool and keeps its capacity for new particles', () => {
+    const pool = new ParticlePool(3);
+    for (let x = 1; x <= 4; x++) emitAt(pool, x);
+    pool.clear();
+    expect(pool.count).toBe(0);
+    expect(snapshot(pool)).toEqual([]);
+    emitAt(pool, 9);
+    expect(pool.capacity).toBe(3);
+    expect(snapshot(pool).map((p) => p.x)).toEqual([9]);
+  });
 });

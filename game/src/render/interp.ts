@@ -54,14 +54,22 @@ export function wrapCopies(x: number, y: number, radius: number, field: Field, o
   // Offset to draw at per axis, or 0 when that axis needs no copy.
   const dx = x + periodX - radius < field.width ? periodX : x - periodX + radius > 0 ? -periodX : 0;
   const dy = y + periodY - radius < field.height ? periodY : y - periodY + radius > 0 ? -periodY : 0;
+  // Written in place, with no helper closure, because this runs for every entity every frame.
   let count = 0;
-  const push = (ox: number, oy: number): void => {
-    out[count * 2] = ox;
-    out[count * 2 + 1] = oy;
+  if (dx !== 0) {
+    out[0] = dx;
+    out[1] = 0;
+    count = 1;
+  }
+  if (dy !== 0) {
+    out[count * 2] = 0;
+    out[count * 2 + 1] = dy;
     count++;
-  };
-  if (dx !== 0) push(dx, 0);
-  if (dy !== 0) push(0, dy);
-  if (dx !== 0 && dy !== 0) push(dx, dy);
+  }
+  if (dx !== 0 && dy !== 0) {
+    out[4] = dx;
+    out[5] = dy;
+    count = 3;
+  }
   return count;
 }

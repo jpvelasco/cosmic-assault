@@ -67,7 +67,8 @@ const GLOW_STOPS: readonly (readonly [offset: number, alpha: number])[] = [
 ];
 const GLOW_STEP = 4;
 
-const SHIP_HULL: readonly Point[] = [
+/** The hull outline in ship-local units, nose along +x. The HUD's life icons trace it too. */
+export const SHIP_HULL: readonly Point[] = [
   { x: 14, y: 0 },
   { x: -10, y: -9 },
   { x: -6, y: 0 },
@@ -307,6 +308,27 @@ function maxDistance(points: readonly Point[]): number {
   return Math.max(...points.map((p) => Math.hypot(p.x, p.y)));
 }
 
+/** The map stored under `key`, created empty on first use. */
+function inner<K, K2, V>(map: Map<K, Map<K2, V>>, key: K): Map<K2, V> {
+  let next = map.get(key);
+  if (next === undefined) {
+    next = new Map<K2, V>();
+    map.set(key, next);
+  }
+  return next;
+}
+
+/** Per rock object: its shape fingerprint, worked out once, and its cache key for the last palette drawn. */
+interface RockKey {
+  readonly fingerprint: string;
+  readonly paletteId: string;
+  readonly key: string;
+}
+
+/**
+ * Keys are `kind|palette or colour|size(|asteroid id|shape)`. They omit the scale because `setScale`
+ * clears the cache, so every live entry was baked at the current scale.
+ */
 export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
   /** Cache keys per asteroid id, so `forget` finds every entry; eviction keeps it in step. */
   const asteroidKeys = new Map<number, Set<string>>();
@@ -318,11 +340,21 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     keys?.delete(key);
     if (keys?.size === 0) asteroidKeys.delete(asteroidId);
   });
-  const fingerprints = new WeakMap<Readonly<Asteroid>, string>();
+  const rockKeys = new WeakMap<Readonly<Asteroid>, RockKey>();
+  /** kind → palette id or colour → size → key, so looking a key up allocates nothing. */
+  const keys = new Map<string, Map<string, Map<number, string>>>();
   let pixelsPerUnit = 1;
   let dpr = 1;
 
-  const keyOf = (...parts: readonly (string | number)[]): string => [...parts, pixelsPerUnit, dpr].join('|');
+  function keyOf(kind: string, name: string, size: number): string {
+    const bySize = inner(inner(keys, kind), name);
+    let key = bySize.get(size);
+    if (key === undefined) {
+      key = `${kind}|${name}|${String(size)}`;
+      bySize.set(size, key);
+    }
+    return key;
+  }
 
   /** Bakes `paint` (in field units, origin at the centre) onto a canvas spanning ±halfW × ±halfH plus edge padding. */
   function bake(halfW: number, halfH: number, paint: (ctx: CanvasRenderingContext2D) => void): Sprite {
@@ -337,70 +369,90 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     return { canvas, halfW: canvas.width / (2 * k), halfH: canvas.height / (2 * k) };
   }
 
-  function cached(key: string, make: () => Sprite, asteroidId?: number): Sprite {
-    const hit = cache.get(key);
-    if (hit !== undefined) return hit.sprite;
-    const sprite = make();
+  function store(key: string, sprite: Sprite, asteroidId?: number): Sprite {
     cache.set(key, { sprite, asteroidId });
     if (asteroidId !== undefined) {
-      const keys = asteroidKeys.get(asteroidId);
-      if (keys === undefined) asteroidKeys.set(asteroidId, new Set([key]));
-      else keys.add(key);
+      const idKeys = asteroidKeys.get(asteroidId);
+      if (idKeys === undefined) asteroidKeys.set(asteroidId, new Set([key]));
+      else idKeys.add(key);
     }
     return sprite;
   }
 
-  function fingerprintOf(a: Readonly<Asteroid>): string {
-    let fingerprint = fingerprints.get(a);
-    if (fingerprint === undefined) {
-      fingerprint = shapeFingerprint(a);
-      fingerprints.set(a, fingerprint);
-    }
-    return fingerprint;
+  /** Rocks never change shape in place, so a key worked out once per object stays valid; drawing allocates none. */
+  function asteroidKeyOf(a: Readonly<Asteroid>, p: Palette): string {
+    const known = rockKeys.get(a);
+    if (known?.paletteId === p.id) return known.key;
+    const fingerprint = known?.fingerprint ?? shapeFingerprint(a);
+    const key = `asteroid|${p.id}|${String(a.size)}|${String(a.id)}|${fingerprint}`;
+    rockKeys.set(a, { fingerprint, paletteId: p.id, key });
+    return key;
   }
 
+  function bakeAsteroid(a: Readonly<Asteroid>, p: Palette): Sprite {
+    const extent = maxDistance(a.vertices) + ROCK_RIM_WIDTH / 2;
+    return bake(extent, extent, (ctx) => {
+      paintAsteroid(ctx, a, p);
+    });
+  }
+
+  // Each method looks the key up first and only builds the bake closure on a miss.
   return {
     glow(color, diameter) {
       const size = snapGlowDiameter(diameter);
-      return cached(keyOf('glow', color, size), () =>
-        bake(size / 2, size / 2, (ctx) => {
-          paintGlow(ctx, color, 0, 0, size / 2);
-        }),
+      const key = keyOf('glow', color, size);
+      return (
+        cache.get(key)?.sprite ??
+        store(
+          key,
+          bake(size / 2, size / 2, (ctx) => {
+            paintGlow(ctx, color, 0, 0, size / 2);
+          }),
+        )
       );
     },
     ship(p) {
+      const key = keyOf('ship', p.id, 0);
       const half = SHIP_RIM_WIDTH / 2;
-      return cached(keyOf('ship', p.id), () =>
-        bake(maxDistance(SHIP_HULL) + half, SHIP_HALF_BEAM + half, (ctx) => {
-          paintShip(ctx, p);
-        }),
+      return (
+        cache.get(key)?.sprite ??
+        store(
+          key,
+          bake(maxDistance(SHIP_HULL) + half, SHIP_HALF_BEAM + half, (ctx) => {
+            paintShip(ctx, p);
+          }),
+        )
       );
     },
     asteroid(a, p) {
-      const key = keyOf('asteroid', p.id, a.id, a.size, fingerprintOf(a));
-      const make = (): Sprite => {
-        const extent = maxDistance(a.vertices) + ROCK_RIM_WIDTH / 2;
-        return bake(extent, extent, (ctx) => {
-          paintAsteroid(ctx, a, p);
-        });
-      };
-      return cached(key, make, a.id);
+      const key = asteroidKeyOf(a, p);
+      return cache.get(key)?.sprite ?? store(key, bakeAsteroid(a, p), a.id);
     },
     shot(p) {
+      const key = keyOf('shot', p.id, 0);
       const glowRadius = SHOT_GLOW_DIAMETER / 2;
-      return cached(keyOf('shot', p.id), () =>
-        bake(Math.max(glowRadius, SHOT_LENGTH + SHOT_WIDTH / 2), glowRadius, (ctx) => {
-          paintShot(ctx, p);
-        }),
+      return (
+        cache.get(key)?.sprite ??
+        store(
+          key,
+          bake(Math.max(glowRadius, SHOT_LENGTH + SHOT_WIDTH / 2), glowRadius, (ctx) => {
+            paintShot(ctx, p);
+          }),
+        )
       );
     },
     flame(p, length) {
       const size = snapFlameLength(length);
+      const key = keyOf('flame', p.id, size);
       const glowReach = size * 0.3 + flameGlowRadius(size);
-      return cached(keyOf('flame', p.id, size), () =>
-        bake(-FLAME_BASE_X + Math.max(size, glowReach), flameGlowRadius(size), (ctx) => {
-          paintFlame(ctx, size);
-        }),
+      return (
+        cache.get(key)?.sprite ??
+        store(
+          key,
+          bake(-FLAME_BASE_X + Math.max(size, glowReach), flameGlowRadius(size), (ctx) => {
+            paintFlame(ctx, size);
+          }),
+        )
       );
     },
     setScale(nextPixelsPerUnit, nextDpr) {

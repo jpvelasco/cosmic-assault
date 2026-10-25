@@ -231,6 +231,15 @@ describe('createSpriteBaker', () => {
     expect(reads).toBe(afterBake);
   });
 
+  it('re-keys a remembered asteroid when the palette changes', () => {
+    const baker = createSpriteBaker();
+    const a = rock(7);
+    const drift = baker.asteroid(a, DRIFT);
+    const other = baker.asteroid(a, { ...DRIFT, id: 'other' });
+    expect(other).not.toBe(drift);
+    expect(baker.asteroid(a, DRIFT)).toBe(drift);
+  });
+
   it('clear() frees every baked canvas', () => {
     const baker = createSpriteBaker();
     baker.ship(DRIFT);

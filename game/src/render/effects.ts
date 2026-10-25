@@ -35,6 +35,8 @@ const FLAME_COLORS = ['#ffb347', '#ff6a3c'] as const;
 const MAX_SHAKE = 18;
 /** Fraction of shake left after one second. */
 const SHAKE_DECAY = 0.002;
+/** Below this (field units) the shake snaps to rest. */
+const SHAKE_REST = 0.01;
 const SHAKE_FREQ_X = 63;
 const SHAKE_FREQ_Y = 49;
 const FLASH_DECAY_PER_SECOND = 3;
@@ -89,7 +91,7 @@ interface Origin {
 }
 
 function emitBurst({ pool, rng, palette }: Emitter, spec: BurstSpec, at: Origin): void {
-  const shardColor = at.tint ?? palette.rock[1];
+  const shardColor = at.tint ?? palette.rock[0];
   const sparkColor = at.tint ?? palette.spark;
   const ringColor = at.tint ?? palette.ring;
   const direction = (): readonly [number, number] => {
@@ -200,14 +202,16 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
     step(dt, world) {
       time += dt;
       shake *= SHAKE_DECAY ** dt;
+      if (shake < SHAKE_REST) shake = 0;
       flash = Math.max(0, flash - dt * FLASH_DECAY_PER_SECOND);
       emitTrail(world, dt);
     },
+    // At rest these are exactly 0, never -0, so the renderer's transform stays on whole pixels.
     get shakeX() {
-      return Math.sin(time * SHAKE_FREQ_X) * shake;
+      return shake === 0 ? 0 : Math.sin(time * SHAKE_FREQ_X) * shake;
     },
     get shakeY() {
-      return Math.cos(time * SHAKE_FREQ_Y) * shake;
+      return shake === 0 ? 0 : Math.cos(time * SHAKE_FREQ_Y) * shake;
     },
     get flash() {
       return flash;
