@@ -21,6 +21,12 @@ const jobs = Object.fromEntries(['game', 'legacy', 'deploy'].map((id) => [id, jo
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
 const anyLine = (id, test) => jobs[id]?.some((line) => test(line.trim())) ?? false;
 const hasLine = (id, entry) => anyLine(id, (line) => line === entry);
+const lineIndex = (id, entry) => jobs[id]?.findIndex((line) => line.trim() === entry) ?? -1;
+/** True when either step is absent (the presence checks report that) or `first` comes before `second`. */
+const inOrder = (id, first, second) => {
+  const [a, b] = [lineIndex(id, `run: ${first}`), lineIndex(id, `run: ${second}`)];
+  return a === -1 || b === -1 || a < b;
+};
 
 const problems = Object.entries(jobs)
   .filter(([, block]) => block === undefined)
@@ -39,8 +45,17 @@ const checks = [
     'ci.yml: legacy must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
   [!['game', 'legacy'].some((id) => anyLine(id, (line) => line.includes('continue-on-error:'))),
     'ci.yml: continue-on-error is not allowed in the game/legacy jobs; a failing test must block deploy — remove it'],
-  ...['npm test', 'npm run test:e2e'].map((cmd) => [hasLine('game', `run: ${cmd}`),
-    `ci.yml: the game job must run "${cmd}"; restore the step so tests gate deploy`]),
+  ...[
+    ['npm test', 'tests gate deploy'],
+    ['npm run check:no-bridge', 'a release build carrying the test bridge cannot ship'],
+    ['npm run build:e2e', 'the e2e tests have an e2e build to drive'],
+    ['npm run test:e2e', 'tests gate deploy'],
+  ].map(([cmd, reason]) => [hasLine('game', `run: ${cmd}`),
+    `ci.yml: the game job must run "${cmd}"; restore the step so ${reason}`]),
+  [inOrder('game', 'npm run build:e2e', 'npm run test:e2e'),
+    'ci.yml: in the game job, npm run build:e2e must come before npm run test:e2e; move the build:e2e step above the e2e tests so they drive a fresh e2e build'],
+  [inOrder('game', 'npm run build', 'npm run check:no-bridge'),
+    'ci.yml: in the game job, npm run check:no-bridge must come after npm run build; move it below the release build step so it scans the fresh dist/'],
   [anyLine('legacy', (line) => line.startsWith('run: npx playwright test')),
     'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
 ];

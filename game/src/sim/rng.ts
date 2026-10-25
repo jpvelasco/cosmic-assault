@@ -60,7 +60,24 @@ function assertIntBounds(minInclusive: number, maxExclusive: number): void {
   }
 }
 
+function assertIntegerSeed(seed: number): void {
+  if (!Number.isInteger(seed)) {
+    throw new RangeError(
+      `createRng() needs an integer seed (got ${String(seed)}); round or hash the seed first`,
+    );
+  }
+}
+
+function assertProbability(p: number): void {
+  if (!(p >= 0 && p <= 1)) {
+    throw new RangeError(
+      `chance() needs a probability between 0 and 1 (got ${String(p)}); clamp it first`,
+    );
+  }
+}
+
 export function createRng(seed: number): Rng {
+  assertIntegerSeed(seed);
   const next = mulberry32(seed);
   return {
     next,
@@ -72,7 +89,10 @@ export function createRng(seed: number): Rng {
       assertIntBounds(minInclusive, maxExclusive);
       return minInclusive + Math.floor(next() * (maxExclusive - minInclusive));
     },
-    chance: (p) => next() < p,
+    chance: (p) => {
+      assertProbability(p);
+      return next() < p;
+    },
     pick<T>(items: readonly T[]): T {
       if (items.length === 0) {
         throw new RangeError('pick() needs at least one item');

@@ -1,10 +1,14 @@
-import { formatBuildLabel } from './buildLabel';
+import { createApp } from './app/game';
 
-const app = document.querySelector('#app');
-if (app) {
-  app.innerHTML = `
-    <h1>Cosmic Assault</h1>
-    <p>Preview build</p>
-    <p data-testid="build-label">${formatBuildLabel(__BUILD_SHA__, __BUILD_DATE__)}</p>
-  `;
+const root = document.querySelector('#app');
+const canvas = document.querySelector('#game');
+if (!(root instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {
+  throw new Error('index.html must contain <main id="app"> holding <canvas id="game">; restore that markup');
+}
+const app = createApp(root, canvas);
+
+if (import.meta.env.MODE === 'e2e') {
+  void import('./testBridge').then((bridge) => {
+    bridge.exposeTestBridge(app);
+  });
 }

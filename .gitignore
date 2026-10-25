@@ -32,5 +32,6 @@ tests/.cache/
 # game/ package
 game/node_modules/
 game/dist/
+game/dist-e2e/
 game/test-results/
 game/playwright-report/

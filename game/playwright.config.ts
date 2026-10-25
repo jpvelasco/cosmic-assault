@@ -1,6 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const isCI = !!process.env['CI'];
+// Off Vite's default preview port (4173), so a stray `npm run preview` is never mistaken for these builds.
+const E2E_URL = 'http://localhost:4317';
+const RELEASE_URL = 'http://localhost:4318';
+const desktopChrome = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } };
+
+/** Serves a built `outDir`. CI builds it in an earlier step; locally, build first so preview is never stale. */
+function previewServer(build: string, outDir: string, url: string) {
+  const port = new URL(url).port;
+  return {
+    command: `${isCI ? '' : `npm run ${build} && `}npm run preview -- --outDir ${outDir} --port ${port} --strictPort`,
+    url,
+    reuseExistingServer: !isCI,
+    timeout: 60000,
+  };
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -8,23 +23,26 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   reporter: isCI ? [['html', { open: 'never' }], ['list']] : 'list',
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: E2E_URL,
   },
   projects: [
+    // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } },
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts'],
+      use: desktopChrome,
     },
     {
       name: 'mobile-landscape',
+      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts'],
       use: { ...devices['Pixel 5 landscape'] },
     },
+    // The release build has no bridge; this only proves it boots cleanly without one.
+    {
+      name: 'release-smoke',
+      testMatch: '**/release-smoke.spec.ts',
+      use: { ...desktopChrome, baseURL: RELEASE_URL },
+    },
   ],
-  webServer: {
-    // CI already ran `npm run build` and `check:base`; locally, build first so preview is never stale.
-    command: `${isCI ? '' : 'npm run build && '}npm run preview -- --port 4173 --strictPort`,
-    url: 'http://localhost:4173',
-    reuseExistingServer: !isCI,
-    timeout: 60000,
-  },
+  webServer: [previewServer('build:e2e', 'dist-e2e', E2E_URL), previewServer('build', 'dist', RELEASE_URL)],
 });

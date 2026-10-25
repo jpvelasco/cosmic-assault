@@ -1,0 +1,5415 @@
+{
+  "scenario": "max-speed",
+  "dt": 0.016666666666666666,
+  "field": {
+    "width": 1280,
+    "height": 720
+  },
+  "start": {
+    "x": 640,
+    "y": 360,
+    "angle": -1.5707963267948966
+  },
+  "frames": [
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 359.94555555555553,
+        "vx": 2.0002564386073437e-16,
+        "vy": -3.2666666666666666,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 359.83775555555553,
+        "vx": 3.9605077484425406e-16,
+        "vy": -6.468,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 359.6776671111111,
+        "vx": 5.881554032081034e-16,
+        "vy": -9.605306666666667,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 359.46633599111107,
+        "vx": 7.764179390046756e-16,
+        "vy": -12.6798672,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 359.2047870490666,
+        "vx": 9.609152240853165e-16,
+        "vy": -15.692936522666665,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 358.89402464141864,
+        "vx": 1.1417225634643447e-15,
+        "vy": -18.64574445888,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 358.53503303747914,
+        "vx": 1.318913756055792e-15,
+        "vy": -21.539496236369065,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 358.128776821174,
+        "vx": 1.4925611247954104e-15,
+        "vy": -24.37537297830835,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 357.6762012847505,
+        "vx": 1.6627355461602364e-15,
+        "vy": -27.154532185408847,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 357.178232814611,
+        "vx": 1.8295064790977662e-15,
+        "vy": -29.878108208367337,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 356.6357792694299,
+        "vx": 1.992941993376545e-15,
+        "vy": -32.54721271086666,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 356.049730350708,
+        "vx": 2.1531087973697486e-15,
+        "vy": -35.162935123316,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 355.42095796591605,
+        "vx": 2.310072265283088e-15,
+        "vy": -37.72634308751635,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 354.7503165843755,
+        "vx": 2.4638964638381604e-15,
+        "vy": -40.23848289243269,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 354.03864358602135,
+        "vx": 2.6146441784221317e-15,
+        "vy": -42.700379901250706,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 353.2867596031898,
+        "vx": 2.7623769387144236e-15,
+        "vy": -45.11303896989236,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 352.49546885557044,
+        "vx": 2.9071550438008697e-15,
+        "vy": -47.47744485716118,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 351.66555947845904,
+        "vx": 3.0490375867855866e-15,
+        "vy": -49.79456262668462,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 350.7978038444454,
+        "vx": 3.1880824789106094e-15,
+        "vy": -52.0653380408176,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 349.8929588786676,
+        "vx": 3.3243464731931318e-15,
+        "vy": -54.29069794666792,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 348.95176636776097,
+        "vx": 3.4578851875900035e-15,
+        "vy": -56.47155065440123,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 347.974953262628,
+        "vx": 3.588753127698938e-15,
+        "vy": -58.60878630797987,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 346.96323197515323,
+        "vx": 3.717003709005693e-15,
+        "vy": -60.70327724848694,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 345.9173006689835,
+        "vx": 3.842689278686313e-15,
+        "vy": -62.755878370183865,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 344.8378435444927,
+        "vx": 3.965861136973321e-15,
+        "vy": -64.76742746944684,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 343.72553111804734,
+        "vx": 4.086569558094589e-15,
+        "vy": -66.73874558672456,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 342.5810204956864,
+        "vx": 4.204863810793431e-15,
+        "vy": -68.67063734165673,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 341.40495564132823,
+        "vx": 4.320792178438296e-15,
+        "vy": -70.56389126149026,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 340.1979676396128,
+        "vx": 4.4344019787302645e-15,
+        "vy": -72.4192801029271,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 338.96067495348717,
+        "vx": 4.545739583016393e-15,
+        "vy": -74.23756116753522,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 337.69368367663964,
+        "vx": 4.654850435216799e-15,
+        "vy": -76.01947661085117,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 336.39758778088463,
+        "vx": 4.761779070373197e-15,
+        "vy": -77.76575374530081,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 335.0729693586003,
+        "vx": 4.8665691328264664e-15,
+        "vy": -79.47710533706146,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 333.7203988603172,
+        "vx": 4.969263394030671e-15,
+        "vy": -81.15422989698689,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 332.34043532755527,
+        "vx": 5.069903770010792e-15,
+        "vy": -82.79781196571382,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 330.9336266210042,
+        "vx": 5.168531338471311e-15,
+        "vy": -84.4085223930662,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 329.50050964413964,
+        "vx": 5.2651863555626185e-15,
+        "vy": -85.98701861187155,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 328.04161056236796,
+        "vx": 5.3599082723121e-15,
+        "vy": -87.53394490630077,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 326.5574450177873,
+        "vx": 5.4527357507265925e-15,
+        "vy": -89.04993267484141,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 325.04851833965375,
+        "vx": 5.543706679572795e-15,
+        "vy": -90.53560068801124,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 323.51532575063845,
+        "vx": 5.632858189842073e-15,
+        "vy": -91.99155534091769,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 321.958352568959,
+        "vx": 5.7202266699059655e-15,
+        "vy": -93.41839090076598,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 320.3780744064687,
+        "vx": 5.80584778036858e-15,
+        "vy": -94.81668974941732,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 318.7749573627838,
+        "vx": 5.889756468621942e-15,
+        "vy": -96.18702262109564,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 317.14945821552817,
+        "vx": 5.971986983110237e-15,
+        "vy": -97.52994883534038,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 315.50202460677315,
+        "vx": 6.052572887308766e-15,
+        "vy": -98.84601652530023,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 313.8330952257488,
+        "vx": 6.131547073423325e-15,
+        "vy": -100.13576286146089,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 312.14309998790054,
+        "vx": 6.208941775815592e-15,
+        "vy": -101.39971427089833,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 310.43246021036475,
+        "vx": 6.284788584160014e-15,
+        "vy": -102.63838665214702,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 308.7015887839352,
+        "vx": 6.359118456337548e-15,
+        "vy": -103.85228558577074,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 306.95089034158985,
+        "vx": 6.4319617310715305e-15,
+        "vy": -105.041906540722,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 305.18076142364697,
+        "vx": 6.503348140310834e-15,
+        "vy": -106.20773507657421,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 303.39159063961847,
+        "vx": 6.573306821365351e-15,
+        "vy": -107.35024704170938,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 301.5837588268261,
+        "vx": 6.641866328798778e-15,
+        "vy": -108.46990876754185,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 299.7576392058452,
+        "vx": 6.709054646083536e-15,
+        "vy": -109.56717725885767,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 297.9135975328394,
+        "vx": 6.7748991970226e-15,
+        "vy": -110.64250038034717,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 296.0519922488493,
+        "vx": 6.839426856942881e-15,
+        "vy": -111.69631703940689,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 294.1731746260945,
+        "vx": 6.9026639636647576e-15,
+        "vy": -112.72905736528541,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 292.2774889113504,
+        "vx": 6.964636328252197e-15,
+        "vy": -113.74114288464637,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 290.36527246645676,
+        "vx": 7.025369245547888e-15,
+        "vy": -114.73298669362009,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 288.43685590601655,
+        "vx": 7.084887504497665e-15,
+        "vy": -115.70499362641435,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 286.4925632323407,
+        "vx": 7.143215398268446e-15,
+        "vy": -116.65756042055273,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 284.53271196769384,
+        "vx": 7.20037673416381e-15,
+        "vy": -117.59107587880833,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 282.55761328389553,
+        "vx": 7.256394843341267e-15,
+        "vy": -118.50592102789882,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 280.56757212932877,
+        "vx": 7.311292590335176e-15,
+        "vy": -119.4024692740075,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 278.5628873534089,
+        "vx": 7.365092382389207e-15,
+        "vy": -120.28108655519401,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 276.54385182856294,
+        "vx": 7.417816178602156e-15,
+        "vy": -121.14213149075678,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 274.51075256976947,
+        "vx": 7.469485498890847e-15,
+        "vy": -121.98595552760831,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 272.46387085170744,
+        "vx": 7.520121432773764e-15,
+        "vy": -122.8129030837228,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 270.4034823235622,
+        "vx": 7.569744647979022e-15,
+        "vy": -123.623311688715,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 268.3298571215354,
+        "vx": 7.618375398880175e-15,
+        "vy": -124.41751212160736,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 266.24325997910466,
+        "vx": 7.666033534763304e-15,
+        "vy": -125.19582854584188,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 264.14395033507816,
+        "vx": 7.712738507928772e-15,
+        "vy": -125.9585786415917,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 262.0321824394877,
+        "vx": 7.75850938163093e-15,
+        "vy": -126.70607373542653,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 259.90820545736466,
+        "vx": 7.803364837859046e-15,
+        "vy": -127.43861892738465,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 257.7722635704396,
+        "vx": 7.8473231849626e-15,
+        "vy": -128.15651321550362,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 255.6245960768086,
+        "vx": 7.890402365124081e-15,
+        "vy": -128.86004961786023,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 253.46543748860574,
+        "vx": 7.932619961682333e-15,
+        "vy": -129.5495152921697,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 251.29501762772253,
+        "vx": 7.97399320630942e-15,
+        "vy": -130.22519165299298,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 249.11356171961253,
+        "vx": 8.014538986043966e-15,
+        "vy": -130.88735448659978,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 246.92129048522028,
+        "vx": 8.05427385018382e-15,
+        "vy": -131.53627406353445,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 244.71842023107143,
+        "vx": 8.093214017040878e-15,
+        "vy": -132.17221524893043,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 242.50516293756112,
+        "vx": 8.131375380560794e-15,
+        "vy": -132.7954376106185,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 240.28172634547659,
+        "vx": 8.168773516810312e-15,
+        "vy": -133.4061955250728,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 238.04831404078928,
+        "vx": 8.205423690334839e-15,
+        "vy": -134.00473828123802,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 235.80512553775128,
+        "vx": 8.241340860388877e-15,
+        "vy": -134.59131018227993,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 233.5523563603296,
+        "vx": 8.276539687041833e-15,
+        "vy": -135.166150645301,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 231.29019812201193,
+        "vx": 8.31103453716173e-15,
+        "vy": -135.72949429906166,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 229.01883860401614,
+        "vx": 8.34483949027923e-15,
+        "vy": -136.2815710797471,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 226.73846183193584,
+        "vx": 8.37796834433438e-15,
+        "vy": -136.82260632481882,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 224.4492481508527,
+        "vx": 8.410434621308426e-15,
+        "vy": -137.35282086498913,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 222.15137429894676,
+        "vx": 8.442251572742992e-15,
+        "vy": -137.872431114356,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 219.8450134796345,
+        "vx": 8.473432185148866e-15,
+        "vy": -138.38164915873557,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 217.53033543226405,
+        "vx": 8.503989185306623e-15,
+        "vy": -138.88068284222754,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 215.20750650139655,
+        "vx": 8.533935045461225e-15,
+        "vy": -139.36973585204967,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 212.87668970470196,
+        "vx": 8.563281988412734e-15,
+        "vy": -139.84900780167536,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 210.53804479949682,
+        "vx": 8.592041992505214e-15,
+        "vy": -140.3186943123085,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 208.19172834795134,
+        "vx": 8.620226796515843e-15,
+        "vy": -140.778987092729,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 205.83789378099232,
+        "vx": 8.64784790444626e-15,
+        "vy": -141.2300740175411,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 203.47669146092804,
+        "vx": 8.674916590218069e-15,
+        "vy": -141.67213920385697,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 201.1082687428206,
+        "vx": 8.701443902274441e-15,
+        "vy": -142.10536308644652,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 198.73277003463087,
+        "vx": 8.727440668089686e-15,
+        "vy": -142.52992249138427,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 196.35033685616048,
+        "vx": 8.752917498588626e-15,
+        "vy": -142.94599070822326,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 193.96110789681507,
+        "vx": 8.777884792477587e-15,
+        "vy": -143.35373756072548,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 191.5652190722121,
+        "vx": 8.802352740488769e-15,
+        "vy": -143.75332947617764,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 189.16280357965675,
+        "vx": 8.826331329539728e-15,
+        "vy": -144.14492955332076,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 186.75399195250807,
+        "vx": 8.849830346809667e-15,
+        "vy": -144.528697628921,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 184.33891211345792,
+        "vx": 8.872859383734208e-15,
+        "vy": -144.90479034300927,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 181.91768942674432,
+        "vx": 8.895427839920257e-15,
+        "vy": -145.27336120281575,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 179.49044674932054,
+        "vx": 8.917544926982587e-15,
+        "vy": -145.63456064542612,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 177.0573044810008,
+        "vx": 8.939219672303669e-15,
+        "vy": -145.98853609918427,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 174.61838061360302,
+        "vx": 8.960460922718329e-15,
+        "vy": -146.33543204386726,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 172.17379077910874,
+        "vx": 8.981277348124697e-15,
+        "vy": -146.67539006965657,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 169.72364829685992,
+        "vx": 9.001677445022937e-15,
+        "vy": -147.0085489349301,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 167.2680642198116,
+        "vx": 9.021669539983211e-15,
+        "vy": -147.33504462289818,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 164.80714737985983,
+        "vx": 9.04126179304428e-15,
+        "vy": -147.65501039710688,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 162.34100443226265,
+        "vx": 9.060462201044129e-15,
+        "vy": -147.9685768558314,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 159.86973989917297,
+        "vx": 9.07927860088398e-15,
+        "vy": -148.27587198538146,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 157.39345621230063,
+        "vx": 9.097718672727035e-15,
+        "vy": -148.5770212123405,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 154.9122537547213,
+        "vx": 9.115789943133228e-15,
+        "vy": -148.87214745476035,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 152.4262309018491,
+        "vx": 9.133499788131298e-15,
+        "vy": -149.16137117233183,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 149.9354840615899,
+        "vx": 9.150855436229406e-15,
+        "vy": -149.44481041555187,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 147.44010771369145,
+        "vx": 9.167863971365551e-15,
+        "vy": -149.7225808739075,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 144.9401944483065,
+        "vx": 9.184532335798975e-15,
+        "vy": -149.99479592309604,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 142.43583500378483,
+        "vx": 9.200867332943729e-15,
+        "vy": -150.26156667130078,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 139.92711830370914,
+        "vx": 9.216875630145587e-15,
+        "vy": -150.52300200454144,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 137.41413149319052,
+        "vx": 9.23256376140341e-15,
+        "vy": -150.77920863111729,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 134.89695997443783,
+        "vx": 9.247938130036075e-15,
+        "vy": -151.03029112516163,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 132.37568744161575,
+        "vx": 9.263005011296087e-15,
+        "vy": -151.27635196932508,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 129.85039591500566,
+        "vx": 9.2777705549309e-15,
+        "vy": -151.51749159660525,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 127.32116577448333,
+        "vx": 9.292240787693015e-15,
+        "vy": -151.75380843133982,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 124.788075792327,
+        "vx": 9.306421615799889e-15,
+        "vy": -151.9853989293797,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 122.25120316536936,
+        "vx": 9.320318827344626e-15,
+        "vy": -152.21235761745876,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 119.71062354650643,
+        "vx": 9.333938094658467e-15,
+        "vy": -152.43477713177626,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 117.1664110755763,
+        "vx": 9.347284976626031e-15,
+        "vy": -152.6527482558074,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 114.61863840962035,
+        "vx": 9.360364920954245e-15,
+        "vy": -152.86635995735793,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 112.06737675253905,
+        "vx": 9.373183266395895e-15,
+        "vy": -153.07569942487746,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 109.51269588415494,
+        "vx": 9.38574524492871e-15,
+        "vy": -153.28085210304658,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 106.95466418869407,
+        "vx": 9.39805598389087e-15,
+        "vy": -153.4819017276523,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 104.39334868269796,
+        "vx": 9.410120508073786e-15,
+        "vy": -153.67893035976593,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 101.82881504237734,
+        "vx": 9.421943741773045e-15,
+        "vy": -153.8720184192373,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 99.26112763041868,
+        "vx": 9.433530510798319e-15,
+        "vy": -154.06124471751923,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 96.69034952225476,
+        "vx": 9.444885544443087e-15,
+        "vy": -154.24668648983553,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 94.11654253180967,
+        "vx": 9.45601347741496e-15,
+        "vy": -154.4284194267055,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 91.53976723672903,
+        "vx": 9.466918851727395e-15,
+        "vy": -154.60651770483804,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 88.96008300310557,
+        "vx": 9.47760611855358e-15,
+        "vy": -154.78105401740794,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 86.37754800971013,
+        "vx": 9.488079640043243e-15,
+        "vy": -154.95209960372645,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 83.79221927173815,
+        "vx": 9.498343691103112e-15,
+        "vy": -155.11972427831859,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 81.20415266408116,
+        "vx": 9.508402461141784e-15,
+        "vy": -155.2839964594189,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 78.61340294413287,
+        "vx": 9.518260055779682e-15,
+        "vy": -155.44498319689717,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 76.0200237741391,
+        "vx": 9.527920498524823e-15,
+        "vy": -155.6027501996259,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 73.42406774310078,
+        "vx": 9.53738773241506e-15,
+        "vy": -155.75736186230003,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 70.82558638823876,
+        "vx": 9.546665621627493e-15,
+        "vy": -155.9088812917207,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 68.22463021602954,
+        "vx": 9.555757953055677e-15,
+        "vy": -156.05737033255295,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 65.62124872282006,
+        "vx": 9.564668437855298e-15,
+        "vy": -156.20288959256857,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 63.01549041503033,
+        "vx": 9.573400712958926e-15,
+        "vy": -156.34549846738386,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 60.407402828951945,
+        "vx": 9.581958342560481e-15,
+        "vy": -156.48525516470286,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 57.79703255015069,
+        "vx": 9.590344819570006e-15,
+        "vy": -156.62221672807547,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 55.18442523248101,
+        "vx": 9.59856356703934e-15,
+        "vy": -156.75643906018064,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 52.56962561672028,
+        "vx": 9.606617939559287e-15,
+        "vy": -156.8879769456437,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 49.95267754883032,
+        "vx": 9.614511224628835e-15,
+        "vy": -157.01688407339748,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 47.33362399785372,
+        "vx": 9.622246643996993e-15,
+        "vy": -157.1432130585962,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 44.71250707345221,
+        "vx": 9.629827354977787e-15,
+        "vy": -157.26701546409095,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 42.08936804309428,
+        "vx": 9.637256451738966e-15,
+        "vy": -157.3883418214758,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 39.464247348899065,
+        "vx": 9.64453696656492e-15,
+        "vy": -157.50724165171295,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 36.83718462414331,
+        "vx": 9.651671871094356e-15,
+        "vy": -157.62376348534536,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 34.20821870943823,
+        "vx": 9.658664077533203e-15,
+        "vy": -157.73795488230513,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 31.5773876685828,
+        "vx": 9.665516439843273e-15,
+        "vy": -157.8498624513257,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 28.944728804100038,
+        "vx": 9.672231754907141e-15,
+        "vy": -157.95953186896585,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 26.310278672462484,
+        "vx": 9.678812763669732e-15,
+        "vy": -158.06700789825322,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 23.67407309901324,
+        "vx": 9.685262152257072e-15,
+        "vy": -158.17233440695483,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 21.036147192588533,
+        "vx": 9.691582553072664e-15,
+        "vy": -158.2755543854824,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 18.396535359847878,
+        "vx": 9.697776545871945e-15,
+        "vy": -158.3767099644394,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 15.75527131931759,
+        "vx": 9.70384665881524e-15,
+        "vy": -158.47584243181728,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 13.112388115153463,
+        "vx": 9.709795369499669e-15,
+        "vy": -158.5729922498476,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 10.467918130628174,
+        "vx": 9.715625105970409e-15,
+        "vy": -158.66819907151734,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 7.821893101348946,
+        "vx": 9.721338247711734e-15,
+        "vy": -158.76150175675366,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 5.174344128210858,
+        "vx": 9.726937126618233e-15,
+        "vy": -158.85293838828525,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 2.525301690091088,
+        "vx": 9.732424027946602e-15,
+        "vy": -158.94254628718622,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -0.12520434371073108,
+        "vx": 9.737801191248404e-15,
+        "vy": -159.03036202810915,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -2.7771447012809585,
+        "vx": 9.74307081128417e-15,
+        "vy": -159.11642145421365,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -5.430490696144226,
+        "vx": 9.74823503891922e-15,
+        "vy": -159.20075969179604,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -8.085214215554672,
+        "vx": 9.75329598200157e-15,
+        "vy": -159.28341116462678,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -10.741287709021353,
+        "vx": 9.758255706222272e-15,
+        "vy": -159.36440960800093,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -13.398684177063146,
+        "vx": 9.763116235958561e-15,
+        "vy": -159.44378808250758,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -16.057377160188548,
+        "vx": 9.767879555100124e-15,
+        "vy": -159.5215789875241,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -18.717340728095884,
+        "vx": 9.772547607858854e-15,
+        "vy": -159.5978140744403,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -21.37854946908952,
+        "vx": 9.77712229956241e-15,
+        "vy": -159.67252445961816,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -24.04097847970773,
+        "vx": 9.781605497431896e-15,
+        "vy": -159.74574063709247,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -26.704603354558017,
+        "vx": 9.785999031343993e-15,
+        "vy": -159.8174924910173,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -29.369400176355743,
+        "vx": 9.790304694577847e-15,
+        "vy": -159.88780930786362,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -32.03534550616196,
+        "vx": 9.794524244547024e-15,
+        "vy": -159.95671978837302,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -34.7024163738165,
+        "vx": 9.798659403516818e-15,
+        "vy": -160.02425205927224,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -37.37059026856239,
+        "vx": 9.802711859307215e-15,
+        "vy": -160.09043368475346,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -40.03984512985781,
+        "vx": 9.806683265981805e-15,
+        "vy": -160.15529167772507,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -42.71015933837177,
+        "vx": 9.810575244522903e-15,
+        "vy": -160.21885251083725,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -45.38151170715989,
+        "vx": 9.814389383493178e-15,
+        "vy": -160.28114212728718,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": -48.05388147301669,
+        "vx": 9.818127239684049e-15,
+        "vy": -160.3421859514081,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 770,
+        "vx": 9.821790338751103e-15,
+        "vy": -160.40200889904662,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 767.3256560768712,
+        "vx": 9.825380175836814e-15,
+        "vy": -160.46063538773237,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 764.6503545877604,
+        "vx": 9.828898216180812e-15,
+        "vy": -160.5180893466444,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 761.9741146839874,
+        "vx": 9.83234589571793e-15,
+        "vy": -160.57439422637816,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 759.2969551338455,
+        "vx": 9.835724621664306e-15,
+        "vy": -160.62957300851727,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 756.6188943302619,
+        "vx": 9.839035773091753e-15,
+        "vy": -160.6836482150136,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 753.9399502983056,
+        "vx": 9.842280701490652e-15,
+        "vy": -160.73664191737998,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 751.2601407025439,
+        "vx": 9.845460731321573e-15,
+        "vy": -160.78857574569906,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 748.5794828542531,
+        "vx": 9.848577160555875e-15,
+        "vy": -160.83947089745175,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 745.8979937184836,
+        "vx": 9.851631261205492e-15,
+        "vy": -160.8893481461694,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 743.215689920985,
+        "vx": 9.854624279842115e-15,
+        "vy": -160.9382278499127,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 740.532587754992,
+        "vx": 9.857557438106006e-15,
+        "vy": -160.98612995958112,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 737.8487031878744,
+        "vx": 9.86043193320462e-15,
+        "vy": -161.03307402705616,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 735.1640518676547,
+        "vx": 9.86324893840126e-15,
+        "vy": -161.0790792131817,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 732.478649129395,
+        "vx": 9.86600960349397e-15,
+        "vy": -161.12416429558473,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 729.792510001456,
+        "vx": 9.868715055284825e-15,
+        "vy": -161.16834767633972,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 727.1056492116313,
+        "vx": 9.871366398039862e-15,
+        "vy": -161.2116473894796,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 724.4180811931587,
+        "vx": 9.8739647139398e-15,
+        "vy": -161.25408110835667,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 721.7298200906112,
+        "vx": 9.876511063521737e-15,
+        "vy": -161.2956661528562,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 719.0408797656701,
+        "vx": 9.879006486112036e-15,
+        "vy": -161.33641949646574,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 716.3512738027833,
+        "vx": 9.88145200025053e-15,
+        "vy": -161.3763577732031,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 713.6610155147099,
+        "vx": 9.883848604106252e-15,
+        "vy": -161.41549728440572,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 710.9701179479536,
+        "vx": 9.88619727588486e-15,
+        "vy": -161.45385400538427,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 708.2785938880878,
+        "vx": 9.888498974227897e-15,
+        "vy": -161.49144359194327,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 705.5864558649749,
+        "vx": 9.890754638604072e-15,
+        "vy": -161.52828138677108,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 702.8937161578799,
+        "vx": 9.892965189692725e-15,
+        "vy": -161.56438242570235,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 700.2003868004823,
+        "vx": 9.895131529759604e-15,
+        "vy": -161.599761443855,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 697.5064795857883,
+        "vx": 9.897254543025146e-15,
+        "vy": -161.63443288164456,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 694.8120060709437,
+        "vx": 9.899335096025377e-15,
+        "vy": -161.66841089067833,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 692.1169775819515,
+        "vx": 9.901374037965603e-15,
+        "vy": -161.70170933953145,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 689.4214052182947,
+        "vx": 9.903372201067025e-15,
+        "vy": -161.7343418194075,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 686.7252998574666,
+        "vx": 9.905330400906419e-15,
+        "vy": -161.766321649686,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 684.0286721594106,
+        "vx": 9.907249436749024e-15,
+        "vy": -161.79766188335896,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 681.3315325708712,
+        "vx": 9.909130091874778e-15,
+        "vy": -161.82837531235845,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 678.6338913296582,
+        "vx": 9.910973133898016e-15,
+        "vy": -161.85847447277794,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 675.935758468825,
+        "vx": 9.91277931508079e-15,
+        "vy": -161.88797164998905,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 673.2371438207641,
+        "vx": 9.914549372639908e-15,
+        "vy": -161.91687888365595,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 670.53805702122,
+        "vx": 9.916284029047844e-15,
+        "vy": -161.9452079726495,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 667.8385075132222,
+        "vx": 9.917983992327621e-15,
+        "vy": -161.9729704798632,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 665.1385045509401,
+        "vx": 9.919649956341803e-15,
+        "vy": -162.0001777369326,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 662.438057203459,
+        "vx": 9.921282601075701e-15,
+        "vy": -162.02684084886064,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 659.7371743584832,
+        "vx": 9.922882592914922e-15,
+        "vy": -162.0529706985501,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 657.0358647259625,
+        "vx": 9.924450584917357e-15,
+        "vy": -162.07857795124576,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 654.3341368416477,
+        "vx": 9.925987217079744e-15,
+        "vy": -162.10367305888752,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 651.6319990705748,
+        "vx": 9.927493116598883e-15,
+        "vy": -162.12826626437644,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 648.9294596104788,
+        "vx": 9.92896889812764e-15,
+        "vy": -162.1523676057556,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 646.2265264951404,
+        "vx": 9.93041516402582e-15,
+        "vy": -162.17598692030714,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 643.5232075976643,
+        "vx": 9.931832504606037e-15,
+        "vy": -162.19913384856767,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 640.8195106336932,
+        "vx": 9.93322149837465e-15,
+        "vy": -162.22181783826298,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 638.1154431645572,
+        "vx": 9.934582712267892e-15,
+        "vy": -162.24404814816438,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 635.4110126003594,
+        "vx": 9.935916701883268e-15,
+        "vy": -162.26583385186777,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 632.7062262030012,
+        "vx": 9.937224011706337e-15,
+        "vy": -162.2871838414971,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 630.0010910891456,
+        "vx": 9.938505175332945e-15,
+        "vy": -162.30810683133382,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 627.2956142331227,
+        "vx": 9.93976071568702e-15,
+        "vy": -162.32861136137382,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 624.5898024697758,
+        "vx": 9.940991145234013e-15,
+        "vy": -162.348705800813,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 621.8836624972514,
+        "vx": 9.942196966190067e-15,
+        "vy": -162.3683983514634,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 619.177200879733,
+        "vx": 9.943378670726999e-15,
+        "vy": -162.38769705110082,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 616.4704240501206,
+        "vx": 9.944536741173193e-15,
+        "vy": -162.40660977674548,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 613.7633383126561,
+        "vx": 9.945671650210463e-15,
+        "vy": -162.42514424787726,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 611.0559498454963,
+        "vx": 9.946783861066988e-15,
+        "vy": -162.44330802958638,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 608.3482647032354,
+        "vx": 9.947873827706381e-15,
+        "vy": -162.4611085356613,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 605.6402888193751,
+        "vx": 9.948941995012988e-15,
+        "vy": -162.47855303161475,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 602.9320280087476,
+        "vx": 9.949988798973462e-15,
+        "vy": -162.49564863764914,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 600.2234879698882,
+        "vx": 9.951014666854726e-15,
+        "vy": -162.51240233156284,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 597.5146742873616,
+        "vx": 9.952020017378366e-15,
+        "vy": -162.52882095159825,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 594.805592434041,
+        "vx": 9.953005260891532e-15,
+        "vy": -162.54491119923296,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 592.0962477733425,
+        "vx": 9.953970799534436e-15,
+        "vy": -162.56067964191496,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 589.3866455614134,
+        "vx": 9.954917027404481e-15,
+        "vy": -162.57613271574334,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 586.6767909492785,
+        "vx": 9.955844330717126e-15,
+        "vy": -162.59127672809515,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 583.9666889849418,
+        "vx": 9.956753087963518e-15,
+        "vy": -162.60611786019993,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 581.2563446154475,
+        "vx": 9.957643670064981e-15,
+        "vy": -162.6206621696626,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 578.5457626888985,
+        "vx": 9.958516440524416e-15,
+        "vy": -162.63491559293604,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 575.8349479564362,
+        "vx": 9.959371755574661e-15,
+        "vy": -162.648883947744,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 573.1239050741785,
+        "vx": 9.960209964323902e-15,
+        "vy": -162.66257293545578,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 570.4126386051216,
+        "vx": 9.961031408898158e-15,
+        "vy": -162.67598814341335,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 567.7011530210015,
+        "vx": 9.96183642458093e-15,
+        "vy": -162.68913504721175,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 564.9894527041192,
+        "vx": 9.962625339950045e-15,
+        "vy": -162.7020190129342,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 562.2775419491302,
+        "vx": 9.963398477011777e-15,
+        "vy": -162.71464529934218,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 559.5654249647965,
+        "vx": 9.964156151332276e-15,
+        "vy": -162.727019060022,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 556.8531058757051,
+        "vx": 9.964898672166364e-15,
+        "vy": -162.73914534548823,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 554.1405887239509,
+        "vx": 9.965626342583771e-15,
+        "vy": -162.75102910524512,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 551.4278774707875,
+        "vx": 9.96633945959283e-15,
+        "vy": -162.76267518980688,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 548.7149759982428,
+        "vx": 9.967038314261707e-15,
+        "vy": -162.7740883526774,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 546.0018881107046,
+        "vx": 9.967723191837207e-15,
+        "vy": -162.78527325229052,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 543.2886175364728,
+        "vx": 9.968394371861197e-15,
+        "vy": -162.79623445391138,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 540.5751679292811,
+        "vx": 9.969052128284707e-15,
+        "vy": -162.80697643149983,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 537.8615428697888,
+        "vx": 9.969696729579747e-15,
+        "vy": -162.8175035695365,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 535.1477458670419,
+        "vx": 9.970328438848886e-15,
+        "vy": -162.82782016481247,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 532.4337803599054,
+        "vx": 9.970947513932642e-15,
+        "vy": -162.8379304281829,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 529.7196497184673,
+        "vx": 9.971554207514724e-15,
+        "vy": -162.8478384862859,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 527.0053572454135,
+        "vx": 9.972148767225163e-15,
+        "vy": -162.85754838322686,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 524.2909061773763,
+        "vx": 9.972731435741394e-15,
+        "vy": -162.86706408222898,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 521.5762996862554,
+        "vx": 9.9733024508873e-15,
+        "vy": -162.87638946725107,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 518.8615408805125,
+        "vx": 9.973862045730288e-15,
+        "vy": -162.88552834457272,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 516.14663280644,
+        "vx": 9.974410448676416e-15,
+        "vy": -162.89448444434794,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 513.4315784494046,
+        "vx": 9.974947883563622e-15,
+        "vy": -162.90326142212766,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 510.7163807350654,
+        "vx": 9.975474569753083e-15,
+        "vy": -162.9118628603518,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 508.00104253056855,
+        "vx": 9.975990722218755e-15,
+        "vy": -162.92029226981143,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 505.2855666457172,
+        "vx": 9.976496551635113e-15,
+        "vy": -162.92855309108188,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 502.56995583411845,
+        "vx": 9.976992264463145e-15,
+        "vy": -162.93664869592692,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 499.8542127943072,
+        "vx": 9.977478063034617e-15,
+        "vy": -162.94458238867506,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    },
+    {
+      "input": {
+        "keys": [
+          "ArrowUp"
+        ],
+        "stick": null
+      },
+      "ship": {
+        "x": 640,
+        "y": 497.13834017084775,
+        "vx": 9.977954145634658e-15,
+        "vy": -162.95235740756823,
+        "angle": -1.5707963267948966,
+        "thrusting": true,
+        "invulnerable": false
+      },
+      "shots": []
+    }
+  ]
+}

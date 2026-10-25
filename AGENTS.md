@@ -13,7 +13,14 @@
   `website/modules/core/TestAPI.js`. Preserve that contract when changing gameplay.
 - `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
   Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
-  Pages site.
+  Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
+  carries the test bridge and the `?seed=`/`?lives=` URL overrides, and checks
+  that it does), `check:no-bridge` (fails if the release `dist/` contains the
+  bridge or that URL parsing), and `record:parity` (records the parity traces).
+  Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
+  enforces it. Ship handling is pinned to recorded traces of the live game in
+  `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
+  without owner approval.
 - There is no root npm package or workspace. Run npm commands from `game/` or
   `tests/`, whichever package you are changing. `ReadMe.md` is the README's
   exact filename.
@@ -34,9 +41,11 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
 2. **Typecheck:** For `game/` changes, run `npm run typecheck` from `game/`.
    `tests/` has no typecheck script.
 3. **Tests:** For `game/` changes, run `npm test` (Vitest) and `npm run test:e2e`
-   (Playwright against a production build) from `game/`; install Chromium first
-   with `npx playwright install chromium`. For changes to `website/` gameplay,
-   UI, or the legacy tests, install Chromium with
+   (Playwright against the e2e build, plus a smoke test of the release build)
+   from `game/`; install Chromium first with `npx playwright install chromium`.
+   Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
+   4318 (release), clear of Vite's default preview port. For changes to
+   `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
    browser system dependencies installed separately.
@@ -69,7 +78,10 @@ and `tests/test-results/` and are ignored by Git.
   configuration or coverage upload is currently committed.
 - `.github/workflows/ci.yml` is the only workflow. It runs on pull requests to
   `main`, pushes to `main`, and manual dispatch. Job `game` runs the `game/`
-  workflow guard, lint, typecheck, unit tests, build, base check, and e2e tests;
+  workflow guard, lint, typecheck, unit tests, release build, base check,
+  no-test-bridge check, e2e build, and e2e tests (the `chromium-desktop` and
+  `mobile-landscape` projects against `dist-e2e/`, plus the `release-smoke`
+  project against `dist/`);
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
   `website/`. Job `deploy` runs only on pushes to `main`, and only after both
   `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.

@@ -112,6 +112,31 @@ describe('createRng', () => {
     );
   });
 
+  it('throws a RangeError from createRng() on a non-integer seed', () => {
+    for (const seed of [1.5, NaN, Infinity]) {
+      expect(() => createRng(seed)).toThrow(RangeError);
+    }
+    expect(() => createRng(1.5)).toThrow(
+      'createRng() needs an integer seed (got 1.5); round or hash the seed first',
+    );
+  });
+
+  it('still accepts negative and out-of-range integer seeds', () => {
+    expect(() => createRng(-1)).not.toThrow();
+    expect(() => createRng(2 ** 32 + 5)).not.toThrow();
+    expect(createRng(2 ** 32 + 5).next()).toBe(createRng(5).next());
+  });
+
+  it('throws a RangeError from chance() on an invalid probability', () => {
+    const rng = createRng(1);
+    for (const p of [NaN, -0.1, 1.1]) {
+      expect(() => rng.chance(p)).toThrow(RangeError);
+    }
+    expect(() => rng.chance(1.1)).toThrow(
+      'chance() needs a probability between 0 and 1 (got 1.1); clamp it first',
+    );
+  });
+
   it('pins the int() sequence for seed 42 over [0, 100)', () => {
     const rng = createRng(42);
     const values = Array.from({ length: 5 }, () => rng.int(0, 100));
