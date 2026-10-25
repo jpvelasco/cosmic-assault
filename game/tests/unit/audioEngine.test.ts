@@ -40,6 +40,8 @@ class FakeContext {
   /** What a new context starts as, and whether `resume()` gets it running (a browser may refuse without a user gesture). */
   static startState: 'running' | 'suspended' = 'running';
   static resumeSucceeds = true;
+  /** When set, `resume()` rejects with it, as a browser does when it refuses to start audio. */
+  static resumeError: Error | null = null;
   static failBuild = false;
   state: 'running' | 'suspended' | 'closed' = FakeContext.startState;
   currentTime = 0;
@@ -47,6 +49,7 @@ class FakeContext {
   readonly nodes: FakeNode[] = [];
   readonly destination = new FakeNode('destination');
   readonly resume = vi.fn(() => {
+    if (FakeContext.resumeError !== null) return Promise.reject(FakeContext.resumeError);
     if (FakeContext.resumeSucceeds) this.state = 'running';
     return Promise.resolve();
   });
@@ -112,6 +115,7 @@ beforeEach(() => {
   contexts = [];
   FakeContext.startState = 'running';
   FakeContext.resumeSucceeds = true;
+  FakeContext.resumeError = null;
   FakeContext.failBuild = false;
   visibility = 'visible';
   win = new EventTarget();
@@ -201,10 +205,15 @@ describe('unlocking', () => {
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
     FakeContext.startState = 'suspended';
+    FakeContext.resumeError = new Error('NotAllowedError');
+    const remove = vi.spyOn(win, 'removeEventListener');
     const e = engine();
-    press();
-    ctx().resume.mockRejectedValue(new Error('NotAllowedError'));
-    press();
+    press('pointerdown');
+    await Promise.resolve();
+    press('keydown');
+    await Promise.resolve();
+    expect(ctx().resume).toHaveBeenCalledTimes(2);
+    expect(remove).not.toHaveBeenCalled();
     e.setMuted(true);
     e.setMuted(false);
     setVisibility('hidden');

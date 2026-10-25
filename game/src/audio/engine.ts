@@ -166,7 +166,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       const doneIfRunning = (): void => {
         if (ctx.state === 'running') removeGestureListeners();
       };
-      if (ctx.state === 'running') doneIfRunning();
+      if (ctx.state === 'running') removeGestureListeners();
       else settle(ctx.resume(), doneIfRunning);
     });
   }

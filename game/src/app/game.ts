@@ -168,17 +168,17 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     setMode('playing');
   }
 
-  function pause(): void {
-    if (mode !== 'playing') return;
+  /** Pauses a run in play; returns whether it did. */
+  function pause(): boolean {
+    if (mode !== 'playing') return false;
     hitStop.clear();
     setMode('paused');
+    return true;
   }
 
   /** The pause button or key: unlike a blur or hidden tab, it blips. */
   function pauseByPlayer(): void {
-    if (mode !== 'playing') return;
-    audio.play('pause');
-    pause();
+    if (pause()) audio.play('pause');
   }
 
   function resume(): void {
