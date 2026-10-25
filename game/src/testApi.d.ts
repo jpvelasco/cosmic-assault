@@ -34,6 +34,10 @@ interface CosmicAssaultTestState {
   readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest' };
   /** Frame times of the current run in ms, less its first 3 s; zeros until a run is past that. */
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
+  /** Whether sound is muted; saved across visits. */
+  readonly muted: boolean;
+  /** 'none' until the first key press or pointer press creates the audio context. */
+  readonly audioState: 'none' | 'suspended' | 'running' | 'closed';
 }
 
 interface CosmicAssaultTestApi {

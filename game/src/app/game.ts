@@ -1,3 +1,4 @@
+import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
@@ -12,11 +13,13 @@ import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createOverlay } from '../ui/overlay';
 import { createSafeAreaProbe } from '../ui/safeArea';
+import { createToast } from '../ui/toast';
 import { commandForKey, START, TO_TITLE, type Command } from './commands';
 import { passesGameOverGuard } from './gameOverGuard';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { clockSeed, runOverrides } from './seed';
+import { browserStorage, loadSettings, saveSettings } from './settings';
 
 export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
 
@@ -34,6 +37,10 @@ export interface App {
   readonly quality: { readonly index: number; readonly level: QualityLevel };
   /** Frame times of the current run, less its first 3 s. */
   readonly frameStats: FrameSummary;
+  /** Whether sound is muted (saved across visits). */
+  readonly muted: boolean;
+  /** 'none' until the first key press or tap creates the audio context. */
+  readonly audioState: AudioState;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -42,6 +49,15 @@ export interface App {
   quit(): void;
   dispose(): void;
 }
+
+const MUSIC_LEVEL: Readonly<Record<AppMode, MusicLevel>> = {
+  title: 'menu',
+  playing: 'play',
+  paused: 'paused',
+  gameOver: 'menu',
+};
+const TOAST_MUTED = 'Muted';
+const TOAST_SOUND_ON = 'Sound on';
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -65,6 +81,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const monitor = new FrameMonitor();
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const storage = browserStorage();
+  const settings = loadSettings(storage);
+  const audio = createAudioEngine(settings);
+  const toast = createToast(root);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
   const button = (command: Command) => (): void => {
@@ -108,7 +128,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   }
 
   function setMode(next: AppMode): void {
+    if ((mode === 'playing' && next === 'paused') || (mode === 'paused' && next === 'playing')) audio.play('pause');
     mode = next;
+    audio.setMusicLevel(MUSIC_LEVEL[next]);
     redrawPending = true;
     syncView();
   }
@@ -143,6 +165,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     renderer.reset();
     monitor.reset();
     scaler.startRun();
+    audio.play('uiClick');
     setMode('playing');
   }
 
@@ -163,13 +186,23 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     world.endRun();
     world = null;
     hitStop.clear();
+    audio.play('uiClick');
     setMode('title');
   }
 
   function selectLevel(level: number): void {
     if (mode !== 'title') return;
     practiceLevel = level;
+    audio.play('uiClick');
     syncView();
+  }
+
+  function toggleMute(): void {
+    audio.setMuted(!audio.muted);
+    toast.show(audio.muted ? TOAST_MUTED : TOAST_SOUND_ON);
+    if (!saveSettings(storage, { ...settings, muted: audio.muted })) {
+      console.warn('Could not save the sound setting, so it will reset on reload. Allow site storage for this page to keep it.');
+    }
   }
 
   /** Runs a key or button command unless the game-over guard is still ignoring it. */
@@ -189,6 +222,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
         if (mode === 'playing') pause();
         else resume();
         break;
+      case 'toggleMute':
+        toggleMute();
+        break;
     }
   }
 
@@ -204,6 +240,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       const events = run.step(dt, controls);
       hitStop.trigger(events);
       renderer.handle(events, run);
+      audio.handle(events);
     });
     if (run.status === 'gameOver') {
       gameOverAt = now;
@@ -217,6 +254,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     const frameMs = now - lastFrameAt;
     const frameSeconds = frameMs / 1000;
     lastFrameAt = now;
+    audio.beginFrame();
     applyPendingResize();
     for (const code of keyboard.drainPressed()) {
       startKeys.release(code);
@@ -293,6 +331,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     get frameStats() {
       return monitor.summary();
     },
+    get muted() {
+      return audio.muted;
+    },
+    get audioState() {
+      return audio.state;
+    },
     start,
     pause,
     resume,
@@ -303,6 +347,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       keyboard.dispose();
       touch.dispose();
       overlay.dispose();
+      toast.dispose();
+      audio.dispose();
       safeArea.dispose();
       renderer.dispose();
       document.body.classList.remove('lite');

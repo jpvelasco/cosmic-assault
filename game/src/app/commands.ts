@@ -6,14 +6,17 @@ export type Command =
   | { readonly kind: 'start' }
   | { readonly kind: 'selectLevel'; readonly level: number }
   | { readonly kind: 'togglePause' }
-  | { readonly kind: 'toTitle' };
+  | { readonly kind: 'toTitle' }
+  | { readonly kind: 'toggleMute' };
 
 /** Starts a run from the title, or restarts one from the game-over card. */
 export const START: Command = { kind: 'start' };
 export const TO_TITLE: Command = { kind: 'toTitle' };
 const TOGGLE_PAUSE: Command = { kind: 'togglePause' };
+const TOGGLE_MUTE: Command = { kind: 'toggleMute' };
 const START_KEYS: ReadonlySet<string> = new Set([...GAME_KEY_CODES, 'Enter']);
 const PAUSE_KEYS: ReadonlySet<string> = new Set(['Escape', 'KeyP']);
+const MUTE_KEY = 'KeyM';
 const RESTART_KEY = 'KeyR';
 const TITLE_KEY = 'Escape';
 
@@ -24,6 +27,7 @@ function levelForKey(code: string): number | null {
 
 /** What a key press (`KeyboardEvent.code`) asks the app to do in `mode`, if anything. */
 export function commandForKey(mode: AppMode, code: string): Command | null {
+  if (code === MUTE_KEY) return TOGGLE_MUTE;
   switch (mode) {
     case 'title': {
       const level = levelForKey(code);

@@ -118,6 +118,23 @@
         min-width: 160px;
         padding: 10px 24px;
       }
+      .toast {
+        position: absolute;
+        top: max(12px, env(safe-area-inset-top));
+        left: 50%;
+        transform: translateX(-50%);
+        margin: 0;
+        padding: 6px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.09);
+        font-size: 0.85rem;
+        font-weight: 800;
+        pointer-events: none;
+      }
+      .toast[hidden] {
+        display: none;
+      }
     </style>
   </head>
   <body>

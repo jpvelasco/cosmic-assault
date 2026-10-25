@@ -46,3 +46,9 @@ describe('commandForKey', () => {
     }
   });
 });
+
+describe('mute key', () => {
+  it.each<AppMode>(['title', 'playing', 'paused', 'gameOver'])('toggles mute on KeyM while %s', (mode) => {
+    expect(commandForKey(mode, 'KeyM')).toEqual({ kind: 'toggleMute' });
+  });
+});
