@@ -9,6 +9,13 @@ export interface Ship {
   vx: number;
   vy: number;
   angle: number;
+  /**
+   * Pose before the latest `World.step`, for interpolated drawing. `px`/`py` are the raw position
+   * before the latest step; not wrap-adjusted — a renderer must not interpolate across a wrap.
+   */
+  px: number;
+  py: number;
+  pangle: number;
   thrusting: boolean;
   invulnerable: boolean;
   invulnerableFor: number;
@@ -34,6 +41,9 @@ export function createShip(x: number, y: number): Ship {
     vx: 0,
     vy: 0,
     angle: -Math.PI / 2,
+    px: x,
+    py: y,
+    pangle: -Math.PI / 2,
     thrusting: false,
     invulnerable: true,
     invulnerableFor: PLAYER.invulnerableSeconds,
@@ -45,6 +55,9 @@ export function createShip(x: number, y: number): Ship {
 export function respawnShip(ship: Ship, field: Field): void {
   ship.x = field.width / 2;
   ship.y = field.height / 2;
+  ship.px = ship.x;
+  ship.py = ship.y;
+  ship.pangle = ship.angle;
   ship.vx = 0;
   ship.vy = 0;
   ship.invulnerable = true;

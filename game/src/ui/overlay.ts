@@ -9,12 +9,14 @@ export interface OverlayActions {
   readonly resume: () => void;
   readonly quit: () => void;
   readonly toTitle: () => void;
+  readonly toggleMute: () => void;
 }
 
 export interface OverlayState {
   readonly mode: AppMode;
   readonly practiceLevel: number;
   readonly score: number;
+  readonly muted: boolean;
 }
 
 export interface Overlay {
@@ -48,11 +50,26 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
+/**
+ * Enter and Space on the focused chip toggle sound only: they never reach the window's key handling, which would
+ * start a run. A click does not focus it, so after one Space still starts a run.
+ */
+function keepActivationKeysLocal(el: HTMLElement): void {
+  const stop = (e: KeyboardEvent): void => {
+    if (e.code === 'Enter' || e.code === 'Space') e.stopPropagation();
+  };
+  el.addEventListener('keydown', stop);
+  el.addEventListener('keyup', stop);
+  el.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+}
+
 function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
   const chips: HTMLButtonElement[] = [];
   for (let level = MIN_PRACTICE_LEVEL; level <= MAX_PRACTICE_LEVEL; level++) {
     chips.push(
-      button('chip', String(level), () => {
+      button('level-chip', String(level), () => {
         selectLevel(level);
       }),
     );
@@ -60,8 +77,16 @@ function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
   return chips;
 }
 
-function titlePanel(chips: readonly HTMLButtonElement[]): HTMLElement {
-  const panel = element('section', 'overlay overlay--title');
+/** A panel holding one glass card. */
+function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLElement } {
+  const panel = element('section', `overlay overlay--${modifier}`);
+  const card = element('div', 'card');
+  panel.append(card);
+  return { panel, card };
+}
+
+function titlePanel(chips: readonly HTMLButtonElement[], soundSlot: HTMLElement): HTMLElement {
+  const { panel, card } = cardPanel('title');
   const label = element('p', 'label', 'Practice level');
   label.id = 'practice-level-label';
   const group = element('div', 'chips');
@@ -70,40 +95,38 @@ function titlePanel(chips: readonly HTMLButtonElement[]): HTMLElement {
   group.append(...chips);
   const build = element('p', 'build', formatBuildLabel(__BUILD_SHA__ || undefined, __BUILD_DATE__));
   build.dataset['testid'] = 'build-label';
-  panel.append(
+  card.append(
     element('h1', 'title', 'Cosmic Assault'),
     label,
     group,
     element('p', 'hint', 'Press Space or tap to start'),
+    soundSlot,
     build,
   );
   return panel;
 }
 
-function pausePanel(actions: OverlayActions): HTMLElement {
-  const panel = element('section', 'overlay overlay--pause');
-  const card = element('div', 'card');
+function pausePanel(actions: OverlayActions, soundSlot: HTMLElement): HTMLElement {
+  const { panel, card } = cardPanel('pause');
   card.append(
     element('h2', 'heading', 'Paused'),
-    button('menu-button', 'Resume', actions.resume),
+    button('menu-button menu-button--primary', 'Resume', actions.resume),
     button('menu-button', 'Quit', actions.quit),
+    soundSlot,
   );
-  panel.append(card);
   return panel;
 }
 
 /** Only its buttons act, so taps that were aimed at the ship cannot skip the score. */
 function gameOverPanel(score: HTMLElement, actions: OverlayActions): HTMLElement {
-  const panel = element('section', 'overlay overlay--game-over');
-  const card = element('div', 'card');
+  const { panel, card } = cardPanel('game-over');
   card.append(
     element('h2', 'heading', 'Game over'),
     score,
     element('p', 'hint', 'Press R to restart'),
-    button('menu-button', 'Restart', actions.start),
+    button('menu-button menu-button--primary', 'Restart', actions.start),
     button('menu-button', 'Title', actions.toTitle),
   );
-  panel.append(card);
   return panel;
 }
 
@@ -111,16 +134,28 @@ function gameOverPanel(score: HTMLElement, actions: OverlayActions): HTMLElement
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
   const chips = levelChips(actions.selectLevel);
   const score = element('p', 'score');
-  const title = titlePanel(chips);
+  // One sound chip serves the title and pause cards; `update` moves it into the visible card's slot.
+  const sound = button('sound-toggle', '', actions.toggleMute);
+  sound.dataset['testid'] = 'sound-toggle';
+  keepActivationKeysLocal(sound);
+  const titleSlot = element('div', 'sound-slot');
+  const pauseSlot = element('div', 'sound-slot');
+  const soundSlots: Partial<Record<AppMode, HTMLElement>> = { title: titleSlot, paused: pauseSlot };
+  const title = titlePanel(chips, titleSlot);
   const gameOver = gameOverPanel(score, actions);
   onTapOutsideButtons(title, actions.start);
-  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions), gameOver };
+  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions, pauseSlot), gameOver };
   const all = Object.values(panels);
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points }) {
+    update({ mode, practiceLevel, score: points, muted }) {
       for (const panel of all) panel.hidden = panel !== panels[mode];
+      const slot = soundSlots[mode];
+      // Moved only on a card change: re-inserting it would drop keyboard focus after a toggle.
+      if (slot !== undefined && sound.parentElement !== slot) slot.append(sound);
+      sound.textContent = `Sound: ${muted ? 'off' : 'on'}`;
+      sound.classList.toggle('sound-toggle--muted', muted);
       for (const [i, chip] of chips.entries()) {
         chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
       }

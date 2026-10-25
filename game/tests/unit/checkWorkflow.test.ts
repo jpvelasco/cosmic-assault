@@ -94,6 +94,14 @@ describe('check-workflow guard', () => {
     expect(status).toBe(0);
   });
 
+  it('accepts the report-only perf job, which deploy does not wait for', () => {
+    expect(realText).toMatch(/^ {2}perf:$/m);
+    expect(realText).toContain(needsLine);
+    const { status, output } = runGuard(realWorkflow);
+    expect(output).toContain('workflow ok');
+    expect(status).toBe(0);
+  });
+
   it('accepts a CRLF copy of ci.yml', () => {
     const { status, output } = runGuard(writeFixture(realText.replace(/\n/g, '\r\n')));
     expect(output).toContain('workflow ok');

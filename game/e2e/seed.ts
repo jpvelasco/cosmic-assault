@@ -19,3 +19,9 @@ export const E2E_SEED = 3;
  * prints replacements.
  */
 export const GAME_OVER_SEED = 1;
+
+/**
+ * The `?seed=` the perf spec loads. Any seed works, as it measures frame time rather than a
+ * scripted outcome; this one is fixed so every run spawns the same rocks.
+ */
+export const PERF_SEED = 7;

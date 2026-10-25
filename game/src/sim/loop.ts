@@ -3,6 +3,8 @@ import { STEP_SECONDS } from './config';
 export interface FixedStepLoop {
   /** Runs whole steps for `frameSeconds`; returns how many ran. */
   advance(frameSeconds: number, onStep: (dt: number, isFirstStep: boolean) => void): number;
+  /** Fraction of a step left in the accumulator, in [0, 1): how far to interpolate past the latest step. */
+  alpha(): number;
   reset(): void; // drop the accumulator (used on pause/resume)
 }
 
@@ -62,6 +64,11 @@ export function createFixedStepLoop(opts: FixedStepLoopOptions = {}): FixedStepL
         accumulator = 0;
       }
       return steps;
+    },
+    alpha() {
+      // A step fires once the accumulator is within STEP_EPSILON of `step`, so what is left is below 1;
+      // only the epsilon leaves it a hair negative.
+      return Math.max(0, accumulator / step);
     },
     reset() {
       accumulator = 0;
