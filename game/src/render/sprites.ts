@@ -18,7 +18,7 @@ export interface SpriteBaker {
   ship(palette: Palette): Sprite;
   /**
    * The rock unrotated, centred on its origin and lit from the sprite's upper left, so the
-   * light turns with the rock. Cached per `a.id`, which must be unique (World assigns ids).
+   * light turns with the rock. Cached per id, size and shape, so ids reused by a later World never collide.
    */
   asteroid(a: Readonly<Asteroid>, palette: Palette): Sprite;
   /** Shot with its glow baked in: head at the origin, tail along −x. Draw it additively. */
@@ -30,7 +30,15 @@ export interface SpriteBaker {
   flame(palette: Palette, length: number): Sprite;
   /** Device pixels per field unit are `pixelsPerUnit × dpr`; a change clears the cache. */
   setScale(pixelsPerUnit: number, dpr: number): void;
+  /** Drops every sprite baked for this asteroid id. */
   forget(asteroidId: number): void;
+  /** Frees every baked sprite, for example when a new run starts. */
+  clear(): void;
+}
+
+interface CacheEntry {
+  readonly sprite: Sprite;
+  readonly asteroidId: number | undefined;
 }
 
 export interface Crater {
@@ -71,6 +79,9 @@ const SHIP_RIM_WIDTH = 1;
 const ROCK_RIM_WIDTH = 1.5;
 /** Every crater lies within this fraction of the radius: inside the outline for 7+ vertices at ±30 % jaggedness. */
 const CRATER_REACH = 0.6;
+const CRATER_TRIES = 8;
+/** Crater centres stay at least this multiple of their summed radii apart. */
+const CRATER_GAP = 1.1;
 
 const SHOT_LENGTH = 8;
 const SHOT_WIDTH = 4.5;
@@ -111,19 +122,46 @@ function hashStream(seed: number): () => number {
   };
 }
 
-/** Two or three craters for asteroid `id`, spread around the centre and kept within `CRATER_REACH × radius`. */
+/**
+ * Two or three craters for asteroid `id`, spread around the centre, kept within `CRATER_REACH × radius`
+ * and apart from each other. A crater that finds no free spot in `CRATER_TRIES` draws is dropped.
+ */
 export function craterLayout(id: number, radius: number): readonly Crater[] {
   const next = hashStream(id);
   const count = next() < 0.5 ? 2 : 3;
   const start = next() * TWO_PI;
   const craters: Crater[] = [];
   for (let i = 0; i < count; i++) {
-    const size = 0.12 + next() * 0.12;
-    const angle = start + ((i + (next() - 0.5) * 0.3) / count) * TWO_PI;
-    const distance = (0.5 + 0.5 * next()) * (CRATER_REACH - size) * radius;
-    craters.push({ x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, r: size * radius });
+    for (let attempt = 0; attempt < CRATER_TRIES; attempt++) {
+      const size = 0.12 + next() * 0.12;
+      const angle = start + ((i + (next() - 0.5) * 0.3) / count) * TWO_PI;
+      const distance = (0.5 + 0.5 * next()) * (CRATER_REACH - size) * radius;
+      const crater = { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance, r: size * radius };
+      if (craters.every((other) => !cratersOverlap(crater, other))) {
+        craters.push(crater);
+        break;
+      }
+    }
   }
   return craters;
+}
+
+export function cratersOverlap(a: Crater, b: Crater): boolean {
+  return Math.hypot(a.x - b.x, a.y - b.y) < (a.r + b.r) * CRATER_GAP;
+}
+
+/** FNV-1a over the radius and vertices rounded to 1e-3, so rocks that share an id but not a shape get distinct keys. */
+export function shapeFingerprint(a: Readonly<Asteroid>): string {
+  let hash = 0x811c9dc5;
+  const add = (value: number): void => {
+    hash = Math.imul(hash ^ Math.round(value * 1000), 0x01000193);
+  };
+  add(a.radius);
+  for (const v of a.vertices) {
+    add(v.x);
+    add(v.y);
+  }
+  return (hash >>> 0).toString(16);
 }
 
 function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
@@ -270,11 +308,17 @@ function maxDistance(points: readonly Point[]): number {
 }
 
 export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
-  const cache = new SpriteCache<Sprite>(capacity, (_key, sprite) => {
+  /** Cache keys per asteroid id, so `forget` finds every entry; eviction keeps it in step. */
+  const asteroidKeys = new Map<number, Set<string>>();
+  const cache = new SpriteCache<CacheEntry>(capacity, (key, { sprite, asteroidId }) => {
     sprite.canvas.width = 0;
     sprite.canvas.height = 0;
+    if (asteroidId === undefined) return;
+    const keys = asteroidKeys.get(asteroidId);
+    keys?.delete(key);
+    if (keys?.size === 0) asteroidKeys.delete(asteroidId);
   });
-  const paletteIds = new Set<string>();
+  const fingerprints = new WeakMap<Readonly<Asteroid>, string>();
   let pixelsPerUnit = 1;
   let dpr = 1;
 
@@ -293,17 +337,26 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     return { canvas, halfW: canvas.width / (2 * k), halfH: canvas.height / (2 * k) };
   }
 
-  function cached(key: string, make: () => Sprite): Sprite {
+  function cached(key: string, make: () => Sprite, asteroidId?: number): Sprite {
     const hit = cache.get(key);
-    if (hit !== undefined) return hit;
+    if (hit !== undefined) return hit.sprite;
     const sprite = make();
-    cache.set(key, sprite);
+    cache.set(key, { sprite, asteroidId });
+    if (asteroidId !== undefined) {
+      const keys = asteroidKeys.get(asteroidId);
+      if (keys === undefined) asteroidKeys.set(asteroidId, new Set([key]));
+      else keys.add(key);
+    }
     return sprite;
   }
 
-  function paletteKey(kind: string, p: Palette, ...parts: readonly (string | number)[]): string {
-    paletteIds.add(p.id);
-    return keyOf(kind, p.id, ...parts);
+  function fingerprintOf(a: Readonly<Asteroid>): string {
+    let fingerprint = fingerprints.get(a);
+    if (fingerprint === undefined) {
+      fingerprint = shapeFingerprint(a);
+      fingerprints.set(a, fingerprint);
+    }
+    return fingerprint;
   }
 
   return {
@@ -317,23 +370,25 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     },
     ship(p) {
       const half = SHIP_RIM_WIDTH / 2;
-      return cached(paletteKey('ship', p), () =>
+      return cached(keyOf('ship', p.id), () =>
         bake(maxDistance(SHIP_HULL) + half, SHIP_HALF_BEAM + half, (ctx) => {
           paintShip(ctx, p);
         }),
       );
     },
     asteroid(a, p) {
-      return cached(paletteKey('asteroid', p, a.id), () => {
+      const key = keyOf('asteroid', p.id, a.id, a.size, fingerprintOf(a));
+      const make = (): Sprite => {
         const extent = maxDistance(a.vertices) + ROCK_RIM_WIDTH / 2;
         return bake(extent, extent, (ctx) => {
           paintAsteroid(ctx, a, p);
         });
-      });
+      };
+      return cached(key, make, a.id);
     },
     shot(p) {
       const glowRadius = SHOT_GLOW_DIAMETER / 2;
-      return cached(paletteKey('shot', p), () =>
+      return cached(keyOf('shot', p.id), () =>
         bake(Math.max(glowRadius, SHOT_LENGTH + SHOT_WIDTH / 2), glowRadius, (ctx) => {
           paintShot(ctx, p);
         }),
@@ -342,7 +397,7 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     flame(p, length) {
       const size = snapFlameLength(length);
       const glowReach = size * 0.3 + flameGlowRadius(size);
-      return cached(paletteKey('flame', p, size), () =>
+      return cached(keyOf('flame', p.id, size), () =>
         bake(-FLAME_BASE_X + Math.max(size, glowReach), flameGlowRadius(size), (ctx) => {
           paintFlame(ctx, size);
         }),
@@ -357,7 +412,10 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
       cache.clear();
     },
     forget(asteroidId) {
-      for (const id of paletteIds) cache.delete(keyOf('asteroid', id, asteroidId));
+      for (const key of [...(asteroidKeys.get(asteroidId) ?? [])]) cache.delete(key);
+    },
+    clear() {
+      cache.clear();
     },
   };
 }

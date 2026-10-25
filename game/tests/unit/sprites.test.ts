@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DRIFT } from '../../src/render/palette';
-import { craterLayout, createSpriteBaker, snapFlameLength, snapGlowDiameter } from '../../src/render/sprites';
+import {
+  craterLayout,
+  createSpriteBaker,
+  shapeFingerprint,
+  snapFlameLength,
+  snapGlowDiameter,
+} from '../../src/render/sprites';
 import { createAsteroid, type AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID } from '../../src/sim/config';
 import { createRng } from '../../src/sim/rng';
@@ -33,6 +39,17 @@ describe('craterLayout', () => {
     expect(craterLayout(42, 40)).not.toEqual(craterLayout(43, 40));
   });
 
+  it('keeps crater centres at least 1.1 × their summed radii apart', () => {
+    for (let id = 1; id <= 400; id++) {
+      const craters = craterLayout(id, ASTEROID.radii[id % 4] ?? 0);
+      craters.forEach((a, i) => {
+        for (const b of craters.slice(i + 1)) {
+          expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual((a.r + b.r) * 1.1);
+        }
+      });
+    }
+  });
+
   it('places two or three craters of 0.12 to 0.24 radius, all of them inside the asteroid outline', () => {
     const rng = createRng(99);
     const counts = new Set<number>();
@@ -52,6 +69,16 @@ describe('craterLayout', () => {
       }
     }
     expect([...counts].sort()).toEqual([2, 3]);
+  });
+});
+
+describe('shapeFingerprint', () => {
+  it('matches for the same shape and differs for another shape', () => {
+    const a = createAsteroid(createRng(1), 0, 0, 1, 0, 1, createRng(1), 5);
+    const twin = createAsteroid(createRng(1), 300, 40, 1, 2, 1, createRng(1), 9);
+    const other = createAsteroid(createRng(2), 0, 0, 1, 0, 1, createRng(2), 5);
+    expect(shapeFingerprint(twin)).toBe(shapeFingerprint(a));
+    expect(shapeFingerprint(other)).not.toBe(shapeFingerprint(a));
   });
 });
 
@@ -173,6 +200,49 @@ describe('createSpriteBaker', () => {
     expect(spriteB.canvas.width).toBeGreaterThan(0);
     expect(baker.asteroid(a, DRIFT)).not.toBe(spriteA);
     expect(baker.asteroid(b, DRIFT)).toBe(spriteB);
+  });
+
+  it('bakes separate sprites for asteroids that share an id but not a shape, as a new World reuses ids', () => {
+    const baker = createSpriteBaker();
+    const first = createAsteroid(createRng(1), 0, 0, 0, 0, 1, createRng(1), 1);
+    const reused = createAsteroid(createRng(2), 0, 0, 0, 0, 1, createRng(2), 1);
+    const sprite = baker.asteroid(first, DRIFT);
+    expect(baker.asteroid(reused, DRIFT)).not.toBe(sprite);
+    expect(baker.asteroid(first, DRIFT)).toBe(sprite);
+    baker.forget(1);
+    expect(sprite.canvas.width).toBe(0);
+    expect(created.every((canvas) => canvas.width === 0)).toBe(true);
+  });
+
+  it('fingerprints each asteroid object once, not every frame', () => {
+    const baker = createSpriteBaker();
+    const a = rock(6);
+    let reads = 0;
+    const counted = Object.defineProperty({ ...a }, 'vertices', {
+      get: () => {
+        reads++;
+        return a.vertices;
+      },
+    });
+    baker.asteroid(counted, DRIFT);
+    const afterBake = reads;
+    for (let frame = 0; frame < 5; frame++) baker.asteroid(counted, DRIFT);
+    expect(afterBake).toBeGreaterThan(0);
+    expect(reads).toBe(afterBake);
+  });
+
+  it('clear() frees every baked canvas', () => {
+    const baker = createSpriteBaker();
+    baker.ship(DRIFT);
+    baker.shot(DRIFT);
+    baker.flame(DRIFT, 14);
+    baker.glow('#39ff14', 64);
+    const a = rock(2);
+    const sprite = baker.asteroid(a, DRIFT);
+    baker.clear();
+    expect(created).toHaveLength(5);
+    expect(created.every((canvas) => canvas.width === 0 && canvas.height === 0)).toBe(true);
+    expect(baker.asteroid(a, DRIFT)).not.toBe(sprite);
   });
 
   it('evicts the least recently used sprite past capacity and frees its canvas', () => {
