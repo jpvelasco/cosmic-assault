@@ -27,6 +27,7 @@ function snapshot(app: App): CosmicAssaultTestState {
     muted: app.muted,
     audioState: app.audioState,
     logSize: app.log.size,
+    fullscreen: app.fullscreen,
   };
 }
 

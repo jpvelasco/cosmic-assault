@@ -11,6 +11,7 @@ export interface OverlayActions {
   readonly quit: () => void;
   readonly toTitle: () => void;
   readonly toggleMute: () => void;
+  readonly toggleFullscreen: () => void;
 }
 
 export interface OverlayState {
@@ -18,6 +19,8 @@ export interface OverlayState {
   readonly practiceLevel: number;
   readonly score: number;
   readonly muted: boolean;
+  /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
+  readonly fullscreen: boolean | null;
 }
 
 export interface Overlay {
@@ -34,7 +37,7 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
 }
 
 /**
- * Enter and Space on the focused chip toggle sound only: they never reach the window's key handling, which would
+ * Enter and Space on a focused chip act on that chip only: they never reach the window's key handling, which would
  * start a run. A click does not focus it, so after one Space still starts a run.
  */
 function keepActivationKeysLocal(el: HTMLElement): void {
@@ -46,6 +49,14 @@ function keepActivationKeysLocal(el: HTMLElement): void {
   el.addEventListener('mousedown', (e) => {
     e.preventDefault();
   });
+}
+
+/** A glass chip whose class and test id are `name`; it stays out of the game's key handling. */
+function settingChip(name: string, onClick: () => void): HTMLButtonElement {
+  const chip = button(name, '', onClick);
+  chip.dataset['testid'] = name;
+  keepActivationKeysLocal(chip);
+  return chip;
 }
 
 function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
@@ -60,7 +71,7 @@ function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
   return chips;
 }
 
-function titlePanel(chips: readonly HTMLButtonElement[], soundSlot: HTMLElement): HTMLElement {
+function titlePanel(chips: readonly HTMLButtonElement[], chipRow: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const label = element('p', 'label', 'Practice level');
   label.id = 'practice-level-label';
@@ -75,19 +86,19 @@ function titlePanel(chips: readonly HTMLButtonElement[], soundSlot: HTMLElement)
     label,
     group,
     element('p', 'hint', 'Press Space or tap to start'),
-    soundSlot,
+    chipRow,
     build,
   );
   return panel;
 }
 
-function pausePanel(actions: OverlayActions, soundSlot: HTMLElement): HTMLElement {
+function pausePanel(actions: OverlayActions, chipRow: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('pause');
   card.append(
     element('h2', 'heading', 'Paused'),
     button('menu-button menu-button--primary', 'Resume', actions.resume),
     button('menu-button', 'Quit', actions.quit),
-    soundSlot,
+    chipRow,
   );
   return panel;
 }
@@ -109,28 +120,29 @@ function gameOverPanel(score: HTMLElement, actions: OverlayActions): HTMLElement
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
   const chips = levelChips(actions.selectLevel);
   const score = element('p', 'score');
-  // One sound chip serves the title and pause cards; `update` moves it into the visible card's slot.
-  const sound = button('sound-toggle', '', actions.toggleMute);
-  sound.dataset['testid'] = 'sound-toggle';
-  keepActivationKeysLocal(sound);
-  const titleSlot = element('div', 'sound-slot');
-  const pauseSlot = element('div', 'sound-slot');
-  const soundSlots: Partial<Record<AppMode, HTMLElement>> = { title: titleSlot, paused: pauseSlot };
-  const title = titlePanel(chips, titleSlot);
+  // One pair of chips serves the title and pause cards; `update` moves it into the visible card's row.
+  const sound = settingChip('sound-toggle', actions.toggleMute);
+  const fullscreen = settingChip('fullscreen-toggle', actions.toggleFullscreen);
+  const titleRow = element('div', 'chips');
+  const pauseRow = element('div', 'chips');
+  const chipRows: Partial<Record<AppMode, HTMLElement>> = { title: titleRow, paused: pauseRow };
+  const title = titlePanel(chips, titleRow);
   const gameOver = gameOverPanel(score, actions);
   onTapOutsideButtons(title, actions.start);
-  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions, pauseSlot), gameOver };
+  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions, pauseRow), gameOver };
   const all = Object.values(panels);
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points, muted }) {
+    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState }) {
       for (const panel of all) panel.hidden = panel !== panels[mode];
-      const slot = soundSlots[mode];
-      // Moved only on a card change: re-inserting it would drop keyboard focus after a toggle.
-      if (slot !== undefined && sound.parentElement !== slot) slot.append(sound);
+      const row = chipRows[mode];
+      // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle.
+      if (row !== undefined && sound.parentElement !== row) row.append(sound, fullscreen);
       sound.textContent = `Sound: ${muted ? 'off' : 'on'}`;
       sound.classList.toggle('sound-toggle--muted', muted);
+      fullscreen.hidden = fullscreenState === null;
+      fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
       for (const [i, chip] of chips.entries()) {
         chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
       }

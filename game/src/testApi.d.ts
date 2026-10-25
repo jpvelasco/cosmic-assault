@@ -42,6 +42,8 @@ interface CosmicAssaultTestState {
   readonly audioState: 'none' | 'suspended' | 'running' | 'closed';
   /** Entries in the in-memory event and error log (at most 200). */
   readonly logSize: number;
+  /** Whether the page is in full screen (`document.fullscreenElement` is set). */
+  readonly fullscreen: boolean;
 }
 
 interface CosmicAssaultTestApi {

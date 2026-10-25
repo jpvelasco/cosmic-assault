@@ -5,6 +5,7 @@ import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
+import { createFullscreen } from '../platform/fullscreen';
 import { RingLog } from '../platform/log';
 import type { CornerBox, HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
@@ -19,7 +20,7 @@ import { createCrashCard } from '../ui/crashCard';
 import { createOverlay } from '../ui/overlay';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
-import { commandForKey, START, TO_TITLE, type Command } from './commands';
+import { commandForKey, START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
 import { passesGameOverGuard } from './gameOverGuard';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
@@ -58,6 +59,8 @@ export interface App {
   readonly muted: boolean;
   /** 'none' until the first key press or tap creates the audio context. */
   readonly audioState: AudioState;
+  /** Whether the page is in full screen; false where the browser cannot. */
+  readonly fullscreen: boolean;
   /** What the game has noticed: mode changes, long stalls and errors. Kept in memory only. */
   readonly log: RingLog;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
@@ -108,6 +111,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const settings = loadSettings(storage);
   const audio = createAudioEngine(settings);
   const toast = createToast(root);
+  const fullscreen = createFullscreen(document, document.documentElement, log);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
   const button = (command: Command) => (): void => {
@@ -120,6 +124,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     quit,
     toTitle: button(TO_TITLE),
     toggleMute,
+    toggleFullscreen: button(TOGGLE_FULLSCREEN),
   });
 
   const crashCard = createCrashCard(root, {
@@ -148,7 +153,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   function syncView(): void {
-    overlay.update({ mode, practiceLevel, score: world?.score ?? 0, muted: audio.muted });
+    overlay.update({
+      mode,
+      practiceLevel,
+      score: world?.score ?? 0,
+      muted: audio.muted,
+      fullscreen: fullscreen.supported ? fullscreen.active : null,
+    });
     touch.show(mode === 'playing' && coarsePointer.matches);
     syncHudBounds();
   }
@@ -273,6 +284,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       case 'toggleMute':
         toggleMute();
         break;
+      case 'toggleFullscreen':
+        fullscreen.toggle();
+        break;
     }
   }
 
@@ -370,6 +384,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const markResize = (): void => {
     resizePending = true;
   };
+  /** Full screen changes the viewport and the chip's label. */
+  const onFullscreenChange = (): void => {
+    markResize();
+    syncView();
+  };
   const onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') pause();
   };
@@ -380,6 +399,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(reducedMotion, 'change', syncReducedMotion),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
+    fullscreen.onChange(onFullscreenChange),
     guard.attachGlobal(window),
   ];
   syncView();
@@ -415,6 +435,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     },
     get audioState() {
       return audio.state;
+    },
+    get fullscreen() {
+      return fullscreen.active;
     },
     log,
     start,

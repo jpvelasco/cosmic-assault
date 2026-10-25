@@ -52,3 +52,9 @@ describe('mute key', () => {
     expect(commandForKey(mode, 'KeyM')).toEqual({ kind: 'toggleMute' });
   });
 });
+
+describe('full screen key', () => {
+  it.each<AppMode>(['title', 'playing', 'paused', 'gameOver'])('toggles full screen on KeyF while %s', (mode) => {
+    expect(commandForKey(mode, 'KeyF')).toEqual({ kind: 'toggleFullscreen' });
+  });
+});

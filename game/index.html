@@ -215,9 +215,6 @@
         justify-content: center;
         gap: 6px;
       }
-      .sound-slot {
-        display: contents;
-      }
       .overlay button {
         font: inherit;
         font-weight: 800;
@@ -264,13 +261,20 @@
         min-width: 168px;
         padding: 10px 24px;
       }
-      .sound-toggle {
+      .sound-toggle,
+      .fullscreen-toggle {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         min-height: 40px;
-        padding: 0 16px 0 12px;
+        padding: 0 16px;
         font-size: 0.875rem;
+      }
+      .fullscreen-toggle[hidden] {
+        display: none;
+      }
+      .sound-toggle {
+        padding-left: 12px;
       }
       .sound-toggle::before {
         content: '';
