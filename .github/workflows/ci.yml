@@ -59,6 +59,12 @@ jobs:
       - name: Check relative asset base
         run: npm run check:base
 
+      - name: Check release build has no test bridge
+        run: npm run check:no-bridge
+
+      - name: Build for end-to-end tests
+        run: npm run build:e2e
+
       - name: End-to-end tests
         run: npm run test:e2e
         env:

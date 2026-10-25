@@ -36,12 +36,19 @@ function replaceOnce(text: string, from: string, to: string): string {
   return text.replace(from, () => to);
 }
 
+/** Moves the first occurrence of `step` to just before the first occurrence of `anchor`. */
+const moveBefore = (text: string, step: string, anchor: string) =>
+  replaceOnce(replaceOnce(text, step, ''), anchor, `${step}${anchor}`);
+
 const needsLine = '    needs: [game, legacy]\n';
 const ifLine = "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n";
 const diffLine = '        run: diff -r website _site --exclude next\n';
 const nodeVersionLine = '          node-version-file: .nvmrc\n';
 const e2eStep = '        run: npm run test:e2e\n';
 const unitStep = '        run: npm test\n';
+const buildStep = '        run: npm run build\n';
+const noBridgeStep = '        run: npm run check:no-bridge\n';
+const buildE2eStep = '        run: npm run build:e2e\n';
 const legacyRun = '        run: npx playwright test --project=chromium-desktop --reporter=html,list\n';
 const comment = (line: string) => `    # ${line.trim()}\n`;
 
@@ -76,6 +83,18 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ],
   ['deleted unit test step', (t) => replaceOnce(t, unitStep, ''), 'the game job must run "npm test"'],
   ['deleted e2e step', (t) => replaceOnce(t, e2eStep, ''), 'the game job must run "npm run test:e2e"'],
+  ['deleted no-bridge check', (t) => replaceOnce(t, noBridgeStep, ''), 'the game job must run "npm run check:no-bridge"'],
+  ['deleted e2e build', (t) => replaceOnce(t, buildE2eStep, ''), 'the game job must run "npm run build:e2e"'],
+  [
+    'e2e build after e2e tests',
+    (t) => replaceOnce(replaceOnce(t, buildE2eStep, ''), e2eStep, `${e2eStep}${buildE2eStep}`),
+    'npm run build:e2e must come before npm run test:e2e',
+  ],
+  [
+    'no-bridge check before release build',
+    (t) => moveBefore(t, noBridgeStep, buildStep),
+    'npm run check:no-bridge must come after npm run build',
+  ],
   ['deleted legacy playwright run', (t) => replaceOnce(t, legacyRun, ''), 'the legacy job must run the Playwright suite'],
   ['website/assets/next directory', (t) => t, 'website/assets/next is named "next"', ['assets/next']],
 ];
