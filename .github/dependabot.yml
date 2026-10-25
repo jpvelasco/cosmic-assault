@@ -13,6 +13,13 @@ updates:
       dev-dependencies:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    ignore:
+      # typescript-eslint 8.x supports TypeScript <6.1; lift when it supports 7.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
+      # Keep Node type definitions on the runtime major in .nvmrc (24).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/tests"
