@@ -15,6 +15,8 @@ export interface TouchControls {
   /** Current drag, or null while the joystick is released. */
   readonly stick: Stick | null;
   readonly fire: boolean;
+  /** The pause button's viewport box in CSS px, or null while the touch layer is hidden. */
+  pauseRect(): DOMRect | null;
   show(visible: boolean): void;
   dispose(): void;
 }
@@ -169,6 +171,9 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
     },
     get fire() {
       return fire;
+    },
+    pauseRect() {
+      return layer.style.display === 'none' ? null : pause.getBoundingClientRect();
     },
     show,
     dispose() {

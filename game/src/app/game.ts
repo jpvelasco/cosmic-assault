@@ -2,6 +2,7 @@ import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
+import type { CornerBox, HudRect } from '../render/hud';
 import { createRenderer } from '../render/renderer';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
@@ -9,6 +10,7 @@ import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createOverlay } from '../ui/overlay';
+import { createSafeAreaProbe } from '../ui/safeArea';
 import { commandForKey, START, TO_TITLE, type Command } from './commands';
 import { passesGameOverGuard } from './gameOverGuard';
 import { HitStop } from './hitStop';
@@ -22,6 +24,8 @@ export interface App {
   readonly world: World | null;
   /** The level the next run starts at (1–7), chosen on the title screen. */
   readonly practiceLevel: number;
+  /** The HUD pills drawn last, in CSS px. */
+  readonly hudRects: readonly HudRect[];
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -31,8 +35,8 @@ export interface App {
   dispose(): void;
 }
 
-/** The renderer draws the latest state; M1 does not interpolate between steps. */
-const LATEST_STATE_ALPHA = 1;
+/** Caps the visual step after a stalled frame, so stars and particles never jump. */
+const MAX_VISUAL_STEP_SECONDS = 0.1;
 
 function listen(target: EventTarget, type: string, listener: (e: Event) => void): () => void {
   target.addEventListener(type, listener);
@@ -46,6 +50,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const keyboard = attachKeyboard(window);
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pause);
+  const safeArea = createSafeAreaProbe(root);
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
   const coarsePointer = window.matchMedia('(pointer: coarse)');
@@ -66,10 +71,23 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   let gameOverAt = 0;
   let lastFrameAt = performance.now();
   let frameId = 0;
+  /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
+  let pauseCorner: CornerBox | null = null;
 
   function syncView(): void {
     overlay.update({ mode, practiceLevel, score: world?.score ?? 0 });
     touch.show(mode === 'playing' && coarsePointer.matches);
+    syncHudBounds();
+  }
+
+  /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button (CA-024). */
+  function syncHudBounds(): void {
+    if (!coarsePointer.matches) pauseCorner = null;
+    else {
+      const button = touch.pauseRect();
+      if (button !== null) pauseCorner = { width: root.clientWidth - button.left, height: button.bottom };
+    }
+    renderer.setHudBounds({ insets: safeArea.read(), topRight: pauseCorner });
   }
 
   function setMode(next: AppMode): void {
@@ -85,6 +103,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     resizePending = false;
     field = fieldForViewport(clientWidth, clientHeight);
     renderer.resize(clientWidth, clientHeight, field);
+    syncHudBounds();
     world?.resize(field);
     redrawPending = true;
   }
@@ -104,6 +123,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     startKeys.latch(keyboard.held);
     loop.reset();
     hitStop.clear();
+    renderer.reset();
     setMode('playing');
   }
 
@@ -162,7 +182,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     const controls = readControls();
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
-      hitStop.trigger(run.step(dt, controls));
+      const events = run.step(dt, controls);
+      hitStop.trigger(events);
+      renderer.handle(events, run);
     });
     if (run.status === 'gameOver') {
       gameOverAt = now;
@@ -182,15 +204,21 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       if (command !== null) applyCommand(command, now);
     }
     if (world === null) return;
-    if (mode === 'playing') stepWorld(world, frameSeconds, now);
+    if (mode === 'playing') {
+      stepWorld(world, frameSeconds, now);
+      // Visuals keep moving through a hit-stop freeze, on real frame time rather than sim time.
+      renderer.advance(Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS), world);
+    }
     if (mode === 'playing' || redrawPending) {
-      renderer.draw(world, LATEST_STATE_ALPHA);
+      renderer.draw(world, loop.alpha());
       redrawPending = false;
     }
   }
 
+  /** The one reduced-motion source: it turns off hit-stop, shake and flash together. */
   const syncReducedMotion = (): void => {
     hitStop.reducedMotion = reducedMotion.matches;
+    renderer.effects.reducedMotion = reducedMotion.matches;
   };
   syncReducedMotion();
   const markResize = (): void => {
@@ -220,6 +248,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     get practiceLevel() {
       return practiceLevel;
     },
+    get hudRects() {
+      return renderer.hudRects;
+    },
     start,
     pause,
     resume,
@@ -230,6 +261,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       keyboard.dispose();
       touch.dispose();
       overlay.dispose();
+      safeArea.dispose();
+      renderer.dispose();
     },
   };
 }

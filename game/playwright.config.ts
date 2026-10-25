@@ -34,7 +34,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-landscape',
-      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts'],
       use: { ...devices['Pixel 5 landscape'] },
     },
     // The release build has no bridge; this only proves it boots cleanly without one.

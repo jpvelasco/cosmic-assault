@@ -9,6 +9,14 @@ interface CosmicAssaultTestShip {
   readonly invulnerable: boolean;
 }
 
+/** A box in CSS px from the viewport's top left. */
+interface CosmicAssaultTestRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 interface CosmicAssaultTestState {
   readonly mode: import('./app/game').AppMode;
   readonly practiceLevel: number;
@@ -18,6 +26,8 @@ interface CosmicAssaultTestState {
   readonly ship: CosmicAssaultTestShip | null;
   readonly asteroidCount: number;
   readonly projectileCount: number;
+  /** The HUD pills drawn on the last frame; empty before the first run is drawn. */
+  readonly hudRects: readonly CosmicAssaultTestRect[];
 }
 
 interface CosmicAssaultTestApi {
