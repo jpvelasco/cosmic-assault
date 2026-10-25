@@ -11,7 +11,8 @@ export const PLAYER = {
   dragPerFrame60: 0.98,
   maxSpeed: 350,
   invulnerableSeconds: 3,
-  fireInterval: 0.3,
+  /** Live cadence: a 0.3 s timer checked once per 1/60 s frame fires every 19 frames. */
+  fireInterval: 19 / 60,
   projectileSpeed: 450,
   inheritVelocity: 0.5,
   noseOffset: 16,
