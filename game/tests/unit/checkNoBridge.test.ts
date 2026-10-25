@@ -7,7 +7,7 @@ const { run: runGuard, tempRoot } = guardScript('check-no-bridge.mjs', 'check-no
 
 const BRIDGE = 'window.__COSMIC_ASSAULT_TEST_API__ = {}';
 const QUERY = 'console.warn(`__E2E_QUERY__ Ignoring ?seed=`)';
-const HOOK = 'e2eSeam.e2eBeforeFrame?.()';
+const HOOK = 'e2e.e2eBeforeFrame?.()';
 
 /** Writes `files` (relative path → contents) into a fresh temp build directory. */
 function writeDist(files: Record<string, string>): string {

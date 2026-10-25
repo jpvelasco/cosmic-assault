@@ -1,5 +1,4 @@
-import { e2eSeam } from './app/e2eSeam';
-import type { App } from './app/game';
+import type { App, E2eHooks } from './app/game';
 import type { World } from './sim/world';
 
 /** The message e2e specs allow in the console; the bridge is the only place it exists. */
@@ -32,13 +31,13 @@ function snapshot(app: App): CosmicAssaultTestState {
 }
 
 /** Exposes read-only game state to Playwright; main.ts imports this only in `--mode e2e` builds. */
-export function exposeTestBridge(app: App): void {
+export function exposeTestBridge(app: App, hooks: E2eHooks): void {
   window.__COSMIC_ASSAULT_TEST_API__ = {
     version: 3,
     getState: () => snapshot(app),
     crash() {
-      e2eSeam.e2eBeforeFrame = () => {
-        e2eSeam.e2eBeforeFrame = null;
+      hooks.e2eBeforeFrame = () => {
+        hooks.e2eBeforeFrame = undefined;
         throw new Error(DELIBERATE_CRASH);
       };
     },

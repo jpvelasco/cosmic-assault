@@ -20,12 +20,21 @@ import { createOverlay } from '../ui/overlay';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
 import { commandForKey, START, TO_TITLE, type Command } from './commands';
-import { e2eSeam } from './e2eSeam';
 import { passesGameOverGuard } from './gameOverGuard';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { clockSeed, runOverrides } from './seed';
 import { browserStorage, loadSettings, saveSettings } from './settings';
+
+/**
+ * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
+ * release builds carry no trace of them. The long property name is deliberate: unlike a local name it survives
+ * minification, which lets `check:no-bridge` find it.
+ */
+export interface E2eHooks {
+  /** Runs at the start of every guarded frame. */
+  e2eBeforeFrame?: (() => void) | undefined;
+}
 
 export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
 
@@ -79,7 +88,7 @@ function listen(target: EventTarget, type: string, listener: (e: Event) => void)
   };
 }
 
-export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
+export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
   const keyboard = attachKeyboard(window);
   const startKeys = createKeyLatch();
@@ -300,11 +309,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
 
   function frame(): void {
     frameId = requestAnimationFrame(frame);
-    guard.run(runFrame);
+    guard.run(guardedFrame);
   }
 
   function runFrame(): void {
-    if (import.meta.env.MODE === 'e2e') e2eSeam.e2eBeforeFrame?.();
     const now = performance.now();
     const frameMs = now - lastFrameAt;
     const frameSeconds = frameMs / 1000;
@@ -342,6 +350,15 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       redrawPending = false;
     }
   }
+
+  /** The frame to run, chosen once: a release build has no hook to look for on each frame. */
+  const guardedFrame =
+    import.meta.env.MODE === 'e2e' && e2e !== undefined
+      ? (): void => {
+          e2e.e2eBeforeFrame?.();
+          runFrame();
+        }
+      : runFrame;
 
   /** The one reduced-motion source: it turns off hit-stop, shake and flash together. */
   const syncReducedMotion = (): void => {
