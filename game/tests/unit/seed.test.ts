@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clockSeed, E2E_QUERY_MARK, parseLives, parseSeed } from '../../src/app/seed';
+import { clockSeed, E2E_QUERY_MARK, parseLives, parseQuality, parseSeed } from '../../src/app/seed';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -60,11 +60,39 @@ describe('parseLives', () => {
   });
 });
 
+describe('parseQuality', () => {
+  it('returns undefined without warning when no quality is given', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(parseQuality(null)).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['0', 0],
+    ['3', 3],
+    ['high', 0],
+    ['medium', 1],
+    ['low', 2],
+    ['lowest', 3],
+  ])('accepts %s as level %i', (raw, index) => {
+    expect(parseQuality(raw)).toBe(index);
+  });
+
+  it.each(['', '4', '-1', '1.5', 'ultra', 'HIGH', ' low'])('warns (not errors) and ignores %j', (raw) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error');
+    expect(parseQuality(raw)).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`?quality=${raw}: it must be an integer from 0 to 3 (or one of high, medium, low, lowest); adapting to frame time instead`));
+    expect(error).not.toHaveBeenCalled();
+  });
+});
+
 describe('e2e query warnings', () => {
   // scripts/check-no-bridge.mjs proves the release build drops this parsing by looking for the mark.
   it.each([
     ['seed', parseSeed],
     ['lives', parseLives],
+    ['quality', parseQuality],
   ])('carry the release-build mark for ?%s=', (_name, parse) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     parse('bad');

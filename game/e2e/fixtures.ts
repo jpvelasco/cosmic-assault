@@ -32,12 +32,15 @@ export const BUILD_LABEL = /^preview · (local|[0-9a-f]{7}) · \d{4}-\d{2}-\d{2}
 export interface GameQuery {
   readonly seed?: number;
   readonly lives?: number;
+  /** A level index (0-3) or name to pin; without it the quality adapts to frame time. */
+  readonly quality?: string;
 }
 
 /** Opens the e2e build (seed E2E_SEED unless overridden) and waits for the test bridge, which loads after an `import()`. */
-export async function openGame(page: Page, { seed = E2E_SEED, lives }: GameQuery = {}): Promise<void> {
+export async function openGame(page: Page, { seed = E2E_SEED, lives, quality }: GameQuery = {}): Promise<void> {
   const query = new URLSearchParams({ seed: String(seed) });
   if (lives !== undefined) query.set('lives', String(lives));
+  if (quality !== undefined) query.set('quality', quality);
   await page.goto(`/?${query.toString()}`);
   await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
 }

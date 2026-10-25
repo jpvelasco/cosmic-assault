@@ -29,13 +29,20 @@ export default defineConfig({
     // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts'],
       use: desktopChrome,
     },
     {
       name: 'mobile-landscape',
       testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts'],
       use: { ...devices['Pixel 5 landscape'] },
+    },
+    // Report-only frame times under a CPU slowdown. `npm run test:e2e` leaves this project out; run it with `npm run test:perf`.
+    {
+      name: 'perf',
+      testMatch: '**/perf.spec.ts',
+      retries: 0,
+      use: desktopChrome,
     },
     // The release build has no bridge; this only proves it boots cleanly without one.
     {

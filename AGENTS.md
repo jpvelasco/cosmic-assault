@@ -44,7 +44,10 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    (Playwright against the e2e build, plus a smoke test of the release build)
    from `game/`; install Chromium first with `npx playwright install chromium`.
    Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
-   4318 (release), clear of Vite's default preview port. For changes to
+   4318 (release), clear of Vite's default preview port. `npm run test:perf`
+   (the report-only `perf` project: 4x CPU slowdown, writes
+   `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
+   non-required `perf` job. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's

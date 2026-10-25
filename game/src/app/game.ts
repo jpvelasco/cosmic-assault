@@ -3,6 +3,7 @@ import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
 import type { CornerBox, HudRect } from '../render/hud';
+import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
@@ -13,6 +14,7 @@ import { createOverlay } from '../ui/overlay';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { commandForKey, START, TO_TITLE, type Command } from './commands';
 import { passesGameOverGuard } from './gameOverGuard';
+import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { clockSeed, runOverrides } from './seed';
 
@@ -28,6 +30,10 @@ export interface App {
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
+  /** The quality level in force: its index in QUALITY_LEVELS and its settings. */
+  readonly quality: { readonly index: number; readonly level: QualityLevel };
+  /** Frame times of the current run, less its first 3 s. */
+  readonly frameStats: FrameSummary;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -55,9 +61,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const safeArea = createSafeAreaProbe(root);
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
+  const scaler = new QualityScaler();
+  const monitor = new FrameMonitor();
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const overrides = runOverrides();
+  if (overrides.quality !== undefined) scaler.pin(overrides.quality);
   const button = (command: Command) => (): void => {
     applyCommand(command, performance.now());
   };
@@ -75,6 +84,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   let frameId = 0;
   /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
   let pauseCorner: CornerBox | null = null;
+
+  /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
+  function applyQuality(): void {
+    renderer.setQuality(scaler.level);
+    document.body.classList.toggle('lite', scaler.index >= LITE_FROM_INDEX);
+  }
 
   function syncView(): void {
     overlay.update({ mode, practiceLevel, score: world?.score ?? 0 });
@@ -126,6 +141,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     loop.reset();
     hitStop.clear();
     renderer.reset();
+    monitor.reset();
     setMode('playing');
   }
 
@@ -197,7 +213,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   function frame(): void {
     frameId = requestAnimationFrame(frame);
     const now = performance.now();
-    const frameSeconds = (now - lastFrameAt) / 1000;
+    const frameMs = now - lastFrameAt;
+    const frameSeconds = frameMs / 1000;
     lastFrameAt = now;
     applyPendingResize();
     for (const code of keyboard.drainPressed()) {
@@ -211,6 +228,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
     const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
     if (mode === 'playing') {
+      monitor.sample(frameMs);
+      const levelBefore = scaler.index;
+      scaler.sample(frameMs);
+      if (scaler.index !== levelBefore) applyQuality();
       const frozen = hitStop.frozen;
       stepWorld(world, frameSeconds, now);
       renderer.advance(visualSeconds, world, frozen);
@@ -231,6 +252,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     renderer.effects.reducedMotion = reducedMotion.matches;
   };
   syncReducedMotion();
+  applyQuality();
   const markResize = (): void => {
     resizePending = true;
   };
@@ -264,6 +286,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     get drawCount() {
       return renderer.drawCount;
     },
+    get quality() {
+      return { index: scaler.index, level: scaler.level };
+    },
+    get frameStats() {
+      return monitor.summary();
+    },
     start,
     pause,
     resume,
@@ -276,6 +304,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       overlay.dispose();
       safeArea.dispose();
       renderer.dispose();
+      document.body.classList.remove('lite');
     },
   };
 }

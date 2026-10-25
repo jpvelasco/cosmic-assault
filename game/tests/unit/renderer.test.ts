@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REBAKE_DELAY_MS } from '../../src/render/layout';
 import { DRIFT } from '../../src/render/palette';
 import { ParticlePool } from '../../src/render/particles';
+import { QUALITY_LEVELS } from '../../src/render/quality';
 import { blinkHidden, createRenderer, type Renderer } from '../../src/render/renderer';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
@@ -16,6 +17,8 @@ interface DrawCall {
   /** The transform's x and y offset when the image was drawn. */
   readonly e: number;
   readonly f: number;
+  /** The globalAlpha in force. */
+  readonly alpha: number;
 }
 
 interface FakeCanvas {
@@ -23,6 +26,8 @@ interface FakeCanvas {
   height: number;
   readonly style: Record<string, string>;
   readonly draws: DrawCall[];
+  /** Arcs begun so far; the stars are the only thing drawn as arcs in the stub scene. */
+  arcs: number;
   getContext(kind: string): unknown;
 }
 
@@ -31,6 +36,8 @@ function fakeCanvas(): FakeCanvas {
   const draws: DrawCall[] = [];
   let e = 0;
   let f = 0;
+  let alpha = 1;
+  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, arcs: 0, getContext: () => ctx };
   const gradient = { addColorStop: () => undefined };
   const ctx = new Proxy(
     {},
@@ -43,7 +50,9 @@ function fakeCanvas(): FakeCanvas {
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, e, f });
+            return (image: unknown) => draws.push({ image, e, f, alpha });
+          case 'arc':
+            return () => fake.arcs++;
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
@@ -53,10 +62,13 @@ function fakeCanvas(): FakeCanvas {
             return () => undefined;
         }
       },
-      set: () => true,
+      set: (_target, name, value) => {
+        if (name === 'globalAlpha') alpha = value as number;
+        return true;
+      },
     },
   );
-  return { width: 0, height: 0, style: {}, draws, getContext: () => ctx };
+  return fake;
 }
 
 interface Stub {
@@ -223,6 +235,84 @@ describe('createRenderer', () => {
     renderer.draw(world, 1);
     renderer.draw(world, 1);
     expect(renderer.drawCount).toBe(2);
+  });
+
+  describe('setQuality', () => {
+    const [high, , low, lowest] = QUALITY_LEVELS as [(typeof QUALITY_LEVELS)[number], unknown, (typeof QUALITY_LEVELS)[number], (typeof QUALITY_LEVELS)[number]];
+
+    it('resizes the particle pool to the level', () => {
+      renderer.setQuality(lowest);
+      expect(particles.capacity).toBe(60);
+      renderer.setQuality(high);
+      expect(particles.capacity).toBe(400);
+    });
+
+    it('caps the backing store at the level, re-baking after the debounce rather than per frame', () => {
+      vi.stubGlobal('devicePixelRatio', 2);
+      renderer.resize(1280, 720, FIELD);
+      expect(canvas.width).toBe(2560);
+      const setScale = vi.spyOn(baker, 'setScale');
+
+      renderer.setQuality(low);
+      expect(canvas.width).toBe(1600);
+      expect(canvas.height).toBe(900);
+      expect(canvas.style['width']).toBe('1280px');
+      expect(setScale).not.toHaveBeenCalled();
+      renderer.draw(stubWorld().world, 1);
+      expect(setScale).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(REBAKE_DELAY_MS);
+      expect(setScale).toHaveBeenCalledExactlyOnceWith(1, 1.25);
+      expect(renderer.consumeRedrawRequest()).toBe(true);
+    });
+
+    it('leaves the canvas alone when the cap does not change the ratio', () => {
+      renderer.resize(1280, 720, FIELD);
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.setQuality(lowest);
+      vi.advanceTimersByTime(REBAKE_DELAY_MS * 2);
+      expect(setScale).not.toHaveBeenCalled();
+      expect(renderer.consumeRedrawRequest()).toBe(false);
+    });
+
+    it('applies the cap to the first resize after it is set', () => {
+      vi.stubGlobal('devicePixelRatio', 3);
+      renderer.setQuality(lowest);
+      renderer.resize(1280, 720, FIELD);
+      expect(canvas.width).toBe(1280);
+    });
+
+    it('scales the glow alpha, never touching the other sprites', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const shipGlow = baker.glow(DRIFT.ship[1], 64).canvas;
+      drawFrame(world, 1);
+      expect(drawsOf(shipGlow).map((call) => call.alpha)).toEqual([0.3]);
+      renderer.setQuality(lowest);
+      drawFrame(world, 1);
+      expect(drawsOf(shipGlow).map((call) => call.alpha)).toEqual([0.3 * 0.4]);
+    });
+
+    it('draws the vignette only where the level asks for it', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      drawFrame(world, 1);
+      const withVignette = canvas.draws.length;
+      renderer.setQuality(low);
+      drawFrame(world, 1);
+      expect(canvas.draws.length).toBe(withVignette - 1);
+    });
+
+    it('draws fewer stars at a lower level', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      renderer.draw(world, 1);
+      const full = canvas.arcs;
+      canvas.arcs = 0;
+      renderer.setQuality(lowest);
+      renderer.draw(world, 1);
+      expect(canvas.arcs).toBeLessThan(full);
+    });
   });
 
   it('dispose() cancels a pending re-bake and frees every sprite and particle', () => {

@@ -8,6 +8,8 @@ export interface StarLayers {
   draw(ctx: CanvasRenderingContext2D, time: number): void;
   /** Reseeds the layers for a new field so stars fill it and keep their on-screen density. */
   resize(field: Field): void;
+  /** Reseeds with `scale` times the usual star count; stars already placed move only if the scale changed. */
+  setCountScale(scale: number): void;
 }
 
 export interface Star {
@@ -75,7 +77,8 @@ export function seedStars(seed: number, countScale: number, field: Field): Star[
   return stars;
 }
 
-export function createStarLayers(seed: number, countScale: number): StarLayers {
+export function createStarLayers(seed: number, initialScale: number): StarLayers {
+  let countScale = initialScale;
   let field: Field | null = null;
   let stars: Star[] = [];
   return {
@@ -95,6 +98,11 @@ export function createStarLayers(seed: number, countScale: number): StarLayers {
     resize(next) {
       field = next;
       stars = seedStars(seed, countScale, next);
+    },
+    setCountScale(scale) {
+      if (scale === countScale) return;
+      countScale = scale;
+      if (field !== null) stars = seedStars(seed, countScale, field);
     },
   };
 }

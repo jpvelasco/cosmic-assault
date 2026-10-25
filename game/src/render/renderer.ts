@@ -12,6 +12,7 @@ import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layo
 import { DRIFT } from './palette';
 import { createParticlePass } from './particlePass';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
+import { HIGH_QUALITY, type QualityLevel } from './quality';
 import { createSpriteBaker, type Sprite, type SpriteBaker } from './sprites';
 import { createStarLayers } from './starfieldLayers';
 
@@ -32,6 +33,11 @@ export interface Renderer {
   hasActiveParticles(): boolean;
   /** True once after a deferred re-bake, so a still frame is redrawn with it. Reading clears it. */
   consumeRedrawRequest(): boolean;
+  /**
+   * Applies a quality level: backing-store ratio, glow alpha, particle pool, star count, vignette.
+   * A changed pixel ratio re-bakes after the usual resize debounce, not on the next frame.
+   */
+  setQuality(level: QualityLevel): void;
   /** Draws the world `alpha` of the way from each entity's previous pose to its current one. */
   draw(world: World, alpha: number): void;
   /** Frees the previous run's sprites and particles; call when a new run starts. */
@@ -45,6 +51,13 @@ export interface Renderer {
   dispose(): void;
 }
 
+/** The size last given to `resize()`, kept so a quality change can lay the canvas out again. */
+interface View {
+  readonly cssWidth: number;
+  readonly cssHeight: number;
+  readonly field: Field;
+}
+
 /** Parts a caller may supply instead of the defaults, such as test doubles. */
 export interface RendererParts {
   readonly baker?: SpriteBaker;
@@ -56,7 +69,6 @@ export interface RendererParts {
  * sky dust, stars, flame flicker and bursts never line up with one another.
  */
 const RENDER_SEED = 0x57a7f1e1;
-const STAR_COUNT_SCALE = 1;
 const BLINK_HZ = 10;
 
 // Glow looks from the mockup's renderGlossy.
@@ -79,7 +91,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const baker = parts.baker ?? createSpriteBaker();
   const particles = parts.particles ?? new ParticlePool(DEFAULT_PARTICLE_CAPACITY);
   const effects = createEffects(particles, deriveSeed(RENDER_SEED, 'effects'), palette);
-  const stars = createStarLayers(deriveSeed(RENDER_SEED, 'stars'), STAR_COUNT_SCALE);
+  const stars = createStarLayers(deriveSeed(RENDER_SEED, 'stars'), HIGH_QUALITY.starScale);
   const flicker = createRng(deriveSeed(RENDER_SEED, 'flame'));
   const backdrop = createBackdrop(baker, palette, deriveSeed(RENDER_SEED, 'sky'));
   const pen = createFieldPen(ctx);
@@ -88,6 +100,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const copies = new Float64Array(6);
   const pose = { x: 0, y: 0, angle: 0 };
   let layout: Layout | null = null;
+  let view: View | null = null;
+  let quality = HIGH_QUALITY;
   let drawCount = 0;
 
   function resize(cssWidth: number, cssHeight: number, field: Field): void {
@@ -96,7 +110,13 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
         `Renderer.resize() needs positive finite sizes (got ${String(cssWidth)}×${String(cssHeight)}); wait for layout first`,
       );
     }
-    const dpr = devicePixelRatio();
+    view = { cssWidth, cssHeight, field };
+    applyView(view);
+  }
+
+  /** Sizes the canvas and layout at the pixel ratio the quality level allows, and schedules the re-bake. */
+  function applyView({ cssWidth, cssHeight, field }: View): void {
+    const dpr = devicePixelRatio(quality.dprCap);
     canvas.style.width = `${String(cssWidth)}px`;
     canvas.style.height = `${String(cssHeight)}px`;
     canvas.width = Math.round(cssWidth * dpr);
@@ -105,6 +125,13 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     stars.resize(field);
     hud.resize(cssWidth, cssHeight);
     backdrop.schedule(layout);
+  }
+
+  function setQuality(level: QualityLevel): void {
+    quality = level;
+    particles.setCapacity(level.particles);
+    stars.setCountScale(level.starScale);
+    if (view !== null && devicePixelRatio(level.dprCap) !== layout?.dpr) applyView(view);
   }
 
   /** Clears the letterbox bars, where nothing else draws but the HUD may. */
@@ -135,7 +162,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   }
 
   function drawRockGlows(world: World, alpha: number, field: Field): void {
-    ctx.globalAlpha = ROCK_GLOW_ALPHA;
+    ctx.globalAlpha = ROCK_GLOW_ALPHA * quality.glow;
     for (const a of world.asteroids) {
       const reach = rockPose(a, alpha, field);
       stamp(baker.glow(palette.rockGlow, reach * 2), pose.x, pose.y, 1, 0, reach, field);
@@ -171,7 +198,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const sin = Math.sin(pose.angle);
     const radius = SHIP_GLOW_DIAMETER / 2;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = SHIP_GLOW_ALPHA;
+    ctx.globalAlpha = SHIP_GLOW_ALPHA * quality.glow;
     stamp(baker.glow(palette.ship[1], SHIP_GLOW_DIAMETER), x, y, 1, 0, radius, field);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
@@ -211,7 +238,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const width = field.width * k;
     const height = field.height * k;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(vignette, fieldX, fieldY, width, height);
+    if (quality.vignette) ctx.drawImage(vignette, fieldX, fieldY, width, height);
     if (effects.flash > 0) {
       ctx.globalAlpha = effects.flash * FLASH_ALPHA;
       ctx.fillStyle = effects.flashColor;
@@ -272,6 +299,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     consumeRedrawRequest() {
       return backdrop.consumeRebaked();
     },
+    setQuality,
     draw,
     reset: freeRun,
     effects,

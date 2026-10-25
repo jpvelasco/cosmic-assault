@@ -119,3 +119,43 @@ describe('createStarLayers', () => {
     expect(moved.calls.arcs).toBeGreaterThan(0);
   });
 });
+
+describe('createStarLayers.setCountScale', () => {
+  const countFor = (setup: (layers: ReturnType<typeof createStarLayers>) => void): number => {
+    let arcs = 0;
+    const ctx = { beginPath: () => undefined, arc: () => arcs++, fill: () => undefined } as unknown as CanvasRenderingContext2D;
+    const layers = createStarLayers(3, 1);
+    layers.resize(FIELD);
+    setup(layers);
+    layers.draw(ctx, 0);
+    return arcs;
+  };
+
+  it('reseeds a smaller field of stars at once', () => {
+    const full = countFor(() => undefined);
+    const lowest = countFor((layers) => {
+      layers.setCountScale(0.35);
+    });
+    expect(lowest).toBeLessThan(full * 0.5);
+    expect(lowest).toBeGreaterThan(0);
+  });
+
+  it('applies to the next resize when called before one', () => {
+    const layers = createStarLayers(3, 1);
+    layers.setCountScale(0.5);
+    let arcs = 0;
+    layers.resize(FIELD);
+    layers.draw({ beginPath: () => undefined, arc: () => arcs++, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
+    expect(arcs).toBe(seedStars(3, 0.5, FIELD).length);
+  });
+
+  it('keeps stars where they are when the scale does not change', () => {
+    const layers = createStarLayers(3, 1);
+    layers.resize(FIELD);
+    layers.step(1, 100, 0);
+    layers.setCountScale(1);
+    const xs: number[] = [];
+    layers.draw({ beginPath: () => undefined, arc: (x: number) => xs.push(x), fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
+    expect(xs).not.toEqual(seedStars(3, 1, FIELD).map((s) => s.x));
+  });
+});

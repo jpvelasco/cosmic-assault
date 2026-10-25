@@ -30,6 +30,10 @@ interface CosmicAssaultTestState {
   readonly hudRects: readonly CosmicAssaultTestRect[];
   /** Frames the renderer has drawn; a still screen (paused, game over) draws only when something changes. */
   readonly drawCount: number;
+  /** The quality level in force: index into the ladder (0 high … 3 lowest) and its name. */
+  readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest' };
+  /** Frame times of the current run in ms, less its first 3 s; zeros until a run is past that. */
+  readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
 }
 
 interface CosmicAssaultTestApi {
