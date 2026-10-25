@@ -1,0 +1,26 @@
+# Octopus Review: AI review comments on pull requests.
+# The action sends the PR diff to https://octopus-review.ai using this job's
+# GITHUB_TOKEN (contents: read, pull-requests: write). It runs on
+# pull_request, not pull_request_target, so fork PRs get a read-only token
+# and no secrets. Delete this file to opt out.
+name: Octopus Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: octopus-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: octopusreview/action@c7156c0dc465c20e8b06da84b92b64f9ae8c7c36
