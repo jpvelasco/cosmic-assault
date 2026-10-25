@@ -5,7 +5,10 @@ const BASE_SIZE_PX = 120;
 const HANDLE_SIZE_PX = 50;
 const FIRE_SIZE_PX = 80;
 const MAX_HANDLE_TRAVEL_PX = (BASE_SIZE_PX - HANDLE_SIZE_PX) / 2;
-const INSET = (side: 'left' | 'right' | 'bottom'): string => `max(16px, env(safe-area-inset-${side}))`;
+const inset = (side: 'left' | 'right' | 'bottom', px: number): string =>
+  `max(${String(px)}px, env(safe-area-inset-${side}))`;
+const TOUCH_CSS =
+  'pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent';
 
 export interface TouchControls {
   /** Current drag, or null while the joystick is released. */
@@ -51,8 +54,8 @@ function trackSinglePointer(el: HTMLElement, handlers: PointerHandlers): Pointer
   const onDown = (e: PointerEvent): void => {
     if (activeId !== null) return;
     e.preventDefault();
-    activeId = e.pointerId;
     el.setPointerCapture(e.pointerId);
+    activeId = e.pointerId;
     handlers.onStart(e);
   };
   const onMove = (e: PointerEvent): void => {
@@ -83,9 +86,9 @@ function trackSinglePointer(el: HTMLElement, handlers: PointerHandlers): Pointer
   };
 }
 
-const BASE_CSS = `position:absolute;left:${INSET('left')};bottom:${INSET('bottom')};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;background:rgba(57,255,20,0.1);border:2px solid rgba(57,255,20,0.5);pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none`;
+const BASE_CSS = `position:absolute;left:${inset('left', 35)};bottom:${inset('bottom', 35)};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;background:rgba(57,255,20,0.1);border:2px solid rgba(57,255,20,0.5);${TOUCH_CSS}`;
 const HANDLE_CSS = `position:absolute;left:50%;top:50%;width:${String(HANDLE_SIZE_PX)}px;height:${String(HANDLE_SIZE_PX)}px;margin:-${String(HANDLE_SIZE_PX / 2)}px 0 0 -${String(HANDLE_SIZE_PX / 2)}px;border-radius:50%;background:rgba(57,255,20,0.5);pointer-events:none`;
-const FIRE_CSS = `position:absolute;right:${INSET('right')};bottom:${INSET('bottom')};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;background:rgba(255,0,255,0.5);border:2px solid rgba(255,0,255,0.8);color:#fff;font:bold 14px sans-serif;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none`;
+const FIRE_CSS = `position:absolute;right:${inset('right', 20)};bottom:${inset('bottom', 20)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;background:rgba(255,0,255,0.5);border:2px solid rgba(255,0,255,0.8);color:#fff;font:bold 16px sans-serif;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
 const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:1000';
 
 export function attachTouchControls(root: HTMLElement): TouchControls {

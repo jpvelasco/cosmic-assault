@@ -42,7 +42,6 @@ describe('controlsFromKeys', () => {
     expect([...GAME_KEY_CODES].sort()).toEqual(
       ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'KeyA', 'KeyD', 'KeyW', 'Space', 'ShiftLeft', 'ShiftRight'].sort(),
     );
-    expect(GAME_KEY_CODES.has('KeyD')).toBe(true);
   });
 });
 
@@ -75,6 +74,9 @@ describe('stickFromOffset', () => {
 interface FakeEvent {
   code: string;
   repeat: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
   prevented: boolean;
   preventDefault(): void;
 }
@@ -97,10 +99,14 @@ function fakeTarget() {
   };
 }
 
-function ev(code: string, repeat = false): FakeEvent {
+function ev(code: string, repeat = false, mods: Partial<Pick<FakeEvent, 'ctrlKey' | 'metaKey' | 'altKey'>> = {}): FakeEvent {
   return {
     code,
     repeat,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    ...mods,
     prevented: false,
     preventDefault() {
       this.prevented = true;
@@ -149,6 +155,39 @@ describe('attachKeyboard', () => {
     expect(space.prevented).toBe(true);
     expect(other.prevented).toBe(false);
   });
+
+  it.each([
+    ['KeyA', { ctrlKey: true }],
+    ['KeyD', { metaKey: true }],
+    ['ArrowLeft', { altKey: true }],
+  ] as const)('ignores %s chorded with a modifier', (code, mods) => {
+    const target = fakeTarget();
+    const kb = attachKeyboard(target);
+    const chord = ev(code, false, mods);
+    target.fire('keydown', chord);
+    expect(chord.prevented).toBe(false);
+    expect(kb.held.size).toBe(0);
+    expect(kb.drainPressed()).toEqual([]);
+  });
+
+  it('releases a held key on keyup even if a modifier is down', () => {
+    const target = fakeTarget();
+    const kb = attachKeyboard(target);
+    target.fire('keydown', ev('KeyA'));
+    target.fire('keyup', ev('KeyA', false, { metaKey: true }));
+    expect(kb.held.has('KeyA')).toBe(false);
+  });
+
+  it.each(['MetaLeft', 'MetaRight', 'ControlLeft', 'ControlRight'])(
+    'clears held keys when %s is released (swallowed keyups)',
+    (code) => {
+      const target = fakeTarget();
+      const kb = attachKeyboard(target);
+      target.fire('keydown', ev('KeyA'));
+      target.fire('keyup', ev(code));
+      expect(kb.held.size).toBe(0);
+    },
+  );
 
   it('clears held and pending pressed codes on blur', () => {
     const target = fakeTarget();

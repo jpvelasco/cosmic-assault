@@ -1,6 +1,6 @@
 import { GAME_KEY_CODES } from './keyboard';
 
-type KeyEventLike = Pick<KeyboardEvent, 'code' | 'repeat' | 'preventDefault'>;
+type KeyEventLike = Pick<KeyboardEvent, 'code' | 'repeat' | 'ctrlKey' | 'metaKey' | 'altKey' | 'preventDefault'>;
 
 /** The slice of `Window` the adapter needs, so tests can supply a fake. */
 export interface KeyboardTarget {
@@ -18,16 +18,21 @@ export interface KeyboardSource {
   dispose(): void;
 }
 
+/** Releasing these can swallow the keyups of keys pressed while they were down (macOS Cmd). */
+const MODIFIER_CODES: ReadonlySet<string> = new Set(['MetaLeft', 'MetaRight', 'ControlLeft', 'ControlRight']);
+
 export function attachKeyboard(target: KeyboardTarget): KeyboardSource {
   const held = new Set<string>();
   let pressed: string[] = [];
 
   const onKeyDown = (e: KeyEventLike): void => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (GAME_KEY_CODES.has(e.code)) e.preventDefault();
     held.add(e.code);
     if (!e.repeat) pressed.push(e.code);
   };
   const onKeyUp = (e: KeyEventLike): void => {
+    if (MODIFIER_CODES.has(e.code)) held.clear();
     if (GAME_KEY_CODES.has(e.code)) e.preventDefault();
     held.delete(e.code);
   };
