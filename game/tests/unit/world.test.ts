@@ -4,6 +4,7 @@ import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
+import type { Ship } from '../../src/sim/ship';
 import { World, type WorldOptions } from '../../src/sim/world';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -51,6 +52,23 @@ function stepUntil(w: World, controls: Controls, done: (events: readonly SimEven
     }
   }
   throw new Error(`condition not reached within ${String(maxSteps)} steps`);
+}
+
+/** Idles until the ship's invulnerability is about to end, then runs that step with `controls`. */
+function stepIntoVulnerability(w: World, controls: Controls): readonly SimEvent[] {
+  while (w.ship.invulnerableFor - STEP_SECONDS > 0) {
+    w.step(STEP_SECONDS, NO_CONTROLS);
+  }
+  return w.step(STEP_SECONDS, controls);
+}
+
+/** Tags each asteroid sitting exactly at one of the named points, in list order. */
+function tagsAt(w: World, points: Readonly<Record<string, { x: number; y: number }>>): string[] {
+  return w.asteroids.flatMap((a) =>
+    Object.entries(points)
+      .filter(([, p]) => p.x === a.x && p.y === a.y)
+      .map(([tag]) => tag),
+  );
 }
 
 function ofType<T extends SimEvent['type']>(events: readonly SimEvent[], type: T) {
@@ -113,6 +131,26 @@ describe('World start of a run', () => {
 
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])('rejects field width %s with a RangeError', (width) => {
     expect(() => new World({ seed: 1, field: { width, height: 720 } })).toThrow(RangeError);
+  });
+
+  it.each([
+    ['x', { x: Number.NaN, y: 0, angle: 0 }],
+    ['angle', { x: 0, y: 0, angle: Number.POSITIVE_INFINITY }],
+  ])('rejects a non-finite initialShip %s with a RangeError', (_field, initialShip) => {
+    expect(() => world({ initialShip })).toThrow(RangeError);
+    expect(() => world({ initialShip })).toThrow(/WorldOptions\.initialShip/);
+  });
+
+  it.each([
+    ['size 4', { ...still(0, 0, 0), size: 4 as AsteroidSize }],
+    ['size 1.5', { ...still(0, 0, 0), size: 1.5 as AsteroidSize }],
+    ['NaN y', still(0, Number.NaN, 0)],
+    ['infinite angle', { ...still(0, 0, 0), angle: Number.NEGATIVE_INFINITY }],
+    ['NaN speedMultiplier', { ...still(0, 0, 0), speedMultiplier: Number.NaN }],
+  ])('rejects an initial asteroid with %s with a RangeError', (_case, bad) => {
+    const initialAsteroids = [still(0, 0, 1), bad];
+    expect(() => world({ initialAsteroids })).toThrow(RangeError);
+    expect(() => world({ initialAsteroids })).toThrow(/WorldOptions\.initialAsteroids\[1\]/);
   });
 
   it('exposes read-only state', () => {
@@ -184,8 +222,8 @@ describe('World.step', () => {
 
 describe('World determinism', () => {
   it('replays the same seed and inputs identically', () => {
-    const a = world({ seed: 42 });
-    const b = world({ seed: 42 });
+    const a = world({ seed: 2 });
+    const b = world({ seed: 2 });
     const logA = runScript(a, 5);
     const logB = runScript(b, 5);
     expect(logA.length).toBeGreaterThan(0);
@@ -198,7 +236,7 @@ describe('World determinism', () => {
   });
 
   it('gives a different run for a different seed', () => {
-    expect(runScript(world({ seed: 43 }), 5)).not.toEqual(runScript(world({ seed: 42 }), 5));
+    expect(runScript(world({ seed: 3 }), 5)).not.toEqual(runScript(world({ seed: 2 }), 5));
   });
 });
 
@@ -279,6 +317,53 @@ describe('World splitting and removal', () => {
   });
 });
 
+describe('World overlap order', () => {
+  // The World's hash cells are 120 wide, so x = 240 is a cell boundary: the asteroid in the left
+  // cell is visited first even though it has the higher index.
+  it('the ship takes the highest-indexed overlap even when the hash visits it first', () => {
+    const w = world({ initialShip: { x: 240, y: 60, angle: 0 }, initialAsteroids: [still(262, 60, 3), still(218, 60, 3)] });
+    const [right, left] = w.asteroids;
+    const events = stepIntoVulnerability(w, NO_CONTROLS);
+    expect(ofType(events, 'shipHit')).toHaveLength(1);
+    expect(w.asteroids).toContain(right);
+    expect(w.asteroids).not.toContain(left);
+  });
+
+  it('a projectile takes the highest-indexed overlap even when the hash visits it first', () => {
+    const w = world({
+      initialShip: { x: 240, y: 300, angle: -Math.PI / 2 },
+      initialAsteroids: [still(256, 280, 3), still(224, 280, 3)],
+    });
+    const events = w.step(STEP_SECONDS, FIRE);
+    expect(ofType(events, 'asteroidDestroyed')).toEqual([
+      { type: 'asteroidDestroyed', x: 224, y: 280, size: 3, points: ASTEROID.scores[3] },
+    ]);
+  });
+
+  it('scans projectiles from last to first, so the newer shot claims a shared asteroid', () => {
+    const w = world({ initialShip: SHOOTER, initialAsteroids: [still(225, 360, 3)] });
+    // Weapon upgrades arrive after M1; set the tier directly to get a two-shot volley.
+    (w.ship as Ship).tier = 2;
+    const events = w.step(STEP_SECONDS, FIRE);
+    expect(ofType(events, 'shot')).toHaveLength(2);
+    expect(ofType(events, 'asteroidDestroyed')).toHaveLength(1);
+    expect(w.projectiles).toHaveLength(1);
+    expect(w.projectiles[0]?.vy).toBeLessThan(0);
+  });
+
+  it('appends children in break order: the ship hit first, then projectile hits', () => {
+    const shipTarget = { x: 270, y: 300 };
+    const shotTarget = { x: 336, y: 300 };
+    const w = world({
+      initialShip: PARKED,
+      initialAsteroids: [still(shotTarget.x, shotTarget.y, 2), still(shipTarget.x, shipTarget.y, 1)],
+    });
+    const events = stepIntoVulnerability(w, FIRE);
+    expect(events.map((e) => e.type).filter((t) => t !== 'shot')).toEqual(['shipHit', 'asteroidDestroyed']);
+    expect(tagsAt(w, { ship: shipTarget, shot: shotTarget })).toEqual(['ship', 'ship', 'shot', 'shot']);
+  });
+});
+
 describe('World lives', () => {
   it('ignores collisions while the ship is invulnerable', () => {
     const w = world({ initialAsteroids: [still(CENTRE.x, CENTRE.y, 0)] });
@@ -302,16 +387,26 @@ describe('World lives', () => {
 
   it('does not let a projectile score an asteroid the ship already broke this step', () => {
     const w = world({ initialShip: PARKED, initialAsteroids: [still(330, 300, 0)] });
-    const firstVulnerableStep = (): boolean => w.ship.invulnerableFor - STEP_SECONDS <= 0;
-    let events: readonly SimEvent[] = [];
-    while (ofType(events, 'shipHit').length === 0) {
-      events = w.step(STEP_SECONDS, firstVulnerableStep() ? FIRE : NO_CONTROLS);
-    }
+    const events = stepIntoVulnerability(w, FIRE);
+    expect(ofType(events, 'shipHit')).toHaveLength(1);
     expect(ofType(events, 'shot')).toHaveLength(1);
     expect(ofType(events, 'asteroidDestroyed')).toHaveLength(0);
     expect(w.score).toBe(0);
     expect(w.projectiles).toHaveLength(1);
     expect(w.asteroids.filter((a) => a.x === 330 && a.y === 300).map((a) => a.size)).toEqual([1, 1]);
+  });
+
+  it('skips projectile hits on the step that ends the run', () => {
+    const tiny = still(CENTRE.x, CENTRE.y, 3);
+    const target = still(CENTRE.x, CENTRE.y - 30, 3);
+    const w = world({ initialAsteroids: [tiny, tiny, tiny, target] });
+    stepIntoVulnerability(w, NO_CONTROLS);
+    stepIntoVulnerability(w, NO_CONTROLS);
+    expect(w.lives).toBe(1);
+    const events = stepIntoVulnerability(w, FIRE);
+    expect(events.map((e) => e.type)).toEqual(['shot', 'shipHit', 'gameOver']);
+    expect(w.score).toBe(0);
+    expect(tagsAt(w, { target })).toEqual(['target']);
   });
 
   it('takes the last-indexed overlapping asteroid, one hit per step', () => {

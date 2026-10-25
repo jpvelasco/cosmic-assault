@@ -51,6 +51,8 @@ export function createAsteroid(
   size: AsteroidSize,
   angle: number,
   speedMultiplier: number,
+  /** Draws only the vertex count and radii, so outline changes never shift gameplay draws. */
+  shapeRng: Rng = rng,
 ): Asteroid {
   const rotation = rng.range(0, TWO_PI);
   const spin = rng.range(-ASTEROID.spinMax, ASTEROID.spinMax);
@@ -66,7 +68,7 @@ export function createAsteroid(
     spin,
     size,
     radius,
-    vertices: createVertices(rng, radius),
+    vertices: createVertices(shapeRng, radius),
   };
 }
 
@@ -77,7 +79,7 @@ export function stepAsteroid(a: Asteroid, dt: number, field: Field): void {
   wrapPosition(a, field);
 }
 
-export function splitAsteroid(rng: Rng, a: Asteroid): readonly Asteroid[] {
+export function splitAsteroid(rng: Rng, a: Asteroid, shapeRng: Rng = rng): readonly Asteroid[] {
   if (a.size === TINY) {
     return [];
   }
@@ -87,7 +89,7 @@ export function splitAsteroid(rng: Rng, a: Asteroid): readonly Asteroid[] {
   for (let i = 0; i < 2; i++) {
     const angle = a.rotation + rng.range(-spread, spread);
     const boost = 1 + rng.range(0, ASTEROID.childSpeedBoostMax);
-    children.push(createAsteroid(rng, a.x, a.y, childSize, angle, boost));
+    children.push(createAsteroid(rng, a.x, a.y, childSize, angle, boost, shapeRng));
   }
   return children;
 }
@@ -146,6 +148,7 @@ export function spawnPracticeAsteroid(
   field: Field,
   ship: Ship | null,
   awayFromShip: boolean,
+  shapeRng: Rng = rng,
 ): Asteroid {
   const point = pickEdgePoint(rng, field);
   if (awayFromShip && ship !== null) {
@@ -158,5 +161,5 @@ export function spawnPracticeAsteroid(
   const targetY = field.height * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
   const angle = Math.atan2(targetY - point.y, targetX - point.x) + rng.range(-AIM_JITTER, AIM_JITTER);
   const size = sizeForLevel(rng, level);
-  return createAsteroid(rng, point.x, point.y, size, angle, practiceSettings(level).speedMultiplier);
+  return createAsteroid(rng, point.x, point.y, size, angle, practiceSettings(level).speedMultiplier, shapeRng);
 }

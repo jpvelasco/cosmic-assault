@@ -51,6 +51,7 @@ const UINT32_MAX = 0xffffffff;
 /** Absorbs float residue from summing dt steps so the timer fires on the step its interval ends. */
 const SPAWN_EPSILON = 1e-9;
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
+const ASTEROID_SIZES: readonly AsteroidSize[] = [0, 1, 2, 3];
 
 function assertSeed(seed: number): void {
   if (!(Number.isInteger(seed) && seed >= 0 && seed <= UINT32_MAX)) {
@@ -85,6 +86,28 @@ function assertDt(dt: number): void {
   }
 }
 
+function assertFinite(owner: string, values: Readonly<Record<string, number>>): void {
+  for (const [name, value] of Object.entries(values)) {
+    if (!Number.isFinite(value)) {
+      throw new RangeError(
+        `${owner}.${name} must be a finite number (got ${String(value)}); pass a real position, angle or multiplier`,
+      );
+    }
+  }
+}
+
+function assertShipPlacement(p: ShipPlacement): void {
+  assertFinite('WorldOptions.initialShip', { x: p.x, y: p.y, angle: p.angle });
+}
+
+function assertAsteroidPlacement(p: AsteroidPlacement, index: number): void {
+  const owner = `WorldOptions.initialAsteroids[${String(index)}]`;
+  assertFinite(owner, { x: p.x, y: p.y, angle: p.angle, speedMultiplier: p.speedMultiplier });
+  if (!ASTEROID_SIZES.includes(p.size)) {
+    throw new RangeError(`${owner}.size must be 0, 1, 2 or 3 (got ${String(p.size)}); 0 is large, 3 is tiny`);
+  }
+}
+
 /** Keeps the items whose index is not flagged, in order, without allocating. */
 function removeFlagged(items: unknown[], flagged: readonly boolean[]): void {
   let kept = 0;
@@ -103,13 +126,18 @@ function resetFlags(flags: boolean[], length: number): void {
 
 /**
  * The deterministic game: same seed and same `step` inputs always give the same run.
- * Each concern draws from its own RNG stream ('spawn', 'split', 'shape').
+ * Randomness comes from three streams derived from the seed:
+ * - 'spawn': practice spawns and the rotation, spin and speed of `initialAsteroids`;
+ * - 'split': the angles and speeds of split children;
+ * - 'shape': asteroid outlines (vertex count and radii) on every creation path, so
+ *   outline changes never shift gameplay draws.
  */
 export class World {
   private readonly level: number;
   private readonly practice: PracticeSettings;
   private readonly spawnRng: Rng;
   private readonly splitRng: Rng;
+  private readonly shapeRng: Rng;
   private currentField: Field;
   private readonly shipState: Ship;
   private readonly asteroidList: Asteroid[] = [];
@@ -137,27 +165,33 @@ export class World {
     this.currentField = opts.field;
     this.spawnRng = createRng(deriveSeed(opts.seed, 'spawn'));
     this.splitRng = createRng(deriveSeed(opts.seed, 'split'));
+    this.shapeRng = createRng(deriveSeed(opts.seed, 'shape'));
     this.shipState = World.placeShip(opts.field, opts.initialShip);
     if (opts.initialAsteroids === undefined) {
       for (let i = 0; i < START_ASTEROIDS; i++) {
         this.spawnAsteroid(true);
       }
     } else {
-      const shapeRng = createRng(deriveSeed(opts.seed, 'shape'));
-      for (const a of opts.initialAsteroids) {
-        this.asteroidList.push(createAsteroid(shapeRng, a.x, a.y, a.size, a.angle, a.speedMultiplier));
-      }
+      opts.initialAsteroids.forEach((a, i) => {
+        assertAsteroidPlacement(a, i);
+        this.asteroidList.push(
+          createAsteroid(this.spawnRng, a.x, a.y, a.size, a.angle, a.speedMultiplier, this.shapeRng),
+        );
+      });
     }
   }
 
+  /** Live view, mutated in place by `step()`; copy it if you keep it across steps. */
   get ship(): Readonly<Ship> {
     return this.shipState;
   }
 
+  /** Live view, mutated in place by `step()`; copy it if you keep it across steps. */
   get asteroids(): readonly Readonly<Asteroid>[] {
     return this.asteroidList;
   }
 
+  /** Live view, mutated in place by `step()`; copy it if you keep it across steps. */
   get projectiles(): readonly Readonly<Projectile>[] {
     return this.projectileList;
   }
@@ -222,6 +256,7 @@ export class World {
     if (placement === undefined) {
       return createShip(field.width / 2, field.height / 2);
     }
+    assertShipPlacement(placement);
     const ship = createShip(placement.x, placement.y);
     ship.angle = placement.angle;
     return ship;
@@ -319,7 +354,7 @@ export class World {
   /** Removes broken asteroids and appends their children in break order, like the live splice-and-push. */
   private breakAsteroids(): void {
     for (const index of this.broken) {
-      this.children.push(...splitAsteroid(this.splitRng, this.asteroidList[index] as Asteroid));
+      this.children.push(...splitAsteroid(this.splitRng, this.asteroidList[index] as Asteroid, this.shapeRng));
     }
     removeFlagged(this.asteroidList, this.brokenFlags);
     this.asteroidList.push(...this.children);
@@ -340,7 +375,7 @@ export class World {
 
   private spawnAsteroid(awayFromShip: boolean): void {
     this.asteroidList.push(
-      spawnPracticeAsteroid(this.spawnRng, this.level, this.currentField, this.shipState, awayFromShip),
+      spawnPracticeAsteroid(this.spawnRng, this.level, this.currentField, this.shipState, awayFromShip, this.shapeRng),
     );
   }
 }

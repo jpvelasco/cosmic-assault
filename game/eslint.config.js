@@ -20,7 +20,17 @@ export default defineConfig(
     rules: {
       'no-restricted-globals': [
         'error',
-        ...['window', 'document', 'performance', 'requestAnimationFrame', 'Date'].map((name) => ({
+        ...[
+          'window',
+          'document',
+          'performance',
+          'requestAnimationFrame',
+          'Date',
+          'globalThis',
+          'self',
+          'setTimeout',
+          'setInterval',
+        ].map((name) => ({
           name,
           message: SIM_PURITY_MESSAGE,
         })),

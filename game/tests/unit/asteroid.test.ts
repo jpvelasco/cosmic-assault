@@ -249,3 +249,38 @@ describe('spawnPracticeAsteroid', () => {
     expect(b).toEqual(a);
   });
 });
+
+describe('shape randomness', () => {
+  function gameplayOf(a: Asteroid): Omit<Asteroid, 'vertices'> {
+    return { x: a.x, y: a.y, vx: a.vx, vy: a.vy, rotation: a.rotation, spin: a.spin, size: a.size, radius: a.radius };
+  }
+
+  function expectShapeOnlyDiffers(make: (shapeSeed: number) => readonly Asteroid[]): void {
+    const a = make(100);
+    const b = make(200);
+    expect(a.length).toBeGreaterThan(0);
+    expect(b.map(gameplayOf)).toEqual(a.map(gameplayOf));
+    expect(b.map((x) => x.vertices)).not.toEqual(a.map((x) => x.vertices));
+    expect(make(100)).toEqual(a);
+  }
+
+  it('createAsteroid draws only vertices from shapeRng', () => {
+    expectShapeOnlyDiffers((shapeSeed) => [createAsteroid(createRng(1), 5, 6, 1, 0.4, 1.1, createRng(shapeSeed))]);
+  });
+
+  it('createAsteroid keeps vertices fixed when only the gameplay rng changes', () => {
+    const shape = (seed: number) => createAsteroid(createRng(seed), 0, 0, 2, 0, 1, createRng(9)).vertices;
+    expect(shape(2)).toEqual(shape(1));
+  });
+
+  it('splitAsteroid passes shapeRng to the children', () => {
+    const parent = createAsteroid(createRng(3), 30, 40, 0, 0, 1);
+    expectShapeOnlyDiffers((shapeSeed) => splitAsteroid(createRng(4), parent, createRng(shapeSeed)));
+  });
+
+  it('spawnPracticeAsteroid passes shapeRng to the new asteroid', () => {
+    expectShapeOnlyDiffers((shapeSeed) => [
+      spawnPracticeAsteroid(createRng(5), 6, FIELD, null, false, createRng(shapeSeed)),
+    ]);
+  });
+});
