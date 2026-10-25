@@ -3,7 +3,7 @@ import type { SimEvent } from '../sim/events';
 import { createRng, type Rng } from '../sim/rng';
 import type { World } from '../sim/world';
 import { DRIFT, type Palette } from './palette';
-import { DEFAULT_PARTICLE_CAPACITY, type ParticlePool } from './particles';
+import { DEFAULT_PARTICLE_CAPACITY, type EmitOptions, type ParticlePool } from './particles';
 
 export interface BurstSpec {
   readonly shards: number;
@@ -31,6 +31,7 @@ export interface Effects {
   reducedMotion: boolean;
 }
 
+const TAU = Math.PI * 2;
 const HIT_TINT = '#ff5a5a';
 const SMOKE_COLOR = '#5a5550';
 const FLAME_COLORS = ['#ffb347', '#ff6a3c'] as const;
@@ -49,6 +50,7 @@ const TRAIL_OFFSET = 12;
 const RING_STAGGER_SECONDS = 0.12;
 
 type Counts = Omit<BurstSpec, 'flashColor'>;
+type Writable<T> = { -readonly [K in keyof T]: T[K] };
 
 /** Asteroid bursts by size, big to tiny. */
 const ASTEROID_BURSTS: readonly [Counts, Counts, Counts, Counts] = [
@@ -58,17 +60,29 @@ const ASTEROID_BURSTS: readonly [Counts, Counts, Counts, Counts] = [
   { shards: 5, sparks: 8, rings: 1, smoke: 0, shake: 1.2, flash: 0 },
 ];
 
-const NO_BURST_COUNTS: Counts = { shards: 0, sparks: 0, rings: 0, smoke: 0, shake: 0, flash: 0 };
+const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45 };
+const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
-/** The pure event-to-burst table. `null` means the event is silent. */
-export function burstFor(event: SimEvent, palette: Palette): BurstSpec | null {
+const blankBurst = (): Writable<BurstSpec> => ({ ...SHOT_BURST, flashColor: '' });
+
+function writeBurst(into: Writable<BurstSpec>, counts: Counts, flashColor: string): BurstSpec {
+  Object.assign(into, counts);
+  into.flashColor = flashColor;
+  return into;
+}
+
+/**
+ * The pure event-to-burst table, written into `into` so a caller can reuse one spec for every event.
+ * `null` means the event is silent.
+ */
+export function burstFor(event: SimEvent, palette: Palette, into = blankBurst()): BurstSpec | null {
   switch (event.type) {
     case 'asteroidDestroyed':
-      return { ...ASTEROID_BURSTS[event.size], flashColor: palette.ring };
+      return writeBurst(into, ASTEROID_BURSTS[event.size], palette.ring);
     case 'shipHit':
-      return { shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45, flashColor: HIT_TINT };
+      return writeBurst(into, SHIP_HIT_BURST, HIT_TINT);
     case 'shot':
-      return { ...NO_BURST_COUNTS, sparks: 1, flashColor: palette.shot };
+      return writeBurst(into, SHOT_BURST, palette.shot);
     case 'gameOver':
       return null;
   }
@@ -91,41 +105,63 @@ interface Origin {
   readonly vy: number;
 }
 
+// Emit options and a heading, reused across particles: the pool reads options during emit() and keeps none.
+const shardOptions = { drag: 0.3, spin: 0, rot: 0 };
+const SPARK_OPTIONS: EmitOptions = { drag: 0.1 };
+const SMOKE_OPTIONS: EmitOptions = { drag: 0.4 };
+const TRAIL_OPTIONS: EmitOptions = { drag: 0.2 };
+const ringOptions = { delay: 0 };
+const heading = { x: 0, y: 0 };
+
+/** Points `heading` in a random direction. */
+function aimRandomly(rng: Rng): void {
+  const a = rng.range(0, TAU);
+  heading.x = Math.cos(a);
+  heading.y = Math.sin(a);
+}
+
 function emitBurst({ pool, rng, palette }: Emitter, spec: BurstSpec, at: Origin): void {
   const shardColor = at.tint ?? palette.rock[0];
   const sparkColor = at.tint ?? palette.spark;
   const ringColor = at.tint ?? palette.ring;
-  const direction = (): readonly [number, number] => {
-    const a = rng.range(0, Math.PI * 2);
-    return [Math.cos(a), Math.sin(a)];
-  };
-  const scatter = (): number => rng.range(0, at.radius * 0.4);
+  const scatterReach = at.radius * 0.4;
   for (let i = 0; i < spec.shards; i++) {
-    const [dx, dy] = direction();
+    aimRandomly(rng);
+    const { x: dx, y: dy } = heading;
     const speed = rng.range(60, 220);
-    const s = scatter();
-    pool.emit('shard', at.x + dx * s, at.y + dy * s, dx * speed + at.vx, dy * speed + at.vy, rng.range(0.6, 1.1), rng.range(2, 5), shardColor, {
-      drag: 0.3,
-      spin: rng.range(-8, 8),
-      rot: rng.range(0, Math.PI * 2),
-    });
+    const s = rng.range(0, scatterReach);
+    const life = rng.range(0.6, 1.1);
+    const size = rng.range(2, 5);
+    shardOptions.spin = rng.range(-8, 8);
+    shardOptions.rot = rng.range(0, TAU);
+    pool.emit('shard', at.x + dx * s, at.y + dy * s, dx * speed + at.vx, dy * speed + at.vy, life, size, shardColor, shardOptions);
   }
   for (let i = 0; i < spec.sparks; i++) {
-    const [dx, dy] = direction();
+    aimRandomly(rng);
     const speed = rng.range(80, 320);
-    pool.emit('spark', at.x, at.y, dx * speed + at.vx, dy * speed + at.vy, rng.range(0.3, 0.7), rng.range(1.5, 3), sparkColor, { drag: 0.1 });
+    pool.emit('spark', at.x, at.y, heading.x * speed + at.vx, heading.y * speed + at.vy, rng.range(0.3, 0.7), rng.range(1.5, 3), sparkColor, SPARK_OPTIONS);
   }
   for (let i = 0; i < spec.smoke; i++) {
-    const [dx, dy] = direction();
+    aimRandomly(rng);
+    const { x: dx, y: dy } = heading;
     const speed = rng.range(10, 50);
-    const s = scatter();
-    pool.emit('smoke', at.x + dx * s, at.y + dy * s, dx * speed + at.vx, dy * speed + at.vy, rng.range(0.9, 1.5), rng.range(6, 12), SMOKE_COLOR, {
-      drag: 0.4,
-    });
+    const s = rng.range(0, scatterReach);
+    pool.emit('smoke', at.x + dx * s, at.y + dy * s, dx * speed + at.vx, dy * speed + at.vy, rng.range(0.9, 1.5), rng.range(6, 12), SMOKE_COLOR, SMOKE_OPTIONS);
   }
   for (let i = 0; i < spec.rings; i++) {
-    pool.emit('ring', at.x, at.y, 0, 0, 0.5, at.radius * (1.6 + i * 0.5), ringColor, { delay: i * RING_STAGGER_SECONDS });
+    ringOptions.delay = i * RING_STAGGER_SECONDS;
+    pool.emit('ring', at.x, at.y, 0, 0, 0.5, at.radius * (1.6 + i * 0.5), ringColor, ringOptions);
   }
+}
+
+function writeOrigin(into: Writable<Origin>, x: number, y: number, radius: number, tint: string | null, vx = 0, vy = 0): Origin {
+  into.x = x;
+  into.y = y;
+  into.radius = radius;
+  into.tint = tint;
+  into.vx = vx;
+  into.vy = vy;
+  return into;
 }
 
 /**
@@ -135,6 +171,8 @@ function emitBurst({ pool, rng, palette }: Emitter, spec: BurstSpec, at: Origin)
 export function createEffects(pool: ParticlePool, seed: number, palette: Palette = DRIFT): Effects {
   const emitter: Emitter = { pool, rng: createRng(seed), palette };
   const { rng } = emitter;
+  const spec = blankBurst();
+  const origin: Writable<Origin> = { x: 0, y: 0, radius: 0, tint: null, vx: 0, vy: 0 };
   let time = 0;
   let shake = 0;
   let flash = 0;
@@ -151,14 +189,15 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
     }
   };
 
+  /** Writes where `event`'s burst starts into the shared origin; null for a silent event. */
   const originFor = (event: SimEvent, world: World): Origin | null => {
     switch (event.type) {
       case 'asteroidDestroyed':
-        return { x: event.x, y: event.y, radius: ASTEROID.radii[event.size], tint: null, vx: 0, vy: 0 };
+        return writeOrigin(origin, event.x, event.y, ASTEROID.radii[event.size], null);
       case 'shipHit':
-        return { x: event.x, y: event.y, radius: 30, tint: HIT_TINT, vx: 0, vy: 0 };
+        return writeOrigin(origin, event.x, event.y, 30, HIT_TINT);
       case 'shot':
-        return { x: event.x, y: event.y, radius: 0, tint: null, vx: world.ship.vx * 0.5, vy: world.ship.vy * 0.5 };
+        return writeOrigin(origin, event.x, event.y, 0, null, world.ship.vx * 0.5, world.ship.vy * 0.5);
       case 'gameOver':
         return null;
     }
@@ -186,7 +225,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         rng.range(0.3, 0.5),
         rng.range(3, 5),
         flame,
-        { drag: 0.2 },
+        TRAIL_OPTIONS,
       );
     }
   };
@@ -194,11 +233,11 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   return {
     handle(events, world) {
       for (const event of events) {
-        const spec = burstFor(event, palette);
-        const origin = originFor(event, world);
-        if (spec === null || origin === null) continue;
-        emitBurst(emitter, spec, origin);
-        kick(spec);
+        const burst = burstFor(event, palette, spec);
+        const at = originFor(event, world);
+        if (burst === null || at === null) continue;
+        emitBurst(emitter, burst, at);
+        kick(burst);
       }
     },
     step(dt, world, frozen = false) {

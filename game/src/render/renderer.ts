@@ -238,7 +238,13 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const width = field.width * k;
     const height = field.height * k;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    if (quality.vignette) ctx.drawImage(vignette, fieldX, fieldY, width, height);
+    if (quality.vignette) {
+      // The quarter-resolution gradient stretches nearest-neighbour within one colour level of a full bake;
+      // a smoothed stretch would cost several times a 1:1 blit on CPU-rasterized canvases.
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(vignette, fieldX, fieldY, width, height);
+      ctx.imageSmoothingEnabled = true;
+    }
     if (effects.flash > 0) {
       ctx.globalAlpha = effects.flash * FLASH_ALPHA;
       ctx.fillStyle = effects.flashColor;

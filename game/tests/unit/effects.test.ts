@@ -81,6 +81,13 @@ describe('burstFor', () => {
   it('has no burst for game over', () => {
     expect(burstFor({ type: 'gameOver', score: 10 }, DRIFT)).toBeNull();
   });
+
+  it('writes into a spec it is given, so one spec serves every event', () => {
+    const into = { shards: -1, sparks: -1, rings: -1, smoke: -1, shake: -1, flash: -1, flashColor: '' };
+    expect(burstFor(SHIP_HIT, DRIFT, into)).toBe(into);
+    expect(burstFor({ type: 'shot', x: 0, y: 0 }, DRIFT, into)).toBe(into);
+    expect(into).toEqual({ shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0, flashColor: DRIFT.shot });
+  });
 });
 
 describe('createEffects', () => {

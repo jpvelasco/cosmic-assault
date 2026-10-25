@@ -33,7 +33,7 @@ export interface Backdrop {
   schedule(layout: Layout): void;
   /** True once after each deferred re-bake, so a still frame (paused, game over) is redrawn with it. Reading clears it. */
   consumeRebaked(): boolean;
-  /** Cancels a pending re-bake. */
+  /** Cancels a pending re-bake and frees the bakes; `bakes` is null after. */
   dispose(): void;
 }
 
@@ -58,13 +58,23 @@ export function layoutFor(cssWidth: number, cssHeight: number, field: Field, dpr
   };
 }
 
+/** Releases the bakes' backing stores now, rather than whenever the collector gets to them (iOS caps canvas memory). */
+function freeBakes({ sky, vignette }: Bakes): void {
+  for (const canvas of [sky, vignette]) {
+    canvas.width = 0;
+    canvas.height = 0;
+  }
+}
+
 export function createBackdrop(baker: SpriteBaker, palette: Palette, skySeed: number): Backdrop {
   let bakes: Bakes | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let rebaked = false;
 
   function bake({ field, scale, dpr, k }: Layout): void {
+    const previous = bakes;
     bakes = { sky: bakeSky(field, k, palette, skySeed), vignette: bakeVignette(field, k) };
+    if (previous !== null) freeBakes(previous);
     baker.setScale(scale, dpr);
   }
 
@@ -90,6 +100,8 @@ export function createBackdrop(baker: SpriteBaker, palette: Palette, skySeed: nu
     },
     dispose() {
       clearTimeout(timer);
+      if (bakes !== null) freeBakes(bakes);
+      bakes = null;
     },
   };
 }

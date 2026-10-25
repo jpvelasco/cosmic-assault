@@ -12,6 +12,8 @@ const SKY_STOP_POSITIONS = [0, 0.55, 1] as const;
 const VIGNETTE_ALPHA = 0.4;
 const VIGNETTE_INNER = 0.35;
 const VIGNETTE_OUTER = 0.62;
+/** The vignette is a smooth gradient, so it bakes at this fraction of the sky's resolution per axis and is drawn stretched. */
+const VIGNETTE_RESOLUTION = 0.25;
 
 /** A transparent offscreen canvas covering `field` at `pixelsPerUnit` backing pixels per unit, ready to paint in field units. */
 function fieldCanvas(field: Field, pixelsPerUnit: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
@@ -59,9 +61,12 @@ export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, s
   return canvas;
 }
 
-/** The darkened corners drawn over the scene, baked like the sky so a frame costs one blit. */
+/**
+ * The darkened corners drawn over the scene, baked like the sky so a frame costs one blit. It bakes at
+ * a quarter of `pixelsPerUnit` per axis, so draw it stretched over the field.
+ */
 export function bakeVignette(field: Field, pixelsPerUnit: number): HTMLCanvasElement {
-  const { canvas, ctx } = fieldCanvas(field, pixelsPerUnit);
+  const { canvas, ctx } = fieldCanvas(field, pixelsPerUnit * VIGNETTE_RESOLUTION);
   const cx = field.width / 2;
   const cy = field.height / 2;
   const shade = ctx.createRadialGradient(cx, cy, field.height * VIGNETTE_INNER, cx, cy, field.width * VIGNETTE_OUTER);

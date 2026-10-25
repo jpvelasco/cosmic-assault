@@ -6,9 +6,9 @@ export interface StarLayers {
   step(dt: number, shipVx: number, shipVy: number): void;
   /** Draws the twinkling stars in field units; `time` is in seconds. */
   draw(ctx: CanvasRenderingContext2D, time: number): void;
-  /** Reseeds the layers for a new field so stars fill it and keep their on-screen density. */
+  /** Reseeds the layers for a field of a new size so stars fill it and keep their on-screen density; the same size keeps them. */
   resize(field: Field): void;
-  /** Reseeds with `scale` times the usual star count; stars already placed move only if the scale changed. */
+  /** Sets `scale` times the usual star count: each layer keeps its stars where they are, dropping or adding some. */
   setCountScale(scale: number): void;
 }
 
@@ -77,6 +77,14 @@ export function seedStars(seed: number, countScale: number, field: Field): Star[
   return stars;
 }
 
+/** `next`'s stars, except that each layer keeps as many of `current`'s as it has room for, where they are. */
+function keepStars(current: readonly Star[], next: readonly Star[]): Star[] {
+  return LAYERS.flatMap(({ z }) => {
+    const kept = current.filter((star) => star.z === z);
+    return next.filter((star) => star.z === z).map((star, i) => kept[i] ?? star);
+  });
+}
+
 export function createStarLayers(seed: number, initialScale: number): StarLayers {
   let countScale = initialScale;
   let field: Field | null = null;
@@ -96,13 +104,14 @@ export function createStarLayers(seed: number, initialScale: number): StarLayers
       ctx.globalAlpha = 1;
     },
     resize(next) {
+      const sameSize = field !== null && field.width === next.width && field.height === next.height;
       field = next;
-      stars = seedStars(seed, countScale, next);
+      if (!sameSize) stars = seedStars(seed, countScale, next);
     },
     setCountScale(scale) {
       if (scale === countScale) return;
       countScale = scale;
-      if (field !== null) stars = seedStars(seed, countScale, field);
+      if (field !== null) stars = keepStars(stars, seedStars(seed, countScale, field));
     },
   };
 }

@@ -19,6 +19,7 @@ interface DrawCall {
   readonly f: number;
   /** The globalAlpha in force. */
   readonly alpha: number;
+  readonly smoothing: boolean;
 }
 
 interface FakeCanvas {
@@ -37,6 +38,7 @@ function fakeCanvas(): FakeCanvas {
   let e = 0;
   let f = 0;
   let alpha = 1;
+  let smoothing = true;
   const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, arcs: 0, getContext: () => ctx };
   const gradient = { addColorStop: () => undefined };
   const ctx = new Proxy(
@@ -50,7 +52,7 @@ function fakeCanvas(): FakeCanvas {
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, e, f, alpha });
+            return (image: unknown) => draws.push({ image, e, f, alpha, smoothing });
           case 'arc':
             return () => fake.arcs++;
           case 'createLinearGradient':
@@ -64,6 +66,7 @@ function fakeCanvas(): FakeCanvas {
       },
       set: (_target, name, value) => {
         if (name === 'globalAlpha') alpha = value as number;
+        if (name === 'imageSmoothingEnabled') smoothing = value as boolean;
         return true;
       },
     },
@@ -301,6 +304,15 @@ describe('createRenderer', () => {
       renderer.setQuality(low);
       drawFrame(world, 1);
       expect(canvas.draws.length).toBe(withVignette - 1);
+    });
+
+    it('stretches the vignette without smoothing and smooths everything else', () => {
+      renderer.resize(1280, 720, FIELD);
+      drawFrame(stubWorld().world, 1);
+      const unsmoothed = canvas.draws.filter((call) => !call.smoothing);
+      expect(unsmoothed).toHaveLength(1);
+      // The vignette is baked at a quarter of the 1280 px field per axis.
+      expect((unsmoothed[0]?.image as FakeCanvas | undefined)?.width).toBe(320);
     });
 
     it('draws fewer stars at a lower level', () => {

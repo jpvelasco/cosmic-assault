@@ -131,7 +131,7 @@ describe('createStarLayers.setCountScale', () => {
     return arcs;
   };
 
-  it('reseeds a smaller field of stars at once', () => {
+  it('drops to a smaller field of stars at once', () => {
     const full = countFor(() => undefined);
     const lowest = countFor((layers) => {
       layers.setCountScale(0.35);
@@ -147,6 +147,58 @@ describe('createStarLayers.setCountScale', () => {
     layers.resize(FIELD);
     layers.draw({ beginPath: () => undefined, arc: () => arcs++, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
     expect(arcs).toBe(seedStars(3, 0.5, FIELD).length);
+  });
+
+  /** Each drawn star as [x, y, radius], grouped by radius (one radius per layer). */
+  const drawnLayers = (layers: ReturnType<typeof createStarLayers>): Map<number, number[][]> => {
+    const byRadius = new Map<number, number[][]>();
+    const arc = (x: number, y: number, r: number): void => {
+      byRadius.set(r, [...(byRadius.get(r) ?? []), [x, y]]);
+    };
+    layers.draw({ beginPath: () => undefined, arc, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
+    return byRadius;
+  };
+
+  it('keeps the drifted stars of each layer that a lower count leaves', () => {
+    const layers = createStarLayers(3, 1);
+    layers.resize(FIELD);
+    layers.step(1, 100, 40);
+    const before = drawnLayers(layers);
+    layers.setCountScale(0.5);
+    const after = drawnLayers(layers);
+    expect([...after.keys()]).toEqual([...before.keys()]);
+    for (const [radius, stars] of after) {
+      expect(stars.length).toBeLessThan(before.get(radius)?.length ?? 0);
+      expect(stars).toEqual(before.get(radius)?.slice(0, stars.length));
+    }
+  });
+
+  it('keeps every drifted star and adds new ones per layer on a higher count', () => {
+    const layers = createStarLayers(3, 0.35);
+    layers.resize(FIELD);
+    layers.step(1, 100, 40);
+    const before = drawnLayers(layers);
+    layers.setCountScale(1);
+    const after = drawnLayers(layers);
+    for (const [radius, stars] of before) {
+      const grown = after.get(radius) ?? [];
+      expect(grown.length).toBeGreaterThan(stars.length);
+      expect(grown.slice(0, stars.length)).toEqual(stars);
+    }
+    expect([...after.values()].flat()).toHaveLength(seedStars(3, 1, FIELD).length);
+  });
+
+  it('keeps the stars through a resize to the same size (a pixel ratio change) but reseeds a new size', () => {
+    const layers = createStarLayers(3, 1);
+    layers.resize(FIELD);
+    layers.step(1, 100, 40);
+    const before = drawnLayers(layers);
+    layers.resize({ ...FIELD });
+    expect(drawnLayers(layers)).toEqual(before);
+    const wider = { width: 1200, height: 600 };
+    layers.resize(wider);
+    const xs = [...drawnLayers(layers).values()].flat().map(([x]) => x);
+    expect(xs).toEqual(seedStars(3, 1, wider).map((star) => star.x));
   });
 
   it('keeps stars where they are when the scale does not change', () => {
