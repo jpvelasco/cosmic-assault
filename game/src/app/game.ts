@@ -1,8 +1,11 @@
 import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
+import { currentBuildLabel } from '../buildLabel';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
+import { createCrashGuard } from '../platform/crashGuard';
+import { RingLog } from '../platform/log';
 import type { CornerBox, HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
@@ -12,6 +15,7 @@ import type { Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
+import { createCrashCard } from '../ui/crashCard';
 import { createOverlay } from '../ui/overlay';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
@@ -44,6 +48,10 @@ export interface App {
   readonly muted: boolean;
   /** 'none' until the first key press or tap creates the audio context. */
   readonly audioState: AudioState;
+  /** What the game has noticed: mode changes, long stalls and errors. Kept in memory only. */
+  readonly log: RingLog;
+  /** Runs at the start of every guarded frame; the e2e bridge sets it to make a frame throw. */
+  beforeFrame: (() => void) | null;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -81,7 +89,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
   const scaler = new QualityScaler();
-  const monitor = new FrameMonitor();
+  const log = new RingLog();
+  const monitor = new FrameMonitor((frameMs) => {
+    // A hidden tab's frames are not stalls: the browser simply stopped drawing.
+    if (document.visibilityState === 'visible') log.add('stall', `${String(Math.round(frameMs))} ms frame`, performance.now());
+  });
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const storage = browserStorage();
@@ -102,6 +114,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     toggleMute,
   });
 
+  const crashCard = createCrashCard(root, {
+    report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
+    toast,
+  });
+  const guard = createCrashGuard(log, stopAfterCrash);
+
   let mode: AppMode = 'title';
   let world: World | null = null;
   let practiceLevel = MIN_PRACTICE_LEVEL;
@@ -114,6 +132,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   let frameId = 0;
   /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
   let pauseCorner: CornerBox | null = null;
+  let beforeFrame: (() => void) | null = null;
 
   /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
   function applyQuality(): void {
@@ -139,6 +158,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
 
   function setMode(next: AppMode): void {
     mode = next;
+    log.add('mode', next, performance.now());
     audio.setMusicLevel(MUSIC_LEVEL[next]);
     redrawPending = true;
     syncView();
@@ -267,8 +287,24 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     }
   }
 
+  /** Stops the game for good and shows the recovery card. Silences audio without touching the saved sound setting. */
+  function stopAfterCrash(error: unknown): void {
+    cancelAnimationFrame(frameId);
+    touch.show(false);
+    crashCard.show();
+    audio.setMusicLevel('menu');
+    audio.setMuted(true);
+    renderer.dispose();
+    console.error('Cosmic Assault stopped after an error; use Try again on the card, or Copy report to share what happened.', error);
+  }
+
   function frame(): void {
     frameId = requestAnimationFrame(frame);
+    guard.run(runFrame);
+  }
+
+  function runFrame(): void {
+    beforeFrame?.();
     const now = performance.now();
     const frameMs = now - lastFrameAt;
     const frameSeconds = frameMs / 1000;
@@ -327,6 +363,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     listen(reducedMotion, 'change', syncReducedMotion),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
+    guard.attachGlobal(window),
   ];
   syncView();
   frameId = requestAnimationFrame(frame);
@@ -362,6 +399,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     get audioState() {
       return audio.state;
     },
+    log,
+    get beforeFrame() {
+      return beforeFrame;
+    },
+    set beforeFrame(hook) {
+      beforeFrame = hook;
+    },
     start,
     pause,
     resume,
@@ -373,6 +417,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       touch.dispose();
       overlay.dispose();
       toast.dispose();
+      crashCard.dispose();
       audio.dispose();
       safeArea.dispose();
       renderer.dispose();

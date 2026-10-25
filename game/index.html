@@ -127,6 +127,10 @@
       .overlay--game-over {
         background: color-mix(in srgb, var(--space) 25%, transparent);
       }
+      /* The recovery card sits over whatever screen crashed, so it hides that one almost fully. */
+      .overlay--crash {
+        background: color-mix(in srgb, var(--space) 93%, transparent);
+      }
       .overlay p,
       .overlay h1,
       .overlay h2 {
@@ -189,6 +193,21 @@
       .build {
         font-size: 0.75rem;
         opacity: 0.5;
+      }
+      /* The copy-by-hand fallback, shown when the clipboard is unavailable. */
+      .crash-report {
+        box-sizing: border-box;
+        width: min(80vw, 420px);
+        height: 8em;
+        padding: 8px 10px;
+        resize: none;
+        user-select: text;
+        -webkit-user-select: text;
+        font: 0.7rem/1.35 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        color: inherit;
+        border: 1px solid var(--glass-stroke);
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--space) 70%, transparent);
       }
       .chips {
         display: flex;

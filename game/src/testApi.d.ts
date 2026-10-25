@@ -40,11 +40,15 @@ interface CosmicAssaultTestState {
   readonly muted: boolean;
   /** 'none' until the first key press or pointer press creates the audio context. */
   readonly audioState: 'none' | 'suspended' | 'running' | 'closed';
+  /** Entries in the in-memory event and error log (at most 200). */
+  readonly logSize: number;
 }
 
 interface CosmicAssaultTestApi {
   readonly version: 3;
   getState(): CosmicAssaultTestState;
+  /** Makes the next guarded frame throw `Error('e2e: deliberate crash')`, which shows the recovery card. */
+  crash(): void;
 }
 
 interface Window {

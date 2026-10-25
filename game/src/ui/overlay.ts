@@ -1,6 +1,7 @@
 import type { AppMode } from '../app/game';
-import { formatBuildLabel } from '../buildLabel';
+import { currentBuildLabel } from '../buildLabel';
 import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
+import { button, cardPanel, element } from './dom';
 
 export interface OverlayActions {
   /** A tap on the title screen outside its buttons, or the game-over Restart button. */
@@ -22,24 +23,6 @@ export interface OverlayState {
 export interface Overlay {
   update(state: OverlayState): void;
   dispose(): void;
-}
-
-function element<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text = '',
-): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  el.className = className;
-  el.textContent = text;
-  return el;
-}
-
-function button(className: string, text: string, onClick: () => void): HTMLButtonElement {
-  const el = element('button', className, text);
-  el.type = 'button';
-  el.addEventListener('click', onClick);
-  return el;
 }
 
 /** Calls `onTap` for clicks on `panel` that are not on one of its buttons. */
@@ -77,14 +60,6 @@ function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
   return chips;
 }
 
-/** A panel holding one glass card. */
-function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLElement } {
-  const panel = element('section', `overlay overlay--${modifier}`);
-  const card = element('div', 'card');
-  panel.append(card);
-  return { panel, card };
-}
-
 function titlePanel(chips: readonly HTMLButtonElement[], soundSlot: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const label = element('p', 'label', 'Practice level');
@@ -93,7 +68,7 @@ function titlePanel(chips: readonly HTMLButtonElement[], soundSlot: HTMLElement)
   group.setAttribute('role', 'group');
   group.setAttribute('aria-labelledby', label.id);
   group.append(...chips);
-  const build = element('p', 'build', formatBuildLabel(__BUILD_SHA__ || undefined, __BUILD_DATE__));
+  const build = element('p', 'build', currentBuildLabel());
   build.dataset['testid'] = 'build-label';
   card.append(
     element('h1', 'title', 'Cosmic Assault'),

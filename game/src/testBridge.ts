@@ -1,6 +1,9 @@
 import type { App } from './app/game';
 import type { World } from './sim/world';
 
+/** The message e2e specs allow in the console; the bridge is the only place it exists. */
+const DELIBERATE_CRASH = 'e2e: deliberate crash';
+
 function shipState({ ship }: World): CosmicAssaultTestShip {
   const { x, y, vx, vy, angle, thrusting, invulnerable } = ship;
   return { x, y, vx, vy, angle, thrusting, invulnerable };
@@ -23,10 +26,20 @@ function snapshot(app: App): CosmicAssaultTestState {
     frameStats: app.frameStats,
     muted: app.muted,
     audioState: app.audioState,
+    logSize: app.log.size,
   };
 }
 
 /** Exposes read-only game state to Playwright; main.ts imports this only in `--mode e2e` builds. */
 export function exposeTestBridge(app: App): void {
-  window.__COSMIC_ASSAULT_TEST_API__ = { version: 3, getState: () => snapshot(app) };
+  window.__COSMIC_ASSAULT_TEST_API__ = {
+    version: 3,
+    getState: () => snapshot(app),
+    crash() {
+      app.beforeFrame = () => {
+        app.beforeFrame = null;
+        throw new Error(DELIBERATE_CRASH);
+      };
+    },
+  };
 }

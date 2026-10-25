@@ -1,0 +1,93 @@
+import type { Page } from '@playwright/test';
+import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
+
+const DELIBERATE_CRASH = 'e2e: deliberate crash';
+const SCREENSHOT = '/tmp/m3-crash.png';
+
+test.use({ allowedErrors: [DELIBERATE_CRASH] });
+
+async function crash(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.__COSMIC_ASSAULT_TEST_API__?.crash();
+  });
+}
+
+const card = (page: Page) => page.getByRole('alertdialog', { name: 'Something went wrong' });
+
+test('a crash mid-run shows the recovery card, stops drawing and logs the error', async ({ page, consoleErrors }) => {
+  await openGame(page);
+  await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+  const before = (await gameState(page)).logSize;
+  await crash(page);
+
+  await expect(card(page)).toBeVisible();
+  await expect(page.getByText('The game hit an error and stopped. Your settings are safe.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused();
+  await page.screenshot({ path: SCREENSHOT });
+
+  expect((await gameState(page)).logSize).toBeGreaterThan(before);
+  const drawn = (await gameState(page)).drawCount;
+  await nextFrames(page, 3);
+  expect((await gameState(page)).drawCount).toBe(drawn);
+  expect(consoleErrors.filter((message) => message.includes(DELIBERATE_CRASH))).toHaveLength(1);
+});
+
+test('a crash silences audio without saving the sound setting', async ({ page }) => {
+  await openGame(page);
+  await crash(page);
+  await expect(card(page)).toBeVisible();
+
+  expect((await gameState(page)).muted).toBe(true);
+  const saved = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  expect(JSON.stringify(saved)).not.toContain('"muted":true');
+});
+
+test('Copy report puts the log, with the error in it, on the clipboard', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openGame(page);
+  await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+  await crash(page);
+  await page.getByRole('button', { name: 'Copy report' }).click();
+
+  await expect(page.getByRole('status')).toHaveText('Report copied');
+  const text = await page.evaluate(() => navigator.clipboard.readText());
+  const report = JSON.parse(text) as { meta: Record<string, string>; entries: { kind: string; message: string }[] };
+  expect(report.meta['build']).toMatch(/^preview · /);
+  expect(report.meta['mode']).toBe('playing');
+  expect(report.entries.some((entry) => entry.kind === 'mode' && entry.message === 'playing')).toBe(true);
+  expect(report.entries.some((entry) => entry.kind === 'error' && entry.message.includes(DELIBERATE_CRASH))).toBe(true);
+});
+
+test('Copy report falls back to a selected read-only box when the clipboard refuses', async ({ page }) => {
+  await openGame(page);
+  await crash(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+      configurable: true,
+    });
+  });
+  await page.getByRole('button', { name: 'Copy report' }).click();
+
+  const box = page.getByLabel('Report text, selected for copying');
+  await expect(box).toBeVisible();
+  await expect(box).toHaveAttribute('readonly', '');
+  await expect(box).toBeFocused();
+  expect(await box.inputValue()).toContain(DELIBERATE_CRASH);
+  const selected = await box.evaluate((el: HTMLTextAreaElement) => el.selectionEnd - el.selectionStart);
+  expect(selected).toBe((await box.inputValue()).length);
+});
+
+test('Try again reloads to the title', async ({ page }) => {
+  await openGame(page);
+  await crash(page);
+  await expect(card(page)).toBeVisible();
+  await page.getByRole('button', { name: 'Try again' }).click();
+
+  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+  await expect(card(page)).toBeHidden();
+  await expect(page.getByText('Press Space or tap to start')).toBeVisible();
+  expect((await gameState(page)).mode).toBe('title');
+});

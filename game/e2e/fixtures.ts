@@ -4,11 +4,14 @@ import { E2E_SEED, GAME_OVER_SEED } from './seed';
 
 /**
  * Fails every test that logs a console error or throws an uncaught page error.
- * The check runs in teardown, so it covers everything the test did.
+ * The check runs in teardown, so it covers everything the test did. A spec that
+ * provokes an error on purpose lists its message in `allowedErrors`; only messages
+ * containing one of those strings are let through.
  */
-export const test = base.extend<{ consoleErrors: string[] }>({
+export const test = base.extend<{ consoleErrors: string[]; allowedErrors: string[] }>({
+  allowedErrors: [[], { option: true }],
   consoleErrors: [
-    async ({ page }, use) => {
+    async ({ page, allowedErrors }, use) => {
       const errors: string[] = [];
       page.on('console', (message) => {
         if (message.type() === 'error') errors.push(message.text());
@@ -17,7 +20,8 @@ export const test = base.extend<{ consoleErrors: string[] }>({
         errors.push(error.message);
       });
       await use(errors);
-      expect(errors, 'console and page errors').toEqual([]);
+      const unexpected = errors.filter((message) => !allowedErrors.some((allowed) => message.includes(allowed)));
+      expect(unexpected, 'console and page errors').toEqual([]);
     },
     { auto: true },
   ],

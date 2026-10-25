@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { FrameMonitor } from '../../src/app/frameMonitor';
+import { describe, expect, it, vi } from 'vitest';
+import { FrameMonitor, STALL_MS } from '../../src/app/frameMonitor';
 import { WARMUP_MS } from '../../src/render/quality';
 
 function warmedUp(): FrameMonitor {
@@ -73,5 +73,29 @@ describe('FrameMonitor', () => {
     monitor.sample(-5);
     monitor.sample(Number.NaN);
     expect(monitor.summary().count).toBe(0);
+  });
+
+  describe('stall callback', () => {
+    it('reports a frame longer than 1000 ms, even while warming up', () => {
+      const onStall = vi.fn();
+      const monitor = new FrameMonitor(onStall);
+      monitor.sample(STALL_MS + 1);
+      expect(onStall).toHaveBeenCalledExactlyOnceWith(STALL_MS + 1);
+    });
+
+    it('ignores frames up to 1000 ms and invalid times', () => {
+      const onStall = vi.fn();
+      const monitor = new FrameMonitor(onStall);
+      monitor.sample(STALL_MS);
+      monitor.sample(Number.NaN);
+      monitor.sample(-5);
+      expect(onStall).not.toHaveBeenCalled();
+    });
+
+    it('counts a stall as a long frame', () => {
+      const monitor = warmedUp();
+      monitor.sample(2000);
+      expect(monitor.summary().longFrames).toBe(1);
+    });
   });
 });
