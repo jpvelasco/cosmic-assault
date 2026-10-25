@@ -3,9 +3,12 @@ import { formatBuildLabel } from '../buildLabel';
 import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
 
 export interface OverlayActions {
+  /** A tap on the title or game-over screen outside its buttons. */
+  readonly tap: () => void;
   readonly selectLevel: (level: number) => void;
   readonly resume: () => void;
   readonly quit: () => void;
+  readonly toTitle: () => void;
 }
 
 export interface OverlayState {
@@ -35,6 +38,14 @@ function button(className: string, text: string, onClick: () => void): HTMLButto
   el.type = 'button';
   el.addEventListener('click', onClick);
   return el;
+}
+
+/** Calls `onTap` for clicks on `panel` that are not on one of its buttons. */
+function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
+  panel.addEventListener('click', (e) => {
+    if (e.target instanceof Element && e.target.closest('button') !== null) return;
+    onTap();
+  });
 }
 
 function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
@@ -81,10 +92,15 @@ function pausePanel(actions: OverlayActions): HTMLElement {
   return panel;
 }
 
-function gameOverPanel(score: HTMLElement): HTMLElement {
+function gameOverPanel(score: HTMLElement, toTitle: () => void): HTMLElement {
   const panel = element('section', 'overlay overlay--game-over');
   const card = element('div', 'card');
-  card.append(element('h2', 'heading', 'Game over'), score, element('p', 'hint', 'Press R or tap to restart'));
+  card.append(
+    element('h2', 'heading', 'Game over'),
+    score,
+    element('p', 'hint', 'Press R or tap to restart'),
+    button('menu-button', 'Title', toTitle),
+  );
   panel.append(card);
   return panel;
 }
@@ -93,11 +109,11 @@ function gameOverPanel(score: HTMLElement): HTMLElement {
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
   const chips = levelChips(actions.selectLevel);
   const score = element('p', 'score');
-  const panels: Partial<Record<AppMode, HTMLElement>> = {
-    title: titlePanel(chips),
-    paused: pausePanel(actions),
-    gameOver: gameOverPanel(score),
-  };
+  const title = titlePanel(chips);
+  const gameOver = gameOverPanel(score, actions.toTitle);
+  onTapOutsideButtons(title, actions.tap);
+  onTapOutsideButtons(gameOver, actions.tap);
+  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions), gameOver };
   const all = Object.values(panels);
   root.append(...all);
 

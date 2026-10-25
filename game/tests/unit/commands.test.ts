@@ -38,9 +38,10 @@ describe('commandForKey', () => {
     expect(commandForKey(mode, code)).toBeNull();
   });
 
-  it('restarts from game over on KeyR only', () => {
+  it('restarts from game over on KeyR and returns to the title on Escape', () => {
     expect(commandForKey('gameOver', 'KeyR')).toEqual(START);
-    for (const code of ['Space', 'Enter', 'Escape', 'KeyP', 'Digit2']) {
+    expect(commandForKey('gameOver', 'Escape')).toEqual({ kind: 'toTitle' });
+    for (const code of ['Space', 'Enter', 'KeyP', 'Digit2']) {
       expect(commandForKey('gameOver', code)).toBeNull();
     }
   });

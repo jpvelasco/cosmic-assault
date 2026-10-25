@@ -20,17 +20,20 @@ describe('parseSeed', () => {
     expect(parseSeed(raw)).toBe(seed);
   });
 
-  it('reads leading digits the way Number.parseInt does', () => {
-    expect(parseSeed('12abc')).toBe(12);
+  it('accepts leading zeros as decimal digits', () => {
+    expect(parseSeed('007')).toBe(7);
   });
 
-  it.each(['', 'abc', '-1', '4294967296'])('warns (not errors) and ignores %j', (raw) => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const error = vi.spyOn(console, 'error');
-    expect(parseSeed(raw)).toBeUndefined();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('must be an integer from 0 to 4294967295'));
-    expect(error).not.toHaveBeenCalled();
-  });
+  it.each(['', 'abc', '12abc', '1e9', '0x1f', '-1', '+5', ' 5', '1.5', '4294967296'])(
+    'warns (not errors) and ignores %j',
+    (raw) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const error = vi.spyOn(console, 'error');
+      expect(parseSeed(raw)).toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('must be an integer from 0 to 4294967295'));
+      expect(error).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('clockSeed', () => {

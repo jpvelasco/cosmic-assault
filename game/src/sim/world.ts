@@ -66,8 +66,13 @@ function assertSeed(seed: number): void {
   }
 }
 
+/** Practice levels are the integers 1–7. */
+export function isPracticeLevel(level: number): boolean {
+  return Number.isInteger(level) && level >= MIN_PRACTICE_LEVEL && level <= MAX_PRACTICE_LEVEL;
+}
+
 function assertPracticeLevel(level: number): void {
-  if (!(Number.isInteger(level) && level >= MIN_PRACTICE_LEVEL && level <= MAX_PRACTICE_LEVEL)) {
+  if (!isPracticeLevel(level)) {
     throw new RangeError(
       `World practiceLevel must be an integer from ${String(MIN_PRACTICE_LEVEL)} to ${String(MAX_PRACTICE_LEVEL)} (got ${String(level)}); clamp or round it first`,
     );

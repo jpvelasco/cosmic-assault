@@ -1,4 +1,5 @@
 import { controlsFromKeys } from '../input/keyboard';
+import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
 import { createRenderer } from '../render/renderer';
@@ -27,8 +28,8 @@ export interface App {
   dispose(): void;
 }
 
-/** The game-over card ignores restart input this long, so a held key or tap cannot skip it. */
-const RESTART_GUARD_MS = 700;
+/** The game-over card ignores input this long, so a held key or tap cannot skip it. */
+const GAME_OVER_GUARD_MS = 700;
 /** The renderer draws the latest state; M1 does not interpolate between steps. */
 const LATEST_STATE_ALPHA = 1;
 
@@ -42,17 +43,30 @@ function listen(target: EventTarget, type: string, listener: (e: Event) => void)
 export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const renderer = createRenderer(canvas);
   const keyboard = attachKeyboard(window);
-  const touch = attachTouchControls(root);
+  const startKeys = createKeyLatch();
+  const touch = attachTouchControls(root, pause);
   const loop = createFixedStepLoop();
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const fixedSeed = seedOverride();
-  const overlay = createOverlay(root, { selectLevel, resume, quit });
+  const overlay = createOverlay(root, {
+    tap: () => {
+      afterGuard(performance.now(), start);
+    },
+    selectLevel,
+    resume,
+    quit,
+    toTitle: () => {
+      afterGuard(performance.now(), quit);
+    },
+  });
 
   let mode: AppMode = 'title';
   let world: World | null = null;
   let practiceLevel = MIN_PRACTICE_LEVEL;
   let field: Field | null = null;
   let resizePending = true;
+  /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
+  let redrawPending = false;
   let gameOverAt = 0;
   let lastFrameAt = performance.now();
   let frameId = 0;
@@ -64,6 +78,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
 
   function setMode(next: AppMode): void {
     mode = next;
+    redrawPending = true;
     syncView();
   }
 
@@ -75,6 +90,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     field = fieldForViewport(clientWidth, clientHeight);
     renderer.resize(clientWidth, clientHeight, field);
     world?.resize(field);
+    redrawPending = true;
   }
 
   function start(): void {
@@ -84,6 +100,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
     }
     world = new World({ seed: fixedSeed ?? clockSeed(), field, practiceLevel });
+    startKeys.latch(keyboard.held);
     loop.reset();
     setMode('playing');
   }
@@ -111,15 +128,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     syncView();
   }
 
-  function requestStart(now: number): void {
-    if (mode === 'gameOver' && now - gameOverAt < RESTART_GUARD_MS) return;
-    start();
+  /** Runs a player action unless the game-over guard is still ignoring input. */
+  function afterGuard(now: number, action: () => void): void {
+    if (mode === 'gameOver' && now - gameOverAt < GAME_OVER_GUARD_MS) return;
+    action();
   }
 
   function applyCommand(command: Command, now: number): void {
     switch (command.kind) {
       case 'start':
-        requestStart(now);
+        afterGuard(now, start);
+        break;
+      case 'toTitle':
+        afterGuard(now, quit);
         break;
       case 'selectLevel':
         selectLevel(command.level);
@@ -132,7 +153,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   }
 
   function readControls(): Controls {
-    const keys = controlsFromKeys(keyboard.held);
+    const keys = controlsFromKeys(startKeys.active(keyboard.held));
     return { ...keys, fire: keys.fire || touch.fire, stick: touch.stick };
   }
 
@@ -154,12 +175,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     lastFrameAt = now;
     applyPendingResize();
     for (const code of keyboard.drainPressed()) {
+      startKeys.release(code);
       const command = commandForKey(mode, code);
       if (command !== null) applyCommand(command, now);
     }
     if (world === null) return;
     if (mode === 'playing') stepWorld(world, frameSeconds, now);
-    renderer.draw(world, LATEST_STATE_ALPHA);
+    if (mode === 'playing' || redrawPending) {
+      renderer.draw(world, LATEST_STATE_ALPHA);
+      redrawPending = false;
+    }
   }
 
   const markResize = (): void => {
@@ -168,18 +193,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') pause();
   };
-  /** Taps anywhere but a button start a run from the title or game-over screen. */
-  const onClick = (e: Event): void => {
-    if (e.target instanceof Element && e.target.closest('button') !== null) return;
-    requestStart(performance.now());
-  };
 
   const unlisteners = [
     listen(window, 'resize', markResize),
     listen(window, 'orientationchange', markResize),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
-    listen(root, 'click', onClick),
   ];
   syncView();
   frameId = requestAnimationFrame(frame);

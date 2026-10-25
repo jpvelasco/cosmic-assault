@@ -5,7 +5,7 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import type { Ship } from '../../src/sim/ship';
-import { World, type WorldOptions } from '../../src/sim/world';
+import { isPracticeLevel, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
@@ -128,6 +128,16 @@ describe('World start of a run', () => {
   it.each([0, 8, 1.5, Number.NaN])('rejects practice level %s with a RangeError', (practiceLevel) => {
     expect(() => world({ practiceLevel })).toThrow(/practiceLevel.*1.*7/);
     expect(() => world({ practiceLevel })).toThrow(RangeError);
+  });
+
+  it('accepts exactly the integer practice levels 1 to 7', () => {
+    expect([1, 2, 3, 4, 5, 6, 7].every(isPracticeLevel)).toBe(true);
+    expect([0, 8, 1.5, Number.NaN, -1].some(isPracticeLevel)).toBe(false);
+  });
+
+  it('accepts exactly the unsigned 32-bit integer seeds', () => {
+    expect([0, 1, 2 ** 32 - 1].every(isWorldSeed)).toBe(true);
+    expect([-1, 1.5, Number.NaN, 2 ** 32].some(isWorldSeed)).toBe(false);
   });
 
   it.each([-1, 1.5, Number.NaN, 2 ** 32])('rejects seed %s with a RangeError', (seed) => {

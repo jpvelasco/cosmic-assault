@@ -1,22 +1,24 @@
 import { GAME_KEY_CODES } from '../input/keyboard';
-import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
+import { isPracticeLevel } from '../sim/world';
 import type { AppMode } from './game';
 
 export type Command =
   | { readonly kind: 'start' }
   | { readonly kind: 'selectLevel'; readonly level: number }
-  | { readonly kind: 'togglePause' };
+  | { readonly kind: 'togglePause' }
+  | { readonly kind: 'toTitle' };
 
 const START: Command = { kind: 'start' };
 const TOGGLE_PAUSE: Command = { kind: 'togglePause' };
+const TO_TITLE: Command = { kind: 'toTitle' };
 const START_KEYS: ReadonlySet<string> = new Set([...GAME_KEY_CODES, 'Enter']);
 const PAUSE_KEYS: ReadonlySet<string> = new Set(['Escape', 'KeyP']);
 const RESTART_KEY = 'KeyR';
+const TITLE_KEY = 'Escape';
 
 function levelForKey(code: string): number | null {
-  const digit = /^Digit(\d)$/.exec(code)?.[1];
-  const level = Number(digit);
-  return level >= MIN_PRACTICE_LEVEL && level <= MAX_PRACTICE_LEVEL ? level : null;
+  const level = Number(/^Digit(\d)$/.exec(code)?.[1]);
+  return isPracticeLevel(level) ? level : null;
 }
 
 /** What a key press (`KeyboardEvent.code`) asks the app to do in `mode`, if anything. */
@@ -31,6 +33,7 @@ export function commandForKey(mode: AppMode, code: string): Command | null {
     case 'paused':
       return PAUSE_KEYS.has(code) ? TOGGLE_PAUSE : null;
     case 'gameOver':
-      return code === RESTART_KEY ? START : null;
+      if (code === RESTART_KEY) return START;
+      return code === TITLE_KEY ? TO_TITLE : null;
   }
 }

@@ -167,11 +167,6 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     ctx.fillText(`Lives ${String(world.lives)}`, hudMargin, hudMargin + hudLine);
     ctx.textAlign = 'right';
     ctx.fillText(practiceLabel, field.width - hudMargin, hudMargin);
-    if (world.status === 'gameOver') {
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Game over', field.width / 2, field.height / 2);
-    }
   }
 
   /** Takes no `alpha`: M1 renders the latest state, so interpolation is future work. */
