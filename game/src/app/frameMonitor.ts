@@ -1,5 +1,5 @@
-/** Frame time at the start of a run is skipped: sprites bake and the JIT warms up then. */
-export const WARMUP_MS = 3000;
+import { WARMUP_MS } from '../render/quality';
+
 /** A frame this long or longer is a visible hitch. */
 export const LONG_FRAME_MS = 50;
 

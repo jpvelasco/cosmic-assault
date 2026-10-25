@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUALITY_LEVELS, QualityScaler, UP_WAIT_MS } from '../../src/render/quality';
+import { QUALITY_LEVELS, QualityScaler, UP_WAIT_MS, WARMUP_MS } from '../../src/render/quality';
 
 /** Feeds `ms` of `frameMs`-long frames, stopping early if the level changes; returns ms fed. */
 function feed(scaler: QualityScaler, frameMs: number, ms: number): number {
@@ -122,6 +122,40 @@ describe('QualityScaler', () => {
     for (let i = 0; i < 100; i++) scaler.sample(-30);
     scaler.sample(Number.NaN);
     expect(scaler.index).toBe(0);
+  });
+
+  describe('startRun', () => {
+    it('skips the first 3 s of frame time, however slow, then adapts as usual', () => {
+      const scaler = new QualityScaler();
+      scaler.startRun();
+      for (let i = 0; i < WARMUP_MS / 200; i++) scaler.sample(200);
+      expect(scaler.index).toBe(0);
+      for (let i = 0; i < 48; i++) scaler.sample(25);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('counts a cold-start stall over 250 ms toward the warm-up', () => {
+      const scaler = new QualityScaler();
+      scaler.startRun();
+      scaler.sample(WARMUP_MS);
+      for (let i = 0; i < 48; i++) scaler.sample(25);
+      expect(scaler.index).toBe(1);
+    });
+
+    it('starts the warm-up over each time it is called', () => {
+      const scaler = new QualityScaler();
+      scaler.startRun();
+      for (let i = 0; i < 100; i++) scaler.sample(30);
+      scaler.startRun();
+      for (let i = 0; i < 99; i++) scaler.sample(30);
+      expect(scaler.index).toBe(0);
+    });
+
+    it('is not needed: a scaler never told a run started adapts at once', () => {
+      const scaler = new QualityScaler();
+      for (let i = 0; i < 48; i++) scaler.sample(25);
+      expect(scaler.index).toBe(1);
+    });
   });
 
   describe('pin', () => {

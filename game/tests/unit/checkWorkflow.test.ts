@@ -94,9 +94,8 @@ describe('check-workflow guard', () => {
     expect(status).toBe(0);
   });
 
-  it('accepts the report-only perf job: it may continue on error, and deploy does not wait for it', () => {
-    const perf = realText.slice(realText.indexOf('  perf:'), realText.indexOf('  legacy:'));
-    expect(perf).toContain('    continue-on-error: true\n');
+  it('accepts the report-only perf job, which deploy does not wait for', () => {
+    expect(realText).toMatch(/^ {2}perf:$/m);
     expect(realText).toContain(needsLine);
     const { status, output } = runGuard(realWorkflow);
     expect(output).toContain('workflow ok');

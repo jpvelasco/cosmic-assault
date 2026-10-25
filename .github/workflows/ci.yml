@@ -87,12 +87,11 @@ jobs:
           path: game/dist/
           if-no-files-found: error
 
-  # Report only: a frame-time reading under a 4x CPU slowdown. It is not a required check, deploy
-  # does not need it, and continue-on-error keeps a noisy runner from failing the workflow.
+  # Report only: a frame-time reading under a 4x CPU slowdown. It is not a required check and
+  # deploy does not need it.
   perf:
     name: Performance report (non-blocking)
     runs-on: ubuntu-24.04
-    continue-on-error: true
     timeout-minutes: 15
     permissions:
       contents: read
@@ -117,6 +116,10 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
+
+      # Playwright serves both builds and, under CI, does not build them itself.
+      - name: Build
+        run: npm run build
 
       - name: Build for end-to-end tests
         run: npm run build:e2e

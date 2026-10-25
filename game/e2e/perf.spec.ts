@@ -8,8 +8,11 @@ const CPU_SLOWDOWN = 4;
 const HOLD_MS = 8000;
 /** The target for a throttled phone-class CPU; recorded in perf.json, not asserted in M2. */
 const BUDGET_P95_MS = 33;
-/** Only a sanity ceiling: fails if frames are plainly broken, not if they miss the budget. */
-const SANITY_P95_MS = 50;
+/**
+ * A catastrophic-regression guard, not a target. Headless software raster puts p95 near the
+ * 3-vsync (50 ms) boundary even when nothing is wrong, so a tighter ceiling is just noise.
+ */
+const SANITY_P95_MS = 100;
 const REPORT_PATH = 'test-results/perf.json';
 
 test('frame time under a 4x CPU slowdown (report only)', async ({ page }) => {

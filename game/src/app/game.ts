@@ -142,6 +142,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     hitStop.clear();
     renderer.reset();
     monitor.reset();
+    scaler.startRun();
     setMode('playing');
   }
 

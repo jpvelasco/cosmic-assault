@@ -37,13 +37,12 @@ export interface Backdrop {
   dispose(): void;
 }
 
-const MAX_DPR = 2;
 export const REBAKE_DELAY_MS = 280;
 
-/** The device pixel ratio, capped at `cap` (and at MAX_DPR); 1 where the browser reports none. */
-export function devicePixelRatio(cap = MAX_DPR): number {
+/** The device pixel ratio, capped at `cap` (a quality level's `dprCap`); 1 where the browser reports none. */
+export function devicePixelRatio(cap: number): number {
   const ratio = globalThis.devicePixelRatio;
-  return Math.min(Number.isFinite(ratio) && ratio > 0 ? ratio : 1, cap, MAX_DPR);
+  return Math.min(Number.isFinite(ratio) && ratio > 0 ? ratio : 1, cap);
 }
 
 /** Fits `field` inside the CSS viewport, centred, at `dpr` device pixels per CSS px. */

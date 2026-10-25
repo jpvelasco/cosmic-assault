@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FrameMonitor, WARMUP_MS } from '../../src/app/frameMonitor';
+import { FrameMonitor } from '../../src/app/frameMonitor';
+import { WARMUP_MS } from '../../src/render/quality';
 
 function warmedUp(): FrameMonitor {
   const monitor = new FrameMonitor();

@@ -26,6 +26,8 @@ const LOWEST = QUALITY_LEVELS.length - 1;
 /** From this level down the page drops costly effects of its own, such as backdrop blur (the `lite` body class). */
 export const LITE_FROM_INDEX = 2;
 
+/** Frame time at the start of a run is skipped by the scaler and the monitor: sprites bake and the JIT warms up then. */
+export const WARMUP_MS = 3000;
 /** Frames longer than this are stalls (a hidden tab, a debugger), not load, so they are ignored. */
 export const MAX_SAMPLE_MS = 250;
 /** Step down once this much frame time averages over `DOWN_MEAN_MS`. */
@@ -78,6 +80,8 @@ export class QualityScaler {
   private clock = 0;
   private upWait = UP_WAIT_MS;
   private upgradedAt: number | null = null;
+  /** Frame time left to skip after `startRun()`. */
+  private warmupLeft = 0;
 
   constructor(start = 0) {
     assertLevel(start);
@@ -99,8 +103,18 @@ export class QualityScaler {
     this.pinned = true;
   }
 
+  /** Skips the first `WARMUP_MS` of frames from now: cold-start stalls say nothing about the device. */
+  startRun(): void {
+    this.warmupLeft = WARMUP_MS;
+  }
+
   sample(frameMs: number): void {
-    if (this.pinned || !(frameMs >= 0 && frameMs <= MAX_SAMPLE_MS)) return;
+    if (this.pinned || !(frameMs >= 0)) return;
+    if (this.warmupLeft > 0) {
+      this.warmupLeft -= frameMs;
+      return;
+    }
+    if (frameMs > MAX_SAMPLE_MS) return;
     this.clock += frameMs;
     this.slow.add(frameMs);
     this.fast.add(frameMs);
