@@ -25,9 +25,11 @@
         --glass-fill: linear-gradient(rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.09));
         --glass-stroke: rgba(255, 255, 255, 0.18);
         --glass-tint: color-mix(in srgb, var(--sky-1) 55%, transparent);
+        --glass-tint-lite: color-mix(in srgb, var(--sky-1) 92%, transparent);
         --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 45%);
         --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
         --glass: var(--glass-sheen), var(--glass-fill), var(--glass-tint);
+        --glass-blur: blur(10px) saturate(1.3);
         --gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.12) 44%, rgba(255, 255, 255, 0) 50%);
         --glow: 0 0 28px color-mix(in srgb, var(--accent-2) 45%, transparent);
         --glow-small: 0 0 14px color-mix(in srgb, var(--accent-2) 40%, transparent);
@@ -36,9 +38,13 @@
         --text-drop: 0 1px 2px color-mix(in srgb, var(--sky-1) 70%, transparent);
         --pop: cubic-bezier(0.2, 1.4, 0.4, 1);
       }
-      /* Low quality levels (src/render/quality.ts) drop the backdrop blur for a more opaque fill. */
+      /*
+       * Low quality levels (src/render/quality.ts) drop the backdrop blur for a more opaque fill. `--glass` is
+       * redeclared whole: its var()s resolve where it is declared, so overriding only the tint here would not reach it.
+       */
       body.lite {
-        --glass-tint: color-mix(in srgb, var(--sky-1) 92%, transparent);
+        --glass: var(--glass-sheen), var(--glass-fill), var(--glass-tint-lite);
+        --glass-blur: none;
       }
       html,
       body {
@@ -136,8 +142,8 @@
         border-radius: 22px;
         background: var(--glass);
         box-shadow: var(--glass-edge), var(--glow), 0 20px 50px rgba(0, 0, 0, 0.45);
-        -webkit-backdrop-filter: blur(10px) saturate(1.3);
-        backdrop-filter: blur(10px) saturate(1.3);
+        -webkit-backdrop-filter: var(--glass-blur);
+        backdrop-filter: var(--glass-blur);
         animation: pop-in 360ms var(--pop) both;
       }
       @keyframes pop-in {
@@ -255,10 +261,10 @@
         background: var(--accent-1);
         box-shadow: 0 0 8px var(--accent-1);
       }
-      .sound-toggle[aria-pressed='true'] {
+      .sound-toggle--muted {
         color: color-mix(in srgb, var(--ink) 70%, transparent);
       }
-      .sound-toggle[aria-pressed='true']::before {
+      .sound-toggle--muted::before {
         background: transparent;
         box-shadow: inset 0 0 0 1.5px currentColor;
       }
@@ -274,8 +280,8 @@
         border-radius: 999px;
         background: var(--glass);
         box-shadow: var(--glass-edge), var(--glow-small);
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: var(--glass-blur);
+        backdrop-filter: var(--glass-blur);
         font-size: 0.85rem;
         font-weight: 800;
         pointer-events: none;
@@ -284,11 +290,6 @@
       }
       .toast--shown {
         opacity: 1;
-      }
-      body.lite .card,
-      body.lite .toast {
-        -webkit-backdrop-filter: none;
-        backdrop-filter: none;
       }
       /* Touch controls: positions and sizes are inline in src/input/touchControls.ts; this is only their look. */
       .touch-stick,

@@ -50,6 +50,21 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
+/**
+ * Enter and Space on the focused chip toggle sound only: they never reach the window's key handling, which would
+ * start a run. A click does not focus it, so after one Space still starts a run.
+ */
+function keepActivationKeysLocal(el: HTMLElement): void {
+  const stop = (e: KeyboardEvent): void => {
+    if (e.code === 'Enter' || e.code === 'Space') e.stopPropagation();
+  };
+  el.addEventListener('keydown', stop);
+  el.addEventListener('keyup', stop);
+  el.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+}
+
 function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
   const chips: HTMLButtonElement[] = [];
   for (let level = MIN_PRACTICE_LEVEL; level <= MAX_PRACTICE_LEVEL; level++) {
@@ -122,6 +137,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   // One sound chip serves the title and pause cards; `update` moves it into the visible card's slot.
   const sound = button('sound-toggle', '', actions.toggleMute);
   sound.dataset['testid'] = 'sound-toggle';
+  keepActivationKeysLocal(sound);
   const titleSlot = element('div', 'sound-slot');
   const pauseSlot = element('div', 'sound-slot');
   const soundSlots: Partial<Record<AppMode, HTMLElement>> = { title: titleSlot, paused: pauseSlot };
@@ -139,7 +155,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       // Moved only on a card change: re-inserting it would drop keyboard focus after a toggle.
       if (slot !== undefined && sound.parentElement !== slot) slot.append(sound);
       sound.textContent = `Sound: ${muted ? 'off' : 'on'}`;
-      sound.setAttribute('aria-pressed', String(muted));
+      sound.classList.toggle('sound-toggle--muted', muted);
       for (const [i, chip] of chips.entries()) {
         chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
       }

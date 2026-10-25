@@ -57,12 +57,13 @@ test('the sound chip mutes on the title and pause cards without starting or resu
   await openGame(page);
   const chip = soundChip(page);
   await expect(chip).toHaveText('Sound: on');
-  await expect(chip).toHaveAttribute('aria-pressed', 'false');
+  // The label carries the state, so the chip is a plain button rather than a pressed toggle.
+  await expect(chip).not.toHaveAttribute('aria-pressed');
 
   await chip.click();
   await expectMuted(page, true);
   await expect(chip).toHaveText('Sound: off');
-  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await expect(chip).not.toHaveAttribute('aria-pressed');
   await expect(toast(page)).toHaveText('Muted');
   await nextFrames(page, 3);
   await expectMode(page, 'title');
@@ -72,6 +73,7 @@ test('the sound chip mutes on the title and pause cards without starting or resu
   await expectMuted(page, false);
   await expect(chip).toHaveText('Sound: on');
 
+  // A click does not focus the chip, so Space still starts the game.
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
   await expect(chip).toBeHidden();
@@ -82,6 +84,21 @@ test('the sound chip mutes on the title and pause cards without starting or resu
   await expect(chip).toHaveText('Sound: off');
   await nextFrames(page, 3);
   await expectMode(page, 'paused');
+});
+
+test('Enter and Space on the focused sound chip toggle sound without starting the game', async ({ page }) => {
+  await openGame(page);
+  const chip = soundChip(page);
+  await chip.focus();
+
+  await page.keyboard.press('Enter');
+  await expectMuted(page, true);
+  await expect(chip).toHaveText('Sound: off');
+  await page.keyboard.press('Space');
+  await expectMuted(page, false);
+  await expect(chip).toHaveText('Sound: on');
+  await nextFrames(page, 3);
+  await expectMode(page, 'title');
 });
 
 test('mute survives a reload, and storage holds only the settings key', async ({ page }) => {
