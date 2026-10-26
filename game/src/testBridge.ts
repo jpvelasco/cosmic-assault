@@ -1,5 +1,5 @@
 import type { App, E2eHooks } from './app/game';
-import type { World } from './sim/world';
+import { MIN_PRACTICE_LEVEL, type World } from './sim/world';
 
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
 export const DELIBERATE_CRASH = 'e2e: deliberate crash';
@@ -9,11 +9,27 @@ function shipState({ ship }: World): CosmicAssaultTestShip {
   return { x, y, vx, vy, angle, thrusting, invulnerable };
 }
 
+/** A copy of `value` frozen all the way down, so a spec cannot change the game's state through it. */
+function frozenCopy<T>(value: T): T {
+  const freeze = (v: unknown): unknown => {
+    if (typeof v === 'object' && v !== null) {
+      for (const child of Object.values(v)) freeze(child);
+      Object.freeze(v);
+    }
+    return v;
+  };
+  return freeze(structuredClone(value)) as T;
+}
+
 function snapshot(app: App): CosmicAssaultTestState {
-  const { world } = app;
+  const { world, flow } = app;
   return {
     mode: app.mode,
-    practiceLevel: app.practiceLevel,
+    screen: app.mode,
+    galaxy: flow.galaxy,
+    save: frozenCopy(app.save),
+    rankRun: flow.rankRun === null ? null : frozenCopy(flow.rankRun),
+    practiceLevel: world?.practiceLevel ?? MIN_PRACTICE_LEVEL,
     score: world?.score ?? 0,
     lives: world?.lives ?? 0,
     ship: world === null ? null : shipState(world),

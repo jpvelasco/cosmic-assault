@@ -1,17 +1,17 @@
-import type { AppMode } from '../app/game';
+import type { Command } from '../app/commands';
+import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
+import type { SaveData } from '../meta/save';
 import type { InstallOffer } from '../platform/install';
-import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
 import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
+import { createFlowCards } from './flowCards';
 import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
 
 export interface OverlayActions {
-  /** A tap on the title screen outside its buttons, or the game-over Restart button. */
-  readonly start: () => void;
-  readonly selectLevel: (level: number) => void;
+  /** A screen command from a button: the router applies it, through its cover table and the end-card guard. */
+  readonly command: (command: Command) => void;
   readonly resume: () => void;
   readonly quit: () => void;
-  readonly toTitle: () => void;
   readonly toggleMute: () => void;
   readonly toggleFullscreen: () => void;
   readonly openSettings: () => void;
@@ -20,8 +20,8 @@ export interface OverlayActions {
 }
 
 export interface OverlayState {
-  readonly mode: AppMode;
-  readonly practiceLevel: number;
+  readonly flow: FlowState;
+  readonly save: SaveData;
   readonly score: number;
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
@@ -38,8 +38,8 @@ export interface Overlay {
   update(state: OverlayState): void;
   /** Puts keyboard focus on the Settings chip of the visible card, as the settings card closes. */
   focusSettingsChip(): void;
-  /** The controls of the card for `mode` that can take focus now, in document order; none while another card covers it. */
-  controls(mode: AppMode): HTMLElement[];
+  /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
+  controls(screen: Screen): HTMLElement[];
   dispose(): void;
 }
 
@@ -69,36 +69,11 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
-  const chips: HTMLButtonElement[] = [];
-  for (let level = MIN_PRACTICE_LEVEL; level <= MAX_PRACTICE_LEVEL; level++) {
-    chips.push(
-      button('level-chip', String(level), () => {
-        selectLevel(level);
-      }),
-    );
-  }
-  return chips;
-}
-
-function titlePanel(chips: readonly HTMLButtonElement[], chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
+function titlePanel(play: HTMLButtonElement, resumeRank: HTMLButtonElement, chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
-  const label = element('p', 'label', 'Practice level');
-  label.id = 'practice-level-label';
-  const group = element('div', 'chips');
-  group.setAttribute('role', 'group');
-  group.setAttribute('aria-labelledby', label.id);
-  group.append(...chips);
   const build = element('p', 'build', currentBuildLabel());
   build.dataset['testid'] = 'build-label';
-  card.append(
-    element('h1', 'title', 'Cosmic Assault'),
-    label,
-    group,
-    startHint,
-    chipRow,
-    build,
-  );
+  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeRank, startHint, chipRow, build);
   return panel;
 }
 
@@ -113,23 +88,19 @@ function pausePanel(actions: OverlayActions, chipRow: HTMLElement): HTMLElement 
   return panel;
 }
 
-/** Only its buttons act, so taps that were aimed at the ship cannot skip the score. */
-function gameOverPanel(score: HTMLElement, restartHint: HTMLElement, actions: OverlayActions): HTMLElement {
-  const { panel, card } = cardPanel('game-over');
-  card.append(
-    element('h2', 'heading', 'Game over'),
-    score,
-    restartHint,
-    button('menu-button menu-button--primary', 'Restart', actions.start),
-    button('menu-button', 'Title', actions.toTitle),
-  );
-  return panel;
-}
-
-/** The title, pause and game-over screens as DOM layers over the canvas; one is visible per mode. */
+/**
+ * The screens as DOM layers over the canvas, one visible per screen: the title and pause cards here, the rest from
+ * `createFlowCards`. The end cards act only on their buttons, so taps that were aimed at the ship cannot skip the score.
+ */
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
-  const chips = levelChips(actions.selectLevel);
-  const score = element('p', 'score');
+  const send = (command: Command) => (): void => {
+    actions.command(command);
+  };
+  const play = button('menu-button menu-button--primary', 'Play', send({ kind: 'start' }));
+  play.dataset['testid'] = 'play';
+  const resumeRank = button('menu-button', 'Resume Rank', send({ kind: 'resumeRank' }));
+  resumeRank.dataset['testid'] = 'resume-rank';
+  const flowCards = createFlowCards(actions.command);
   // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
   const sound = chip('sound-toggle', actions.toggleMute);
   const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
@@ -142,23 +113,22 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   iosHint.dataset['testid'] = INSTALL_TEST_ID;
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
-  const chipRows: Partial<Record<AppMode, HTMLElement>> = { title: titleRow, paused: pauseRow };
+  const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
-  const restartHint = element('p', 'hint');
-  const title = titlePanel(chips, titleRow, startHint);
-  const gameOver = gameOverPanel(score, restartHint, actions);
-  onTapOutsideButtons(title, actions.start);
-  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions, pauseRow), gameOver };
-  const all = Object.values(panels);
+  const title = titlePanel(play, resumeRank, titleRow, startHint);
+  onTapOutsideButtons(title, send({ kind: 'start' }));
+  const panels: Partial<Record<Screen, HTMLElement>> = { title, paused: pausePanel(actions, pauseRow), ...flowCards.panels };
+  const all = [...new Set(Object.values(panels))];
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+    update({ flow, save, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+      const { screen } = flow;
       for (const panel of all) {
-        panel.hidden = panel !== panels[mode];
+        panel.hidden = panel !== panels[screen];
         panel.inert = covered;
       }
-      const row = chipRows[mode];
+      const row = chipRows[screen];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
       // stay ahead of the title's Install chip.
       if (row !== undefined && sound.parentElement !== row) row.prepend(sound, fullscreen, settings);
@@ -171,19 +141,16 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       showSoundState(sound, muted);
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
-      for (const [i, chip] of chips.entries()) {
-        chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
-      }
-      score.textContent = `Score ${String(points)}`;
+      resumeRank.hidden = save.rankRun === null;
       const hints = hintCopy(inputStyle);
       startHint.textContent = hints.start;
-      restartHint.textContent = hints.restart;
+      flowCards.update({ flow, save, score, restartHint: hints.restart });
     },
     focusSettingsChip() {
       settings.focus();
     },
-    controls(mode) {
-      const panel = panels[mode];
+    controls(screen) {
+      const panel = panels[screen];
       return panel === undefined ? [] : focusableControls(panel);
     },
     dispose() {

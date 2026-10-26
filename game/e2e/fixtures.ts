@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
-import { E2E_SEED, GAME_OVER_SEED } from './seed';
+import { E2E_GALAXY, E2E_SEED, GAME_OVER_GALAXY, GAME_OVER_SEED } from './seed';
 
 /**
  * Fails every test that logs a console error or throws an uncaught page error.
@@ -35,14 +35,21 @@ export const BUILD_LABEL = /^preview · (local|[0-9a-f]{7}) · \d{4}-\d{2}-\d{2}
 /** The e2e-only URL overrides (see src/app/seed.ts). */
 export interface GameQuery {
   readonly seed?: number;
+  /** Makes the run a Rank run with these lives (1-5). */
   readonly lives?: number;
   /** A level index (0-3) or name to pin; without it the quality adapts to frame time. */
   readonly quality?: string;
+  /** The galaxy the title's Play jumps straight into; null for the normal flow through mode select. */
+  readonly galaxy?: string | null;
 }
 
-/** Opens the e2e build (seed E2E_SEED unless overridden) and waits for the test bridge, which loads after an `import()`. */
-export async function openGame(page: Page, { seed = E2E_SEED, lives, quality }: GameQuery = {}): Promise<void> {
+/**
+ * Opens the e2e build (seed E2E_SEED and galaxy E2E_GALAXY unless overridden) and waits for the test bridge, which
+ * loads after an `import()`. Any of these switches makes it a debug run, which never writes the save.
+ */
+export async function openGame(page: Page, { seed = E2E_SEED, lives, quality, galaxy = E2E_GALAXY }: GameQuery = {}): Promise<void> {
   const query = new URLSearchParams({ seed: String(seed) });
+  if (galaxy !== null) query.set('galaxy', galaxy);
   if (lives !== undefined) query.set('lives', String(lives));
   if (quality !== undefined) query.set('quality', quality);
   await page.goto(`/?${query.toString()}`);
@@ -65,7 +72,7 @@ export function gameState(page: Page): Promise<CosmicAssaultTestState> {
   });
 }
 
-/** The ship in the current run; fails if the game is on the title screen. */
+/** The ship in the current run; fails if no run is in play (title and menu screens). */
 export async function shipState(page: Page): Promise<CosmicAssaultTestShip> {
   const { ship } = await gameState(page);
   if (ship === null) throw new Error('No ship: the game is on the title screen; start a run first');
@@ -80,12 +87,12 @@ export function speed({ vx, vy }: CosmicAssaultTestShip): number {
   return Math.hypot(vx, vy);
 }
 
-/** Opens a one-life run of GAME_OVER_SEED; start it, then call `waitForGameOver`. */
+/** Opens a one-life Rank run of GAME_OVER_GALAXY and GAME_OVER_SEED; start it, then call `waitForGameOver`. */
 export function openGameOverRun(page: Page): Promise<void> {
-  return openGame(page, { seed: GAME_OVER_SEED, lives: 1 });
+  return openGame(page, { seed: GAME_OVER_SEED, lives: 1, galaxy: GAME_OVER_GALAXY });
 }
 
-/** Waits for the idle ship's only life to go (about 3.5 s of sim time; a starved renderer runs slower). */
+/** Waits for the idle ship's only life to go (about 7 s of sim time; a starved renderer runs slower). */
 export async function waitForGameOver(page: Page): Promise<void> {
   await expect.poll(async () => (await gameState(page)).mode, { timeout: 20000 }).toBe('gameOver');
 }

@@ -23,8 +23,7 @@ describe('actsUnder', () => {
     ['start', true, false, false, false],
     ['resume', true, false, false, false],
     ['pause', true, false, true, false],
-    ['selectLevel', true, false, true, false],
-    ['toTitle', true, false, true, false],
+    ['leave', true, false, true, false],
     ['toggleMute', true, true, true, false],
     ['toggleFullscreen', true, true, true, true],
     ['navigate', true, true, false, false],
@@ -39,8 +38,8 @@ describe('actsUnder', () => {
     // M acts under settings and under the rotate prompt, so it acts under both; Esc closing settings does not.
     expect(actsUnder('toggleMute', ['settings', 'rotate'])).toBe(true);
     expect(actsUnder('closeSettings', ['settings', 'rotate'])).toBe(false);
-    // A level key acts under the rotate prompt alone, but not when the settings card is open beneath it.
-    expect(actsUnder('selectLevel', ['settings', 'rotate'])).toBe(false);
+    // Leaving a card acts under the rotate prompt alone, but not when the settings card is open beneath it.
+    expect(actsUnder('leave', ['settings', 'rotate'])).toBe(false);
   });
 });
 
@@ -51,10 +50,25 @@ describe('inputForCommand', () => {
     expect(inputForCommand(toggle, 'paused')).toBe('resume');
   });
 
-  it('names every other command by its kind', () => {
-    expect(inputForCommand({ kind: 'start' }, 'title')).toBe('start');
-    expect(inputForCommand({ kind: 'selectLevel', level: 3 }, 'title')).toBe('selectLevel');
-    expect(inputForCommand({ kind: 'toTitle' }, 'gameOver')).toBe('toTitle');
+  it.each<Command>([
+    { kind: 'start' },
+    { kind: 'resumeRank' },
+    { kind: 'chooseMode', mode: 'rank' },
+    { kind: 'openDimension', dimension: 2 },
+    { kind: 'openGalaxy', id: '1-1' },
+    { kind: 'confirm' },
+    { kind: 'next' },
+    { kind: 'retry' },
+    { kind: 'continue' },
+  ])('routes %j, which goes forward and may start a run, as start', (command) => {
+    expect(inputForCommand(command, 'title')).toBe('start');
+  });
+
+  it.each<Command>([{ kind: 'back' }, { kind: 'map' }, { kind: 'title' }])('routes %j, which leaves a card, as leave', (command) => {
+    expect(inputForCommand(command, 'gameOver')).toBe('leave');
+  });
+
+  it('names mute and full screen by their kind', () => {
     expect(inputForCommand({ kind: 'toggleMute' }, 'playing')).toBe('toggleMute');
     expect(inputForCommand({ kind: 'toggleFullscreen' }, 'paused')).toBe('toggleFullscreen');
   });
@@ -73,8 +87,11 @@ describe('commandActs', () => {
     expect(commandActs({ kind: 'togglePause' }, 'playing', ['rotate'], 0)).toBe(true);
   });
 
-  it('waits out the game-over guard on the game-over card', () => {
-    expect(commandActs(start, 'gameOver', NO_COVER, GAME_OVER_GUARD_MS - 1)).toBe(false);
-    expect(commandActs(start, 'gameOver', NO_COVER, GAME_OVER_GUARD_MS)).toBe(true);
+  it('waits out the game-over guard on the end cards', () => {
+    const retry: Command = { kind: 'retry' };
+    for (const screen of ['results', 'gameOver', 'rankComplete'] as const) {
+      expect(commandActs(retry, screen, NO_COVER, GAME_OVER_GUARD_MS - 1)).toBe(false);
+      expect(commandActs(retry, screen, NO_COVER, GAME_OVER_GUARD_MS)).toBe(true);
+    }
   });
 });

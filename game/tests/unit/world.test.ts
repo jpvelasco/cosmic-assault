@@ -5,7 +5,7 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import type { Ship } from '../../src/sim/ship';
-import { isPracticeLevel, isStartLives, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
+import { isGalaxyStartLives, isPracticeLevel, isStartLives, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
@@ -154,6 +154,11 @@ describe('World start of a run', () => {
   it('accepts exactly the integer start lives 1 to 3', () => {
     expect([1, 2, 3].every(isStartLives)).toBe(true);
     expect([0, 4, 1.5, Number.NaN, -1].some(isStartLives)).toBe(false);
+  });
+
+  it('accepts exactly the integer galaxy (Rank) start lives 1 to 5', () => {
+    expect([1, 3, 5].every(isGalaxyStartLives)).toBe(true);
+    expect([0, 6, 2.5, Number.NaN, -1].some(isGalaxyStartLives)).toBe(false);
   });
 
   it('accepts exactly the unsigned 32-bit integer seeds', () => {

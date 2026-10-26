@@ -1,3 +1,4 @@
+import { galaxyLabel } from '../content/galaxies';
 import type { World } from '../sim/world';
 import type { Palette } from './palette';
 import { SHIP_HULL } from './sprites';
@@ -32,7 +33,7 @@ export interface HudRect {
 export interface Hud {
   resize(cssWidth: number, cssHeight: number): void;
   setBounds(bounds: HudBounds): void;
-  /** Draws the score, lives and practice pills. The caller sets a CSS-px transform (identity × dpr). */
+  /** Draws the score, lives and level pills. The caller sets a CSS-px transform (identity × dpr). */
   draw(ctx: CanvasRenderingContext2D, world: World): void;
   /** The pills drawn last, in CSS px. */
   readonly rects: readonly HudRect[];
@@ -87,6 +88,12 @@ function tracePill(ctx: CanvasRenderingContext2D, r: HudRect): void {
   ctx.stroke();
 }
 
+/** The level pill's text: the galaxy (`1-3`, `2-★`) in a galaxy run, else the practice level. Task 8 replaces the pill. */
+function levelLabel(world: Readonly<Pick<World, 'galaxy' | 'practiceLevel'>>): string {
+  const id = world.galaxy?.id;
+  return id === undefined ? `Practice L${String(world.practiceLevel)}` : galaxyLabel(id);
+}
+
 export function createHud(palette: Palette): Hud {
   const score = pill();
   const lives = pill();
@@ -104,7 +111,6 @@ export function createHud(palette: Palette): Hud {
   let scoreText = '';
   let scoreWidth = 0;
   let shownLives = -1;
-  let shownLevel = -1;
   let levelText = '';
   let levelWidth = 0;
 
@@ -116,9 +122,9 @@ export function createHud(palette: Palette): Hud {
       scoreWidth = ctx.measureText(scoreText).width;
       dirty = true;
     }
-    if (world.practiceLevel !== shownLevel) {
-      shownLevel = world.practiceLevel;
-      levelText = `Practice L${String(shownLevel)}`;
+    const label = levelLabel(world);
+    if (label !== levelText) {
+      levelText = label;
       ctx.font = practiceFont;
       levelWidth = ctx.measureText(levelText).width;
       dirty = true;
@@ -202,7 +208,7 @@ export function createHud(palette: Palette): Hud {
       practiceFont = `900 ${String(11 * scale)}px ${ROUNDED}`;
       // Fonts changed, so every cached width is stale.
       shownScore = -1;
-      shownLevel = -1;
+      levelText = '';
       dirty = true;
     },
     setBounds(next) {

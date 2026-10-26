@@ -14,22 +14,27 @@ import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
+import { galaxyById } from '../content/galaxies';
+import type { SaveData } from '../meta/save';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
-import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
+import { World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
-import { START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
+import { TOGGLE_FULLSCREEN, type Command } from './commands';
+import { END_SCREENS, localDate, MENU_SCREENS, type FlowState, type Screen } from './flow';
+import { createFlowController } from './flowController';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { coversFor, createInputRouter, type Cover } from './inputRouting';
-import { clockSeed, runOverrides } from './seed';
+import { createSaveStore } from './saveStore';
+import { clockSeed, isDebugRun, runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
 import { createSettingsController } from './settingsController';
 import { createViewSync } from './viewSync';
@@ -44,14 +49,15 @@ export interface E2eHooks {
   e2eBeforeFrame?: (() => void) | undefined;
 }
 
-export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
-
 export interface App {
-  readonly mode: AppMode;
-  /** The current run; null on the title screen. */
+  /** The screen shown. */
+  readonly mode: Screen;
+  /** Where the screens stand: the mode, galaxy and Rank run in play. */
+  readonly flow: FlowState;
+  /** The save in memory: what storage holds, or for a debug run what it would hold. */
+  readonly save: SaveData;
+  /** The current run; null on the title, mode select, map and galaxy select. */
   readonly world: World | null;
-  /** The level the next run starts at (1–7), chosen on the title screen. */
-  readonly practiceLevel: number;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
@@ -74,21 +80,16 @@ export interface App {
   readonly fullscreen: boolean;
   /** What the game has noticed: mode changes, long stalls and errors. Kept in memory only. */
   readonly log: RingLog;
-  /** Starts a run from the title or game-over screen; ignored in other modes. */
-  start(): void;
   pause(): void;
   resume(): void;
-  /** Ends the run and returns to the title screen. */
+  /** Ends the paused run and returns to the title screen. */
   quit(): void;
   dispose(): void;
 }
 
-const MUSIC_LEVEL: Readonly<Record<AppMode, MusicLevel>> = {
-  title: 'menu',
-  playing: 'play',
-  paused: 'paused',
-  gameOver: 'menu',
-};
+/** Play and pause have their own music; every other screen plays the menu's. */
+const musicFor = (screen: Screen): MusicLevel => (screen === 'playing' ? 'play' : screen === 'paused' ? 'paused' : 'menu');
+const SAVE_FAILED_TOAST = "Progress can't be saved in this browser";
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -121,15 +122,25 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const installPrompt = createInstallPrompt(window, log, syncView);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
+  // A debug run keeps its progress in memory: the real save is never written.
+  const store = createSaveStore({ storage, writes: !isDebugRun(overrides), log });
+  store.importClassicOnce();
+  const flow = createFlowController({
+    store,
+    overrides,
+    today: () => localDate(new Date()),
+    startRun,
+    showScreen: setMode,
+  });
 
-  let mode: AppMode = 'title';
+  let mode: Screen = 'title';
   let world: World | null = null;
-  let practiceLevel = MIN_PRACTICE_LEVEL;
   let field: Field | null = null;
   let resizePending = true;
-  /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
+  /** Outside play the frame only changes on a screen change or resize, so it is redrawn only then. */
   let redrawPending = false;
-  let gameOverAt = 0;
+  /** When the run on the end card ended; the card's guard counts from it. */
+  let runEndedAt = 0;
   /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
   let previousPad: PadSnapshot | null = null;
   const padFire = createPadFireLatch();
@@ -137,19 +148,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let frameId = 0;
   /** The sound hint is given once a visit: a pad-only player needs it once, and a toast on every A would nag. */
   let soundHintGiven = false;
-  const button = (command: Command) => (): void => {
+  const applyNow = (command: Command): void => {
     router.applyCommand(command, performance.now());
   };
   const overlay = createOverlay(root, {
-    start: button(START),
-    selectLevel,
+    command: applyNow,
     resume,
     quit,
-    toTitle: button(TO_TITLE),
     toggleMute: () => {
       prefs.toggleMute();
     },
-    toggleFullscreen: button(TOGGLE_FULLSCREEN),
+    toggleFullscreen: () => {
+      applyNow(TOGGLE_FULLSCREEN);
+    },
     openSettings: () => {
       prefs.openSettings();
     },
@@ -164,7 +175,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     touch,
     hitStop,
     effects: renderer.effects,
-    mode: () => mode,
+    screen: () => mode,
     covers,
     syncView,
     focusOpener: () => {
@@ -184,8 +195,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     touch,
     renderer,
     read: () => ({
-      mode,
-      practiceLevel,
+      flow: flow.state,
+      save: store.save,
       score: world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
@@ -193,7 +204,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       settings: prefs.settings,
       settingsOpen: prefs.open,
     }),
-    mode: () => mode,
+    screen: () => mode,
     tripped: () => guard.tripped,
     onTurnUpright: pause,
   });
@@ -201,9 +212,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     keyboard,
     startKeys,
     run: {
-      start,
-      quit,
-      selectLevel,
+      flow: flow.command,
       pause: pauseByPlayer,
       resume,
       toggleMute: prefs.toggleMute,
@@ -211,9 +220,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
         fullscreen.toggle();
       },
     },
-    mode: () => mode,
+    screen: () => mode,
     covers,
-    msSinceGameOver: (now) => now - gameOverAt,
+    msSinceRunEnd: (now) => now - runEndedAt,
     menuControls: () => (prefs.open ? prefs.card.controls() : overlay.controls(mode)),
     closeSettings: prefs.closeSettings,
   });
@@ -233,12 +242,15 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     document.body.classList.toggle('lite', scaler.index >= LITE_FROM_INDEX);
   }
 
-  function setMode(next: AppMode): void {
+  function setMode(next: Screen): void {
     // After a crash the log and the report's mode stay as they were when the game stopped.
     if (guard.tripped) return;
     mode = next;
-    log.add('mode', next, performance.now());
-    audio.setMusicLevel(MUSIC_LEVEL[next]);
+    const now = performance.now();
+    log.add('mode', next, now);
+    if (END_SCREENS.includes(next)) runEndedAt = now;
+    if (MENU_SCREENS.includes(next)) dropRun();
+    audio.setMusicLevel(musicFor(next));
     redrawPending = true;
     view.armIdleCursor();
     view.sync();
@@ -256,17 +268,21 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     redrawPending = true;
   }
 
-  function start(): void {
-    if (mode !== 'title' && mode !== 'gameOver') return;
+  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives. */
+  function startRun({ galaxy, mode: playMode, rankRun }: FlowState): void {
     applyPendingResize();
     if (field === null) {
       throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
     }
+    if (galaxy === null || playMode === null) {
+      throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow (mode select or ?galaxy=)');
+    }
     world = new World({
       seed: overrides.seed ?? clockSeed(),
       field,
-      practiceLevel,
-      startLives: overrides.startLives ?? PLAYER.startLives,
+      rules: { kind: 'galaxy', galaxy: galaxyById(galaxy), mode: playMode },
+      // Free play always starts with the default lives; Rank carries its own.
+      startLives: rankRun?.lives ?? PLAYER.startLives,
     });
     startKeys.latch(keyboard.held);
     padFire.latch(previousPad);
@@ -276,14 +292,20 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     monitor.reset();
     scaler.startRun();
     audio.play('uiClick');
-    setMode('playing');
+  }
+
+  /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */
+  function dropRun(): void {
+    world?.endRun();
+    world = null;
+    hitStop.clear();
   }
 
   /** Pauses a run in play; returns whether it did. */
   function pause(): boolean {
     if (mode !== 'playing') return false;
     hitStop.clear();
-    setMode('paused');
+    flow.dispatch({ kind: 'pause' });
     return true;
   }
 
@@ -297,23 +319,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     audio.play('pause');
     loop.reset();
     padFire.latch(previousPad);
-    setMode('playing');
+    flow.dispatch({ kind: 'resume' });
   }
 
   function quit(): void {
-    if (world === null) return;
-    world.endRun();
-    world = null;
-    hitStop.clear();
+    if (world === null || mode !== 'paused') return;
     audio.play('uiClick');
-    setMode('title');
-  }
-
-  function selectLevel(level: number): void {
-    if (mode !== 'title') return;
-    practiceLevel = level;
-    audio.play('uiClick');
-    view.sync();
+    flow.quit(world);
   }
 
   /** Pads grant no user activation, so the first A while sound waits for one says how to turn it on. */
@@ -328,18 +340,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
   }
 
-  function stepWorld(run: World, controls: Controls, frameSeconds: number, now: number): void {
+  /** Steps the run; a clear or game over moves the flow to its end card, after which the steps do nothing. */
+  function stepWorld(run: World, controls: Controls, frameSeconds: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
       const events = run.step(dt, controls);
       hitStop.trigger(events);
       renderer.handle(events, run);
       audio.handle(events);
+      flow.handle(events, run);
     });
-    if (run.status === 'gameOver') {
-      gameOverAt = now;
-      setMode('gameOver');
-    }
   }
 
   /** Stops the game for good and shows the recovery card. Silences audio without touching the saved sound setting. */
@@ -376,7 +386,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
-    const settling = mode === 'gameOver' && renderer.hasActiveParticles();
+    const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
     // Still screens cost next to nothing, so their frame interval is the display's own rate.
     if (mode !== 'playing' && !settling) scaler.sampleIdle(frameMs);
     if (world === null) return;
@@ -388,10 +398,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       scaler.sample(frameMs);
       if (scaler.index !== levelBefore) applyQuality();
       const frozen = hitStop.frozen;
-      stepWorld(world, readControls(pad), frameSeconds, now);
+      stepWorld(world, readControls(pad), frameSeconds);
       renderer.advance(visualSeconds, world, frozen);
     } else if (settling) {
-      // The death burst plays out under the card; redrawing stops once the last particle is gone.
+      // The death or warp burst plays out under the card; redrawing stops once the last particle is gone.
       renderer.settle(visualSeconds, world);
       redrawPending = true;
     }
@@ -428,6 +438,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(window, 'orientationchange', markResize),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
+    // Another tab's clear shows on this tab's map and galaxy select at once.
+    store.onExternalChange(syncView),
+    store.onWriteFailure(() => {
+      toast.show(SAVE_FAILED_TOAST);
+    }),
     fullscreen.onChange(onFullscreenChange),
     installPrompt.dispose,
     guard.attachGlobal(window),
@@ -439,11 +454,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get mode() {
       return mode;
     },
+    get flow() {
+      return flow.state;
+    },
+    get save() {
+      return store.save;
+    },
     get world() {
       return world;
-    },
-    get practiceLevel() {
-      return practiceLevel;
     },
     get hudRects() {
       return renderer.hudRects;
@@ -476,7 +494,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       return fullscreen.active;
     },
     log,
-    start,
     pause,
     resume,
     quit,

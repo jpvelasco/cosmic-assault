@@ -18,6 +18,7 @@ import { assertAsteroidPlacement, assertField, assertFinite, resolveOptions, typ
 
 export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
 export {
+  isGalaxyStartLives,
   isStartLives,
   isWorldSeed,
   MAX_GALAXY_START_LIVES,
@@ -29,6 +30,11 @@ export {
 
 /** `'warping'` lasts 1.5 s at the end of a galaxy; once `'cleared'` or `'gameOver'`, `step` is a no-op. */
 export type WorldStatus = 'playing' | 'warping' | 'cleared' | 'gameOver';
+
+/** Whether a run with `status` is over, cleared or lost: it no longer steps, and is drawn at its latest pose. */
+export function hasEnded(status: WorldStatus): boolean {
+  return status === 'cleared' || status === 'gameOver';
+}
 
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 
@@ -218,7 +224,7 @@ export class World {
   step(dt: number, controls: Controls): readonly SimEvent[] {
     assertDt(dt);
     this.events.length = 0;
-    if (this.statusValue === 'gameOver' || this.statusValue === 'cleared') {
+    if (hasEnded(this.statusValue)) {
       return this.events;
     }
     this.rememberPoses();

@@ -1,11 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { expect, gameState, openGame, test } from './fixtures';
-import { PERF_SEED } from './seed';
+import { PERF_GALAXY, PERF_SEED } from './seed';
 
-const PRACTICE_LEVEL = 7;
 const CPU_SLOWDOWN = 4;
-const HOLD_MS = 8000;
+/** A galaxy opens on an empty field, so the hold runs long enough for it to fill. */
+const HOLD_MS = 20000;
 /** The target for a throttled phone-class CPU; recorded in perf.json, not asserted in M2. */
 const BUDGET_P95_MS = 33;
 /**
@@ -16,11 +16,11 @@ const SANITY_P95_MS = 100;
 const REPORT_PATH = 'test-results/perf.json';
 
 test('frame time under a 4x CPU slowdown (report only)', async ({ page }) => {
+  test.setTimeout(HOLD_MS + 40000);
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
-  await openGame(page, { seed: PERF_SEED, lives: 3 });
+  await openGame(page, { seed: PERF_SEED, galaxy: PERF_GALAXY });
 
-  await page.keyboard.press(`Digit${String(PRACTICE_LEVEL)}`);
   await page.keyboard.press('Space');
   await page.keyboard.up('Space');
   await expect.poll(async () => (await gameState(page)).mode).toBe('playing');
@@ -31,13 +31,14 @@ test('frame time under a 4x CPU slowdown (report only)', async ({ page }) => {
   await page.keyboard.up('ArrowLeft');
   await page.keyboard.up('Space');
 
-  const { frameStats, quality, mode } = await gameState(page);
+  const { frameStats, quality, mode, asteroidCount } = await gameState(page);
   const report = {
     cpuSlowdown: CPU_SLOWDOWN,
-    practiceLevel: PRACTICE_LEVEL,
+    galaxy: PERF_GALAXY,
     seed: PERF_SEED,
     holdMs: HOLD_MS,
     runEnded: mode === 'gameOver',
+    asteroidsAtEnd: asteroidCount,
     budgetP95Ms: BUDGET_P95_MS,
     withinBudget: frameStats.p95 <= BUDGET_P95_MS,
     ...frameStats,

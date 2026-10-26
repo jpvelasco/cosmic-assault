@@ -7,7 +7,7 @@ import type { Overlay, OverlayState } from '../ui/overlay';
 import type { RotatePrompt } from '../ui/rotatePrompt';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import type { SettingsCard } from '../ui/settingsCard';
-import type { AppMode } from './game';
+import type { Screen } from './flow';
 import type { Settings } from './settings';
 
 /** How long the pointer must rest during play before the cursor is hidden. */
@@ -26,7 +26,7 @@ export interface ViewSyncDeps {
   readonly touch: TouchControls;
   readonly renderer: Pick<Renderer, 'setHudBounds'>;
   read(): ViewState;
-  mode(): AppMode;
+  screen(): Screen;
   /** After a crash the recovery card owns the screen and the view stays as it was. */
   tripped(): boolean;
   /** The phone turned upright: a run in play pauses, and stays paused when it turns back. */
@@ -74,7 +74,7 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     settingsCard.update(settings, coarsePointer.matches);
     settingsCard.cover(rotating);
     rotatePrompt.show(rotating);
-    touch.show(state.mode === 'playing' && coarsePointer.matches);
+    touch.show(state.flow.screen === 'playing' && coarsePointer.matches);
     syncHudBounds();
   }
 
@@ -82,7 +82,7 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     clearTimeout(idleCursorTimer);
     idleCursorTimer = undefined;
     document.body.classList.remove('cursor-idle');
-    if (deps.mode() !== 'playing' || deps.tripped()) return;
+    if (deps.screen() !== 'playing' || deps.tripped()) return;
     idleCursorTimer = window.setTimeout(() => {
       document.body.classList.add('cursor-idle');
     }, IDLE_CURSOR_MS);

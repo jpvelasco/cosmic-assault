@@ -1,0 +1,224 @@
+import { galaxyById, nextGalaxyId } from '../content/galaxies';
+import type { Dimension, GalaxyId } from '../content/types';
+import { recordClear, setRankRun } from '../meta/progress';
+import { addEntry, reachedLabel } from '../meta/rankBoard';
+import { afterClear, afterGameOver, type RankRun } from '../meta/rankRun';
+import type { SaveData } from '../meta/save';
+import type { ClearReport, GalaxyMode } from '../sim/scoring';
+
+/** The screen the app is on. Results, game over and Rank complete are the end screens of a run. */
+export type Screen = 'title' | 'modeSelect' | 'map' | 'galaxySelect' | 'playing' | 'paused' | 'results' | 'gameOver' | 'rankComplete';
+
+/** The screens that end a run; their input waits out the game-over guard. */
+export const END_SCREENS: readonly Screen[] = ['results', 'gameOver', 'rankComplete'];
+/** The screens with no run behind them. */
+export const MENU_SCREENS: readonly Screen[] = ['title', 'modeSelect', 'map', 'galaxySelect'];
+
+export interface FlowState {
+  readonly screen: Screen;
+  /** The mode chosen on mode select; null on the title and mode select. */
+  readonly mode: GalaxyMode | null;
+  /** The Dimension galaxy select shows; a Free play run moves it to the galaxy played. */
+  readonly dimension: Dimension;
+  /** The galaxy in play, or the one just played. */
+  readonly galaxy: GalaxyId | null;
+  /** In Rank, the run as carried into `galaxy`; on results, as carried into the next galaxy. Null outside Rank. */
+  readonly rankRun: RankRun | null;
+  /** The last clear: its report and the score it leaves the run on (in Rank, the run's total). */
+  readonly result: { readonly report: ClearReport; readonly total: number } | null;
+  /** Counts the runs started; a change means the app must build a new World for `galaxy`. */
+  readonly runs: number;
+}
+
+export type FlowAction =
+  /** The title's Play. */
+  | { readonly kind: 'start' }
+  /** A new Rank run, from mode select or a `?galaxy=` switch with `?lives=`. */
+  | { readonly kind: 'startRank'; readonly run: RankRun }
+  /** The title's Resume Rank, with the run from the save. */
+  | { readonly kind: 'resumeRank'; readonly run: RankRun }
+  | { readonly kind: 'chooseFree' }
+  | { readonly kind: 'openDimension'; readonly dimension: Dimension }
+  /** A Free play run of `id`, from galaxy select or a `?galaxy=` switch on the title. */
+  | { readonly kind: 'playGalaxy'; readonly id: GalaxyId }
+  | { readonly kind: 'pause' }
+  | { readonly kind: 'resume' }
+  | { readonly kind: 'quit' }
+  /** The galaxy was cleared with `livesLeft` lives. */
+  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number }
+  /** The last life went, with `score` won in this galaxy. */
+  | { readonly kind: 'die'; readonly score: number }
+  /** Enter, or pad A, on an end screen: its first button. */
+  | { readonly kind: 'confirm' }
+  | { readonly kind: 'next' }
+  | { readonly kind: 'retry' }
+  | { readonly kind: 'continue' }
+  | { readonly kind: 'map' }
+  | { readonly kind: 'title' }
+  /** Esc, pad B or a Back button: one screen back. */
+  | { readonly kind: 'back' };
+
+export const INITIAL_FLOW: FlowState = { screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, result: null, runs: 0 };
+
+const dimensionOf = (id: GalaxyId): Dimension => galaxyById(id).dimension;
+
+/** The galaxy Free play results offer as Next; null in Rank, off the results card or after 5-★. */
+export function freeNext(state: FlowState): GalaxyId | null {
+  return state.screen === 'results' && state.mode === 'free' && state.galaxy !== null ? nextGalaxyId(state.galaxy) : null;
+}
+
+function playFree(state: FlowState, id: GalaxyId): FlowState {
+  return { ...state, screen: 'playing', mode: 'free', galaxy: id, dimension: dimensionOf(id), rankRun: null, result: null, runs: state.runs + 1 };
+}
+
+function playRank(state: FlowState, run: RankRun): FlowState {
+  return { ...state, screen: 'playing', mode: 'rank', galaxy: run.next, rankRun: run, result: null, runs: state.runs + 1 };
+}
+
+const toTitle = (state: FlowState): FlowState => ({ ...INITIAL_FLOW, runs: state.runs });
+
+function toMap(state: FlowState): FlowState {
+  return { ...state, screen: 'map', mode: 'free', dimension: state.galaxy === null ? state.dimension : dimensionOf(state.galaxy) };
+}
+
+function cleared(state: FlowState, report: ClearReport, livesLeft: number): FlowState {
+  const { rankRun, galaxy } = state;
+  if (galaxy === null) return state;
+  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score } };
+  const total = rankRun.score + report.score;
+  const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft);
+  const result = { report, total };
+  return next === 'complete' ? { ...state, screen: 'rankComplete', rankRun: null, result } : { ...state, screen: 'results', rankRun: next, result };
+}
+
+/** Where an end screen's action leads in Free play; the state itself when the card does not offer it. */
+function freeEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
+  const { galaxy } = state;
+  if (galaxy === null) return state;
+  const next = freeNext(state);
+  switch (kind) {
+    case 'next':
+      return next === null ? state : playFree(state, next);
+    // The card's first button: Next on results, Retry after a game over or the last galaxy.
+    case 'confirm':
+      return playFree(state, next ?? galaxy);
+    case 'retry':
+      return playFree(state, galaxy);
+    case 'map':
+    case 'back':
+      return toMap(state);
+    case 'title':
+      return toTitle(state);
+    default:
+      return state;
+  }
+}
+
+/** Where an end screen's action leads in Rank: on from results, Continue after a game over, the title from any. */
+function rankEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
+  const { rankRun } = state;
+  if (kind === 'title' || kind === 'back') return toTitle(state);
+  if (rankRun === null) return kind === 'confirm' ? toTitle(state) : state;
+  if (state.screen === 'results') return kind === 'next' || kind === 'confirm' ? playRank(state, rankRun) : state;
+  return kind === 'continue' || kind === 'confirm' || kind === 'retry' ? playRank(state, afterGameOver(rankRun)) : state;
+}
+
+/** The menu screens' moves; the state itself for anything a screen does not offer. */
+function menuMove(state: FlowState, action: FlowAction): FlowState {
+  switch (state.screen) {
+    case 'title':
+      if (action.kind === 'start') return { ...state, screen: 'modeSelect' };
+      if (action.kind === 'resumeRank' || action.kind === 'startRank') return playRank(state, action.run);
+      return action.kind === 'playGalaxy' ? playFree(state, action.id) : state;
+    case 'modeSelect':
+      if (action.kind === 'startRank') return playRank(state, action.run);
+      if (action.kind === 'chooseFree') return { ...state, screen: 'map', mode: 'free' };
+      return action.kind === 'back' ? { ...state, screen: 'title', mode: null } : state;
+    case 'map':
+      if (action.kind === 'openDimension') return { ...state, screen: 'galaxySelect', dimension: action.dimension };
+      return action.kind === 'back' ? { ...state, screen: 'modeSelect', mode: null } : state;
+    case 'galaxySelect':
+      if (action.kind === 'playGalaxy') return playFree(state, action.id);
+      return action.kind === 'back' ? { ...state, screen: 'map' } : state;
+    default:
+      return state;
+  }
+}
+
+/** A run's own moves: pause, resume, quit, and the clear or game over that ends it. */
+function runMove(state: FlowState, action: FlowAction): FlowState {
+  const { screen } = state;
+  switch (action.kind) {
+    case 'pause':
+      return screen === 'playing' ? { ...state, screen: 'paused' } : state;
+    case 'resume':
+      return screen === 'paused' ? { ...state, screen: 'playing' } : state;
+    case 'quit':
+      return screen === 'paused' ? toTitle(state) : state;
+    // A quit that finishes a warp-out clears while paused.
+    case 'clear':
+      return cleared(state, action.report, action.livesLeft);
+    case 'die':
+      return screen === 'playing' ? { ...state, screen: 'gameOver' } : state;
+    default:
+      return state;
+  }
+}
+
+/**
+ * The screen flow: title → mode select → map → galaxy select → playing → results or game over → on, again or back.
+ * Pure: it never reads the clock or the save. An action a screen does not offer returns `state` itself.
+ */
+export function transition(state: FlowState, action: FlowAction): FlowState {
+  switch (state.screen) {
+    case 'playing':
+    case 'paused':
+      return runMove(state, action);
+    case 'results':
+    case 'gameOver':
+    case 'rankComplete':
+      return state.mode === 'rank' ? rankEnd(state, action.kind) : freeEnd(state, action.kind);
+    default:
+      return menuMove(state, action);
+  }
+}
+
+/**
+ * What `action` (which took `before` to `after`) writes to the save, or null when it writes nothing. Clears are
+ * recorded the moment they happen, and every Rank start, end and Continue goes through `setRankRun`.
+ */
+export function saveChange(before: FlowState, action: FlowAction, after: FlowState, today: string): ((save: SaveData) => SaveData) | null {
+  if (after === before) return null;
+  const run = before.mode === 'rank' ? before.rankRun : null;
+  switch (action.kind) {
+    case 'startRank':
+      return (save) => setRankRun(save, action.run);
+    case 'clear': {
+      const { galaxy, result } = after;
+      if (galaxy === null || result === null) return null;
+      const record = (save: SaveData): SaveData => recordClear(save, galaxyById(galaxy), action.report.score, action.report.stars);
+      if (run === null) return record;
+      if (after.screen !== 'rankComplete') return (save) => setRankRun(record(save), after.rankRun);
+      return (save) => endRank(record(save), { score: result.total, reached: reachedLabel(galaxy), date: today, continued: run.continued });
+    }
+    case 'die':
+      if (run === null) return null;
+      return (save) => endRank(save, { score: run.score + action.score, reached: reachedLabel(run.next), date: today, continued: run.continued });
+    case 'continue':
+    case 'confirm':
+    case 'retry':
+      return before.screen === 'gameOver' && run !== null ? (save) => setRankRun(save, after.rankRun) : null;
+    default:
+      return null;
+  }
+}
+
+function endRank(save: SaveData, entry: Parameters<typeof addEntry>[1]): SaveData {
+  return setRankRun({ ...save, rankBoard: addEntry(save.rankBoard, entry) }, null);
+}
+
+/** The local calendar date as `YYYY-MM-DD`, for Rank start dates and board entries. */
+export function localDate(date: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

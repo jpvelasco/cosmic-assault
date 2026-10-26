@@ -22,7 +22,7 @@ test('the title and game-over hints name taps on a phone and keys on a desktop',
   await startRun(page, isMobile);
   await waitForGameOver(page);
 
-  await expect(page.getByText(isMobile ? 'Tap Restart to play again' : 'Press R to restart')).toBeVisible();
+  await expect(page.getByText(isMobile ? 'Tap Retry or Continue to play again' : 'Press R to play again')).toBeVisible();
   // A touch player is never told about a key, anywhere in the page.
   if (isMobile) await expect(page.locator('body')).not.toContainText(/space|press /i);
 });

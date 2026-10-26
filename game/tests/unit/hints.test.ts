@@ -3,11 +3,11 @@ import { hintCopy } from '../../src/ui/hints';
 
 describe('hintCopy', () => {
   it('names keys for keyboard players', () => {
-    expect(hintCopy('keys')).toEqual({ start: 'Press Space to start', restart: 'Press R to restart' });
+    expect(hintCopy('keys')).toEqual({ start: 'Press Space to start', restart: 'Press R to play again' });
   });
 
   it('names taps for touch players', () => {
-    expect(hintCopy('touch')).toEqual({ start: 'Tap to start', restart: 'Tap Restart to play again' });
+    expect(hintCopy('touch')).toEqual({ start: 'Tap to start', restart: 'Tap Retry or Continue to play again' });
   });
 
   it('never mentions a key to a touch player', () => {

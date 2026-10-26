@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
-import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
+import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
 import { showerSeconds } from '../../src/content/curves';
 import { lullStart } from '../../src/content/pacingRules';
@@ -190,5 +190,12 @@ describe('galaxyLabel', () => {
 describe('DIMENSIONS', () => {
   it('names the five Dimensions', () => {
     expect(DIMENSIONS).toEqual({ 1: 'The Drift', 2: 'Ion Reach', 3: 'Crimson Nebula', 4: 'Void Rift', 5: 'Singularity' });
+  });
+});
+
+describe('galaxyIdOf', () => {
+  it('names a galaxy by its Dimension and index, the same ids the table uses', () => {
+    expect(galaxyIdOf(3, 4)).toBe('3-4');
+    expect(GALAXIES.every((g) => galaxyIdOf(g.dimension, g.index) === g.id)).toBe(true);
   });
 });

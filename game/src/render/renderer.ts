@@ -2,7 +2,7 @@ import type { Asteroid } from '../sim/asteroid';
 import type { SimEvent } from '../sim/events';
 import { isPositiveFiniteSize, type Field } from '../sim/field';
 import { createRng, deriveSeed } from '../sim/rng';
-import type { World } from '../sim/world';
+import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
@@ -263,8 +263,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     if (current === null || bakes === null) {
       throw new Error('Renderer.draw() called before resize(); call resize() once the canvas has a size');
     }
-    // The game-over step does not refresh previous poses, so interpolating would pull entities back.
-    const a = world.status === 'gameOver' ? 1 : alpha;
+    // A step after the run ends does not refresh previous poses, so interpolating would pull entities back.
+    const a = hasEnded(world.status) ? 1 : alpha;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     clearBars(current);
     ctx.save();

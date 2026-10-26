@@ -9,7 +9,7 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
-import type { World } from '../../src/sim/world';
+import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
 
@@ -76,7 +76,7 @@ function fakeCanvas(): FakeCanvas {
 }
 
 interface Stub {
-  status: 'playing' | 'gameOver';
+  status: WorldStatus;
   elapsed: number;
   ship: { x: number; y: number; px: number; py: number; angle: number; pangle: number; vx: number; vy: number; thrusting: boolean; invulnerable: boolean };
   asteroids: Asteroid[];
@@ -186,6 +186,18 @@ describe('createRenderer', () => {
     drawFrame(world, 0.5);
     expect(drawsOf(rock).map((call) => call.e)).toEqual([295]);
     stub.status = 'gameOver';
+    drawFrame(world, 0);
+    expect(drawsOf(rock).map((call) => call.e)).toEqual([300]);
+  });
+
+  it('freezes on the latest pose once a galaxy is cleared, and still interpolates through the warp-out', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { stub, world } = stubWorld();
+    const rock = baker.asteroid(stub.asteroids[0] as Asteroid, DRIFT).canvas;
+    stub.status = 'warping';
+    drawFrame(world, 0.5);
+    expect(drawsOf(rock).map((call) => call.e)).toEqual([295]);
+    stub.status = 'cleared';
     drawFrame(world, 0);
     expect(drawsOf(rock).map((call) => call.e)).toEqual([300]);
   });

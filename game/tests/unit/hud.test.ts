@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHud, hudScale, rightPillEdge, type HudBounds } from '../../src/render/hud';
 import { DRIFT } from '../../src/render/palette';
+import { galaxyById } from '../../src/content/galaxies';
 import { World } from '../../src/sim/world';
 
 const NONE: HudBounds = { insets: { top: 0, right: 0, left: 0 }, topRight: null };
@@ -112,5 +113,20 @@ describe('createHud', () => {
     const w = world();
     for (let frame = 0; frame < 10; frame++) hud.draw(ctx, w);
     expect(measured()).toBe(2);
+  });
+
+  it('labels a galaxy run by its galaxy, a boss galaxy with a star, and measures the label once', () => {
+    const hud = createHud(DRIFT);
+    const { ctx, measured } = fakeContext();
+    hud.resize(1280, 720);
+    const galaxy = new World({ seed: 1, field: { width: 1280, height: 720 }, rules: { kind: 'galaxy', galaxy: galaxyById('1-3'), mode: 'free' } });
+    for (let frame = 0; frame < 5; frame++) hud.draw(ctx, galaxy);
+    // "1-3" is 3 characters (30 px) plus 12 px padding each side, at scale 1.5.
+    expect(hud.rects.at(-1)?.width).toBe(30 + 2 * 12 * 1.5);
+    expect(measured()).toBe(2);
+    const boss = new World({ seed: 1, field: { width: 1280, height: 720 }, rules: { kind: 'galaxy', galaxy: galaxyById('2-6'), mode: 'rank' } });
+    hud.draw(ctx, boss);
+    expect(hud.rects.at(-1)?.width).toBe(30 + 2 * 12 * 1.5);
+    expect(measured()).toBe(3);
   });
 });

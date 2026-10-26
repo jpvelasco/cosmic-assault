@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { commandForKey, commandForPad } from '../../src/app/commands';
-import type { AppMode } from '../../src/app/game';
+import type { Screen } from '../../src/app/flow';
 import { GAME_KEY_CODES } from '../../src/input/keyboard';
 
 const START = { kind: 'start' };
 const TOGGLE_PAUSE = { kind: 'togglePause' };
+const BACK = { kind: 'back' };
+const CONFIRM = { kind: 'confirm' };
+const RETRY = { kind: 'retry' };
+const MENUS: readonly Screen[] = ['modeSelect', 'map', 'galaxySelect'];
+const ENDS: readonly Screen[] = ['results', 'gameOver', 'rankComplete'];
+const SCREENS: readonly Screen[] = ['title', ...MENUS, 'playing', 'paused', ...ENDS];
 
 describe('commandForKey', () => {
-  it.each([...GAME_KEY_CODES, 'Enter'].filter((code) => !code.startsWith('Arrow')))('starts from the title on %s', (code) => {
+  it.each([...GAME_KEY_CODES, 'Enter'].filter((code) => !code.startsWith('Arrow')))('plays from the title on %s', (code) => {
     expect(commandForKey('title', code)).toEqual(START);
   });
 
@@ -15,82 +21,95 @@ describe('commandForKey', () => {
     expect(commandForKey('title', code)).toBeNull();
   });
 
-  it.each([1, 2, 3, 4, 5, 6, 7])('selects practice level %i on the title instead of starting', (level) => {
-    expect(commandForKey('title', `Digit${String(level)}`)).toEqual({ kind: 'selectLevel', level });
-  });
-
-  it.each(['Digit0', 'Digit8', 'Digit9', 'Numpad1', 'KeyQ', 'Escape', 'KeyR'])('ignores %s on the title', (code) => {
+  it.each(['Digit1', 'Digit7', 'Numpad1', 'KeyQ', 'Escape', 'KeyR'])('ignores %s on the title: practice levels are gone', (code) => {
     expect(commandForKey('title', code)).toBeNull();
   });
 
-  it.each<[AppMode, string]>([
+  it.each(MENUS)('goes back on Escape from %s, and ignores the rest there', (screen) => {
+    expect(commandForKey(screen, 'Escape')).toEqual(BACK);
+    for (const code of ['Space', 'Enter', 'KeyR', 'KeyP', 'ArrowDown', 'Digit2']) expect(commandForKey(screen, code)).toBeNull();
+  });
+
+  it.each<[Screen, string]>([
     ['playing', 'Escape'],
     ['playing', 'KeyP'],
     ['paused', 'Escape'],
     ['paused', 'KeyP'],
-  ])('toggles pause while %s on %s', (mode, code) => {
-    expect(commandForKey(mode, code)).toEqual(TOGGLE_PAUSE);
+  ])('toggles pause while %s on %s', (screen, code) => {
+    expect(commandForKey(screen, code)).toEqual(TOGGLE_PAUSE);
   });
 
-  it.each<[AppMode, string]>([
+  it.each<[Screen, string]>([
     ['playing', 'Space'],
     ['playing', 'Digit3'],
     ['playing', 'KeyR'],
     ['paused', 'Enter'],
     ['paused', 'Space'],
-  ])('ignores other keys while %s (%s)', (mode, code) => {
-    expect(commandForKey(mode, code)).toBeNull();
+  ])('ignores other keys while %s (%s)', (screen, code) => {
+    expect(commandForKey(screen, code)).toBeNull();
   });
 
-  it('restarts from game over on KeyR and returns to the title on Escape', () => {
-    expect(commandForKey('gameOver', 'KeyR')).toEqual(START);
-    expect(commandForKey('gameOver', 'Escape')).toEqual({ kind: 'toTitle' });
-    for (const code of ['Space', 'Enter', 'KeyP', 'Digit2']) {
-      expect(commandForKey('gameOver', code)).toBeNull();
-    }
+  it.each(ENDS)('on %s: Enter is the card first button, R plays again and Escape goes back', (screen) => {
+    expect(commandForKey(screen, 'Enter')).toEqual(CONFIRM);
+    expect(commandForKey(screen, 'KeyR')).toEqual(RETRY);
+    expect(commandForKey(screen, 'Escape')).toEqual(BACK);
+    // Space is a fire key: a player still holding or mashing it must not skip the card.
+    for (const code of ['Space', 'KeyP', 'Digit2', 'ArrowUp']) expect(commandForKey(screen, code)).toBeNull();
   });
 });
 
 describe('mute key', () => {
-  it.each<AppMode>(['title', 'playing', 'paused', 'gameOver'])('toggles mute on KeyM while %s', (mode) => {
-    expect(commandForKey(mode, 'KeyM')).toEqual({ kind: 'toggleMute' });
+  it.each(SCREENS)('toggles mute on KeyM on %s', (screen) => {
+    expect(commandForKey(screen, 'KeyM')).toEqual({ kind: 'toggleMute' });
   });
 });
 
 describe('full screen key', () => {
-  it.each<AppMode>(['title', 'playing', 'paused', 'gameOver'])(
-    'is not queued as a command while %s: it must run inside the keydown handler',
-    (mode) => {
-      expect(commandForKey(mode, 'KeyF')).toBeNull();
-    },
-  );
+  it.each(SCREENS)('is not queued as a command on %s: it must run inside the keydown handler', (screen) => {
+    expect(commandForKey(screen, 'KeyF')).toBeNull();
+  });
 });
 
 describe('commandForPad', () => {
-  it.each<[AppMode, unknown]>([
+  it.each<[Screen, unknown]>([
     ['title', START],
-    ['paused', TOGGLE_PAUSE],
-    ['gameOver', START],
+    ['modeSelect', null],
+    ['map', null],
+    ['galaxySelect', null],
     ['playing', null],
-  ])('confirm with nothing focused in %s', (mode, command) => {
-    expect(commandForPad(mode, 'confirm')).toEqual(command);
+    ['paused', TOGGLE_PAUSE],
+    ['results', CONFIRM],
+    ['gameOver', CONFIRM],
+    ['rankComplete', CONFIRM],
+  ])('confirm with nothing focused on %s', (screen, command) => {
+    expect(commandForPad(screen, 'confirm')).toEqual(command);
   });
 
-  it.each<[AppMode, unknown]>([
+  it.each<[Screen, unknown]>([
     ['title', null],
+    ['modeSelect', BACK],
+    ['map', BACK],
+    ['galaxySelect', BACK],
     ['playing', null],
     ['paused', TOGGLE_PAUSE],
-    ['gameOver', { kind: 'toTitle' }],
-  ])('back in %s', (mode, command) => {
-    expect(commandForPad(mode, 'back')).toEqual(command);
+    ['results', BACK],
+    ['gameOver', BACK],
+    ['rankComplete', BACK],
+  ])('back on %s', (screen, command) => {
+    expect(commandForPad(screen, 'back')).toEqual(command);
   });
 
-  it.each<[AppMode, unknown]>([
+  it.each<[Screen, unknown]>([
     ['title', START],
+    ['modeSelect', null],
+    ['map', null],
+    ['galaxySelect', null],
     ['playing', TOGGLE_PAUSE],
     ['paused', TOGGLE_PAUSE],
-    ['gameOver', START],
-  ])('pause (Start) in %s', (mode, command) => {
-    expect(commandForPad(mode, 'pause')).toEqual(command);
+    ['results', CONFIRM],
+    ['gameOver', CONFIRM],
+    ['rankComplete', CONFIRM],
+  ])('pause (Start) on %s', (screen, command) => {
+    expect(commandForPad(screen, 'pause')).toEqual(command);
   });
 });

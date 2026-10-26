@@ -34,11 +34,16 @@ function showers(dimension: Dimension, index: GalaxyIndex, duration: number): Ga
   return SHOWER_SHARES[index <= 3 ? 1 : 2].map((share) => ({ at: Math.min(latest, Math.round(duration * share)), type: 'meteorShower', intensity }));
 }
 
+/** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
+export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
+  return `${String(dimension)}-${String(index)}` as GalaxyId;
+}
+
 function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
   const boss = index === 6;
   const duration = boss ? BOSS_APPROACH_SECONDS : survivalSeconds(dimension);
   return {
-    id: `${String(dimension)}-${String(index)}` as GalaxyId,
+    id: galaxyIdOf(dimension, index),
     dimension,
     index,
     kind: boss ? 'boss' : 'survival',
@@ -51,8 +56,8 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
   };
 }
 
-const DIMENSION_NUMBERS: readonly Dimension[] = [1, 2, 3, 4, 5];
-const GALAXY_INDEXES: readonly GalaxyIndex[] = [1, 2, 3, 4, 5, 6];
+export const DIMENSION_NUMBERS: readonly Dimension[] = [1, 2, 3, 4, 5];
+export const GALAXY_INDEXES: readonly GalaxyIndex[] = [1, 2, 3, 4, 5, 6];
 
 export const GALAXIES: readonly GalaxyDef[] = DIMENSION_NUMBERS.flatMap((dimension) => GALAXY_INDEXES.map((index) => galaxy(dimension, index)));
 

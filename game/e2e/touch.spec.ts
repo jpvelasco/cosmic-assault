@@ -125,7 +125,7 @@ test('a second finger on the pause button pauses while the thumb holds the stick
   await fingers.releaseAll();
 });
 
-test('taps on the game-over card outside its buttons keep the score; Restart restarts', async ({ page }) => {
+test('taps on the game-over card outside its buttons keep the score; Continue plays on', async ({ page }) => {
   await tapToStart(page, openGameOverRun);
   await waitForGameOver(page);
   await waitOutGameOverGuard(page);
@@ -138,7 +138,7 @@ test('taps on the game-over card outside its buttons keep the score; Restart res
     expect((await gameState(page)).mode).toBe('gameOver');
   }
 
-  await page.getByRole('button', { name: 'Restart' }).tap();
+  await page.getByTestId('rank-continue').tap();
   await expectMode(page, 'playing');
 });
 

@@ -98,8 +98,9 @@
       .overlay[hidden] {
         display: none;
       }
-      /* The title has no run behind it, so it paints the Drift sky itself. */
-      .overlay--title {
+      /* The title and the menu cards have no run behind them, so they paint the Drift sky themselves. */
+      .overlay--title,
+      .overlay--menu {
         background:
           radial-gradient(circle 73vh at 18% 25%, color-mix(in srgb, var(--nebula-pink) 30%, transparent), transparent),
           radial-gradient(circle 53vh at 35% 10%, color-mix(in srgb, var(--nebula-orange) 20%, transparent), transparent),
@@ -108,7 +109,8 @@
           linear-gradient(to bottom right, var(--sky-1), var(--sky-2) 55%, var(--sky-3));
       }
       /* A sparse starfield: small tiles of different sizes, so the repeat never lines up. */
-      .overlay--title::before {
+      .overlay--title::before,
+      .overlay--menu::before {
         content: '';
         position: absolute;
         inset: 0;
@@ -266,9 +268,8 @@
       .overlay .segment:active {
         transform: scale(0.95);
       }
-      /* Primary actions and the chosen level wear the accent gradient. */
+      /* Primary actions and the chosen setting wear the accent gradient. */
       .overlay .menu-button--primary,
-      .overlay .level-chip[aria-pressed='true'],
       .overlay .segment:has(input:checked) {
         color: white;
         text-shadow: var(--text-drop);
@@ -278,11 +279,6 @@
           var(--gloss-edge),
           0 0 18px color-mix(in srgb, var(--accent-2) 55%, transparent),
           var(--drop);
-      }
-      .level-chip {
-        width: clamp(38px, 10.5vw, 44px);
-        height: clamp(38px, 10.5vw, 44px);
-        padding: 0;
       }
       .menu-button {
         min-width: 168px;
@@ -298,6 +294,11 @@
       }
       .chip[hidden] {
         display: none;
+      }
+      /* A locked Dimension or galaxy: shown, with what opens it, but not pressable. */
+      .overlay button:disabled {
+        cursor: default;
+        opacity: 0.55;
       }
       /* The iOS install steps: longer than a chip, and not a control, so a quiet line under the row. */
       .install-hint {
@@ -476,10 +477,6 @@
         }
         .heading {
           font-size: 1.35rem;
-        }
-        .level-chip {
-          width: 34px;
-          height: 34px;
         }
         .menu-button {
           min-width: 140px;

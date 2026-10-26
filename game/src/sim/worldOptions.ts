@@ -59,6 +59,11 @@ export function isStartLives(lives: number): boolean {
   return livesUpTo(lives, PLAYER.startLives);
 }
 
+/** A galaxy run (Rank) starts with an integer 1–5 lives. */
+export function isGalaxyStartLives(lives: number): boolean {
+  return livesUpTo(lives, MAX_GALAXY_START_LIVES);
+}
+
 function livesUpTo(lives: number, max: number): boolean {
   return Number.isInteger(lives) && lives >= MIN_START_LIVES && lives <= max;
 }

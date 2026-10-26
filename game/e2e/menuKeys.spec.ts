@@ -26,31 +26,29 @@ test('Enter on the focused Quit lands on the title and does not start a run', as
   expect((await gameState(page)).ship).toBeNull();
 });
 
-test('Space on a focused level chip selects it and stays on the title', async ({ page }) => {
-  await openGame(page);
-  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '4', exact: true })).toBeFocused();
+test('Space on the focused Play opens mode select without starting a run, and Escape comes back', async ({ page }) => {
+  await openGame(page, { galaxy: null });
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('play')).toBeFocused();
 
   await page.keyboard.press('Space');
-  await expect.poll(async () => (await gameState(page)).practiceLevel).toBe(4);
-  await expectModeHolds(page, 'title');
+  await expectModeHolds(page, 'modeSelect');
+  expect((await gameState(page)).ship).toBeNull();
 
   // Arrows move focus on the next frame, so Enter waits until it has.
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '5', exact: true })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect.poll(async () => (await gameState(page)).practiceLevel).toBe(5);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await page.keyboard.press('Escape');
   await expectModeHolds(page, 'title');
 });
 
 test('a mouse press on a card button drops the focus the keys had reached, so Space still starts a run', async ({ page }) => {
   await openGame(page);
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '2', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('play')).toBeFocused();
 
-  await page.getByRole('button', { name: '3', exact: true }).click();
-  await expect.poll(async () => (await gameState(page)).practiceLevel).toBe(3);
+  await page.getByTestId('sound-toggle').click();
+  await expect.poll(async () => (await gameState(page)).muted).toBe(true);
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
   await expectModeHolds(page, 'title');
 

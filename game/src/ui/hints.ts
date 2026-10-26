@@ -10,8 +10,8 @@ export interface HintCopy {
 }
 
 const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
-  keys: { start: 'Press Space to start', restart: 'Press R to restart' },
-  touch: { start: 'Tap to start', restart: 'Tap Restart to play again' },
+  keys: { start: 'Press Space to start', restart: 'Press R to play again' },
+  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again' },
 };
 
 export function hintCopy(style: InputStyle): HintCopy {

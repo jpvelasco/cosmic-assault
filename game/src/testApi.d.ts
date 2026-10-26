@@ -18,9 +18,18 @@ interface CosmicAssaultTestRect {
 }
 
 interface CosmicAssaultTestState {
-  readonly mode: import('./app/game').AppMode;
+  /** The screen shown; the same as `screen`, kept from before there were more screens than modes. */
+  readonly mode: import('./app/flow').Screen;
+  readonly screen: import('./app/flow').Screen;
+  /** The galaxy in play or just played (on its end card); null before the first run. */
+  readonly galaxy: import('./content/types').GalaxyId | null;
+  /** A frozen copy of the save in memory. A debug run (`?galaxy=`, `?seed=` or `?lives=`) keeps it in memory only. */
+  readonly save: import('./meta/save').SaveData;
+  /** The Rank run as carried into the galaxy in play (on results, into the next one); null outside Rank. A frozen copy. */
+  readonly rankRun: import('./meta/rankRun').RankRun | null;
+  /** Always 1: runs are galaxies now and practice levels are left to the unit tests. Kept for bridge v3. */
   readonly practiceLevel: number;
-  /** Score, lives and counts are 0 and ship is null while no run exists (title screen). */
+  /** Score, lives and counts are 0 and ship is null while no run exists (title and menu screens). */
   readonly score: number;
   readonly lives: number;
   readonly ship: CosmicAssaultTestShip | null;

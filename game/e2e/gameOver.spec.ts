@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { practiceSettings } from '../src/sim/asteroid';
+import { RANK_START_LIVES } from '../src/meta/rankRun';
 import {
   expect,
   expectMode,
@@ -11,11 +11,20 @@ import {
   waitOutGameOverGuard,
 } from './fixtures';
 
+/** Starts the one-life Rank run of the game-over galaxy; its game over card offers Continue and Title. */
 async function startOneLifeRun(page: Page): Promise<void> {
   await openGameOverRun(page);
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
   expect((await gameState(page)).lives).toBe(1);
+}
+
+/** Continue replays the galaxy with fresh lives, the score reset and the run marked. */
+async function expectContinued(page: Page): Promise<void> {
+  await expectMode(page, 'playing');
+  const { lives, rankRun, score } = await gameState(page);
+  expect({ lives, score }).toEqual({ lives: RANK_START_LIVES, score: 0 });
+  expect(rankRun).toMatchObject({ score: 0, lives: RANK_START_LIVES, continued: true });
 }
 
 /**
@@ -40,7 +49,7 @@ function pressRAsTheCardOpens(page: Page): Promise<void> {
   );
 }
 
-test('R is ignored while the card opens and restarts once the guard lapses', async ({ page }) => {
+test('R is ignored while the card opens and continues the run once the guard lapses', async ({ page }) => {
   await startOneLifeRun(page);
 
   await pressRAsTheCardOpens(page);
@@ -49,8 +58,7 @@ test('R is ignored while the card opens and restarts once the guard lapses', asy
 
   await waitOutGameOverGuard(page);
   await page.keyboard.press('KeyR');
-  await expectMode(page, 'playing');
-  expect((await gameState(page)).lives).toBe(1);
+  await expectContinued(page);
 });
 
 test('a click on the card outside its buttons does not restart', async ({ page }) => {
@@ -65,24 +73,30 @@ test('a click on the card outside its buttons does not restart', async ({ page }
   await expect(page.getByText(/^Score \d+$/)).toBeVisible();
 });
 
-test('Title returns to the title, where the chosen level starts the next run', async ({ page }) => {
+test('Continue on the card continues the run', async ({ page }) => {
   await startOneLifeRun(page);
   await waitForGameOver(page);
   await waitOutGameOverGuard(page);
 
-  await page.getByRole('button', { name: 'Title' }).click();
+  await page.getByTestId('rank-continue').click();
+  await expectContinued(page);
+});
+
+test('Title ends the run and returns to the title, where Play starts a fresh one', async ({ page }) => {
+  await startOneLifeRun(page);
+  await waitForGameOver(page);
+  await waitOutGameOverGuard(page);
+  await expect(page.getByTestId('rank-continue')).toBeVisible();
+
+  await page.getByTestId('rank-title').click();
   await expectMode(page, 'title');
-  await page.getByRole('button', { name: '4', exact: true }).click();
-  await expect.poll(async () => (await gameState(page)).practiceLevel).toBe(4);
+  expect((await gameState(page)).rankRun).toBeNull();
   await page.keyboard.press('Space');
 
   await expectMode(page, 'playing');
-  expect((await gameState(page)).practiceLevel).toBe(4);
-  // The run tops up one asteroid per step to level 4's minimum of 6 within a few steps; level 1
-  // (minimum 3, one timed spawn per 3.5 s) cannot reach 6 inside this 2 s window.
-  await expect
-    .poll(async () => (await gameState(page)).asteroidCount, { timeout: 2000 })
-    .toBeGreaterThanOrEqual(practiceSettings(4).minAsteroids);
+  const { lives, rankRun } = await gameState(page);
+  expect(lives).toBe(1);
+  expect(rankRun).toMatchObject({ score: 0, lives: 1, continued: false });
 });
 
 test('a fire key held through the restart does not fire until pressed again', async ({ page }) => {

@@ -4,7 +4,7 @@ import type { Effects } from '../render/effects';
 import { listen } from '../ui/dom';
 import { createSettingsCard, type SettingsCard } from '../ui/settingsCard';
 import type { Toast } from '../ui/toast';
-import type { AppMode } from './game';
+import type { Screen } from './flow';
 import type { HitStop } from './hitStop';
 import { actsUnder, type Cover } from './inputRouting';
 import { saveSettings, shakeEnabled, type Settings } from './settings';
@@ -21,7 +21,7 @@ export interface SettingsControllerDeps {
   readonly touch: Pick<TouchControls, 'setLeftHanded'>;
   readonly hitStop: HitStop;
   readonly effects: Effects;
-  mode(): AppMode;
+  screen(): Screen;
   covers(): readonly Cover[];
   syncView(): void;
   /** Puts focus back on the chip that opened the card. */
@@ -112,8 +112,8 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     card,
     toggleMute,
     openSettings: () => {
-      const mode = deps.mode();
-      if (open || (mode !== 'title' && mode !== 'paused')) return;
+      const screen = deps.screen();
+      if (open || (screen !== 'title' && screen !== 'paused')) return;
       open = true;
       deps.syncView();
       card.show();

@@ -134,21 +134,21 @@ test('Start pauses and resumes, and B resumes from the pause card', { tag: '@des
 });
 
 test('on the title the arrow keys move focus instead of starting, and A presses the focused chip', { tag: '@desktop' }, async ({ page }) => {
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '2', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('play')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('sound-toggle')).toBeFocused();
   await nextFrames(page, 3);
   await expectMode(page, 'title');
 
   await tap(page, A);
-  expect((await gameState(page)).practiceLevel).toBe(2);
+  expect((await gameState(page)).muted).toBe(true);
   await expectMode(page, 'title');
 });
 
-test('the D-pad walks from the level chips down to the sound chip and across to settings, and A opens it', { tag: '@desktop' }, async ({ page }) => {
+test('the D-pad walks from Play down to the sound chip and across to settings, and A opens it', { tag: '@desktop' }, async ({ page }) => {
   await tap(page, DPAD_DOWN);
-  await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
+  await expect(page.getByTestId('play')).toBeFocused();
 
   await tap(page, DPAD_DOWN);
   await expect(page.getByTestId('sound-toggle')).toBeFocused();
@@ -179,18 +179,37 @@ test('Start starts a run from the title', { tag: '@desktop' }, async ({ page }) 
 });
 
 test('pad navigation shows the focus ring even after a mouse click, until the next pointer press', { tag: '@desktop' }, async ({ page }) => {
-  const outline = (name: string) => page.getByRole('button', { name, exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle);
-  // A click picks the level without taking focus, so the pad starts from the first chip.
-  await page.getByRole('button', { name: '3', exact: true }).click();
-  await tap(page, DPAD_RIGHT);
-  await tap(page, DPAD_RIGHT);
-  const two = page.getByRole('button', { name: '2', exact: true });
-  await expect(two).toBeFocused();
-  expect(await outline('2')).toBe('solid');
+  const sound = page.getByTestId('sound-toggle');
+  const outline = () => sound.evaluate((el) => getComputedStyle(el).outlineStyle);
+  // A click on a chip does not take focus, so the pad starts from the first control.
+  await sound.click();
+  await tap(page, DPAD_DOWN);
+  await tap(page, DPAD_DOWN);
+  await expect(sound).toBeFocused();
+  expect(await outline()).toBe('solid');
 
-  await page.getByRole('button', { name: '1', exact: true }).click();
+  await sound.click();
   await expect.poll(() => page.evaluate(() => document.body.classList.contains('nav-keys'))).toBe(false);
-  expect(await outline('2')).toBe('none');
+  expect(await outline()).toBe('none');
+});
+
+test('on mode select A focuses the first button, A presses it, and B goes back a screen', { tag: '@desktop' }, async ({ page }) => {
+  await openGame(page, { galaxy: null });
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
+
+  await tap(page, A);
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await expectMode(page, 'modeSelect');
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await tap(page, A);
+  await expectMode(page, 'map');
+
+  await tap(page, B);
+  await expectMode(page, 'modeSelect');
+  await tap(page, B);
+  await expectMode(page, 'title');
 });
 
 test('behind the settings card the pad can only reach the card, and Start does not begin a run', { tag: '@desktop' }, async ({ page }) => {
