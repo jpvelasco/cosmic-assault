@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 import { IOS_INSTALL_HINT } from '../src/ui/hints';
 import { expect, test } from './fixtures';
 
-// No test here needs the test bridge, so the spec also runs against the release build (project release-smoke).
+// No test here needs the test bridge. The release build (project release-smoke) runs only the @release one: the
+// install metadata it ships. The chip's behaviour is the same in both builds, so chromium-desktop alone covers it.
 
 const offer = (page: Page) => page.getByTestId('install-offer');
 
@@ -104,7 +105,7 @@ test.describe('in iOS Safari', () => {
   });
 });
 
-test('the manifest link and every icon it lists resolve', async ({ page, request }) => {
+test('the manifest link and every icon it lists resolve', { tag: '@release' }, async ({ page, request }) => {
   await openTitle(page);
   const manifestUrl = await page.locator('link[rel="manifest"]').evaluate((link: HTMLLinkElement) => link.href);
   const touchIconUrl = await page.locator('link[rel="apple-touch-icon"]').evaluate((link: HTMLLinkElement) => link.href);

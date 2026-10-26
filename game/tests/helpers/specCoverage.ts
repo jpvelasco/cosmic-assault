@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import type { PlaywrightTestConfig } from '@playwright/test';
 
 export type SpecPattern = string | RegExp;
@@ -26,4 +28,32 @@ export function unmatchedSpecs(specs: readonly string[], patterns: readonly Spec
 export function projectsWithTestIgnore(config: PlaywrightTestConfig): string[] {
   const projects = (config.projects ?? []).map((project) => ({ name: project.name ?? '(unnamed)', testIgnore: project.testIgnore }));
   return [{ name: '(config)', testIgnore: config.testIgnore }, ...projects].filter((owner) => owner.testIgnore !== undefined).map((owner) => owner.name);
+}
+
+/** The part of a `playwright test --list --reporter=json` report the coverage check reads. */
+export interface ListedSuite {
+  readonly file: string;
+  readonly specs?: readonly { readonly tests: readonly unknown[] }[];
+  readonly suites?: readonly ListedSuite[];
+}
+
+function hasTests(suite: ListedSuite): boolean {
+  return (suite.specs ?? []).some((spec) => spec.tests.length > 0) || (suite.suites ?? []).some(hasTests);
+}
+
+/** The spec files in `report` that keep at least one test once testMatch, grep and tags have had their say. */
+export function specsWithTests(report: { readonly suites?: readonly ListedSuite[] }): string[] {
+  return (report.suites ?? []).filter(hasTests).map((suite) => suite.file);
+}
+
+/** The `--project=` names an npm script passes to `playwright test`. */
+export function scriptProjects(script: string): string[] {
+  return [...script.matchAll(/--project=(\S+)/g)].map(([, name]) => name ?? '');
+}
+
+/** Lists, without running, the tests Playwright would run for `projects`; no browser or web server starts. */
+export function listTests(projects: readonly string[], cwd: string): { suites?: ListedSuite[] } {
+  const cli = join(cwd, 'node_modules', '@playwright', 'test', 'cli.js');
+  const args = [cli, 'test', '--list', '--reporter=json', ...projects.map((project) => `--project=${project}`)];
+  return JSON.parse(execFileSync(process.execPath, args, { cwd, encoding: 'utf8' })) as { suites?: ListedSuite[] };
 }

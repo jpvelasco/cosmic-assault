@@ -18,6 +18,9 @@ interface FakePad {
   axes: number[];
 }
 
+// The pad reads the same on every screen, so these run on the desktop only (@desktop); the phone runs the one test
+// that needs its rotate prompt (@phone). See the project filters in playwright.config.ts.
+
 /** A pad the page sees through `navigator.getGamepads`, which a test works by changing the flags on `window.__fakePad`. */
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -65,12 +68,12 @@ async function startRun(page: Page): Promise<void> {
   await expectMode(page, 'playing');
 }
 
-test('A on the title starts a run', async ({ page }) => {
+test('A on the title starts a run', { tag: '@desktop' }, async ({ page }) => {
   await expectMode(page, 'title');
   await startRun(page);
 });
 
-test('the first A with sound still locked says how to turn it on, once', async ({ page }) => {
+test('the first A with sound still locked says how to turn it on, once', { tag: '@desktop' }, async ({ page }) => {
   const toast = page.getByRole('status');
   await startRun(page);
   // A pad press is no user activation, so the browser keeps sound off until a tap or key press.
@@ -86,7 +89,7 @@ test('the first A with sound still locked says how to turn it on, once', async (
   await expect(toast).toHaveText('');
 });
 
-test('holding the right trigger fires', async ({ page }) => {
+test('holding the right trigger fires', { tag: '@desktop' }, async ({ page }) => {
   await startRun(page);
   expect((await gameState(page)).projectileCount).toBe(0);
 
@@ -95,7 +98,7 @@ test('holding the right trigger fires', async ({ page }) => {
   await setButton(page, RT, false);
 });
 
-test('D-pad up thrusts, and disconnecting the pad mid-thrust stops it', async ({ page }) => {
+test('D-pad up thrusts, and disconnecting the pad mid-thrust stops it', { tag: '@desktop' }, async ({ page }) => {
   await startRun(page);
 
   await setButton(page, DPAD_UP, true);
@@ -105,7 +108,7 @@ test('D-pad up thrusts, and disconnecting the pad mid-thrust stops it', async ({
   await expect.poll(async () => (await shipState(page)).thrusting).toBe(false);
 });
 
-test('the left stick points the ship where it is pushed and thrusts, like the touch joystick', async ({ page }) => {
+test('the left stick points the ship where it is pushed and thrusts, like the touch joystick', { tag: '@desktop' }, async ({ page }) => {
   await startRun(page);
   await page.evaluate(() => {
     (window as unknown as { __fakePad: FakePad }).__fakePad.axes[1] = 1;
@@ -116,7 +119,7 @@ test('the left stick points the ship where it is pushed and thrusts, like the to
   await expect.poll(async () => (await shipState(page)).thrusting).toBe(true);
 });
 
-test('Start pauses and resumes, and B resumes from the pause card', async ({ page }) => {
+test('Start pauses and resumes, and B resumes from the pause card', { tag: '@desktop' }, async ({ page }) => {
   await startRun(page);
 
   await tap(page, START);
@@ -130,7 +133,7 @@ test('Start pauses and resumes, and B resumes from the pause card', async ({ pag
   await expectMode(page, 'playing');
 });
 
-test('on the title the arrow keys move focus instead of starting, and A presses the focused chip', async ({ page }) => {
+test('on the title the arrow keys move focus instead of starting, and A presses the focused chip', { tag: '@desktop' }, async ({ page }) => {
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -143,7 +146,7 @@ test('on the title the arrow keys move focus instead of starting, and A presses 
   await expectMode(page, 'title');
 });
 
-test('the D-pad walks from the level chips down to the sound chip and across to settings, and A opens it', async ({ page }) => {
+test('the D-pad walks from the level chips down to the sound chip and across to settings, and A opens it', { tag: '@desktop' }, async ({ page }) => {
   await tap(page, DPAD_DOWN);
   await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
 
@@ -155,7 +158,7 @@ test('the D-pad walks from the level chips down to the sound chip and across to 
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
 });
 
-test('in settings the D-pad adjusts a slider and B closes the card', async ({ page }) => {
+test('in settings the D-pad adjusts a slider and B closes the card', { tag: '@desktop' }, async ({ page }) => {
   await page.getByTestId('settings-open').click();
   const music = page.getByTestId('settings-music');
   await expect(music).toBeFocused();
@@ -170,12 +173,12 @@ test('in settings the D-pad adjusts a slider and B closes the card', async ({ pa
   await expectMode(page, 'title');
 });
 
-test('Start starts a run from the title', async ({ page }) => {
+test('Start starts a run from the title', { tag: '@desktop' }, async ({ page }) => {
   await tap(page, START);
   await expectMode(page, 'playing');
 });
 
-test('pad navigation shows the focus ring even after a mouse click, until the next pointer press', async ({ page }) => {
+test('pad navigation shows the focus ring even after a mouse click, until the next pointer press', { tag: '@desktop' }, async ({ page }) => {
   const outline = (name: string) => page.getByRole('button', { name, exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle);
   // A click picks the level without taking focus, so the pad starts from the first chip.
   await page.getByRole('button', { name: '3', exact: true }).click();
@@ -190,7 +193,7 @@ test('pad navigation shows the focus ring even after a mouse click, until the ne
   expect(await outline('2')).toBe('none');
 });
 
-test('behind the settings card the pad can only reach the card, and Start does not begin a run', async ({ page }) => {
+test('behind the settings card the pad can only reach the card, and Start does not begin a run', { tag: '@desktop' }, async ({ page }) => {
   await page.getByTestId('settings-open').click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog).toBeVisible();
@@ -204,8 +207,7 @@ test('behind the settings card the pad can only reach the card, and Start does n
   await expectMode(page, 'title');
 });
 
-test('the rotate prompt covers every card: the pad focuses nothing and cannot start a run', async ({ page, isMobile }) => {
-  test.skip(!isMobile, 'The rotate prompt only shows on a phone.');
+test('the rotate prompt covers every card: the pad focuses nothing and cannot start a run', { tag: '@phone' }, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId('rotate-prompt')).toBeVisible();
 
