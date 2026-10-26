@@ -76,13 +76,16 @@ function make(win: ReturnType<typeof fakeWindow>, log = new RingLog()) {
 }
 
 /** A `beforeinstallprompt` event as Chromium sends it: cancelable, with `prompt()` and a `userChoice` promise. */
-function promptEvent(prompt: () => Promise<void> = () => Promise.resolve()) {
+function promptEvent(prompt: () => Promise<void> = () => Promise.resolve(), outcome: 'accepted' | 'dismissed' = 'accepted') {
   const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
     prompt: vi.fn(prompt),
-    userChoice: Promise.resolve({ outcome: 'dismissed', platform: '' }),
+    userChoice: Promise.resolve({ outcome, platform: '' }),
   });
   return event;
 }
+
+/** Lets the prompt's promise chain settle. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('isStandalone', () => {
   it('is true when the display mode is standalone', () => {
@@ -115,7 +118,7 @@ describe('createInstallPrompt', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the kept prompt on install, then withdraws the offer once the player chooses', async () => {
+  it('shows the kept prompt on install, then withdraws the offer once the player accepts', async () => {
     const win = fakeWindow();
     const { install, onChange } = make(win);
     const event = promptEvent();
@@ -139,21 +142,33 @@ describe('createInstallPrompt', () => {
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 
-  it('logs a prompt the browser refuses, with what to do, and withdraws the offer', async () => {
+  it('keeps the offer when the player dismisses the prompt', async () => {
+    const win = fakeWindow();
+    const { install } = make(win);
+    win.dispatchEvent(promptEvent(undefined, 'dismissed'));
+
+    install.install();
+    await settle();
+    expect(install.offer).toBe('prompt');
+  });
+
+  it('logs a prompt the browser refuses, with what to do, and keeps the offer', async () => {
     const win = fakeWindow();
     const { install, log } = make(win);
-    win.dispatchEvent(promptEvent(() => Promise.reject(new Error('already shown'))));
+    // A pad press is no user activation, so Chromium refuses the prompt it asks for.
+    win.dispatchEvent(promptEvent(() => Promise.reject(new DOMException('needs a user gesture', 'NotAllowedError'))));
 
     install.install();
     await vi.waitFor(() => {
-      expect(install.offer).toBe('none');
+      expect(log.size).toBe(1);
     });
     const [entry] = log.entries();
     expect(entry?.kind).toBe('error');
-    expect(entry?.message).toMatch(/already shown.*browser menu/);
+    expect(entry?.message).toMatch(/user gesture.*browser menu/);
+    expect(install.offer).toBe('prompt');
   });
 
-  it('logs a prompt that throws instead of rejecting', () => {
+  it('logs a prompt that throws instead of rejecting, and keeps the offer', () => {
     const win = fakeWindow();
     const { install, log } = make(win);
     const event = promptEvent();
@@ -165,8 +180,24 @@ describe('createInstallPrompt', () => {
     expect(() => {
       install.install();
     }).not.toThrow();
-    expect(install.offer).toBe('none');
+    expect(install.offer).toBe('prompt');
     expect(log.entries()[0]?.message).toMatch(/not allowed/);
+  });
+
+  it('shows the prompt once however often the chip is pressed while it is up, and again once it is answered', async () => {
+    const win = fakeWindow();
+    const { install } = make(win);
+    let answer: () => void = () => undefined;
+    const event = promptEvent(() => new Promise<void>((resolve) => (answer = resolve)), 'dismissed');
+    win.dispatchEvent(event);
+
+    install.install();
+    install.install();
+    expect(event.prompt).toHaveBeenCalledTimes(1);
+    answer();
+    await settle();
+    install.install();
+    expect(event.prompt).toHaveBeenCalledTimes(2);
   });
 
   it('does nothing on install while it holds no prompt', () => {

@@ -10,6 +10,11 @@ export type AudioState = 'none' | 'suspended' | 'running' | 'closed';
 /** How loud the music is relative to its volume setting. */
 export type MusicLevel = 'play' | 'paused' | 'menu';
 
+/** Whether sound is wanted but waits for a key press or tap to start (or wake) the context: not muted, not failed, not running. */
+export function needsSoundGesture(state: AudioState, muted: boolean): boolean {
+  return !muted && (state === 'none' || state === 'suspended');
+}
+
 export interface AudioEngine {
   readonly state: AudioState;
   readonly muted: boolean;

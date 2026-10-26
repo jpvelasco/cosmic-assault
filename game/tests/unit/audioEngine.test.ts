@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAudioEngine, type AudioEngine } from '../../src/audio/engine';
+import { createAudioEngine, needsSoundGesture, type AudioEngine } from '../../src/audio/engine';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/app/settings';
 import type { SimEvent } from '../../src/sim/events';
 
@@ -132,6 +132,19 @@ afterEach(() => {
   for (const e of engines.splice(0)) e.dispose();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('needsSoundGesture', () => {
+  it('is true while wanted sound waits for a key press or tap to start the context', () => {
+    expect(needsSoundGesture('none', false)).toBe(true);
+    expect(needsSoundGesture('suspended', false)).toBe(true);
+  });
+
+  it('is false once sound runs, while muted, and after the audio failed for good', () => {
+    expect(needsSoundGesture('running', false)).toBe(false);
+    expect(needsSoundGesture('none', true)).toBe(false);
+    expect(needsSoundGesture('closed', false)).toBe(false);
+  });
 });
 
 describe('unlocking', () => {

@@ -1,8 +1,8 @@
 import type { App, E2eHooks } from './app/game';
 import type { World } from './sim/world';
 
-/** The message e2e specs allow in the console; the bridge is the only place it exists. */
-const DELIBERATE_CRASH = 'e2e: deliberate crash';
+/** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
+export const DELIBERATE_CRASH = 'e2e: deliberate crash';
 
 function shipState({ ship }: World): CosmicAssaultTestShip {
   const { x, y, vx, vy, angle, thrusting, invulnerable } = ship;

@@ -1,6 +1,6 @@
-import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
+import { createAudioEngine, needsSoundGesture, type AudioState, type MusicLevel } from '../audio/engine';
 import { currentBuildLabel } from '../buildLabel';
-import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadSnapshot } from '../input/gamepad';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
@@ -21,6 +21,7 @@ import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
+import { SOUND_GESTURE_HINT } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
@@ -134,6 +135,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const padFire = createPadFireLatch();
   let lastFrameAt = performance.now();
   let frameId = 0;
+  /** The sound hint is given once a visit: a pad-only player needs it once, and a toast on every A would nag. */
+  let soundHintGiven = false;
   const button = (command: Command) => (): void => {
     router.applyCommand(command, performance.now());
   };
@@ -316,6 +319,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     view.sync();
   }
 
+  /** Pads grant no user activation, so the first A while sound waits for one says how to turn it on. */
+  function hintSoundGesture(edges: readonly PadEdge[]): void {
+    if (soundHintGiven || !edges.includes('confirm') || !needsSoundGesture(audio.state, audio.muted)) return;
+    soundHintGiven = true;
+    toast.show(SOUND_GESTURE_HINT);
+  }
+
   function readControls(pad: PadSnapshot | null): Controls {
     const keys = controlsFromKeys(startKeys.active(keyboard.held));
     return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
@@ -365,6 +375,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const edges = padEdges(previousPad, pad);
     previousPad = pad;
     router.routePad(edges, now);
+    hintSoundGesture(edges);
     router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;

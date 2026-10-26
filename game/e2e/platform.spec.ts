@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { DELIBERATE_CRASH } from '../src/testBridge';
 import { expect, expectMode, gameState, nextFrames, openGame, openGameOverRun, test, waitForGameOver } from './fixtures';
 
 const rotatePrompt = (page: Page) => page.getByTestId('rotate-prompt');
@@ -6,7 +7,6 @@ const PORTRAIT = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 const IDLE_CURSOR_WAIT_MS = 2300;
 
-const DELIBERATE_CRASH = 'e2e: deliberate crash';
 const inert = (page: Page, selector: string) => page.locator(selector).evaluate((el: HTMLElement) => el.inert);
 const cursorIdle = (page: Page) => page.evaluate(() => document.body.classList.contains('cursor-idle'));
 

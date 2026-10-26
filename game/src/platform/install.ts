@@ -34,9 +34,14 @@ function isInstallPromptEvent(e: Event): e is InstallPromptEvent {
   return 'prompt' in e && typeof e.prompt === 'function' && 'userChoice' in e;
 }
 
+/** Whether the player chose to install from the prompt (`userChoice` resolves to `{ outcome }`). */
+function accepted(choice: unknown): boolean {
+  return typeof choice === 'object' && choice !== null && 'outcome' in choice && choice.outcome === 'accepted';
+}
+
 export interface InstallPrompt {
   readonly offer: InstallOffer;
-  /** Shows the kept browser prompt. Call it from a tap or key press; the offer goes once the player chooses. */
+  /** Shows the kept browser prompt. Call it from a tap or key press; the offer goes once the player installs. */
   readonly install: () => void;
   readonly dispose: () => void;
 }
@@ -48,6 +53,8 @@ export interface InstallPrompt {
 export function createInstallPrompt(win: Window, log: RingLog, onChange: () => void): InstallPrompt {
   const iosSafari = isIosSafari(win.navigator.userAgent, win.navigator.maxTouchPoints);
   let kept: InstallPromptEvent | null = null;
+  /** While a prompt is up, a second press of the chip must not ask for another. */
+  let showing = false;
 
   const onPrompt = (e: Event): void => {
     if (!isInstallPromptEvent(e)) return;
@@ -55,14 +62,14 @@ export function createInstallPrompt(win: Window, log: RingLog, onChange: () => v
     kept = e;
     onChange();
   };
-  /** A prompt can be shown only once, so after any choice, an install or a failure there is nothing left to offer. */
+  /** Only an install ends the offer. After a dismissal the browser sends a fresh prompt, which replaces the kept one. */
   const withdraw = (): void => {
     kept = null;
     onChange();
   };
+  /** A refusal (no user gesture, as after a pad press) leaves the offer for a tap or key press to try again. */
   const refused = (reason: unknown): void => {
     log.add('error', `Could not show the install prompt: ${errorMessage(reason)}. Install from the browser menu instead.`, performance.now());
-    withdraw();
   };
   win.addEventListener('beforeinstallprompt', onPrompt);
   win.addEventListener('appinstalled', withdraw);
@@ -73,10 +80,20 @@ export function createInstallPrompt(win: Window, log: RingLog, onChange: () => v
     },
     install: () => {
       const event = kept;
-      if (event === null) return;
+      if (event === null || showing) return;
+      showing = true;
       try {
-        event.prompt().then(() => event.userChoice).then(withdraw, refused);
+        event
+          .prompt()
+          .then(() => event.userChoice)
+          .then((choice) => {
+            if (accepted(choice)) withdraw();
+          }, refused)
+          .finally(() => {
+            showing = false;
+          });
       } catch (error) {
+        showing = false;
         refused(error);
       }
     },

@@ -24,9 +24,9 @@ async function openTitle(page: Page): Promise<void> {
   await expect(page.getByTestId('build-label')).toBeVisible();
 }
 
-/** Sends the page a `beforeinstallprompt` as Chromium would, whose `prompt()` only counts its calls. */
-async function sendInstallPrompt(page: Page): Promise<void> {
-  await page.evaluate(() => {
+/** Sends the page a `beforeinstallprompt` as Chromium would, whose `prompt()` only counts its calls before the player gives `outcome`. */
+async function sendInstallPrompt(page: Page, outcome: 'accepted' | 'dismissed' = 'accepted'): Promise<void> {
+  await page.evaluate((choice) => {
     const counting: CountingWindow = window;
     counting.installPrompts = 0;
     const event = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
@@ -34,10 +34,10 @@ async function sendInstallPrompt(page: Page): Promise<void> {
         counting.installPrompts = (counting.installPrompts ?? 0) + 1;
         return Promise.resolve();
       },
-      userChoice: Promise.resolve({ outcome: 'dismissed', platform: '' }),
+      userChoice: Promise.resolve({ outcome: choice, platform: '' }),
     });
     window.dispatchEvent(event);
-  });
+  }, outcome);
 }
 
 const promptCalls = (page: Page): Promise<number | undefined> => page.evaluate(() => (window as CountingWindow).installPrompts);
@@ -64,6 +64,18 @@ test('arrow keys reach the Install chip, and Enter on it opens the prompt withou
   await page.keyboard.press('Enter');
   await expect.poll(() => promptCalls(page)).toBe(1);
   await expect(page.getByTestId('build-label')).toBeVisible();
+  // The installed chip goes, and focus moves to its neighbour instead of dropping to the page, where Space would start a run.
+  await expect(offer(page)).toHaveCount(0);
+  await expect(page.getByTestId('settings-open')).toBeFocused();
+});
+
+test('a dismissed prompt keeps the Install chip for another try', async ({ page }) => {
+  await openTitle(page);
+  await sendInstallPrompt(page, 'dismissed');
+
+  await offer(page).click();
+  await expect.poll(() => promptCalls(page)).toBe(1);
+  await expect(offer(page)).toHaveText('Install');
 });
 
 test('the installed app offers nothing, even when a prompt arrives', async ({ page }) => {

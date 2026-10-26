@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cacheFirst, isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../../src/platform/swLogic';
+import { cacheFirst, isErrorPage, isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../../src/platform/swLogic';
 
 const SCOPE = new URL('https://example.test/cosmic-assault/next/');
 const at = (path: string) => new URL(path, SCOPE);
@@ -68,6 +68,16 @@ describe('shouldCache', () => {
   });
 });
 
+describe('isErrorPage', () => {
+  it.each([400, 404, 410, 500, 502, 503])('is true for a %i, which the cached game serves better', (status) => {
+    expect(isErrorPage({ status })).toBe(true);
+  });
+
+  it.each([200, 204, 304, 0])('is false for a %i: a page, or a redirect the browser follows itself', (status) => {
+    expect(isErrorPage({ status })).toBe(false);
+  });
+});
+
 describe('networkFirst', () => {
   const fresh = new Response('fresh');
   const cached = new Response('cached');
@@ -78,12 +88,19 @@ describe('networkFirst', () => {
     expect(NAVIGATION_TIMEOUT_MS).toBeLessThanOrEqual(5000);
   });
 
-  it('uses the network when it answers, even with an error status', async () => {
-    const notFound = new Response('missing', { status: 404 });
+  it('uses the network when it answers with the page', async () => {
     const fallback = vi.fn(() => Promise.resolve(cached));
     expect(await networkFirst(Promise.resolve(fresh), fallback, 1000)).toBe(fresh);
-    expect(await networkFirst(Promise.resolve(notFound), fallback, 1000)).toBe(notFound);
     expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 500, 503])('falls back to the cache when the network answers %i, as when offline', async (status) => {
+    expect(await networkFirst(Promise.resolve(new Response('error', { status })), () => Promise.resolve(cached), 1000)).toBe(cached);
+  });
+
+  it('passes an error page on when nothing is cached', async () => {
+    const notFound = new Response('missing', { status: 404 });
+    expect(await networkFirst(Promise.resolve(notFound), () => Promise.resolve(undefined), 1000)).toBe(notFound);
   });
 
   it('falls back to the cache when the network fails', async () => {

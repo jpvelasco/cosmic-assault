@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test';
+import { SOUND_GESTURE_HINT } from '../src/ui/hints';
+import { TOAST_MS } from '../src/ui/toast';
 import { expect, expectMode, gameState, nextFrames, openGame, shipState, test } from './fixtures';
 
 /** Standard-mapping button indices. */
@@ -66,6 +68,22 @@ async function startRun(page: Page): Promise<void> {
 test('A on the title starts a run', async ({ page }) => {
   await expectMode(page, 'title');
   await startRun(page);
+});
+
+test('the first A with sound still locked says how to turn it on, once', async ({ page }) => {
+  const toast = page.getByRole('status');
+  await startRun(page);
+  // A pad press is no user activation, so the browser keeps sound off until a tap or key press.
+  expect((await gameState(page)).audioState).toBe('none');
+  await expect(toast).toHaveText(SOUND_GESTURE_HINT);
+  await expect(toast).toHaveText('', { timeout: TOAST_MS * 3 });
+
+  await tap(page, START);
+  await expectMode(page, 'paused');
+  await tap(page, A);
+  await expectMode(page, 'playing');
+  await nextFrames(page, 3);
+  await expect(toast).toHaveText('');
 });
 
 test('holding the right trigger fires', async ({ page }) => {

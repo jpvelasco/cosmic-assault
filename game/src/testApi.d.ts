@@ -53,7 +53,7 @@ interface CosmicAssaultTestState {
 interface CosmicAssaultTestApi {
   readonly version: 3;
   getState(): CosmicAssaultTestState;
-  /** Makes the next guarded frame throw `Error('e2e: deliberate crash')`, which shows the recovery card. */
+  /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }
 

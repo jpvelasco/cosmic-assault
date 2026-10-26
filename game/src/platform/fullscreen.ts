@@ -15,7 +15,8 @@ export interface FullscreenControl {
 export function createFullscreen(doc: Document, target: HTMLElement, log: RingLog): FullscreenControl {
   // Browsers without the API leave `fullscreenEnabled` undefined, which the DOM typings do not admit.
   const supported = (doc.fullscreenEnabled as boolean | undefined) === true && typeof target.requestFullscreen === 'function';
-  const active = (): boolean => doc.fullscreenElement !== null;
+  // Without the API `fullscreenElement` is undefined, which the DOM typings do not admit either; that is not full screen.
+  const active = (): boolean => supported && (doc.fullscreenElement ?? null) !== null;
 
   /** A refused request is routine (no user gesture, a permissions policy), so it is logged rather than raised. */
   const logRefusal = (action: string) => (reason: unknown) => {

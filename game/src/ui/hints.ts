@@ -20,3 +20,6 @@ export function hintCopy(style: InputStyle): HintCopy {
 
 /** iOS Safari cannot install from a button, so the title card names the steps instead. */
 export const IOS_INSTALL_HINT = 'Add to Home Screen: tap Share, then Add to Home Screen';
+
+/** A pad press is no user activation, so browsers keep sound off until a tap or key press; the toast says so once. */
+export const SOUND_GESTURE_HINT = 'Tap or press a key to enable sound';

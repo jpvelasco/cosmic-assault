@@ -114,6 +114,18 @@ describe('createFullscreen', () => {
     expect(log.entries()[0]?.message).toContain('document not active');
   });
 
+  it('is never active where the browser has no full-screen API, whose fullscreenElement is undefined', () => {
+    const doc = fakeDoc();
+    Object.assign(doc, { fullscreenEnabled: undefined, fullscreenElement: undefined });
+    expect(make(doc, {} as HTMLElement).control.active).toBe(false);
+  });
+
+  it('is never active while full screen is unsupported, whatever the document reports', () => {
+    const doc = fakeDoc(false);
+    doc.fullscreenElement = {} as Element;
+    expect(make(doc, fakeTarget(doc).element).control.active).toBe(false);
+  });
+
   it('is unsupported when fullscreenEnabled is missing altogether', () => {
     const doc = fakeDoc();
     (doc as { fullscreenEnabled: boolean | undefined }).fullscreenEnabled = undefined;

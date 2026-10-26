@@ -45,10 +45,20 @@ export interface Overlay {
 
 const INSTALL_TEST_ID = 'install-offer';
 
-/** Adds `el` with `attach` while `shown` and removes it otherwise. A shown element stays where it is, so it keeps focus. */
+/**
+ * Adds `el` with `attach` while `shown` and removes it otherwise. A shown element stays where it is, so it keeps
+ * focus; a focused one that goes hands focus to its neighbour in the row, so it never drops to the page.
+ */
 function mountWhen(shown: boolean, el: HTMLElement, attach: (el: HTMLElement) => void): void {
-  if (!shown) el.remove();
-  else if (el.parentElement === null) attach(el);
+  if (shown) {
+    if (el.parentElement === null) attach(el);
+    return;
+  }
+  if (el === document.activeElement) {
+    const neighbour = el.nextElementSibling ?? el.previousElementSibling;
+    if (neighbour instanceof HTMLElement) neighbour.focus();
+  }
+  el.remove();
 }
 
 /** Calls `onTap` for clicks on `panel` that are not on one of its buttons. */

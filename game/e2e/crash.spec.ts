@@ -1,9 +1,8 @@
 import type { Page } from '@playwright/test';
 import { SETTINGS_KEY } from '../src/app/settings';
+import { DELIBERATE_CRASH } from '../src/testBridge';
 import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
 
-const DELIBERATE_CRASH = 'e2e: deliberate crash';
-const SCREENSHOT = '/tmp/m3-crash.png';
 
 test.use({ allowedErrors: [DELIBERATE_CRASH] });
 
@@ -15,7 +14,7 @@ async function crash(page: Page): Promise<void> {
 
 const card = (page: Page) => page.getByRole('alertdialog', { name: 'Something went wrong' });
 
-test('a crash mid-run shows the recovery card, stops drawing and logs the error', async ({ page, consoleErrors }) => {
+test('a crash mid-run shows the recovery card, stops drawing and logs the error', async ({ page, consoleErrors }, testInfo) => {
   await openGame(page);
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
@@ -25,7 +24,7 @@ test('a crash mid-run shows the recovery card, stops drawing and logs the error'
   await expect(card(page)).toBeVisible();
   await expect(page.getByText('The game hit an error and stopped. Your settings are safe.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again' })).toBeFocused();
-  await page.screenshot({ path: SCREENSHOT });
+  await page.screenshot({ path: testInfo.outputPath('crash.png') });
 
   const afterCrash = (await gameState(page)).logSize;
   expect(afterCrash).toBeGreaterThan(before);

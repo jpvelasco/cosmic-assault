@@ -27,9 +27,14 @@ export function shouldCache(response: Pick<Response, 'status' | 'type'>): boolea
   return response.status === 200 && response.type === 'basic';
 }
 
+/** A 4xx or 5xx answer, such as a host outage or a removed page, which the cached game serves better. */
+export function isErrorPage(response: Pick<Response, 'status'>): boolean {
+  return response.status >= 400;
+}
+
 /**
- * The network's answer, whatever its status. If the network fails or takes longer than `timeoutMs`, the cached copy
- * from `fallback` instead; with nothing cached, the network's eventual answer or failure.
+ * The network's answer. If the network fails, takes longer than `timeoutMs` or answers with an error page, the cached
+ * copy from `fallback` instead; with nothing cached, the network's eventual answer or failure.
  */
 export async function networkFirst(
   network: Promise<Response>,
@@ -43,15 +48,16 @@ export async function networkFirst(
       clearTimeout(timer);
     };
   });
+  let answer: Response | undefined;
   try {
-    const first = await Promise.race([network, timedOut]);
-    if (first !== undefined) return first;
+    answer = await Promise.race([network, timedOut]);
+    if (answer !== undefined && !isErrorPage(answer)) return answer;
   } catch {
     // Offline or refused: the cache answers below.
   } finally {
     cancelTimer();
   }
-  return (await fallback()) ?? network;
+  return (await fallback()) ?? answer ?? network;
 }
 
 /**

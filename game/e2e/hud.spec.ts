@@ -53,13 +53,13 @@ test.describe('on an 844×390 phone', () => {
   });
 });
 
-test('sprites are drawn larger on a phone screen', async ({ page }) => {
+test('sprites are drawn larger on a phone screen', async ({ page }, testInfo) => {
   await startRun(page);
   const { visualScale } = await gameState(page);
   expect(visualScale.ship).toBeGreaterThan(1.2);
   expect(visualScale.rock).toBeGreaterThan(1);
   expect(visualScale.rock).toBeLessThan(visualScale.ship);
-  await page.screenshot({ path: '/tmp/m3-phone-scale.png' });
+  await page.screenshot({ path: testInfo.outputPath('phone-scale.png') });
 });
 
 test.describe('on a 1280×720 screen', () => {
