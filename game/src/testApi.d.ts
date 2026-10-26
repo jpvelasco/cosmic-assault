@@ -38,7 +38,7 @@ interface CosmicAssaultTestState {
   /** The timed effects running (doubleShot, rapidFire, spreadLaser, shield), each with its seconds left; one that is off is absent. */
   readonly effects: Readonly<Partial<Record<import('./content/pickups').TimedPickupId, number>>>;
   /** The weapon tier, 0–3; 0 outside a run. */
-  readonly weaponTier: number;
+  readonly weaponTier: import('./content/types').WeaponTier;
   /** Whether the Shield is up. */
   readonly shield: boolean;
   /** The HUD pills drawn on the last frame; empty before the first run is drawn. */

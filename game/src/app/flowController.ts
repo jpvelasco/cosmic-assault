@@ -159,6 +159,8 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
       } else if (event.type === 'gameOver') {
         dispatch({ kind: 'die', score: event.score, weaponTier: world.weaponTier });
       } else if (event.type === 'shipHit') {
+        // The tier is read after the whole step. A core taken on the hit's own step (needing a pickup at the respawn
+        // point) leaves it one above what the death did; that rare case is accepted.
         dispatch({ kind: 'hit', livesLeft: event.livesLeft, weaponTier: world.weaponTier });
       }
     }

@@ -1,4 +1,4 @@
-import { PLAYER, STICK, WEAPON_SPREAD } from './config';
+import { PLAYER, STICK } from './config';
 import type { Controls, Stick } from './controls';
 import type { Field } from './field';
 import { wrapPosition } from './wrap';
@@ -20,7 +20,6 @@ export interface Ship {
   invulnerable: boolean;
   invulnerableFor: number;
   fireCooldown: number;
-  tier: 1 | 2 | 3 | 4;
 }
 
 export interface Shot {
@@ -36,7 +35,7 @@ export interface Barrel {
   readonly lateral: number;
 }
 
-/** What a ship fires with; without one, `stepShip` fires the tier's `WEAPON_SPREAD` from the nose. */
+/** What a ship fires with; without one, `stepShip` fires a single shot from the nose (weapon tier 0). */
 export interface Weapon {
   readonly barrels: readonly Barrel[];
   /** Multiplies the fire interval. */
@@ -61,7 +60,6 @@ export function createShip(x: number, y: number): Ship {
     invulnerable: true,
     invulnerableFor: PLAYER.invulnerableSeconds,
     fireCooldown: 0,
-    tier: 1,
   };
 }
 
@@ -120,10 +118,7 @@ function steerWithKeyboard(ship: Ship, controls: Controls, compensation: number,
   }
 }
 
-/** The barrels of weapon tier 0–3: one on the nose axis per `WEAPON_SPREAD` angle. */
-export function tierBarrels(tier: number): readonly Barrel[] {
-  return (WEAPON_SPREAD[tier] ?? []).map((angle) => ({ angle, lateral: 0 }));
-}
+const SINGLE_SHOT: readonly Barrel[] = [{ angle: 0, lateral: 0 }];
 
 function fireShots(ship: Ship, weapon: Weapon | undefined): readonly Shot[] {
   ship.fireCooldown = PLAYER.fireInterval * (weapon?.fireIntervalScale ?? 1);
@@ -131,7 +126,7 @@ function fireShots(ship: Ship, weapon: Weapon | undefined): readonly Shot[] {
   const ny = ship.y + Math.sin(ship.angle) * PLAYER.noseOffset;
   const baseVx = ship.vx * PLAYER.inheritVelocity;
   const baseVy = ship.vy * PLAYER.inheritVelocity;
-  return (weapon?.barrels ?? tierBarrels(ship.tier - 1)).map(({ angle, lateral }) => ({
+  return (weapon?.barrels ?? SINGLE_SHOT).map(({ angle, lateral }) => ({
     x: nx - Math.sin(ship.angle) * lateral,
     y: ny + Math.cos(ship.angle) * lateral,
     vx: baseVx + Math.cos(ship.angle + angle) * PLAYER.projectileSpeed,
@@ -164,7 +159,7 @@ function applyPhysics(ship: Ship, stepDrag: number, dt: number): void {
   ship.y += ship.vy * dt;
 }
 
-/** Steps the ship; `weapon` replaces the tier's one-shot-per-angle volley and its fire interval (the live game never passes one). */
+/** Steps the ship; `weapon` replaces the tier's one-shot-per-angle volley and its fire interval (practice and the parity traces never pass one; a galaxy run's `Loadout` owns the weapon tier). */
 export function stepShip(ship: Ship, controls: Controls, dt: number, field: Field, weapon?: Weapon): readonly Shot[] {
   if (ship.invulnerable) {
     ship.invulnerableFor -= dt;

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { galaxyById } from '../../src/content/galaxies';
 import { practiceSettings, type AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID, PLAYER, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
-import type { Ship } from '../../src/sim/ship';
 import { isGalaxyStartLives, isPracticeLevel, isStartLives, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -424,9 +424,8 @@ describe('World overlap order', () => {
   });
 
   it('scans projectiles from last to first, so the newer shot claims a shared asteroid', () => {
-    const w = world({ initialShip: SHOOTER, initialAsteroids: [still(225, 360, 3)] });
-    // Weapon upgrades arrive after M1; set the tier directly to get a two-shot volley.
-    (w.ship as Ship).tier = 2;
+    // Only a galaxy run has weapon upgrades: Rank starting at tier 1 fires a two-shot volley.
+    const w = world({ rules: { kind: 'galaxy', galaxy: galaxyById('1-1'), mode: 'rank' }, startTier: 1, initialShip: SHOOTER, initialAsteroids: [still(225, 360, 3)] });
     const events = w.step(STEP_SECONDS, FIRE);
     expect(ofType(events, 'shot')).toHaveLength(2);
     expect(ofType(events, 'asteroidDestroyed')).toHaveLength(1);

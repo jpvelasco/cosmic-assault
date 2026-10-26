@@ -14,7 +14,7 @@ export interface PickupDef {
 }
 
 export const PICKUPS: Readonly<Record<PickupId, PickupDef>> = {
-  weaponCore: { name: 'Weapon Core', callout: 'New: Weapon Core — a stronger volley for good', from: 1, weight: 3 },
+  weaponCore: { name: 'Weapon Core', callout: 'New: Weapon Core — a stronger volley', from: 1, weight: 3 },
   doubleShot: { name: 'Double Shot', callout: 'New: Double Shot — two shots at once', from: 1, weight: 3 },
   shield: { name: 'Shield', callout: 'New: Shield — absorbs one hit', from: 1, weight: 3 },
   rapidFire: { name: 'Rapid Fire', callout: 'New: Rapid Fire — shoot faster', from: 2, weight: 2 },
@@ -23,6 +23,9 @@ export const PICKUPS: Readonly<Record<PickupId, PickupDef>> = {
 
 /** Every pickup, in the order saves list them. */
 export const PICKUP_IDS: readonly PickupId[] = ['weaponCore', 'doubleShot', 'shield', 'rapidFire', 'spreadLaser'];
+
+/** `ids` once each, in the table's order. */
+export const canonicalPickups = (ids: readonly PickupId[]): readonly PickupId[] => PICKUP_IDS.filter((id) => ids.includes(id));
 
 export function isPickupId(value: unknown): value is PickupId {
   return PICKUP_IDS.includes(value as PickupId);

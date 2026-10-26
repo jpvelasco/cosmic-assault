@@ -1,5 +1,5 @@
 import { furthest, GALAXIES, isGalaxyId } from '../content/galaxies';
-import { isPickupId, PICKUP_IDS } from '../content/pickups';
+import { canonicalPickups, isPickupId } from '../content/pickups';
 import type { GalaxyId, PickupId } from '../content/types';
 import { addEntry, mergeBoards, type RankEntry } from './rankBoard';
 import { compareRuns, RANK_MAX_LIVES, type RankRun } from './rankRun';
@@ -72,10 +72,9 @@ function sanitizeRankRun(raw: unknown): RankRun | null {
   return { next, score, lives, weaponTier: tier, continued, startedAt, inGalaxy };
 }
 
-/** The known pickup ids in `raw`, once each, in the table's order. */
+/** The known pickup ids in `raw`. */
 function sanitizeSeen(raw: unknown): readonly PickupId[] {
-  const listed = Array.isArray(raw) ? raw.filter(isPickupId) : [];
-  return PICKUP_IDS.filter((id) => listed.includes(id));
+  return canonicalPickups(Array.isArray(raw) ? raw.filter(isPickupId) : []);
 }
 
 function sanitizeEntry(raw: unknown): RankEntry | null {
@@ -157,6 +156,6 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     rankBoard: mergeBoards(a.rankBoard, b.rankBoard),
     classicBest: a.classicBest === null || b.classicBest === null ? (a.classicBest ?? b.classicBest) : Math.max(a.classicBest, b.classicBest),
     classicImported: a.classicImported || b.classicImported,
-    seenPickups: PICKUP_IDS.filter((id) => a.seenPickups.includes(id) || b.seenPickups.includes(id)),
+    seenPickups: canonicalPickups([...a.seenPickups, ...b.seenPickups]),
   };
 }

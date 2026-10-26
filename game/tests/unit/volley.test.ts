@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PLAYER, VOLLEY, WEAPON_SPREAD } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { weaponFor, type TimedFlags } from '../../src/sim/pickups/volley';
-import { createShip, stepShip, tierBarrels, type Barrel } from '../../src/sim/ship';
+import { createShip, stepShip, type Barrel } from '../../src/sim/ship';
 import type { WeaponTier } from '../../src/content/types';
 
 const NONE: TimedFlags = { doubleShot: false, rapidFire: false, spreadLaser: false };
@@ -65,16 +65,42 @@ describe('weaponFor', () => {
     expect(weaponFor(3, { ...NONE, spreadLaser: true }).barrels).toHaveLength(7);
   });
 
-  it('drops the outermost pairs first above 7: tier 3 + Double Shot (10) loses its +-0.3 shots', () => {
+  it('trims the tier\'s outermost shots first above 7: tier 3 + Double Shot (10) loses its +-0.3 shots', () => {
     const barrels = weaponFor(3, { ...NONE, doubleShot: true }).barrels;
     expect(barrels).toHaveLength(6);
     expect(Math.max(...barrels.map((b) => Math.abs(b.angle)))).toBe(0.18);
   });
 
-  it('drops the Spread Laser pair first when it is the outermost: tier 2 + Double Shot + Spread Laser (8) keeps 6', () => {
-    const barrels = weaponFor(2, { ...NONE, doubleShot: true, spreadLaser: true }).barrels;
+  it('keeps Double Shot\'s pair on the centre shot and the Spread Laser pair whatever the tier: tier 3 + both is 4 shots', () => {
+    const { barrels } = weaponFor(3, { ...NONE, doubleShot: true, spreadLaser: true });
+    expect(sortedBy(barrels)).toEqual(
+      sortedBy([
+        { angle: 0, lateral: -VOLLEY.parallelOffset },
+        { angle: 0, lateral: VOLLEY.parallelOffset },
+        { angle: -VOLLEY.spreadLaserAngle, lateral: 0 },
+        { angle: VOLLEY.spreadLaserAngle, lateral: 0 },
+      ]),
+    );
+  });
+
+  it('keeps the inner pair of a tier with no centre shot: tier 1 never loses it', () => {
+    const { barrels } = weaponFor(1, { ...NONE, doubleShot: true, spreadLaser: true });
     expect(barrels).toHaveLength(6);
-    expect(barrels.every((b) => Math.abs(b.angle) !== VOLLEY.spreadLaserAngle)).toBe(true);
+    expect(barrels.filter((b) => Math.abs(b.angle) === 0.12)).toHaveLength(4);
+  });
+
+  it('makes every active volley effect count: removing any one of them changes the weapon, at every tier', () => {
+    const KINDS = ['doubleShot', 'rapidFire', 'spreadLaser'] as const;
+    for (const tier of TIERS)
+      for (let mask = 1; mask < 8; mask++) {
+        const flags: TimedFlags = { doubleShot: (mask & 1) !== 0, rapidFire: (mask & 2) !== 0, spreadLaser: (mask & 4) !== 0 };
+        const full = weaponFor(tier, flags);
+        expect(full.barrels.length, `tier ${String(tier)} ${String(mask)}`).toBeLessThanOrEqual(VOLLEY.maxShots);
+        for (const kind of KINDS.filter((k) => flags[k])) {
+          const without = weaponFor(tier, { ...flags, [kind]: false });
+          expect(without, `tier ${String(tier)} without ${kind} of ${String(mask)}`).not.toEqual(full);
+        }
+      }
   });
 
   it('keeps a capped volley mirror-symmetric, so it never leans', () => {
@@ -95,16 +121,16 @@ describe('stepShip with a weapon', () => {
   const firing = { ...NO_CONTROLS, fire: true };
   const faceUp = () => createShip(640, 360);
 
-  it('fires the tier it has when given no weapon, exactly as a weapon built from that tier does', () => {
-    for (const tier of TIERS) {
-      const a = faceUp();
-      a.tier = (tier + 1) as 1 | 2 | 3 | 4;
-      a.vx = 20;
-      const b = faceUp();
-      b.vx = 20;
-      expect(stepShip(b, firing, 1 / 120, FIELD, { barrels: tierBarrels(tier), fireIntervalScale: 1 })).toEqual(stepShip(a, firing, 1 / 120, FIELD));
-      expect(b.fireCooldown).toBe(a.fireCooldown);
-    }
+  it('fires a single shot from the nose when given no weapon, exactly as the tier 0 weapon does', () => {
+    const a = faceUp();
+    a.vx = 20;
+    const b = faceUp();
+    b.vx = 20;
+    const plain = stepShip(a, firing, 1 / 120, FIELD);
+    expect(plain).toHaveLength(1);
+    expect(stepShip(b, firing, 1 / 120, FIELD, weaponFor(0, NONE))).toEqual(plain);
+    expect(b.fireCooldown).toBe(a.fireCooldown);
+    expect(a.fireCooldown).toBe(PLAYER.fireInterval);
   });
 
   it('puts parallel shots either side of the nose, along the ship\'s own right', () => {

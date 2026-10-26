@@ -55,7 +55,7 @@ function firstRoll(seed: number, lastLife = false): PickupId | null {
   const { pickups, ...rest } = galaxyById('2-1');
   const f = new PickupField(pickups, tierOf(rest), createRng(deriveSeed(seed, 'pickups')));
   const events: SimEvent[] = [];
-  f.roll(0, 0, lastLife, events);
+  f.roll(0, 0, { lastLife, weaponTier: 0 }, events);
   return f.list[0]?.kind ?? null;
 }
 
@@ -172,6 +172,25 @@ describe('a kill drops a pickup', () => {
     expect(ofType(other, 'pickupDropped')[0]?.kind).not.toBe('shield');
   });
 
+  it('never drops a weapon core at the top tier, though the same seed drops one below it', () => {
+    const seed = seedDropping('weaponCore');
+    const kill = (startTier: WeaponTier): PickupId | undefined => {
+      const w = galaxyWorld({ seed, mode: 'rank', startTier, initialShip: SHOOTER, initialAsteroids: [still(300, 360, 3)] });
+      return ofType(stepUntil(w, FIRE, (e) => e.some((x) => x.type === 'pickupDropped')), 'pickupDropped')[0]?.kind;
+    };
+    expect(kill(2)).toBe('weaponCore');
+    const atTop = kill(3);
+    expect(atTop).toBeDefined();
+    expect(atTop).not.toBe('weaponCore');
+  });
+
+  it('drops no weapon core over a long run at the top tier, but other kinds', () => {
+    const w = galaxyWorld({ seed: 3, galaxy: galaxyById('2-3'), mode: 'rank', startLives: 5, startTier: 3 });
+    const kinds = new Set(ofType(play(w, 90, FIRE), 'pickupDropped').map((e) => e.kind));
+    expect(kinds.size).toBeGreaterThan(0);
+    expect(kinds.has('weaponCore')).toBe(false);
+  });
+
   it('replays the same drops for the same seed', () => {
     const run = (seed: number) => play(galaxyWorld({ seed, galaxy: galaxyById('2-3'), mode: 'rank', startLives: 5 }), 60, FIRE).filter((e) => e.type.startsWith('pickup'));
     const a = run(3);
@@ -211,6 +230,7 @@ describe('collecting a pickup', () => {
     collect(w);
     expect(w.weaponTier).toBe(1);
     const log = play(w, 1, FIRE);
+    expect(ofType(log, 'shot')).not.toHaveLength(0);
     expect(ofType(log, 'shot').length % 2).toBe(0);
     expect(w.effects).toEqual({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
   });
@@ -265,7 +285,9 @@ describe('the weapon', () => {
   });
 
   it('caps a volley at 7 shots however the effects combine', () => {
-    expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'doubleShot', 'spreadLaser']))).toBeLessThanOrEqual(7);
+    // Tier 3 + Double Shot + Spread Laser: the tier's outer shots give way, the two pairs stay.
+    expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'doubleShot', 'spreadLaser']))).toBe(4);
+    expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'doubleShot']))).toBe(6);
     expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'spreadLaser']))).toBe(7);
   });
 
@@ -284,7 +306,7 @@ describe('the weapon', () => {
     expect(volleyAt(w)).toBe(1);
   });
 
-  it('keeps a practice run firing exactly one shot, with the ship tier untouched', () => {
+  it('keeps a practice run firing exactly one shot', () => {
     const w = new World({ seed: 1, field: FIELD, initialShip: SHOOTER });
     expect(ofType(w.step(STEP_SECONDS, FIRE), 'shot')).toHaveLength(1);
   });

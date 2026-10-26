@@ -26,7 +26,7 @@ describe('createPickupNotices', () => {
     const { notices, notify } = setup();
     for (const kind of ['weaponCore', 'doubleShot', 'shield', 'rapidFire', 'spreadLaser'] as const) notices.handle([dropped(kind)]);
     expect(notify.mock.calls.map(([text]) => text)).toEqual([
-      'New: Weapon Core — a stronger volley for good',
+      'New: Weapon Core — a stronger volley',
       'New: Double Shot — two shots at once',
       'New: Shield — absorbs one hit',
       'New: Rapid Fire — shoot faster',

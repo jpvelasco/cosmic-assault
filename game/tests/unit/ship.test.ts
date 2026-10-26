@@ -4,7 +4,10 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
 import { createFixedStepLoop } from '../../src/sim/loop';
 import { createShip, respawnShip, stepShip, thrustCompensation, type Ship } from '../../src/sim/ship';
+import { weaponFor } from '../../src/sim/pickups/volley';
 import { wrapPosition } from '../../src/sim/wrap';
+
+const NO_EFFECTS = { doubleShot: false, rapidFire: false, spreadLaser: false };
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = 1 / 60;
@@ -50,7 +53,6 @@ describe('createShip', () => {
       invulnerable: true,
       invulnerableFor: PLAYER.invulnerableSeconds,
       fireCooldown: 0,
-      tier: 1,
     });
   });
 });
@@ -163,12 +165,11 @@ describe('stepShip', () => {
   });
 
   it('fires a shot per spread offset for every weapon tier', () => {
-    for (const tier of [1, 2, 3, 4] as const) {
+    for (const tier of [0, 1, 2, 3] as const) {
       const ship = idleShip();
-      ship.tier = tier;
       ship.vx = 20;
-      const shots = stepShip(ship, withControls({ fire: true }), DT, FIELD);
-      const offsets = WEAPON_SPREAD[tier - 1] ?? [];
+      const shots = stepShip(ship, withControls({ fire: true }), DT, FIELD, weaponFor(tier, NO_EFFECTS));
+      const offsets = WEAPON_SPREAD[tier] ?? [];
       expect(shots).toHaveLength(offsets.length);
       offsets.forEach((offset, i) => {
         const angle = -Math.PI / 2 + offset;

@@ -1,6 +1,6 @@
 import { furthest, galaxyOrdinal, nextGalaxyId } from '../content/galaxies';
 import type { Dimension, GalaxyDef, GalaxyId, PickupId, WeaponTier } from '../content/types';
-import { PICKUP_IDS } from '../content/pickups';
+import { canonicalPickups } from '../content/pickups';
 import { addEntry, reachedLabel, type RankEntry } from './rankBoard';
 import { afterForfeit, afterLoss, type RankRun } from './rankRun';
 import { MAX_RANK_SEQ, type GalaxyProgress, type SaveData } from './save';
@@ -57,5 +57,5 @@ export function abandonRankRun(save: SaveData, today: string): SaveData {
 
 /** The save with `kind` marked as collected, so its first-drop callout stops; the same save if it already was. */
 export function recordPickupSeen(save: SaveData, kind: PickupId): SaveData {
-  return save.seenPickups.includes(kind) ? save : { ...save, seenPickups: PICKUP_IDS.filter((id) => id === kind || save.seenPickups.includes(id)) };
+  return save.seenPickups.includes(kind) ? save : { ...save, seenPickups: canonicalPickups([...save.seenPickups, kind]) };
 }

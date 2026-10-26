@@ -1,8 +1,8 @@
 import { dropChance } from '../../content/curves';
 import { PICKUPS } from '../../content/pickups';
-import type { PickupId } from '../../content/types';
+import type { PickupId, WeaponTier } from '../../content/types';
 import { circlesOverlap } from '../collision';
-import { PICKUP, PLAYER } from '../config';
+import { MAX_WEAPON_TIER, PICKUP, PLAYER } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { TAU, TIME_EPSILON } from '../math';
@@ -27,15 +27,37 @@ export interface Pickup {
 /** On the last life the Shield is this many times as likely, to give a struggling player a chance. */
 const LAST_LIFE_SHIELD_WEIGHT = 3;
 
-/** One kind of `pool`, by the weights of `PICKUPS` (the Shield tripled on the last life); consumes one draw. */
-export function chooseKind(pool: readonly PickupId[], rng: Rng, lastLife: boolean): PickupId {
-  const weightOf = (kind: PickupId): number => PICKUPS[kind].weight * (lastLife && kind === 'shield' ? LAST_LIFE_SHIELD_WEIGHT : 1);
-  let roll = rng.next() * pool.reduce((sum, kind) => sum + weightOf(kind), 0);
-  for (const kind of pool) {
-    roll -= weightOf(kind);
-    if (roll < 0) return kind;
+/** What a drop's kind depends on besides the pool. */
+export interface DropContext {
+  /** The ship is on its last life. */
+  readonly lastLife: boolean;
+  /** The ship's weapon tier: a weapon core is no use at the top one. */
+  readonly weaponTier: WeaponTier;
+}
+
+function weightOf(kind: PickupId, { lastLife, weaponTier }: DropContext): number {
+  if (kind === 'weaponCore' && weaponTier >= MAX_WEAPON_TIER) return 0;
+  return PICKUPS[kind].weight * (lastLife && kind === 'shield' ? LAST_LIFE_SHIELD_WEIGHT : 1);
+}
+
+/**
+ * One kind of `pool`, by the weights of `PICKUPS` (the Shield tripled on the last life, the weapon core dropped at max
+ * tier); null if nothing in the pool can drop. It always consumes exactly one draw, so the stream does not shift with
+ * the situation.
+ */
+export function chooseKind(pool: readonly PickupId[], rng: Rng, context: DropContext): PickupId | null {
+  const draw = rng.next();
+  const weights = pool.map((kind) => weightOf(kind, context));
+  let roll = draw * weights.reduce((sum, weight) => sum + weight, 0);
+  let last: PickupId | null = null;
+  for (const [i, kind] of pool.entries()) {
+    const weight = weights[i] ?? 0;
+    if (weight <= 0) continue;
+    last = kind;
+    roll -= weight;
+    if (roll < 0) break;
   }
-  return pool[pool.length - 1] as PickupId;
+  return last;
 }
 
 /** The pickups on a galaxy's field: what a kill drops from `pool`, and what drifts, expires or is collected. */
@@ -57,11 +79,12 @@ export class PickupField {
 
   /**
    * A kill at (x, y): maybe drops a pickup. With the field full it draws nothing; otherwise it draws once for the
-   * chance, and on a drop twice more for the kind and the drift direction.
+   * chance, and on a drop once more for the kind and once for the drift direction.
    */
-  roll(x: number, y: number, lastLife: boolean, events: SimEvent[]): void {
+  roll(x: number, y: number, context: DropContext, events: SimEvent[]): void {
     if (this.list.length >= PICKUP.maxOnField || !this.rng.chance(dropChance(this.tier))) return;
-    const kind = chooseKind(this.pool, this.rng, lastLife);
+    const kind = chooseKind(this.pool, this.rng, context);
+    if (kind === null) return;
     const heading = this.rng.range(0, TAU);
     const pickup: Pickup = {
       id: ++this.lastId,

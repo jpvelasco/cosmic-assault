@@ -186,7 +186,8 @@ export class GalaxyRun implements Spawner {
 
   /** A kill may drop a pickup, unless the rock was a pass-through one (a meteor or a shard). */
   rockKilled(rock: Readonly<Asteroid>): void {
-    if (rock.transient !== true) this.pickupField.roll(rock.x, rock.y, this.arena.lives() === 1, this.arena.events);
+    if (rock.transient === true) return;
+    this.pickupField.roll(rock.x, rock.y, { lastLife: this.arena.lives() === 1, weaponTier: this.loadout.tier }, this.arena.events);
   }
 
   /** The Shield takes a hit meant for the ship, if it has one; true means the hit is absorbed: no life is lost. */
