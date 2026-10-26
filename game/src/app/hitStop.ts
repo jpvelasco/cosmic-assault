@@ -3,6 +3,8 @@ import { isWarpClear, type SimEvent } from '../sim/events';
 const SHIP_HIT_SECONDS = 0.11;
 const LARGE_ASTEROID_SECONDS = 0.055;
 const LARGE_ASTEROID_SIZE = 0;
+/** A boss's core laid bare: the opening the fight turns on. */
+const CORE_EXPOSED_SECONDS = 0.08;
 
 /** How long the simulation freezes for one event, in seconds; 0 for events that do not freeze. */
 export function hitStopFor(event: SimEvent): number {
@@ -11,6 +13,8 @@ export function hitStopFor(event: SimEvent): number {
       return SHIP_HIT_SECONDS;
     case 'asteroidDestroyed':
       return event.size === LARGE_ASTEROID_SIZE && !isWarpClear(event) ? LARGE_ASTEROID_SECONDS : 0;
+    case 'bossExposed':
+      return CORE_EXPOSED_SECONDS;
     default:
       return 0;
   }

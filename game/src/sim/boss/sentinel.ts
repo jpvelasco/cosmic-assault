@@ -39,10 +39,10 @@ function lunge(ctx: AttackContext): void {
 }
 
 /** M4's placeholder boss: a slow-drifting core that rings itself with shards and lunges at the ship. */
-export const SENTINEL: BossBehaviour = {
+export const SENTINEL = {
   driftSpeed: 20,
   attacks: {
     shardRing: { windup: 0.6, active: 0, run: shardRing },
     lunge: { windup: 0.5, active: LUNGE_SECONDS, run: lunge },
   },
-};
+} as const satisfies BossBehaviour;

@@ -4,7 +4,7 @@ import { isFoeKind } from '../../content/foes';
 import { tierOf } from '../../content/galaxies';
 import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
-import { BossRunner, DYING_SECONDS, type BossBehaviour, type BossView } from '../boss/bossRunner';
+import { BossRunner, DYING_SECONDS, type BossFactory, type BossSetup, type BossView } from '../boss/bossRunner';
 import { SENTINEL } from '../boss/sentinel';
 import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
@@ -32,7 +32,8 @@ const KIND_SIZE: Readonly<Record<RockKind, AsteroidSize>> = { large: 0, medium: 
  * its fragments inherit `transient`, so they would pass through too.
  */
 const SHOWER_SIZE: AsteroidSize = 3;
-const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossBehaviour>> = { sentinel: SENTINEL };
+/** How each boss fights, made afresh for each fight. */
+const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossFactory>> = { sentinel: () => SENTINEL };
 /** Points for beating a boss, per Dimension, before the combo multiplier. */
 const BOSS_KILL_POINTS = 1000;
 
@@ -92,6 +93,8 @@ export class GalaxyRun implements Spawner {
     private readonly streams: GalaxyStreams,
     private readonly arena: Arena,
     startTier: WeaponTier = 0,
+    /** How each boss fights; tests stand in a behaviour of their own. */
+    private readonly behaviours: Readonly<Record<BossId, BossFactory>> = BOSS_BEHAVIOURS,
   ) {
     this.loadout = new Loadout(startTier);
     this.pickupField = new PickupField(galaxy.pickups, tierOf(galaxy), streams.pickups);
@@ -162,11 +165,12 @@ export class GalaxyRun implements Spawner {
   }
 
   /**
-   * The hazard path. A gravity well pulls by nudging the velocities of the ship, the rocks and the foes it pulls, here,
-   * after `stepShip` and before anything else moves; then the foes move.
+   * The hazard path. A gravity well pulls by nudging the velocities of the ship, the rocks and the foes it pulls, and
+   * a boss's attack shoves the ship, here, after `stepShip` and before anything else moves; then the foes move.
    */
   moveOwn(dt: number, ship: Ship): void {
     this.wells.pull(dt, ship, this.arena.asteroids, this.foes.list);
+    this.bossRunner?.shove(ship);
     this.foes.step(dt);
   }
 
@@ -207,22 +211,42 @@ export class GalaxyRun implements Spawner {
   }
 
   /**
-   * A shot at (x, y) has reached the core, if it overlaps it; true means the shot is spent. It takes 1 damage and
-   * reports a `bossHit`, unless the boss is invulnerable; the blow that kills it scores `1000 x Dimension` as a combo kill.
+   * A shot at (x, y) has reached the boss, if it overlaps a live part or the core; true means the shot is spent. A part
+   * takes 1 damage, reporting `bossPartHit` or `bossPartBroken`. The core takes 1 damage and reports a `bossHit`, or a
+   * `bossDeflected` while shielded, and nothing while invulnerable; the blow that kills it scores `1000 x Dimension` as a
+   * combo kill.
    */
   hitBoss(x: number, y: number, radius: number): boolean {
     const boss = this.bossRunner;
-    if (boss === null || boss.state === 'down' || !boss.overlaps(x, y, radius)) return false;
+    if (boss === null || boss.state === 'down') return false;
+    const part = boss.partAt(x, y, radius);
+    if (part >= 0) {
+      this.hitPart(boss, part);
+      return true;
+    }
+    if (!boss.overlaps(x, y, radius)) return false;
     const result = boss.hit(1);
     if (result === 'blocked') return true;
+    if (result === 'deflected') {
+      this.arena.events.push({ type: 'bossDeflected', x, y });
+      return true;
+    }
     this.arena.events.push({ type: 'bossHit', x, y, hp: boss.hp });
     if (result === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
     return true;
   }
 
-  /** True when a circle at (x, y) touches a boss that is fighting; the intro and dying are harmless. */
+  private hitPart(boss: BossRunner, index: number): void {
+    const result = boss.hitPart(index, 1);
+    const part = boss.view.parts[index];
+    if (result === 'blocked' || part === undefined) return;
+    const { x, y } = part;
+    this.arena.events.push(result === 'broken' ? { type: 'bossPartBroken', part: index, x, y } : { type: 'bossPartHit', part: index, x, y, hp: part.hp });
+  }
+
+  /** True when a circle at (x, y) touches a boss that is fighting, its core or a live part; the intro and dying are harmless. */
   touchesBoss(x: number, y: number, radius: number): boolean {
-    return this.bossRunner?.state === 'fighting' && this.bossRunner.overlaps(x, y, radius);
+    return this.bossRunner?.state === 'fighting' && this.bossRunner.touches(x, y, radius);
   }
 
   shipLost(): void {
@@ -264,9 +288,14 @@ export class GalaxyRun implements Spawner {
   private stepBoss(dt: number, elapsed: number): void {
     const { boss: id, dimension } = this.galaxy;
     if (id === null || phaseAt(this.galaxy, elapsed) !== 'boss') return;
-    const def = BOSSES[id];
-    this.bossRunner ??= new BossRunner(def, BOSS_BEHAVIOURS[id], { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field() });
+    this.bossRunner ??= this.bringBoss(id, dimension);
     this.bossRunner.step(dt, this.arena);
+  }
+
+  private bringBoss(id: BossId, dimension: GalaxyDef['dimension']): BossRunner {
+    const def = BOSSES[id];
+    const setup: BossSetup = { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field() };
+    return new BossRunner(def, this.behaviours[id](setup), setup);
   }
 
   private spawn(dt: number, elapsed: number): void {

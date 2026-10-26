@@ -30,6 +30,16 @@ export type SimEvent =
   | { type: 'bossWindup'; attack: AttackId; x: number; y: number }
   /** A shot hurt a boss: it struck at (x, y) and left the boss with `hp`. Shots into an invulnerable boss make none. */
   | { type: 'bossHit'; x: number; y: number; hp: number }
+  /** A shot struck the shielded core at (x, y): spent, harmlessly. */
+  | { type: 'bossDeflected'; x: number; y: number }
+  /** A shot hurt part `part` of a boss, at (x, y), leaving it `hp`. The blow that breaks it is `bossPartBroken` instead. */
+  | { type: 'bossPartHit'; part: number; x: number; y: number; hp: number }
+  /** A shot broke part `part` of a boss, at (x, y). */
+  | { type: 'bossPartBroken'; part: number; x: number; y: number }
+  /** A boss's core at (x, y) can be hurt again: its shield is down. */
+  | { type: 'bossExposed'; x: number; y: number }
+  /** A boss's core at (x, y) is shielded again: shots on it are deflected. */
+  | { type: 'bossShielded'; x: number; y: number }
   /** A boss fell to two thirds (2) or one third (3) of its HP. */
   | { type: 'bossPhase'; phase: 2 | 3 }
   /** A boss was beaten, its HP at 0: the galaxy warps out on the same step, and the boss dies over the warp. */

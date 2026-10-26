@@ -35,6 +35,11 @@ export const SFX_NAMES = [
   'wellWarn',
   'wellOpen',
   'wellClose',
+  'deflect',
+  'partCrack',
+  'partBreak',
+  'coreExposed',
+  'coreShielded',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -65,9 +70,10 @@ const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm' } as const satisfie
 
 /**
  * The most times a sound starts in one frame; the rest are dropped. Held fire plus a hit-stop catch-up would stack shot
- * blips, and a drone group arrives in one step, three to five at once, which is heard as one swarm.
+ * blips, and a drone group arrives in one step, three to five at once, which is heard as one swarm. A spread volley
+ * glancing off a shielded core is heard as one tick.
  */
-export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1 };
+export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1 };
 
 /** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
 export function isBossKill(events: readonly SimEvent[]): boolean {
@@ -84,6 +90,16 @@ function soundOf(event: SimEvent): SfxName | null {
       return isWarpClear(event) ? null : BOOM_BY_SIZE[event.size];
     case 'bossHit':
       return 'boomTiny';
+    case 'bossDeflected':
+      return 'deflect';
+    case 'bossPartHit':
+      return 'partCrack';
+    case 'bossPartBroken':
+      return 'partBreak';
+    case 'bossExposed':
+      return 'coreExposed';
+    case 'bossShielded':
+      return 'coreShielded';
     // Only a foe with HP to spare survives a hit: the splitter, cracking.
     case 'foeHit':
       return 'foeCrack';

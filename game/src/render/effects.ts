@@ -71,6 +71,16 @@ const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, sha
 const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A shot hurting a boss or a foe without killing it. */
 const HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A shot glancing off a shielded boss core: a few sparks, no more. */
+const DEFLECT_BURST: Counts = { shards: 0, sparks: 3, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A boss's part breaking bursts like a small rock. */
+const PART_BREAK_BURST = ASTEROID_BURSTS[2];
+/** About a boss part's size, for the spread of its burst. */
+const PART_BURST_RADIUS = 16;
+/** A boss's core laid bare: rings and a spray of sparks, a shake and a flash, so the opening is plain. */
+const EXPOSED_BURST: Counts = { shards: 0, sparks: 18, rings: 2, smoke: 0, shake: 4, flash: 0.2 };
+/** The core shielded again: one ring closing the opening. */
+const SHIELDED_BURST: Counts = { shards: 0, sparks: 6, rings: 1, smoke: 0, shake: 0, flash: 0 };
 /** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one (the sounds in sfx.ts match). */
 const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2] };
 /** A pickup dropping or being collected: a ring and a spray of sparks in its colour, no shake. */
@@ -102,8 +112,17 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'shot':
       return writeBurst(into, SHOT_BURST, palette.shot);
     case 'bossHit':
+    case 'bossPartHit':
     case 'foeHit':
       return writeBurst(into, HIT_BURST, palette.shot);
+    case 'bossDeflected':
+      return writeBurst(into, DEFLECT_BURST, palette.spark);
+    case 'bossPartBroken':
+      return writeBurst(into, PART_BREAK_BURST, palette.ring);
+    case 'bossExposed':
+      return writeBurst(into, EXPOSED_BURST, palette.accent[2]);
+    case 'bossShielded':
+      return writeBurst(into, SHIELDED_BURST, palette.ring);
     case 'foeDestroyed':
       return writeBurst(into, event.points === 0 ? WARP_CLEAR_BURST : FOE_BURSTS[event.kind], palette.ring);
     case 'pickupDropped':
@@ -246,8 +265,15 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'shot':
         return writeOrigin(origin, event.x, event.y, 0, null, world.ship.vx * 0.5, world.ship.vy * 0.5);
       case 'bossHit':
+      case 'bossPartHit':
+      case 'bossDeflected':
       case 'foeHit':
         return writeOrigin(origin, event.x, event.y, 0, null);
+      case 'bossPartBroken':
+        return writeOrigin(origin, event.x, event.y, PART_BURST_RADIUS, null);
+      case 'bossExposed':
+      case 'bossShielded':
+        return writeOrigin(origin, event.x, event.y, world.boss?.radius ?? PART_BURST_RADIUS, null);
       case 'foeDestroyed':
         return writeOrigin(origin, event.x, event.y, FOES[event.kind].radius, null);
       case 'pickupDropped':

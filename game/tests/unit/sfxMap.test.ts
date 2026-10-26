@@ -47,6 +47,11 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
   bossWindup: { type: 'bossWindup', attack: 'shardRing', x: 0, y: 0 },
   bossPhase: { type: 'bossPhase', phase: 2 },
   bossDown: { type: 'bossDown', id: 'sentinel' },
+  bossDeflected: { type: 'bossDeflected', x: 0, y: 0 },
+  bossPartHit: { type: 'bossPartHit', part: 0, x: 0, y: 0, hp: 1 },
+  bossPartBroken: { type: 'bossPartBroken', part: 0, x: 0, y: 0 },
+  bossExposed: { type: 'bossExposed', x: 0, y: 0 },
+  bossShielded: { type: 'bossShielded', x: 0, y: 0 },
 };
 
 /** The step a boss dies on: it goes down, the galaxy warps out (clearing the field for 0 points) and is cleared. */
@@ -108,8 +113,8 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'splitter', x: 0, y: 0 })).toBeNull();
   });
 
-  it('caps the swarm buzz at one a frame and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1 });
+  it('caps the swarm buzz and deflections at one a frame and shots at three (the engine applies the caps)', () => {
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {

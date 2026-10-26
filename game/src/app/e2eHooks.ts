@@ -1,3 +1,4 @@
+import { bossTarget } from '../sim/boss/bossRunner';
 import { STEP_SECONDS } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import type { Screen } from './flow';
@@ -13,7 +14,7 @@ export interface E2eHooks {
   e2eBeforeFrame?: (() => void) | undefined;
   /** Set by `installE2eHooks`: steps the run in play by fixed steps for `seconds`, or until it leaves play. */
   e2eFastForward?: ((seconds: number) => void) | undefined;
-  /** Set by `installE2eHooks`: takes `damage` hit points off a boss that is fighting; throws if none is. */
+  /** Set by `installE2eHooks`: lands `damage` shots on a boss that is fighting, each where it does harm; throws if none is. */
   e2eDamageBoss?: ((damage: number) => void) | undefined;
 }
 
@@ -38,12 +39,16 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
     for (let t = 0; t < seconds && deps.mode() === 'playing'; t += STEP_SECONDS) run.step(STEP_SECONDS, controls);
     deps.redraw();
   };
-  /** One shot's hit on the boss, through the galaxy rules (private on World, reached by name here); false if it is not fighting. */
+  /**
+   * One shot through the galaxy rules (private on World, reached by name here) where it does harm: the core, or while
+   * it is shielded a live part. False if the boss is not fighting.
+   */
   const strikeBoss = (): boolean => {
     const { world } = run;
-    const boss = world?.boss;
-    if (world === null || boss?.state !== 'fighting') return false;
-    return world['run']?.hitBoss(boss.x, boss.y, 1) === true;
+    const boss = world?.boss ?? null;
+    const target = boss === null ? null : bossTarget(boss);
+    if (world === null || target === null) return false;
+    return world['run']?.hitBoss(target.x, target.y, 1) === true;
   };
   e2e.e2eDamageBoss = (damage) => {
     let struck = 0;

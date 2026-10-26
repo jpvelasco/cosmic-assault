@@ -82,8 +82,9 @@ interface CosmicAssaultTestApi {
    */
   fastForward(seconds: number): void;
   /**
-   * Takes `damage` hit points off the boss, as that many shots would; the blow that empties it kills it, and the next
-   * step ends the galaxy, warping out while the boss dies. Throws unless a boss is fighting (not in its intro, dying or down).
+   * Lands `damage` shots on the boss, each where it does harm: the core, or while the core is shielded a live part, so a
+   * shielded boss takes fewer than `damage` hit points. The blow that empties it kills it, and the next step ends the
+   * galaxy, warping out while the boss dies. Throws unless a boss is fighting (not in its intro, dying or down).
    */
   damageBoss(damage: number): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
