@@ -6,21 +6,17 @@ import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
-import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
+import { defaultSave, type SaveData } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
+import { memoryStorage } from '../helpers/memoryStorage';
 
 const TODAY = '2026-10-26';
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
 
 type Backing = Pick<Storage, 'getItem' | 'setItem'>;
-
-function memoryStorage(initial?: SaveData): Backing {
-  const items = new Map<string, string>(initial === undefined ? [] : [[SAVE_KEY, JSON.stringify(initial)]]);
-  return { getItem: (key) => items.get(key) ?? null, setItem: (key, value) => items.set(key, value) };
-}
 
 /** A tab: its own store over `storage` (shared between tabs to model two), and its flow. */
 function setup(options: { save?: SaveData; storage?: Backing; galaxy?: GalaxyId; startLives?: number } = {}) {

@@ -9,15 +9,12 @@ import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { RingLog } from '../../src/platform/log';
+import { memoryStorage } from '../helpers/memoryStorage';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
 
-function memoryStorage(initial?: SaveData): Pick<Storage, 'getItem' | 'setItem'> & { items: Map<string, string> } {
-  const items = new Map<string, string>(initial === undefined ? [] : [[SAVE_KEY, JSON.stringify(initial)]]);
-  return { items, getItem: (key) => items.get(key) ?? null, setItem: (key, value) => items.set(key, value) };
-}
 
 function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData) {
   const storage = memoryStorage(save);
