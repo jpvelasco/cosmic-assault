@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Screen } from '../../src/app/flow';
-import { createRunController, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
+import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
 import { setRankRun } from '../../src/meta/progress';
@@ -26,6 +26,7 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
   const refresh = vi.fn();
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
+  const notify = vi.fn<(text: string) => void>();
   const run = createRunController({
     storage,
     overrides: { ...NONE, ...overrides },
@@ -34,12 +35,12 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
     field,
     showScreen: (screen) => screens.push(screen),
     onRunStarted,
-    notify: () => undefined,
+    notify,
     onEvents: () => undefined,
     refresh,
     presence,
   });
-  return { run, storage, screens, onRunStarted, refresh };
+  return { run, storage, screens, onRunStarted, refresh, notify };
 }
 
 describe('createRunController', () => {
@@ -113,6 +114,23 @@ describe('createRunController', () => {
       });
       expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
       expect(refresh).toHaveBeenCalled();
+    });
+
+    it('says why the run lost a life, once, when it forfeits it', async () => {
+      const { run, notify } = setup({}, () => FIELD, leftMidGalaxy);
+      await vi.waitFor(() => {
+        expect(run.rankLock).toBe('free');
+      });
+      expect(notify.mock.calls).toEqual([[LEFT_RUN_NOTICE]]);
+    });
+
+    it('says nothing when the owner answers, or when nothing was left mid-galaxy', async () => {
+      const owned = setup({}, () => FIELD, leftMidGalaxy, fakePresence(true));
+      await vi.waitFor(() => {
+        expect(owned.run.rankLock).toBe('elsewhere');
+      });
+      expect(owned.notify).not.toHaveBeenCalled();
+      expect(setup().notify).not.toHaveBeenCalled();
     });
 
     it('is forfeited when there is no channel to ask on', async () => {

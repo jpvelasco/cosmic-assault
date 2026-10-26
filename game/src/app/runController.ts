@@ -46,6 +46,9 @@ export type RankLock = 'free' | 'checking' | 'elsewhere';
 /** While another tab plays the saved run, it is asked about again this often, in case that tab closed or crashed. */
 export const RECHECK_MS = 5000;
 
+/** The toast when a Rank run left mid-galaxy (a closed or discarded tab) is forfeited at boot or on a recheck. */
+export const LEFT_RUN_NOTICE = 'Your Rank run lost a life: it was left mid-galaxy';
+
 /** The toast, once a session, when the save cannot be written. */
 export const SAVE_FAILED_NOTICE = "Progress can't be saved in this browser";
 
@@ -184,7 +187,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       return;
     }
     // The forfeit re-checks inGalaxy inside its update, so a run another tab already forfeited loses no second life.
-    flow.forfeitLeftRun();
+    if (flow.forfeitLeftRun()) deps.notify(LEFT_RUN_NOTICE);
     setLock('free');
   }
   checkLeftRun();

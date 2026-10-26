@@ -35,8 +35,8 @@ export interface FlowController {
   dispatch(action: FlowAction): void;
   /** Feeds one step's events: a clear or a game over moves the flow and writes the save at once, as does a Rank hit. */
   handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void;
-  /** Forfeits a saved run left mid-galaxy (a closed tab), once the caller knows no other tab is playing it. */
-  forfeitLeftRun(): void;
+  /** Forfeits a saved run left mid-galaxy (a closed tab), once the caller knows no other tab is playing it; true if it took a life. */
+  forfeitLeftRun(): boolean;
 }
 
 /**
@@ -51,10 +51,17 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
   /** The `rankSeq` this tab last saw its Rank run at: loaded, written, or shown on the title. */
   let knownSeq = store.save.rankSeq;
 
-  function forfeitLeftRun(): void {
-    if (store.save.rankRun?.inGalaxy !== true) return;
-    store.update((save) => (save.rankRun?.inGalaxy === true ? forfeitRankRun(save, save.rankRun, save.rankRun.lives, deps.today()) : save));
+  function forfeitLeftRun(): boolean {
+    if (store.save.rankRun?.inGalaxy !== true) return false;
+    let forfeited = false;
+    store.update((save) => {
+      const run = save.rankRun;
+      // Re-checked on the save as stored now: a run another tab already forfeited loses no second life.
+      forfeited = run?.inGalaxy === true;
+      return run !== null && forfeited ? forfeitRankRun(save, run, run.lives, deps.today()) : save;
+    });
     knownSeq = store.save.rankSeq;
+    return forfeited;
   }
 
   /** Writes `change`; returns false when another tab had moved the Rank run on, so its Rank part was dropped. */

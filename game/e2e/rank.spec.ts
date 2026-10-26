@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
 import { STALE_RUN_NOTICE } from '../src/app/flowController';
+import { LEFT_RUN_NOTICE } from '../src/app/runController';
 import { RANK_START_LIVES, startRank, type RankRun } from '../src/meta/rankRun';
 import { SAVE_KEY } from '../src/meta/save';
-import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, storedSave, test, waitForBridge } from './fixtures';
+import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, storedSave, test, toastOf, waitForBridge } from './fixtures';
 import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, GAME_OVER_SEED, SURVIVES_1_1, THREE_DEATHS_SECONDS } from './seed';
 
 /** Plays a new Rank run from the title. */
@@ -93,6 +94,8 @@ test('a reload mid-galaxy forfeits it the same way, once no tab answers for it',
   await waitForBridge(page);
 
   await expect.poll(async () => (await gameState(page)).save.rankRun).toMatchObject({ next: '1-1', lives: 2, inGalaxy: false });
+  // The player is told why: the run was left mid-galaxy.
+  await expect(toastOf(page)).toHaveText(LEFT_RUN_NOTICE);
   expect((await gameState(page)).screen).toBe('title');
   await expect(page.getByTestId('resume-rank')).toBeEnabled();
   await expect(page.getByTestId('rank-elsewhere')).toBeHidden();
