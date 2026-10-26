@@ -91,7 +91,12 @@ describe('weaponFor', () => {
         expect(full.barrels.length, where).toBeLessThanOrEqual(VOLLEY.maxShots);
         for (const kind of KINDS) {
           if (flags[kind]) expect(weaponFor(tier, { ...flags, [kind]: false }), `${where} without ${kind}`).not.toEqual(full);
-          else expect(weaponFor(tier, { ...flags, [kind]: true }).barrels.length, `${where} adding ${kind}`).toBeGreaterThanOrEqual(full.barrels.length);
+          else {
+            const added = weaponFor(tier, { ...flags, [kind]: true }).barrels.length;
+            // Rapid Fire speeds the volley up rather than widening it; the shot-adding kinds must add shots.
+            if (kind === 'rapidFire') expect(added, `${where} adding ${kind}`).toBe(full.barrels.length);
+            else expect(added, `${where} adding ${kind}`).toBeGreaterThan(full.barrels.length);
+          }
         }
       }
   });

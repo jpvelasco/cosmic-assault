@@ -159,7 +159,7 @@ function applyPhysics(ship: Ship, stepDrag: number, dt: number): void {
   ship.y += ship.vy * dt;
 }
 
-/** Steps the ship; `weapon` replaces the tier's one-shot-per-angle volley and its fire interval (practice and the parity traces never pass one; a galaxy run's `Loadout` owns the weapon tier). */
+/** Steps the ship; `weapon` replaces the default single forward shot and its fire interval (practice and the parity traces never pass one; a galaxy run's `Loadout` owns the weapon tier). */
 export function stepShip(ship: Ship, controls: Controls, dt: number, field: Field, weapon?: Weapon): readonly Shot[] {
   if (ship.invulnerable) {
     ship.invulnerableFor -= dt;

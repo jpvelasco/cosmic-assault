@@ -7,14 +7,14 @@ import { afterAll } from 'vitest';
 
 export const gameDir = fileURLToPath(new URL('../../', import.meta.url));
 
+/** Tests that spawn Node on a script take a few seconds apiece on a loaded host; give their suites this timeout. */
+export const SPAWN_TIMEOUT_MS = 30_000;
+
 /**
  * Test harness for a `scripts/*.mjs` guard: `run` executes it from game/ with the given arguments,
  * and `tempRoot` makes a directory that is removed after the file's tests.
  * Call it at the top level of a test file so the cleanup hook registers there.
  */
-/** Tests that spawn Node on a script take a few seconds apiece on a loaded host; give their suites this timeout. */
-export const SPAWN_TIMEOUT_MS = 30_000;
-
 export function guardScript(script: string, tempPrefix: string) {
   const tempRoots: string[] = [];
   afterAll(() => {
