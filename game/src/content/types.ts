@@ -12,7 +12,10 @@ export type BossId = 'sentinel';
 /** The moves a boss draws on; M5 adds the rest of the roster's. */
 export type AttackId = 'shardRing' | 'lunge';
 
-/** How likely a kind is to be picked: `base` from tier `from`, rising by `step` per tier, never above `max`. */
+/**
+ * How likely a kind is to be picked: `base` up to tier `from`, then rising by `step` per tier past it, never above
+ * `max`. `from` is not a grace period: a kind that must not appear before some tier needs a `base` of 0.
+ */
 export interface KindRamp {
   readonly from: number;
   readonly base: number;

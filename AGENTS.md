@@ -35,7 +35,8 @@
   controller (save, World and Rank wiring), commands, hit-stop, frame monitor
   and settings; `render/` owns drawing; `audio/` owns sound; `input/`
   owns keyboard, touch and gamepad input and menu focus; `ui/` owns the DOM
-  cards (title, pause, game over, settings, crash, rotate prompt); `platform/`
+  cards (title, mode select, the level map and level select, results and game
+  over, pause, settings, records, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
   crash guard and the local log; `sw/` is the service worker itself.
   - Game key handling stands down while a form control has focus
@@ -64,13 +65,14 @@
     created on the first user gesture, suspended while the tab is hidden, and
     builds no nodes while suspended or muted. `M` or the sound chip toggles mute.
   - `World` takes a rules strategy. Practice rules (the old game's spawning,
-    kept for tests and pinned by `tests/fixtures/practice-log.json`) and level
+    kept for tests and pinned by `game/tests/fixtures/practice-log.json`) and level
     rules: a threat-budget director (`sim/galaxy/director.ts`) keeps the
     on-field cost under a budget normalised to field area, a scripted pacing
     (opening, build, lull, surge, warp-out) shapes it, meteor showers are
     scheduled and telegraphed and their rocks pass through instead of wrapping,
     and boss levels run a phased boss (`sim/boss/`). `galaxyCleared` fires
-    when the warp starts, and the app records the clear at that moment.
+    when the warp starts (the timer runs out, or the boss's HP hits 0), and the
+    app records the clear at that moment.
   - Progress saves under `cosmic-assault.v2` (`meta/save.ts`, `app/saveStore.ts`).
     Loading sanitizes field by field; every write re-reads, merges (`mergeSaves`:
     furthest frontier, best score and stars per level, the ranked run with the
