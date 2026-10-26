@@ -14,20 +14,26 @@
 - `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
   Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
   Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
-  carries the test bridge and the `?seed=`/`?lives=`/`?quality=` URL overrides,
+  carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=` URL overrides,
   and checks that it does), `check:no-bridge` (fails if the release `dist/`
   contains the bridge or that URL parsing), and `record:parity` (records the
   parity traces), and `icons` (re-renders the committed PNG icons in
   `game/public/icons/` from `game/assets-src/icon.svg` with Playwright's
   Chromium; run it after editing the SVG and commit the PNGs). Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
-  also fails if the e2e frame hook reaches `dist/`.
+  also fails if an e2e hook (frame, fast-forward, boss damage) reaches `dist/`.
+  `?galaxy=` jumps straight into a level (see `app/seed.ts`). A run started with `?galaxy=`,
+  `?seed=` or `?lives=` never writes the save.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
   enforces it. Ship handling is pinned to recorded traces of the live game in
   `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
   without owner approval.
-- In `game/src/`, `app/` owns the mode machine, commands, hit-stop, frame
-  monitor and settings; `render/` owns drawing; `audio/` owns sound; `input/`
+- In `game/src/`, `content/` holds the level tables (levels grouped in sets,
+  each set ending in a boss level), the difficulty curves, the pacing rules and
+  the bosses as typed data; `meta/` holds the pure save, unlock, star
+  and Rank rules; `app/` owns the screen flow (`flow.ts`, pure), the run
+  controller (save, World and Rank wiring), commands, hit-stop, frame monitor
+  and settings; `render/` owns drawing; `audio/` owns sound; `input/`
   owns keyboard, touch and gamepad input and menu focus; `ui/` owns the DOM
   cards (title, pause, game over, settings, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
@@ -57,7 +63,21 @@
   - `audio/` is all synthesized WebAudio: no audio files. The `AudioContext` is
     created on the first user gesture, suspended while the tab is hidden, and
     builds no nodes while suspended or muted. `M` or the sound chip toggles mute.
-  - Settings persist in `localStorage` under the single key
+  - `World` takes a rules strategy. Practice rules (the old game's spawning,
+    kept for tests and pinned by `tests/fixtures/practice-log.json`) and level
+    rules: a threat-budget director (`sim/galaxy/director.ts`) keeps the
+    on-field cost under a budget normalised to field area, a scripted pacing
+    (opening, build, lull, surge, warp-out) shapes it, meteor showers are
+    scheduled and telegraphed and their rocks pass through instead of wrapping,
+    and boss levels run a phased boss (`sim/boss/`). `galaxyCleared` fires
+    when the warp starts, and the app records the clear at that moment.
+  - Progress saves under `cosmic-assault.v2` (`meta/save.ts`, `app/saveStore.ts`).
+    Loading sanitizes field by field; every write re-reads, merges (`mergeSaves`:
+    furthest frontier, best score and stars per level, the ranked run with the
+    higher `rankSeq`) and never writes after a failed read. Other tabs' changes
+    arrive through the `storage` event, and a ranked run playing in another
+    tab is detected over `BroadcastChannel` before any forfeit.
+  - Settings persist in `localStorage` under the key
     `cosmic-assault.v2.settings` (`app/settings.ts`): mute, music and effects
     volume, screen shake (`auto`, `on` or `off`; `auto` follows
     `prefers-reduced-motion`) and left-handed touch controls. Loading sanitizes
