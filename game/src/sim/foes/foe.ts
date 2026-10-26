@@ -27,6 +27,8 @@ export interface Foe {
 /** What a foe's behaviour sees of the field it is in. */
 export interface FoeWorld {
   readonly arena: Arena;
+  /** The foes on the field, the one stepping included; live. */
+  readonly list: readonly Foe[];
   /** The 'foes' stream. */
   readonly rng: Rng;
   /** A foe of `kind` with its HP and radius set, or null with the pool full; set its motion, then `commit` it. */

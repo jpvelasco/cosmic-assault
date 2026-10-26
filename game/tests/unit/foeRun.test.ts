@@ -267,6 +267,14 @@ describe('foe collisions', () => {
     expect(w.lives).toBe(3);
     expect(w.shield).toBe(false);
     expect(w.ship.invulnerable).toBe(true);
+    for (let i = 0; i < 5 * 120 && w.ship.invulnerable; i++) step(w);
+    expect(w.ship.invulnerable).toBe(false);
+    expect(w.foes).toContain(second);
+    park(second, w.ship.x, w.ship.y);
+    const next = step(w);
+    expect(next.filter((e) => e.type === 'shipHit')).toHaveLength(1);
+    expect(next.some((e) => e.type === 'shieldBroken')).toBe(false);
+    expect(w.lives).toBe(2);
   });
 
   it('removes a foe that rams the ship on its last life, so none is left at game over', () => {

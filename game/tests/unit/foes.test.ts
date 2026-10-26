@@ -284,6 +284,25 @@ describe('drone', () => {
     expect(r.foes.list).toHaveLength(2);
   });
 
+  it('keeps a swarm of 5 chasing a circling ship at least 16 units apart once 2 s have passed (Ruling R14)', () => {
+    const r = rig({ field: FIELD_43, shipX: 820, shipY: 360 });
+    r.foes.spawn('drone', 5, 1);
+    const drones = r.foes.list;
+    expect(drones).toHaveLength(5);
+    const { ship } = r.arena;
+    let closest = Infinity;
+    for (let i = 1; i <= 8 / DT; i++) {
+      const angle = i * DT * 1.2;
+      ship.x = 640 + Math.cos(angle) * 180;
+      ship.y = 360 + Math.sin(angle) * 180;
+      r.foes.step(DT);
+      if (i * DT < 2) continue;
+      for (const [j, a] of drones.entries()) for (const b of drones.slice(j + 1)) closest = Math.min(closest, Math.hypot(a.x - b.x, a.y - b.y));
+      for (const d of drones) expect(Math.hypot(d.vx, d.vy)).toBeCloseTo(FOES.drone.speed, 9);
+    }
+    expect(closest).toBeGreaterThanOrEqual(16);
+  });
+
   it('spends one shot on one drone even where two overlap', () => {
     const r = rig();
     r.foes.spawn('drone', 3, 1);
