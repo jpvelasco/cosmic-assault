@@ -913,6 +913,15 @@ describe('music themes', () => {
   const reaches = (from: FakeNode, to: FakeNode): boolean => from === to || [...from.outputs].some((n) => reaches(n, to));
   /** Start times of the music voices that sound on `lane`. */
   const startsOn = (lane: FakeNode): number[] => voiceNodes().filter((v) => reaches(v, lane)).map((v) => v.start.mock.calls[0]?.[0] as number);
+  /** The pitch classes (0-11) of the oscillators sounding on `lane`; noise has none. */
+  const pitchClassesOn = (lane: FakeNode): Set<number> =>
+    new Set(
+      nodesOf('oscillator')
+        .filter((v) => reaches(v, lane))
+        .map((v) => (((Math.round(69 + 12 * Math.log2((v.frequency.setValueAtTime.mock.calls[0]?.[0] as number) / 440)) % 12) + 12) % 12)),
+    );
+  const D_MAJOR = [2, 4, 6, 7, 9, 11, 1];
+  const A_MINOR = [9, 11, 0, 2, 4, 5, 7];
   const setAt = (lane: FakeNode, value: number): number | undefined =>
     (lane.gain.setValueAtTime.mock.calls as [number, number][]).find(([v]) => v === value)?.[1];
 
@@ -995,6 +1004,29 @@ describe('music themes', () => {
       expect(startsOn(old).every((t) => t < at)).toBe(true);
       expect(startsOn(fresh).length).toBeGreaterThan(0);
       expect(startsOn(fresh).every((t) => t >= at)).toBe(true);
+      // Nothing of the Drift (Am F C G) is on the new lane, even a note on the bar line itself, nor of Ion Reach on the old.
+      expect([...pitchClassesOn(fresh)].every((pc) => D_MAJOR.includes(pc))).toBe(true);
+      expect([...pitchClassesOn(old)].every((pc) => A_MINOR.includes(pc))).toBe(true);
+      expect(pitchClassesOn(fresh).size).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each([
+      ['the Drift', '1-6', 0.625],
+      ['Ion Reach', '2-6', 60 / 110],
+    ] as const)('switches %s to its boss variant on the next beat, inside the 2 s boss intro', (_name, galaxy, beat) => {
+      const e = playing();
+      e.handle([start(galaxy)]);
+      for (let i = 0; i < 400 && lanes().length < 2; i++) runClock(0.025);
+      runClock(1);
+      expect(lanes()).toHaveLength(1);
+      const asked = ctx().currentTime;
+      e.handle([INTRO]);
+      const [, fresh] = untilChange();
+      const at = setAt(fresh, 0) as number;
+      expect(at).toBeGreaterThanOrEqual(asked);
+      expect(at - asked).toBeLessThanOrEqual(beat + 0.2);
+      expect(at - asked).toBeLessThan(2);
+      expect(e.theme).toBe(galaxy === '1-6' ? 'driftBoss' : 'ionReachBoss');
     });
 
     it('drops the faded-out bus once it is silent, and not before', () => {

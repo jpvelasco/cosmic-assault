@@ -1,9 +1,9 @@
 import { galaxyById } from '../content/galaxies';
+import type { GalaxyDef } from '../content/types';
 import { recordPickupSeen } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
 import { createTabPresence, type TabPresence } from '../platform/tabPresence';
-import type { GalaxyDef } from '../content/types';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';

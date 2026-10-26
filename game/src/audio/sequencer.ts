@@ -30,20 +30,21 @@ export interface Pattern {
 /** How far ahead of the audio clock notes are handed to the audio graph. */
 export const LOOKAHEAD_SECONDS = 0.1;
 
-/** Beats in a bar: themes are written in bars, and a theme change lands on a bar line. */
+/** Beats in a bar: themes are written in bars, and a theme change lands on a bar line (or a beat line, see `SwitchGrain`). */
 export const BEATS_PER_BAR = 4;
+
+/** The beat at audio time `time` of a theme whose beat 0 sounded at `startTime`. */
+const beatAt = (bpm: number, time: number, startTime: number): number => ((time - startTime) * bpm) / 60;
 
 /** The beat a window ending at `toTime` starts from: `fromBeat`, or now if that fell more than one look-ahead behind (a stalled timer). */
 function windowStart(bpm: number, fromBeat: number, toTime: number, startTime: number): number {
-  const secondsPerBeat = 60 / bpm;
-  const nowBeat = (toTime - startTime) / secondsPerBeat - LOOKAHEAD_SECONDS / secondsPerBeat;
-  return (nowBeat - fromBeat) * secondsPerBeat > LOOKAHEAD_SECONDS ? nowBeat : fromBeat;
+  const nowBeat = beatAt(bpm, toTime - LOOKAHEAD_SECONDS, startTime);
+  return ((nowBeat - fromBeat) * 60) / bpm > LOOKAHEAD_SECONDS ? nowBeat : fromBeat;
 }
 
-/** The notes of `pattern` looped from `startTime` that fall in [`from`, the beat at `toTime`), and the beat to continue from. */
-function window(pattern: Pattern, bpm: number, from: number, toTime: number, startTime: number): { events: NoteEvent[]; nextBeat: number } {
+/** The notes of `pattern` looped from `startTime` that fall in [`from`, `toBeat`), and the beat to continue from. */
+function window(pattern: Pattern, bpm: number, from: number, toBeat: number, startTime: number): { events: NoteEvent[]; nextBeat: number } {
   const secondsPerBeat = 60 / bpm;
-  const toBeat = (toTime - startTime) / secondsPerBeat;
   const events: NoteEvent[] = [];
   const { lengthBeats, notes } = pattern;
   for (let loop = Math.floor(from / lengthBeats); loop * lengthBeats < toBeat; loop++) {
@@ -77,7 +78,7 @@ export function scheduleWindow(
   toTime: number,
   startTime: number,
 ): { events: NoteEvent[]; nextBeat: number } {
-  return window(pattern, bpm, windowStart(bpm, fromBeat, toTime, startTime), toTime, startTime);
+  return window(pattern, bpm, windowStart(bpm, fromBeat, toTime, startTime), beatAt(bpm, toTime, startTime), startTime);
 }
 
 /** A theme as the scheduler plays it. */
@@ -92,30 +93,38 @@ export interface Timeline extends Playable {
   readonly nextBeat: number;
 }
 
+/** How soon a theme change lands: on the next bar line, or the next beat line. */
+export type SwitchGrain = 'bar' | 'beat';
+
 /**
  * One timer tick of a theme that can change: the notes up to `toTime`, and the timeline to continue from. With
- * `next` set, the change waits for the first bar line not yet scheduled, so every bar is played whole: the old
- * theme's notes stop short of it, and `next`'s beat 0 sounds on it, at `next`'s tempo. `switchedAt` is that
- * audio time, or null when the tick did not reach it (the caller keeps passing `next` until it does).
+ * `next` set, the change waits for the first `grain` line (bar or beat) not yet scheduled, so every bar or beat is
+ * played whole: the old theme's notes stop short of it, and `next`'s beat 0 sounds on it, at `next`'s tempo.
+ * `switchedAt` is that audio time, or null when the tick did not reach it (the caller keeps passing `next` until it
+ * does). The line is a whole beat, and the old window ends on that beat rather than on a time worked back to one, so
+ * no rounding at an awkward tempo can leave an old note on the switch.
  */
 export function stepTimeline(
   line: Timeline,
   next: Playable | null,
   toTime: number,
+  grain: SwitchGrain,
 ): { events: NoteEvent[]; line: Timeline; switchedAt: number | null } {
   const from = windowStart(line.bpm, line.nextBeat, toTime, line.startTime);
   if (next !== null) {
-    const switchedAt = line.startTime + Math.ceil(from / BEATS_PER_BAR) * BEATS_PER_BAR * (60 / line.bpm);
+    const quantum = grain === 'bar' ? BEATS_PER_BAR : 1;
+    const switchBeat = Math.ceil(from / quantum) * quantum;
+    const switchedAt = line.startTime + switchBeat * (60 / line.bpm);
     if (switchedAt < toTime) {
-      const old = window(line.pattern, line.bpm, from, switchedAt, line.startTime);
-      const fresh = window(next.pattern, next.bpm, 0, toTime, switchedAt);
+      const old = window(line.pattern, line.bpm, from, switchBeat, line.startTime);
+      const fresh = window(next.pattern, next.bpm, 0, beatAt(next.bpm, toTime, switchedAt), switchedAt);
       return {
-        events: [...old.events, ...fresh.events],
+        events: [...old.events.filter((e) => e.time < switchedAt), ...fresh.events],
         line: { pattern: next.pattern, bpm: next.bpm, startTime: switchedAt, nextBeat: fresh.nextBeat },
         switchedAt,
       };
     }
   }
-  const now = window(line.pattern, line.bpm, from, toTime, line.startTime);
+  const now = window(line.pattern, line.bpm, from, beatAt(line.bpm, toTime, line.startTime), line.startTime);
   return { events: now.events, line: { ...line, nextBeat: now.nextBeat }, switchedAt: null };
 }

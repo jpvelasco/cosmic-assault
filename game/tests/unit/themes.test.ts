@@ -97,6 +97,7 @@ describe('Drift', () => {
     const drift = THEMES.drift;
     expect(drift.bpm).toBe(96);
     expect(drift.chords.map((c) => c.bass)).toEqual([45, 41, 48, 43]);
+    // Not a parity trace: the old Drift loop, captured from the code before themes became data.
     const saved = JSON.parse(readFileSync(new URL('../fixtures/drift-pattern.json', import.meta.url), 'utf8')) as unknown;
     expect(patternOf(drift)).toEqual(saved);
   });

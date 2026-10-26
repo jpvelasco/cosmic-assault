@@ -291,7 +291,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     });
   }
 
-  /** Moves the music to the theme the galaxy and boss fight now call for; it changes at the next bar line. */
+  /**
+   * Moves the music to the theme the galaxy and boss fight now call for. A new galaxy waits for the next bar line, but
+   * a boss's variant for the next beat, to be playing by the end of its 2 s intro.
+   */
   function syncTheme(): void {
     const next = bossFight ? bossThemeOf(galaxyTheme) : galaxyTheme;
     if (next === theme) return;
@@ -299,7 +302,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     const current = graph;
     if (current === null) return;
     guard(() => {
-      current.player.setTheme(THEMES[next]);
+      current.player.setTheme(THEMES[next], bossFight ? 'beat' : 'bar');
     });
   }
 

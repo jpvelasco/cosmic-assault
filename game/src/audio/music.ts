@@ -1,4 +1,4 @@
-import { LOOKAHEAD_SECONDS, stepTimeline, type Timeline } from './sequencer';
+import { LOOKAHEAD_SECONDS, stepTimeline, type SwitchGrain, type Timeline } from './sequencer';
 import { patternOf, type MusicTheme } from './themes';
 import { playNote, type VoiceBed } from './voices';
 
@@ -18,11 +18,11 @@ export interface MusicPlayer {
   start(): void;
   stop(): void;
   /**
-   * Plays `theme` from the next bar line: the old theme's bar finishes, then the new one starts from its first
-   * beat while the old bus fades out under it. Asking for the theme already playing cancels a change still waiting.
-   * Before `start` it just picks the theme to start with.
+   * Plays `theme` from the next bar line (or beat line, for a `grain` of 'beat'): the old theme's bar finishes, then
+   * the new one starts from its first beat while the old bus fades out under it. Asking for the theme already playing
+   * cancels a change still waiting. Before `start` it just picks the theme to start with.
    */
-  setTheme(theme: MusicTheme): void;
+  setTheme(theme: MusicTheme, grain: SwitchGrain): void;
 }
 
 /** A theme's own bus, so it can be faded out as a whole when another takes over. */
@@ -50,6 +50,7 @@ export function createMusicPlayer(
   let timer: ReturnType<typeof setInterval> | null = null;
   let theme = initial;
   let pending: MusicTheme | null = null;
+  let pendingGrain: SwitchGrain = 'bar';
   let line: Timeline | null = null;
   let lane: Lane | null = null;
   const fading: Lane[] = [];
@@ -82,11 +83,12 @@ export function createMusicPlayer(
 
   const tick = (): void => {
     guard(() => {
-      if (!audible() || line === null || lane === null) return;
+      if (line === null || lane === null) return;
       const now = bed.ctx.currentTime;
       retire(now);
+      if (!audible()) return;
       const changing = pending;
-      const step = stepTimeline(line, changing === null ? null : { pattern: patternOf(changing), bpm: changing.bpm }, now + LOOKAHEAD_SECONDS);
+      const step = stepTimeline(line, changing === null ? null : { pattern: patternOf(changing), bpm: changing.bpm }, now + LOOKAHEAD_SECONDS, pendingGrain);
       line = step.line;
       if (changing === null || step.switchedAt === null) {
         for (const note of step.events) playNote(bed, lane.gain, note);
@@ -122,10 +124,11 @@ export function createMusicPlayer(
       lane = null;
       line = null;
     },
-    setTheme(next) {
-      if (next.id === (pending ?? theme).id) return;
+    setTheme(next, grain) {
+      pendingGrain = grain;
       if (timer === null) {
         theme = next;
+        pending = null;
       } else if (next.id === theme.id) {
         pending = null;
       } else {
