@@ -22,12 +22,12 @@ function frozenCopy<T>(value: T): T {
 }
 
 function snapshot(app: App): CosmicAssaultTestState {
-  const { world, flow } = app;
+  const { world, flow, save } = app.run;
   return {
     mode: app.mode,
     screen: app.mode,
     galaxy: flow.galaxy,
-    save: frozenCopy(app.save),
+    save: frozenCopy(save),
     rankRun: flow.rankRun === null ? null : frozenCopy(flow.rankRun),
     score: world?.score ?? 0,
     lives: world?.lives ?? 0,

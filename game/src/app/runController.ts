@@ -1,15 +1,17 @@
 import { galaxyById } from '../content/galaxies';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
+import { createTabPresence, type TabPresence } from '../platform/tabPresence';
 import { PLAYER } from '../sim/config';
+import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
-import { World } from '../sim/world';
+import { hasEnded, World } from '../sim/world';
 import type { FlowCommand } from './commands';
 import { localDate } from './date';
-import { MENU_SCREENS, type FlowState, type Screen } from './flow';
+import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
 import { createFlowController } from './flowController';
-import { createSaveStore, type SaveStore, type StorageEvents } from './saveStore';
+import { createSaveStore, type StorageEvents } from './saveStore';
 import { clockSeed, isDebugRun, type RunOverrides } from './seed';
 
 export interface RunControllerDeps {
@@ -27,7 +29,22 @@ export interface RunControllerDeps {
   onRunStarted(): void;
   /** Tells the player something in a toast. */
   notify(text: string): void;
+  /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
+  onEvents(events: readonly SimEvent[], world: World): void;
+  /** Something the cards show changed outside a screen change: another tab's save, or the Rank lock. */
+  refresh(): void;
+  /** Which tab plays a Rank galaxy; defaults to one over `BroadcastChannel`. */
+  readonly presence?: TabPresence;
 }
+
+/**
+ * Whether the saved Rank run can be played here: `'free'`, `'checking'` while a probe asks the other tabs whether one
+ * is playing it, or `'elsewhere'` when one answered.
+ */
+export type RankLock = 'free' | 'checking' | 'elsewhere';
+
+/** The toast, once a session, when the save cannot be written. */
+export const SAVE_FAILED_NOTICE = "Progress can't be saved in this browser";
 
 export interface RunController {
   /** The run in play or on its end card; null on the title and menu screens. */
@@ -38,14 +55,16 @@ export interface RunController {
   /** The score the run stands on: in Rank, the run's score so far plus this galaxy's; in Free play, the galaxy's. */
   readonly runTotal: number;
   readonly command: (command: FlowCommand) => void;
-  /** Feeds one step's events to the flow: a clear or a game over moves it and writes the save at once. */
-  handle(events: readonly SimEvent[]): void;
+  readonly rankLock: RankLock;
+  /** True while an end card is up over a World still warping out: the app keeps stepping it until it ends. */
+  readonly warpingUnderCard: boolean;
+  /** Steps the World by `dt`; its events go to `onEvents`, then to the flow (a clear or game over moves it at once). */
+  step(dt: number, controls: Controls): void;
   pause(): void;
   resume(): void;
   /** Quits the paused run to the title; in Rank that forfeits the galaxy, at the cost of a life. */
   quit(): void;
-  readonly onExternalChange: SaveStore['onExternalChange'];
-  readonly onWriteFailure: SaveStore['onWriteFailure'];
+  dispose(): void;
 }
 
 /**
@@ -62,7 +81,12 @@ export function createRunController(deps: RunControllerDeps): RunController {
     ...(deps.events === undefined ? {} : { events: deps.events }),
   });
   store.importClassicOnce();
+  const presence = deps.presence ?? createTabPresence();
   let world: World | null = null;
+  let rankLock: RankLock = 'free';
+  /** The answer to probes for the Rank galaxy this tab plays; a no-op while it plays none. */
+  let releaseOwnership = (): void => undefined;
+  let ownedSeq: number | null = null;
 
   /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives. */
   function startRun({ galaxy, mode, rankRun }: FlowState): void {
@@ -101,7 +125,55 @@ export function createRunController(deps: RunControllerDeps): RunController {
     notify: (text) => {
       deps.notify(text);
     },
+    liveRun: (runSeq) => {
+      if (runSeq === ownedSeq) return;
+      releaseOwnership();
+      ownedSeq = runSeq;
+      releaseOwnership = runSeq === null ? () => undefined : presence.own(runSeq);
+    },
   });
+
+  /** False until construction ends: the app's view does not exist yet, and reads the first lock as it is built. */
+  let built = false;
+  function setLock(lock: RankLock): void {
+    if (lock === rankLock) return;
+    rankLock = lock;
+    if (built) deps.refresh();
+  }
+
+  /**
+   * A run saved mid-galaxy is either another tab's live attempt or one left unfinished (a closed tab). Ask first: an
+   * owner's answer locks it here; silence (or no channel) forfeits it. Runs again whenever another tab writes the save.
+   */
+  function checkLeftRun(): void {
+    void settleLeftRun();
+  }
+
+  async function settleLeftRun(): Promise<void> {
+    const { rankRun, rankSeq } = store.save;
+    if (rankRun?.inGalaxy !== true || ownedSeq !== null) {
+      setLock('free');
+      return;
+    }
+    setLock('checking');
+    const owned = await presence.probe(rankSeq);
+    // A newer write has started its own check.
+    if (store.save.rankSeq !== rankSeq) return;
+    if (!owned) flow.forfeitLeftRun();
+    setLock(owned ? 'elsewhere' : 'free');
+  }
+  checkLeftRun();
+  built = true;
+  const unlisteners = [
+    // Another tab's write: this tab's map, galaxy select and Resume show it at once, and a run it left is re-checked.
+    store.onExternalChange(() => {
+      deps.refresh();
+      checkLeftRun();
+    }),
+    store.onWriteFailure(() => {
+      deps.notify(SAVE_FAILED_NOTICE);
+    }),
+  ];
 
   return {
     get world() {
@@ -117,9 +189,22 @@ export function createRunController(deps: RunControllerDeps): RunController {
       const { result, rankRun } = flow.state;
       return result?.total ?? (rankRun?.score ?? 0) + (world?.score ?? 0);
     },
-    command: flow.command,
-    handle(events) {
-      if (world !== null) flow.handle(events, world);
+    get rankLock() {
+      return rankLock;
+    },
+    get warpingUnderCard() {
+      return world !== null && END_SCREENS.includes(flow.state.screen) && !hasEnded(world.status);
+    },
+    command(command) {
+      // The saved run is being checked, or is playing in another tab: it cannot be resumed here yet.
+      if (command.kind === 'resumeRank' && rankLock !== 'free') return;
+      flow.command(command);
+    },
+    step(dt, controls) {
+      if (world === null) return;
+      const events = world.step(dt, controls);
+      deps.onEvents(events, world);
+      flow.handle(events, world);
     },
     pause() {
       flow.dispatch({ kind: 'pause' });
@@ -130,7 +215,10 @@ export function createRunController(deps: RunControllerDeps): RunController {
     quit() {
       flow.dispatch({ kind: 'quit' });
     },
-    onExternalChange: (callback) => store.onExternalChange(callback),
-    onWriteFailure: (callback) => store.onWriteFailure(callback),
+    dispose() {
+      for (const unlisten of unlisteners) unlisten();
+      releaseOwnership();
+      presence.dispose();
+    },
   };
 }

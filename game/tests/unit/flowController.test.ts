@@ -172,17 +172,22 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  it('a tab closed mid-galaxy forfeits it on the next boot', () => {
+  it('forfeitLeftRun takes the life of a run a closed tab left mid-galaxy (once no tab owns it)', () => {
     const storage = memoryStorage();
     startRankRun(setup({ storage }));
     const next = setup({ storage });
+    expect(next.store.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+    next.flow.forfeitLeftRun();
     expect(next.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+    next.flow.forfeitLeftRun();
+    expect(next.store.save.rankRun).toMatchObject({ lives: 2 });
     expect(next.flow.state.screen).toBe('title');
   });
 
   it('on the last life the forfeit loses the run, and the board gets its entry', () => {
     const last = { ...startRank(TODAY), next: '1-2' as const, score: 800, lives: 1, inGalaxy: true };
     const tab = setup({ save: setRankRun(defaultSave(), last) });
+    tab.flow.forfeitLeftRun();
     expect(tab.store.save.rankRun).toMatchObject({ lives: 0, score: 800 });
     expect(tab.store.save.rankBoard).toEqual([{ score: 800, reached: 'D1 · G2', date: TODAY, continued: false }]);
   });
@@ -193,8 +198,9 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const storage = memoryStorage();
     const a = setup({ storage });
     startRankRun(a);
-    // Tab B opens while A plays: A's galaxy was left unfinished as far as B can tell, so B forfeits it.
+    // Tab B, finding no owner for A's galaxy (say A's answer was lost), forfeits it.
     const b = setup({ storage });
+    b.flow.forfeitLeftRun();
     expect(b.store.save.rankRun).toMatchObject({ lives: 2 });
     a.flow.dispatch({ kind: 'pause' });
     a.flow.dispatch({ kind: 'quit' });
@@ -209,7 +215,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const storage = memoryStorage();
     const a = setup({ storage });
     startRankRun(a);
-    setup({ storage });
+    setup({ storage }).flow.forfeitLeftRun();
     playUntilEnd(a.flow, '1-1', 'rank');
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');

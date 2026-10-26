@@ -9,6 +9,7 @@ import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { RingLog } from '../../src/platform/log';
+import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
 import { memoryStorage } from '../helpers/memoryStorage';
 
 const FIELD = { width: 1280, height: 720 };
@@ -16,8 +17,14 @@ const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEven
 const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
 
 
-function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData) {
+/** A presence where no other tab ever answers, unless `owner` is set: then one owns every run. */
+function fakePresence(owner = false): TabPresence {
+  return { probe: () => Promise.resolve(owner), own: () => () => undefined, dispose: () => undefined };
+}
+
+function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData, presence = fakePresence()) {
   const storage = memoryStorage(save);
+  const refresh = vi.fn();
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
   const run = createRunController({
@@ -29,8 +36,11 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
     showScreen: (screen) => screens.push(screen),
     onRunStarted,
     notify: () => undefined,
+    onEvents: () => undefined,
+    refresh,
+    presence,
   });
-  return { run, storage, screens, onRunStarted };
+  return { run, storage, screens, onRunStarted, refresh };
 }
 
 describe('createRunController', () => {
@@ -77,7 +87,7 @@ describe('createRunController', () => {
     if (world === null) throw new Error('Resume must start a run');
     expect(run.runTotal).toBe(4000);
     // Seed 2 keeps the idle ship alive to the warp, so the clear bonus is the galaxy's only score.
-    while (run.flow.screen === 'playing') run.handle(world.step(STEP_SECONDS, NO_CONTROLS));
+    while (run.flow.screen === 'playing') run.step(STEP_SECONDS, NO_CONTROLS);
     expect(run.flow.screen).toBe('results');
     expect(run.runTotal).toBe(run.flow.result?.total);
     expect(run.runTotal).toBe(4000 + world.score);
@@ -89,9 +99,60 @@ describe('createRunController', () => {
     expect(run.runTotal).toBe(run.world?.score);
   });
 
-  it('forfeits a galaxy left unfinished as it boots, before the title shows', () => {
-    const { run } = setup({}, () => FIELD, setRankRun(defaultSave(), { ...startRank('2026-10-26'), inGalaxy: true }));
-    expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+  describe('a run saved mid-galaxy at boot', () => {
+    const leftMidGalaxy = setRankRun(defaultSave(), { ...startRank('2026-10-26'), inGalaxy: true });
+
+    it('is forfeited when no tab answers the probe, and Resume waits for the answer', async () => {
+      const { run, refresh } = setup({}, () => FIELD, leftMidGalaxy);
+      expect(run.rankLock).toBe('checking');
+      // The app builds its view after the controller, so the first lock is read, not pushed.
+      expect(refresh).not.toHaveBeenCalled();
+      run.command({ kind: 'resumeRank' });
+      expect(run.flow.screen).toBe('title');
+      await vi.waitFor(() => {
+        expect(run.rankLock).toBe('free');
+      });
+      expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it('is forfeited when there is no channel to ask on', async () => {
+      const { run } = setup({}, () => FIELD, leftMidGalaxy, createTabPresence(null));
+      await vi.waitFor(() => {
+        expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+      });
+    });
+
+    it('is left alone when its owner answers: locked here, with no forfeit and no Resume', async () => {
+      const { run } = setup({}, () => FIELD, leftMidGalaxy, fakePresence(true));
+      await vi.waitFor(() => {
+        expect(run.rankLock).toBe('elsewhere');
+      });
+      expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+      run.command({ kind: 'resumeRank' });
+      expect(run.flow.screen).toBe('title');
+    });
+  });
+
+  it('owns the Rank galaxy it plays, answering probes until the galaxy ends', () => {
+    const owned: number[] = [];
+    const released: number[] = [];
+    const presence: TabPresence = {
+      probe: () => Promise.resolve(false),
+      own: (seq) => {
+        owned.push(seq);
+        return () => released.push(seq);
+      },
+      dispose: () => undefined,
+    };
+    const { run } = setup({}, () => FIELD, undefined, presence);
+    run.command({ kind: 'start' });
+    run.command({ kind: 'chooseMode', mode: 'rank' });
+    expect(owned).toEqual([run.save.rankSeq]);
+    run.pause();
+    expect(released).toEqual([]);
+    run.quit();
+    expect(released).toEqual(owned);
   });
 
   it('refuses to start without a field, saying what to do', () => {

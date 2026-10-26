@@ -224,13 +224,14 @@ const rankOnly = (rank: Change): SaveChange => ({ record: null, rank });
  * - a clear saves it between galaxies, at the next one; 5-★ posts the run and ends it;
  * - a game over posts the run total and keeps the run, with no lives, for a Continue.
  */
-export function saveChange(before: FlowState, action: FlowAction, after: FlowState, today: string): SaveChange | null {
+/** `today` gives the local date; it is read only by a change that dates something (a board entry or forfeit). */
+export function saveChange(before: FlowState, action: FlowAction, after: FlowState, today: () => string): SaveChange | null {
   if (after === before) return null;
   const run = before.mode === 'rank' ? before.rankRun : null;
   if (after.runs !== before.runs && after.mode === 'rank') {
     const started = after.rankRun;
     if (started === null) return null;
-    return rankOnly((save) => setRankRun(action.kind === 'startRank' ? abandonRankRun(save, today) : save, started));
+    return rankOnly((save) => setRankRun(action.kind === 'startRank' ? abandonRankRun(save, today()) : save, started));
   }
   switch (action.kind) {
     case 'clear': {
@@ -239,12 +240,12 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
       const record: Change = (save) => recordClear(save, galaxyById(galaxy), action.report.score, action.report.stars);
       if (run === null) return { record, rank: null };
       const next = after.rankRun;
-      return { record, rank: next === null ? (save) => endRankRun(save, rankEntry(run, result.total, today), null) : (save) => setRankRun(save, next) };
+      return { record, rank: next === null ? (save) => endRankRun(save, rankEntry(run, result.total, today()), null) : (save) => setRankRun(save, next) };
     }
     case 'die':
-      return run === null ? null : rankOnly((save) => loseRankRun(save, run, action.score, today));
+      return run === null ? null : rankOnly((save) => loseRankRun(save, run, action.score, today()));
     case 'quit':
-      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, today));
+      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, today()));
     default:
       return null;
   }

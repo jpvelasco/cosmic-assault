@@ -2,6 +2,7 @@ import type { Command } from '../app/commands';
 import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
 import type { SaveData } from '../meta/save';
+import type { RankLock } from '../app/runController';
 import type { InstallOffer } from '../platform/install';
 import { button, cardPanel, chip, element, focusableControls, showSoundState, withTestId } from './dom';
 import { createFlowCards } from './flowCards';
@@ -22,6 +23,8 @@ export interface OverlayActions {
 export interface OverlayState {
   readonly flow: FlowState;
   readonly save: SaveData;
+  /** Whether the saved Rank run is being checked, or played in another tab, so it cannot be resumed here. */
+  readonly rankLock: RankLock;
   readonly score: number;
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
@@ -69,10 +72,10 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function titlePanel(play: HTMLButtonElement, resumeRank: HTMLButtonElement, chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
+function titlePanel(rank: readonly HTMLElement[], chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeRank, startHint, chipRow, build);
+  card.append(element('h1', 'title', 'Cosmic Assault'), ...rank, startHint, chipRow, build);
   return panel;
 }
 
@@ -98,6 +101,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const play = withTestId(button('menu-button menu-button--primary', 'Play', send({ kind: 'start' })), 'play');
   const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
   const quit = withTestId(button('menu-button', '', actions.quit), 'quit');
+  const elsewhere = withTestId(element('p', 'hint', 'This run is playing in another tab'), 'rank-elsewhere');
   const flowCards = createFlowCards(actions.command);
   // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
   const sound = chip('sound-toggle', actions.toggleMute);
@@ -112,14 +116,14 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
-  const title = titlePanel(play, resumeRank, titleRow, startHint);
+  const title = titlePanel([play, resumeRank, elsewhere], titleRow, startHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
   const panels: Partial<Record<Screen, HTMLElement>> = { title, paused: pausePanel(actions, quit, pauseRow), ...flowCards.panels };
   const all = [...new Set(Object.values(panels))];
   root.append(...all);
 
   return {
-    update({ flow, save, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+    update({ flow, save, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
       const { screen } = flow;
       for (const panel of all) {
         panel.hidden = panel !== panels[screen];
@@ -140,6 +144,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
       resumeRank.hidden = save.rankRun === null;
       resumeRank.textContent = resumeLabel(save);
+      resumeRank.disabled = rankLock !== 'free';
+      elsewhere.hidden = rankLock !== 'elsewhere';
       quit.textContent = quitLabel(flow);
       const hints = hintCopy(inputStyle);
       startHint.textContent = hints.start;

@@ -25,7 +25,7 @@ const run = (state: FlowState, ...actions: FlowAction[]): FlowState => actions.r
 /** The save after `action` from `state`, written as the app writes it, by a tab that is up to date. */
 function saved(save: SaveData, state: FlowState, action: FlowAction): { state: FlowState; save: SaveData } {
   const next = transition(state, action);
-  const change = saveChange(state, action, next, TODAY);
+  const change = saveChange(state, action, next, () => TODAY);
   return { state: next, save: change === null ? save : applySaveChange(save, change, save.rankSeq).save };
 }
 
@@ -109,7 +109,7 @@ describe('transition: pause', () => {
     const paused = freeOn('paused', '1-2');
     const quit = transition(paused, { kind: 'quit' });
     expect(quit).toMatchObject({ screen: 'title', rankRun: null });
-    expect(saveChange(paused, { kind: 'quit' }, quit, TODAY)).toBeNull();
+    expect(saveChange(paused, { kind: 'quit' }, quit, () => TODAY)).toBeNull();
   });
 });
 
@@ -238,7 +238,7 @@ describe('saveChange', () => {
     const save = { ...defaultSave(), rankRun: RUN, rankSeq: 4 };
     const playing = freeOn('playing', '1-1');
     const action: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 3 };
-    expect(rankPart(saveChange(playing, action, transition(playing, action), TODAY))).toBeNull();
+    expect(rankPart(saveChange(playing, action, transition(playing, action), () => TODAY))).toBeNull();
     const after = saved(save, playing, action).save;
     expect(after).toMatchObject({ frontier: '1-2', galaxies: { '1-1': { bestScore: 1200, stars: 3 } }, rankRun: RUN, rankSeq: 4, rankBoard: [] });
   });
@@ -251,7 +251,7 @@ describe('saveChange', () => {
       [at('modeSelect'), { kind: 'askNewRank' }],
       [at('galaxySelect', { mode: 'free' }), { kind: 'playGalaxy', id: '1-1' }],
     ];
-    for (const [state, action] of cases) expect(saveChange(state, action, transition(state, action), TODAY)).toBeNull();
+    for (const [state, action] of cases) expect(saveChange(state, action, transition(state, action), () => TODAY)).toBeNull();
   });
 
   it('a new Rank run is saved through setRankRun, marked as in its galaxy', () => {
@@ -329,7 +329,7 @@ describe('applySaveChange (the stale-tab guard)', () => {
   const run1 = { ...RUN, next: '1-2' as const, score: 900, lives: 2 };
   const playing = rankOn('playing', run1);
   const clear: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 2 };
-  const change = saveChange(playing, clear, transition(playing, clear), TODAY);
+  const change = saveChange(playing, clear, transition(playing, clear), () => TODAY);
   if (change === null) throw new Error('a Rank clear must write');
 
   it('applies the whole change for a tab that saw the run at the stored rankSeq', () => {
@@ -346,7 +346,7 @@ describe('applySaveChange (the stale-tab guard)', () => {
   });
 
   it('never blocks a change with no Rank part', () => {
-    const free = saveChange(freeOn('playing', '1-1'), clear, transition(freeOn('playing', '1-1'), clear), TODAY);
+    const free = saveChange(freeOn('playing', '1-1'), clear, transition(freeOn('playing', '1-1'), clear), () => TODAY);
     if (free === null) throw new Error('a Free clear must write');
     expect(applySaveChange({ ...defaultSave(), rankSeq: 9 }, free, 0).stale).toBe(false);
   });

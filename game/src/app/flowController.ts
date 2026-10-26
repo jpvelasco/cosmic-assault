@@ -22,6 +22,8 @@ export interface FlowControllerDeps {
   showScreen(screen: Screen): void;
   /** Tells the player something in a toast. */
   notify(text: string): void;
+  /** After each move: the `rankSeq` of the Rank galaxy this tab is now playing, or null when it plays none. */
+  liveRun?(runSeq: number | null): void;
 }
 
 export interface FlowController {
@@ -31,25 +33,27 @@ export interface FlowController {
   dispatch(action: FlowAction): void;
   /** Feeds one step's events: a clear or a game over moves the flow and writes the save at once. */
   handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void;
+  /** Forfeits a saved run left mid-galaxy (a closed tab), once the caller knows no other tab is playing it. */
+  forfeitLeftRun(): void;
 }
 
 /**
  * Owns the flow state: turns commands into flow actions, writes what each one saves, and tells the app what to show.
- * A Rank run left mid-galaxy (a closed tab) is forfeited as it boots. Rank writes are guarded against other tabs: the
- * controller remembers the `rankSeq` it last saw the run at, and a write that finds a higher one stored is dropped.
+ * Rank writes are guarded against other tabs: the controller remembers the `rankSeq` it last saw the run at, and a
+ * write that finds a higher one stored is dropped.
  */
 export function createFlowController(deps: FlowControllerDeps): FlowController {
   const { store, overrides } = deps;
   let state = INITIAL_FLOW;
 
-  /** A galaxy left unfinished, here or in a tab closed mid-galaxy, costs its life before anything reads the run. */
-  function settleRun(): void {
-    if (store.save.rankRun?.inGalaxy !== true) return;
-    store.update((save) => (save.rankRun?.inGalaxy === true ? forfeitRankRun(save, save.rankRun, deps.today()) : save));
-  }
-  settleRun();
   /** The `rankSeq` this tab last saw its Rank run at: loaded, written, or shown on the title. */
   let knownSeq = store.save.rankSeq;
+
+  function forfeitLeftRun(): void {
+    if (store.save.rankRun?.inGalaxy !== true) return;
+    store.update((save) => (save.rankRun?.inGalaxy === true ? forfeitRankRun(save, save.rankRun, deps.today()) : save));
+    knownSeq = store.save.rankSeq;
+  }
 
   /** Writes `change`; returns false when another tab had moved the Rank run on, so its Rank part was dropped. */
   function write(change: SaveChange): boolean {
@@ -65,6 +69,8 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
 
   function show(before: FlowState, after: FlowState): void {
     state = after;
+    const live = after.mode === 'rank' && (after.screen === 'playing' || after.screen === 'paused');
+    deps.liveRun?.(live ? knownSeq : null);
     if (after.runs !== before.runs) deps.startRun(after);
     if (after.screen !== before.screen) deps.showScreen(after.screen);
   }
@@ -75,7 +81,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     if (after === before) return;
     // On the title the player sees the run as the save has it now, other tabs' changes included.
     if (before.screen === 'title') knownSeq = store.save.rankSeq;
-    const change = saveChange(before, action, after, deps.today());
+    const change = saveChange(before, action, after, () => deps.today());
     if (change !== null && !write(change)) {
       deps.notify(STALE_RUN_NOTICE);
       show(before, toTitle(before));
@@ -99,7 +105,6 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
 
   /** Resume Rank plays the saved run on; a lost one (no lives) is a Continue: score back to 0, and marked. */
   function resume(): FlowAction | null {
-    settleRun();
     const run = store.save.rankRun;
     if (run === null) return null;
     return { kind: 'resumeRank', run: run.lives === 0 ? afterGameOver(run) : run };
@@ -148,5 +153,6 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     },
     dispatch,
     handle,
+    forfeitLeftRun,
   };
 }

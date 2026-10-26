@@ -14,12 +14,10 @@ import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
-import type { SaveData } from '../meta/save';
 import { STEP_SECONDS } from '../sim/config';
 import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
-import { hasEnded, type World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
@@ -27,11 +25,11 @@ import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
-import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
+import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { coversFor, createInputRouter, type Cover } from './inputRouting';
-import { createRunController } from './runController';
+import { createRunController, type RunController } from './runController';
 import { runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
 import { createSettingsController } from './settingsController';
@@ -52,12 +50,8 @@ export interface E2eHooks {
 export interface App {
   /** The screen shown. */
   readonly mode: Screen;
-  /** Where the screens stand: the mode, galaxy and Rank run in play. */
-  readonly flow: FlowState;
-  /** The save in memory: what storage holds, or for a debug run what it would hold. */
-  readonly save: SaveData;
-  /** The current run; null on the title, mode select, map and galaxy select. */
-  readonly world: World | null;
+  /** The run: its World (null on the menu screens), the screen flow, the save in memory and the run total. */
+  readonly run: Pick<RunController, 'world' | 'flow' | 'save' | 'runTotal'>;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
@@ -89,7 +83,6 @@ export interface App {
 
 /** Play and pause have their own music; every other screen plays the menu's. */
 const musicFor = (screen: Screen): MusicLevel => (screen === 'playing' ? 'play' : screen === 'paused' ? 'paused' : 'menu');
-const SAVE_FAILED_TOAST = "Progress can't be saved in this browser";
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -132,9 +125,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     },
     showScreen: setMode,
     onRunStarted,
-    notify: (text) => {
-      toast.show(text);
+    notify: toast.show,
+    onEvents: (events, world) => {
+      hitStop.trigger(events);
+      renderer.handle(events, world);
+      audio.handle(events);
     },
+    refresh: syncView,
   });
 
   let mode: Screen = 'title';
@@ -200,6 +197,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     read: () => ({
       flow: run.flow,
       save: run.save,
+      rankLock: run.rankLock,
       score: run.world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
@@ -323,19 +321,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   /** Steps the run; a clear or game over moves the flow to its end card, after which the steps do nothing. */
-  /** One sim step, its events handed to the hit-stop, renderer, audio and flow. */
-  function stepOnce(world: World, dt: number, controls: Controls): void {
-    const events = world.step(dt, controls);
-    hitStop.trigger(events);
-    renderer.handle(events, world);
-    audio.handle(events);
-    run.handle(events);
-  }
-
-  function stepWorld(world: World, controls: Controls, frameSeconds: number): void {
+  function stepRun(controls: Controls, frameSeconds: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
-      stepOnce(world, dt, controls);
+      run.step(dt, controls);
     });
   }
 
@@ -386,11 +375,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       scaler.sample(frameMs);
       if (scaler.index !== levelBefore) applyQuality();
       const frozen = hitStop.frozen;
-      stepWorld(world, readControls(pad), frameSeconds);
+      stepRun(readControls(pad), frameSeconds);
       renderer.advance(visualSeconds, world, frozen);
-    } else if (END_SCREENS.includes(mode) && !hasEnded(world.status)) {
+    } else if (run.warpingUnderCard) {
       // The clear is recorded and its card shown as the warp starts; the warp plays out under the card, untouched by input.
-      stepWorld(world, NO_CONTROLS, frameSeconds);
+      stepRun(NO_CONTROLS, frameSeconds);
       renderer.advance(visualSeconds, world, hitStop.frozen);
       redrawPending = true;
     } else if (settling) {
@@ -406,10 +395,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
 
   if (import.meta.env.MODE === 'e2e' && e2e !== undefined) {
     e2e.e2eFastForward = (seconds) => {
-      const { world } = run;
-      if (world === null) return;
       const controls = readControls(previousPad);
-      for (let t = 0; t < seconds && mode === 'playing'; t += STEP_SECONDS) stepOnce(world, STEP_SECONDS, controls);
+      for (let t = 0; t < seconds && mode === 'playing'; t += STEP_SECONDS) run.step(STEP_SECONDS, controls);
       redrawPending = true;
     };
   }
@@ -441,11 +428,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(window, 'orientationchange', markResize),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
-    // Another tab's clear shows on this tab's map and galaxy select at once.
-    run.onExternalChange(syncView),
-    run.onWriteFailure(() => {
-      toast.show(SAVE_FAILED_TOAST);
-    }),
     fullscreen.onChange(onFullscreenChange),
     installPrompt.dispose,
     guard.attachGlobal(window),
@@ -457,15 +439,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get mode() {
       return mode;
     },
-    get flow() {
-      return run.flow;
-    },
-    get save() {
-      return run.save;
-    },
-    get world() {
-      return run.world;
-    },
+    run,
     get hudRects() {
       return renderer.hudRects;
     },
@@ -513,6 +487,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       toast.dispose();
       crashCard.dispose();
       audio.dispose();
+      run.dispose();
       renderer.dispose();
       document.body.classList.remove('lite');
     },
