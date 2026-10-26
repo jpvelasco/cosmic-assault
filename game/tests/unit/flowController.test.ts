@@ -47,6 +47,11 @@ function playUntilEnd(flow: ReturnType<typeof setup>['flow'], id: GalaxyId, mode
   return world;
 }
 
+/** The forfeit a tab runs when its probe, asked at the `rankSeq` it loaded, goes unanswered. */
+function forfeitAtLoad(tab: ReturnType<typeof setup>): boolean {
+  return tab.flow.forfeitLeftRun(tab.store.save.rankSeq);
+}
+
 /** Plays a new Rank run in `tab` from the title. */
 function startRankRun(tab: ReturnType<typeof setup>): void {
   tab.flow.command({ kind: 'start' });
@@ -210,7 +215,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 1 }], { lives: 1 });
     // The tab closes here: the next one forfeits from the 1 life left, which loses the run.
     const next = setup({ storage });
-    next.flow.forfeitLeftRun();
+    forfeitAtLoad(next);
     expect(next.store.save.rankRun).toMatchObject({ lives: 0, inGalaxy: false });
     expect(next.store.save.rankBoard).toHaveLength(1);
   });
@@ -249,17 +254,31 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     startRankRun(setup({ storage }));
     const next = setup({ storage });
     expect(next.store.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
-    next.flow.forfeitLeftRun();
+    forfeitAtLoad(next);
     expect(next.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
-    next.flow.forfeitLeftRun();
+    forfeitAtLoad(next);
     expect(next.store.save.rankRun).toMatchObject({ lives: 2 });
     expect(next.flow.state.screen).toBe('title');
+  });
+
+  it('forfeits nothing when the run moved on since the probe, even before this tab has heard of the write', () => {
+    const storage = memoryStorage();
+    const a = setup({ storage });
+    startRankRun(a);
+    const b = setup({ storage });
+    const probed = b.store.save.rankSeq;
+    // A's hit writes the next rankSeq; B's storage event for it is still in flight, so B's cached save reads the old one.
+    a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    expect(b.store.save.rankSeq).toBe(probed);
+    expect(b.flow.forfeitLeftRun(probed)).toBe(false);
+    expect(b.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: true });
+    expect(a.store.load().rankRun).toMatchObject({ lives: 2, inGalaxy: true });
   });
 
   it('on the last life the forfeit loses the run, and the board gets its entry', () => {
     const last = { ...startRank(TODAY), next: '1-2' as const, score: 800, lives: 1, inGalaxy: true };
     const tab = setup({ save: setRankRun(defaultSave(), last) });
-    tab.flow.forfeitLeftRun();
+    forfeitAtLoad(tab);
     expect(tab.store.save.rankRun).toMatchObject({ lives: 0, score: 800 });
     expect(tab.store.save.rankBoard).toEqual([{ score: 800, reached: 'D1 · G2', date: TODAY, continued: false }]);
   });
@@ -272,7 +291,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     startRankRun(a);
     // Tab B, finding no owner for A's galaxy (say A's answer was lost), forfeits it.
     const b = setup({ storage });
-    b.flow.forfeitLeftRun();
+    forfeitAtLoad(b);
     expect(b.store.save.rankRun).toMatchObject({ lives: 2 });
     a.flow.dispatch({ kind: 'pause' });
     a.flow.dispatch({ kind: 'quit', livesLeft: 3 });
@@ -287,7 +306,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const storage = memoryStorage();
     const a = setup({ storage });
     startRankRun(a);
-    setup({ storage }).flow.forfeitLeftRun();
+    forfeitAtLoad(setup({ storage }));
     // Hits are left out: the first one would find the run moved on, and go to the title before the clear.
     playUntilEnd(a.flow, '1-1', 'rank', (event) => event.type !== 'shipHit');
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
@@ -299,7 +318,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const storage = memoryStorage();
     const a = setup({ storage });
     startRankRun(a);
-    setup({ storage }).flow.forfeitLeftRun();
+    forfeitAtLoad(setup({ storage }));
     a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');

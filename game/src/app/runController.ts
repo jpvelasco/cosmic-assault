@@ -186,8 +186,9 @@ export function createRunController(deps: RunControllerDeps): RunController {
       setLock('elsewhere');
       return;
     }
-    // The forfeit re-checks inGalaxy inside its update, so a run another tab already forfeited loses no second life.
-    if (flow.forfeitLeftRun()) deps.notify(LEFT_RUN_NOTICE);
+    // The forfeit re-checks inGalaxy and rankSeq inside its update: a run another tab already forfeited loses no second
+    // life, and one it has written to since the probe is still live.
+    if (flow.forfeitLeftRun(rankSeq)) deps.notify(LEFT_RUN_NOTICE);
     setLock('free');
   }
   checkLeftRun();
