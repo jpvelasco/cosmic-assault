@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BACKGROUND, DRIFT } from '../../src/render/palette';
 
-const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+/** index.html's stylesheet alone: its theme-color meta tag needs a literal colour, which tests/unit/icons.test.ts checks. */
+const styles = /<style>([\s\S]*?)<\/style>/.exec(readFileSync(new URL('../../index.html', import.meta.url), 'utf8'))?.[1] ?? '';
 
 function cssVar(name: string): string | undefined {
-  return new RegExp(`--${name}:\\s*(#[0-9a-f]{6});`).exec(html)?.[1];
+  return new RegExp(`--${name}:\\s*(#[0-9a-f]{6});`).exec(styles)?.[1];
 }
 
 describe('index.html palette properties', () => {
@@ -26,7 +27,7 @@ describe('index.html palette properties', () => {
   });
 
   it('writes each hex colour once, so the rules use the properties', () => {
-    const hexes = html.match(/#[0-9a-f]{6}\b/gi) ?? [];
+    const hexes = styles.match(/#[0-9a-f]{6}\b/gi) ?? [];
     expect(hexes.length).toBe(new Set(hexes).size);
   });
 });

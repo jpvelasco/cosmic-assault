@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Cosmic Assault</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#1d0b44" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Cosmic Assault" />
     <style>
       /* The Drift palette (src/render/palette.ts; tests/unit/indexStyles.test.ts keeps them in step) and the glass look built on it. */
       :root {
@@ -275,9 +281,7 @@
         min-width: 168px;
         padding: 10px 24px;
       }
-      .sound-toggle,
-      .fullscreen-toggle,
-      .settings-open {
+      .chip {
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -285,8 +289,13 @@
         padding: 0 16px;
         font-size: 0.875rem;
       }
-      .fullscreen-toggle[hidden] {
+      .chip[hidden] {
         display: none;
+      }
+      /* The iOS install steps: longer than a chip, and not a control, so a quiet line under the row. */
+      .install-hint {
+        font-size: 0.75rem;
+        opacity: 0.7;
       }
       .sound-toggle {
         padding-left: 12px;
@@ -468,9 +477,7 @@
           min-width: 140px;
           padding: 6px 20px;
         }
-        .sound-toggle,
-        .fullscreen-toggle,
-        .settings-open {
+        .chip {
           min-height: 34px;
         }
         .overlay--settings .card {

@@ -116,6 +116,10 @@ describe('the release build', () => {
     expect(version).not.toBe('');
 
     expect(list).toContain('index.html');
+    // The installed app opens offline only if its manifest and icons (copied from public/) are cached too.
+    expect(list).toEqual(
+      expect.arrayContaining(['manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']),
+    );
     expect(list.some((entry) => /^assets\/.+\.js$/.test(entry))).toBe(true);
     expect(list).not.toContain(SW_FILE_NAME);
     for (const entry of list.filter((name) => name !== './')) expect(existsSync(join(outDir, entry)), entry).toBe(true);

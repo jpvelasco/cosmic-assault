@@ -29,7 +29,7 @@ export default defineConfig({
     // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts', '**/offline.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts', '**/offline.spec.ts', '**/install.spec.ts'],
       use: desktopChrome,
     },
     {
@@ -44,10 +44,10 @@ export default defineConfig({
       retries: 0,
       use: desktopChrome,
     },
-    // The release build has no bridge; this only proves it boots cleanly without one.
+    // The release build has no bridge; these prove it boots cleanly without one and can be installed.
     {
       name: 'release-smoke',
-      testMatch: '**/release-smoke.spec.ts',
+      testMatch: ['**/release-smoke.spec.ts', '**/install.spec.ts'],
       use: { ...desktopChrome, baseURL: RELEASE_URL },
     },
   ],

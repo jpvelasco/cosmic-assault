@@ -17,3 +17,6 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
 export function hintCopy(style: InputStyle): HintCopy {
   return HINTS[style];
 }
+
+/** iOS Safari cannot install from a button, so the title card names the steps instead. */
+export const IOS_INSTALL_HINT = 'Add to Home Screen: tap Share, then Add to Home Screen';

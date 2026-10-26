@@ -39,9 +39,9 @@ export function keepActivationKeysLocal(el: HTMLElement): void {
   });
 }
 
-/** A glass chip with the class `className` and a test id (the class unless given) that stays out of the game's key handling. */
+/** A glass chip with the classes `chip` and `className` and a test id (the class unless given) that stays out of the game's key handling. */
 export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
-  const el = button(className, '', onClick);
+  const el = button(`chip ${className}`, '', onClick);
   el.dataset['testid'] = testId;
   keepActivationKeysLocal(el);
   return el;

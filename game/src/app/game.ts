@@ -10,6 +10,7 @@ import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
 import { attachFullscreenKey, createFullscreen } from '../platform/fullscreen';
+import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
 import type { CornerBox, HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
@@ -139,6 +140,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const audio = createAudioEngine(settings);
   const toast = createToast(root);
   const fullscreen = createFullscreen(document, document.documentElement, log);
+  const installPrompt = createInstallPrompt(window, log, syncView);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
   const button = (command: Command) => (): void => {
@@ -153,6 +155,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     toggleMute,
     toggleFullscreen: button(TOGGLE_FULLSCREEN),
     openSettings,
+    install: installPrompt.install,
   });
   const settingsCard = createSettingsCard(root, {
     change: applySettings,
@@ -210,6 +213,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       covered: settingsOpen || rotating,
       inputStyle: touchStyle.matches ? 'touch' : 'keys',
+      installOffer: installPrompt.offer,
     });
     settingsCard.update(settings, coarsePointer.matches);
     settingsCard.cover(rotating);
@@ -584,6 +588,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(document, 'visibilitychange', onVisibilityChange),
     fullscreen.onChange(onFullscreenChange),
     attachFullscreenKey(window, fullscreen),
+    installPrompt.dispose,
     guard.attachGlobal(window),
   ];
   syncView();

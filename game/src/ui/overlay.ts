@@ -1,8 +1,9 @@
 import type { AppMode } from '../app/game';
 import { currentBuildLabel } from '../buildLabel';
+import type { InstallOffer } from '../platform/install';
 import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
 import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
-import { hintCopy, type InputStyle } from './hints';
+import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
 
 export interface OverlayActions {
   /** A tap on the title screen outside its buttons, or the game-over Restart button. */
@@ -14,6 +15,8 @@ export interface OverlayActions {
   readonly toggleMute: () => void;
   readonly toggleFullscreen: () => void;
   readonly openSettings: () => void;
+  /** The title card's Install chip: shows the browser's install prompt. */
+  readonly install: () => void;
 }
 
 export interface OverlayState {
@@ -27,6 +30,8 @@ export interface OverlayState {
   readonly covered: boolean;
   /** Decides whether the start and restart hints name keys or taps. */
   readonly inputStyle: InputStyle;
+  /** What the title card offers for installing the game: an Install chip, the iOS steps, or nothing. */
+  readonly installOffer: InstallOffer;
 }
 
 export interface Overlay {
@@ -36,6 +41,14 @@ export interface Overlay {
   /** The controls of the card for `mode` that can take focus now, in document order; none while another card covers it. */
   controls(mode: AppMode): HTMLElement[];
   dispose(): void;
+}
+
+const INSTALL_TEST_ID = 'install-offer';
+
+/** Adds `el` with `attach` while `shown` and removes it otherwise. A shown element stays where it is, so it keeps focus. */
+function mountWhen(shown: boolean, el: HTMLElement, attach: (el: HTMLElement) => void): void {
+  if (!shown) el.remove();
+  else if (el.parentElement === null) attach(el);
 }
 
 /** Calls `onTap` for clicks on `panel` that are not on one of its buttons. */
@@ -112,6 +125,11 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
   const settings = chip('settings-open', actions.openSettings);
   settings.textContent = 'Settings';
+  // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
+  const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
+  installChip.textContent = 'Install';
+  const iosHint = element('p', 'install-hint', IOS_INSTALL_HINT);
+  iosHint.dataset['testid'] = INSTALL_TEST_ID;
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<AppMode, HTMLElement>> = { title: titleRow, paused: pauseRow };
@@ -125,14 +143,21 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, covered, inputStyle }) {
+    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
       for (const panel of all) {
         panel.hidden = panel !== panels[mode];
         panel.inert = covered;
       }
       const row = chipRows[mode];
-      // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle.
-      if (row !== undefined && sound.parentElement !== row) row.append(sound, fullscreen, settings);
+      // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
+      // stay ahead of the title's Install chip.
+      if (row !== undefined && sound.parentElement !== row) row.prepend(sound, fullscreen, settings);
+      mountWhen(installOffer === 'prompt', installChip, (el) => {
+        titleRow.append(el);
+      });
+      mountWhen(installOffer === 'iosHint', iosHint, (el) => {
+        titleRow.after(el);
+      });
       showSoundState(sound, muted);
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
