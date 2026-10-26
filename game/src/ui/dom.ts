@@ -9,6 +9,14 @@ export function element<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
+/** Adds `listener` to `target` and returns the function that removes it. */
+export function listen(target: EventTarget, type: string, listener: (e: Event) => void): () => void {
+  target.addEventListener(type, listener);
+  return () => {
+    target.removeEventListener(type, listener);
+  };
+}
+
 export function button(className: string, text: string, onClick: () => void): HTMLButtonElement {
   const el = element('button', className, text);
   el.type = 'button';

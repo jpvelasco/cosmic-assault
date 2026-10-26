@@ -1,18 +1,16 @@
 import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
 import { currentBuildLabel } from '../buildLabel';
-import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadButton, type PadEdge, type PadSnapshot } from '../input/gamepad';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
-import { isFormControlTarget } from '../input/keyEvent';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { mergeControls } from '../input/mergeControls';
-import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
-import { attachFullscreenKey, createFullscreen } from '../platform/fullscreen';
+import { createFullscreen } from '../platform/fullscreen';
 import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
-import type { CornerBox, HudRect } from '../render/hud';
+import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
@@ -22,19 +20,18 @@ import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
-import { TOUCH_STYLE_QUERY } from '../ui/hints';
-import { focusedControl, moveFocus, nudgeSlider } from '../ui/menuNav';
+import { listen } from '../ui/dom';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
-import { createSettingsCard } from '../ui/settingsCard';
-import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
-import { commandForKey, commandForPad, START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
-import { passesGameOverGuard } from './gameOverGuard';
+import { START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
+import { coversFor, createInputRouter, type Cover } from './inputRouting';
 import { clockSeed, runOverrides } from './seed';
-import { browserStorage, loadSettings, saveSettings, shakeEnabled, type Settings } from './settings';
+import { browserStorage, loadSettings, type Settings } from './settings';
+import { createSettingsController } from './settingsController';
+import { createViewSync } from './viewSync';
 
 /**
  * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
@@ -91,24 +88,9 @@ const MUSIC_LEVEL: Readonly<Record<AppMode, MusicLevel>> = {
   paused: 'paused',
   gameOver: 'menu',
 };
-const TOAST_MUTED = 'Muted';
-const TOAST_SOUND_ON = 'Sound on';
-
-/** How long the pointer must rest during play before the cursor is hidden. */
-const IDLE_CURSOR_MS = 2000;
-
-/** Set on `body` while a pad or arrow key drives menu focus; the stylesheet shows the focus ring for it. */
-const NAV_KEYS_CLASS = 'nav-keys';
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
-
-function listen(target: EventTarget, type: string, listener: (e: Event) => void): () => void {
-  target.addEventListener(type, listener);
-  return () => {
-    target.removeEventListener(type, listener);
-  };
-}
 
 export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
@@ -123,7 +105,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       console.warn('Gamepad input is unavailable in this browser or frame, so play with the keyboard or touch instead.', error);
     },
   );
-  const safeArea = createSafeAreaProbe(root);
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
   const scaler = new QualityScaler();
@@ -131,20 +112,30 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     // A hidden tab's frames are not stalls: the browser simply stopped drawing.
     if (document.visibilityState === 'visible') log.add('stall', `${String(Math.round(frameMs))} ms frame`, performance.now());
   });
-  const coarsePointer = window.matchMedia('(pointer: coarse)');
-  const touchStyle = window.matchMedia(TOUCH_STYLE_QUERY);
-  const portrait = window.matchMedia('(orientation: portrait)');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const storage = browserStorage();
-  let settings = loadSettings(storage);
-  const audio = createAudioEngine(settings);
+  const saved = loadSettings(storage);
+  const audio = createAudioEngine(saved);
   const toast = createToast(root);
   const fullscreen = createFullscreen(document, document.documentElement, log);
   const installPrompt = createInstallPrompt(window, log, syncView);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
+
+  let mode: AppMode = 'title';
+  let world: World | null = null;
+  let practiceLevel = MIN_PRACTICE_LEVEL;
+  let field: Field | null = null;
+  let resizePending = true;
+  /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
+  let redrawPending = false;
+  let gameOverAt = 0;
+  /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
+  let previousPad: PadSnapshot | null = null;
+  const padFire = createPadFireLatch();
+  let lastFrameAt = performance.now();
+  let frameId = 0;
   const button = (command: Command) => (): void => {
-    applyCommand(command, performance.now());
+    router.applyCommand(command, performance.now());
   };
   const overlay = createOverlay(root, {
     start: button(START),
@@ -154,104 +145,92 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     toTitle: button(TO_TITLE),
     toggleMute,
     toggleFullscreen: button(TOGGLE_FULLSCREEN),
-    openSettings,
+    openSettings: () => {
+      prefs.openSettings();
+    },
     install: installPrompt.install,
   });
-  const settingsCard = createSettingsCard(root, {
-    change: applySettings,
-    save: persistSettings,
-    toggleMute,
-    previewSfx: () => {
-      audio.play('uiClick');
+  const prefs = createSettingsController(root, {
+    storage,
+    initial: saved,
+    audio,
+    toast,
+    touch,
+    hitStop,
+    effects: renderer.effects,
+    mode: () => mode,
+    covers,
+    syncView,
+    focusOpener: () => {
+      overlay.focusSettingsChip();
     },
-    done: closeSettings,
   });
-
   const rotatePrompt = createRotatePrompt(root);
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
     toast,
   });
   const guard = createCrashGuard(log, stopAfterCrash);
-
-  let mode: AppMode = 'title';
-  let world: World | null = null;
-  let practiceLevel = MIN_PRACTICE_LEVEL;
-  let field: Field | null = null;
-  let resizePending = true;
-  /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
-  let redrawPending = false;
-  /** Whether the settings card is over the title or pause card; the run behind it, if any, stays as it was. */
-  let settingsOpen = false;
-  /** The save warning is given once: a slider that is dragged again and again must not flood the console. */
-  let warnedStorage = false;
-  let gameOverAt = 0;
-  /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
-  let previousPad: PadSnapshot | null = null;
-  const padFire = createPadFireLatch();
-  let lastFrameAt = performance.now();
-  let frameId = 0;
-  /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
-  let pauseCorner: CornerBox | null = null;
-  let idleCursorTimer: number | undefined;
-
-  /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
-  function applyQuality(): void {
-    renderer.setQuality(scaler.level);
-    document.body.classList.toggle('lite', scaler.index >= LITE_FROM_INDEX);
-  }
-
-  function syncView(): void {
-    // After a crash the recovery card owns the screen; a late event must not bring the touch layer or a card back over it.
-    if (guard.tripped) return;
-    const rotating = needsRotation();
-    overlay.update({
+  const view = createViewSync(root, {
+    overlay,
+    settingsCard: prefs.card,
+    rotatePrompt,
+    touch,
+    renderer,
+    read: () => ({
       mode,
       practiceLevel,
       score: world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
-      covered: settingsOpen || rotating,
-      inputStyle: touchStyle.matches ? 'touch' : 'keys',
       installOffer: installPrompt.offer,
-    });
-    settingsCard.update(settings, coarsePointer.matches);
-    settingsCard.cover(rotating);
-    rotatePrompt.show(rotating);
-    touch.show(mode === 'playing' && coarsePointer.matches);
-    syncHudBounds();
+      settings: prefs.settings,
+      settingsOpen: prefs.open,
+    }),
+    mode: () => mode,
+    tripped: () => guard.tripped,
+    onTurnUpright: pause,
+  });
+  const router = createInputRouter(window, {
+    keyboard,
+    startKeys,
+    run: {
+      start,
+      quit,
+      selectLevel,
+      pause: pauseByPlayer,
+      resume,
+      toggleMute,
+      toggleFullscreen: () => {
+        fullscreen.toggle();
+      },
+    },
+    mode: () => mode,
+    covers,
+    msSinceGameOver: (now) => now - gameOverAt,
+    menuControls: () => (prefs.open ? prefs.card.controls() : overlay.controls(mode)),
+    closeSettings: () => {
+      prefs.closeSettings();
+    },
+  });
+
+  /** What covers the cards right now, for the router's table. */
+  function covers(): Cover[] {
+    return coversFor({ settings: prefs.open, rotate: view.needsRotation(), crash: guard.tripped });
   }
 
-  /** A phone held upright: the game needs the wide screen, so it asks for a turn instead of playing. */
-  function needsRotation(): boolean {
-    return touchStyle.matches && portrait.matches;
+  function syncView(): void {
+    view.sync();
   }
 
-  /** A screen or pointer change: a run that is playing when the phone turns upright pauses, and stays paused when it turns back. */
-  function onPlatformChange(): void {
-    if (needsRotation()) pause();
-    syncView();
+  function toggleMute(): void {
+    prefs.toggleMute();
   }
 
-  /** Hides the cursor after it rests for `IDLE_CURSOR_MS` in play; any move, and leaving play or a crash, brings it back. */
-  function armIdleCursor(): void {
-    clearTimeout(idleCursorTimer);
-    idleCursorTimer = undefined;
-    document.body.classList.remove('cursor-idle');
-    if (mode !== 'playing' || guard.tripped) return;
-    idleCursorTimer = window.setTimeout(() => {
-      document.body.classList.add('cursor-idle');
-    }, IDLE_CURSOR_MS);
-  }
-
-  /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button (CA-024). */
-  function syncHudBounds(): void {
-    if (!coarsePointer.matches) pauseCorner = null;
-    else {
-      const button = touch.pauseRect();
-      if (button !== null) pauseCorner = { width: root.clientWidth - button.left, height: button.bottom };
-    }
-    renderer.setHudBounds({ insets: safeArea.read(), topRight: pauseCorner });
+  /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
+  function applyQuality(): void {
+    renderer.setQuality(scaler.level);
+    document.body.classList.toggle('lite', scaler.index >= LITE_FROM_INDEX);
   }
 
   function setMode(next: AppMode): void {
@@ -261,8 +240,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     log.add('mode', next, performance.now());
     audio.setMusicLevel(MUSIC_LEVEL[next]);
     redrawPending = true;
-    armIdleCursor();
-    syncView();
+    view.armIdleCursor();
+    view.sync();
   }
 
   /** Applies the latest viewport size once per frame; the renderer re-bakes its sky on each resize. */
@@ -272,7 +251,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     resizePending = false;
     field = fieldForViewport(clientWidth, clientHeight);
     renderer.resize(clientWidth, clientHeight, field);
-    syncHudBounds();
+    view.syncHudBounds();
     world?.resize(field);
     redrawPending = true;
   }
@@ -334,130 +313,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     if (mode !== 'title') return;
     practiceLevel = level;
     audio.play('uiClick');
-    syncView();
-  }
-
-  /** Writes the current settings to storage. A refusal is a warning, not an error: the changes still hold for this visit. */
-  function persistSettings(): void {
-    if (!saveSettings(storage, settings) && !warnedStorage) {
-      warnedStorage = true;
-      console.warn('Could not save your settings, so they will reset on reload. Allow site storage for this page to keep them.');
-    }
-  }
-
-  /** Puts the settings into effect: volumes, the shake gate and the touch layout. Saving is separate (`persistSettings`). */
-  function applySettings(patch: Partial<Settings>): void {
-    settings = { ...settings, ...patch };
-    audio.setVolumes(settings.musicVolume, settings.sfxVolume);
-    syncMotion();
-    touch.setLeftHanded(settings.leftHanded);
-  }
-
-  /** The M key and the sound chip. */
-  function toggleMute(): void {
-    audio.setMuted(!audio.muted);
-    toast.show(audio.muted ? TOAST_MUTED : TOAST_SOUND_ON);
-    settings = { ...settings, muted: audio.muted };
-    syncView();
-    persistSettings();
-  }
-
-  function openSettings(): void {
-    if (settingsOpen || (mode !== 'title' && mode !== 'paused')) return;
-    settingsOpen = true;
-    syncView();
-    settingsCard.show();
-  }
-
-  /** Done and Esc: back to the card that opened it, with focus on the chip that did. */
-  /** A settings card under the rotate prompt is covered and stays put, however closing is asked (Esc, Back, Done). */
-  function closeSettings(): void {
-    if (!settingsOpen || needsRotation()) return;
-    settingsOpen = false;
-    settingsCard.hide();
-    syncView();
-    overlay.focusSettingsChip();
-  }
-
-  /** Runs a key or button command unless the game-over guard is still ignoring it. */
-  function applyCommand(command: Command, now: number): void {
-    if (!passesGameOverGuard(mode, command, now - gameOverAt)) return;
-    // Behind the rotate prompt nothing starts or resumes; a pause still takes effect.
-    if (needsRotation() && (command.kind === 'start' || (command.kind === 'togglePause' && mode !== 'playing'))) return;
-    switch (command.kind) {
-      case 'start':
-        start();
-        break;
-      case 'toTitle':
-        quit();
-        break;
-      case 'selectLevel':
-        selectLevel(command.level);
-        break;
-      case 'togglePause':
-        if (mode === 'playing') pauseByPlayer();
-        else resume();
-        break;
-      case 'toggleMute':
-        toggleMute();
-        break;
-      case 'toggleFullscreen':
-        fullscreen.toggle();
-        break;
-    }
+    view.sync();
   }
 
   function readControls(pad: PadSnapshot | null): Controls {
     const keys = controlsFromKeys(startKeys.active(keyboard.held));
     return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
-  }
-
-  /** The controls that menu focus moves among: the settings card when it is open, else the card for the mode. */
-  function menuControls(): HTMLElement[] {
-    return settingsOpen ? settingsCard.controls() : overlay.controls(mode);
-  }
-
-  /** Pad and arrow navigation moves focus without a keyboard event, so the page asks for the ring itself until the next pointer press. */
-  function showNavFocus(): void {
-    document.body.classList.add(NAV_KEYS_CLASS);
-  }
-
-  function navigateMenu(dir: FocusDirection): void {
-    showNavFocus();
-    const controls = menuControls();
-    const focused = focusedControl(controls);
-    if (focused !== null && (dir === 'left' || dir === 'right') && nudgeSlider(focused, dir)) return;
-    moveFocus(controls, dir);
-  }
-
-  /** Runs the command a pad button asks for in this mode, if any. */
-  function runPadCommand(button: PadButton, now: number): void {
-    const command = commandForPad(mode, button);
-    if (command !== null) applyCommand(command, now);
-  }
-
-  /** Acts on one pad press. Behind the settings card only its own controls and Back act, as with keys. */
-  function applyPadEdge(edge: PadEdge, now: number): void {
-    switch (edge) {
-      case 'confirm': {
-        const focused = focusedControl(menuControls());
-        if (focused !== null) {
-          showNavFocus();
-          focused.click();
-        } else if (!settingsOpen) runPadCommand('confirm', now);
-        break;
-      }
-      case 'back':
-        if (settingsOpen) closeSettings();
-        else runPadCommand('back', now);
-        break;
-      case 'pause':
-        if (!settingsOpen) runPadCommand('pause', now);
-        break;
-      default:
-        // In play the D-pad and stick steer the ship, which `readControls` already reads.
-        if (mode !== 'playing') navigateMenu(edge);
-    }
   }
 
   function stepWorld(run: World, controls: Controls, frameSeconds: number, now: number): void {
@@ -478,9 +339,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   function stopAfterCrash(error: unknown): void {
     cancelAnimationFrame(frameId);
     touch.show(false);
-    settingsCard.hide();
+    prefs.card.hide();
     rotatePrompt.show(false);
-    armIdleCursor();
+    view.armIdleCursor();
     crashCard.show();
     audio.setMusicLevel('menu');
     audio.setMuted(true);
@@ -503,19 +364,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const pad = readPad();
     const edges = padEdges(previousPad, pad);
     previousPad = pad;
-    for (const edge of edges) applyPadEdge(edge, now);
-    for (const code of keyboard.drainPressed()) {
-      startKeys.release(code);
-      const direction = arrowDirection(code);
-      // Out of play the arrows move menu focus, unless a slider has focus and needs them itself.
-      if (direction !== null && mode !== 'playing') {
-        if (!isFormControlTarget(document.activeElement)) navigateMenu(direction);
-        continue;
-      }
-      const command = commandForKey(mode, code);
-      // Behind the settings card only M acts: Space, P and Esc must not start, resume or leave.
-      if (command !== null && (!settingsOpen || command.kind === 'toggleMute')) applyCommand(command, now);
-    }
+    router.routePad(edges, now);
+    router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
     const settling = mode === 'gameOver' && renderer.hasActiveParticles();
@@ -552,13 +402,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
         }
       : runFrame;
 
-  /** The one motion source: reduced motion turns off hit-stop, flash and shake; the shake setting can also turn off shake alone. */
-  function syncMotion(): void {
-    hitStop.reducedMotion = reducedMotion.matches;
-    renderer.effects.reducedMotion = reducedMotion.matches;
-    renderer.effects.shakeEnabled = shakeEnabled(settings.screenShake, reducedMotion.matches);
-  }
-  applySettings({});
   applyQuality();
   const markResize = (): void => {
     resizePending = true;
@@ -566,10 +409,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   /** Full screen changes the viewport and the chip's label. */
   const onFullscreenChange = (): void => {
     markResize();
-    syncView();
-  };
-  const hideNavFocus = (): void => {
-    document.body.classList.remove(NAV_KEYS_CLASS);
+    view.sync();
   };
   const onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') pause();
@@ -578,20 +418,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const unlisteners = [
     listen(window, 'resize', markResize),
     listen(window, 'orientationchange', markResize),
-    listen(reducedMotion, 'change', syncMotion),
-    listen(touchStyle, 'change', onPlatformChange),
-    listen(coarsePointer, 'change', onPlatformChange),
-    listen(portrait, 'change', onPlatformChange),
-    listen(window, 'pointermove', armIdleCursor),
-    listen(window, 'pointerdown', hideNavFocus),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
     fullscreen.onChange(onFullscreenChange),
-    attachFullscreenKey(window, fullscreen),
     installPrompt.dispose,
     guard.attachGlobal(window),
   ];
-  syncView();
+  view.sync();
   frameId = requestAnimationFrame(frame);
 
   return {
@@ -623,7 +456,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       return audio.muted;
     },
     get settings() {
-      return settings;
+      return prefs.settings;
     },
     get motion() {
       return { reducedMotion: renderer.effects.reducedMotion, shake: renderer.effects.shakeEnabled };
@@ -644,16 +477,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       for (const unlisten of unlisteners) unlisten();
       keyboard.dispose();
       touch.dispose();
+      router.dispose();
+      view.dispose();
       overlay.dispose();
-      settingsCard.dispose();
+      prefs.dispose();
       rotatePrompt.dispose();
       toast.dispose();
       crashCard.dispose();
       audio.dispose();
-      safeArea.dispose();
       renderer.dispose();
-      clearTimeout(idleCursorTimer);
-      document.body.classList.remove('lite', 'cursor-idle', NAV_KEYS_CLASS);
+      document.body.classList.remove('lite');
     },
   };
 }
