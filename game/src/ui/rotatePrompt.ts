@@ -1,6 +1,6 @@
 import { cardPanel, element } from './dom';
 
-export const ROTATE_COPY = 'Rotate your phone to play';
+const ROTATE_COPY = 'Rotate your phone to play';
 
 export interface RotatePrompt {
   show(visible: boolean): void;

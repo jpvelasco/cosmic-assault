@@ -23,8 +23,8 @@ export interface OverlayState {
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
   readonly fullscreen: boolean | null;
-  /** While the settings card is over the screen, the cards beneath it ignore taps, keys and Tab. */
-  readonly settingsOpen: boolean;
+  /** While another card (settings, or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
+  readonly covered: boolean;
   /** Decides whether the start and restart hints name keys or taps. */
   readonly inputStyle: InputStyle;
 }
@@ -123,10 +123,10 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, settingsOpen, inputStyle }) {
+    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, covered, inputStyle }) {
       for (const panel of all) {
         panel.hidden = panel !== panels[mode];
-        panel.inert = settingsOpen;
+        panel.inert = covered;
       }
       const row = chipRows[mode];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle.

@@ -17,6 +17,8 @@ export interface SettingsCard {
   /** Shows the card and moves keyboard focus to the first control. */
   show(): void;
   hide(): void;
+  /** While another card covers it (the rotate prompt), the settings card ignores taps, keys and Tab. */
+  cover(covered: boolean): void;
   /** Brings every control in line with `settings`. The left-handed choice is offered only where `touchScreen` is true. */
   update(settings: Settings, touchScreen: boolean): void;
   dispose(): void;
@@ -154,6 +156,9 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
     hide() {
       panel.hidden = true;
       document.removeEventListener('keydown', onKeyDown);
+    },
+    cover(covered) {
+      panel.inert = covered;
     },
     update(settings, touchScreen) {
       music.set(settings.musicVolume);

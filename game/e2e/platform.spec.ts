@@ -6,6 +6,8 @@ const PORTRAIT = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 const IDLE_CURSOR_WAIT_MS = 2300;
 
+const DELIBERATE_CRASH = 'e2e: deliberate crash';
+const inert = (page: Page, selector: string) => page.locator(selector).evaluate((el: HTMLElement) => el.inert);
 const cursorIdle = (page: Page) => page.evaluate(() => document.body.classList.contains('cursor-idle'));
 
 async function startRun(page: Page, isMobile: boolean): Promise<void> {
@@ -49,9 +51,11 @@ test.describe('on a phone', () => {
     await expect(rotatePrompt(page)).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Rotate your phone to play' })).toBeVisible();
     await expectMode(page, 'paused');
+    expect(await inert(page, '.overlay--pause'), 'the pause card is inert behind the prompt').toBe(true);
 
     await page.setViewportSize(LANDSCAPE);
     await expect(rotatePrompt(page)).toBeHidden();
+    expect(await inert(page, '.overlay--pause')).toBe(false);
     await nextFrames(page, 3);
     await expectMode(page, 'paused');
     await page.getByRole('button', { name: 'Resume' }).tap();
@@ -62,10 +66,56 @@ test.describe('on a phone', () => {
     await page.setViewportSize(PORTRAIT);
     await openGame(page);
     await expect(rotatePrompt(page)).toBeVisible();
+    expect(await inert(page, '.overlay--title'), 'the title card is inert behind the prompt').toBe(true);
+    for (let i = 0; i < 12; i++) await page.keyboard.press('Tab');
+    await expect(page.locator('.overlay--title :focus')).toHaveCount(0);
 
     await page.setViewportSize(LANDSCAPE);
     await expect(rotatePrompt(page)).toBeHidden();
+    expect(await inert(page, '.overlay--title')).toBe(false);
     await expectMode(page, 'title');
+  });
+
+  test('keys do not start a run behind the prompt', async ({ page }) => {
+    await page.setViewportSize(PORTRAIT);
+    await openGame(page);
+    await page.keyboard.press('Space');
+    await nextFrames(page, 3);
+    await expectMode(page, 'title');
+  });
+
+  test('a run paused by the prompt does not resume from the keyboard behind it', async ({ page }) => {
+    await openGame(page);
+    await startRun(page, true);
+    await page.setViewportSize(PORTRAIT);
+    await expectMode(page, 'paused');
+
+    await page.keyboard.press('KeyP');
+    await nextFrames(page, 3);
+    await expectMode(page, 'paused');
+  });
+});
+
+test.describe('a crash behind the prompt', () => {
+  test.skip(({ isMobile }) => !isMobile, 'The rotate prompt is for touch screens');
+  test.use({ allowedErrors: [DELIBERATE_CRASH] });
+
+  test('shows the recovery card alone, and the prompt does not come back', async ({ page }) => {
+    await openGame(page);
+    await startRun(page, true);
+    await page.setViewportSize(PORTRAIT);
+    await expect(rotatePrompt(page)).toBeVisible();
+
+    await page.evaluate(() => {
+      window.__COSMIC_ASSAULT_TEST_API__?.crash();
+    });
+    await expect(page.getByRole('alertdialog', { name: 'Something went wrong' })).toBeVisible();
+    await expect(rotatePrompt(page)).toBeHidden();
+
+    await page.setViewportSize(LANDSCAPE);
+    await page.setViewportSize(PORTRAIT);
+    await nextFrames(page, 3);
+    await expect(rotatePrompt(page)).toBeHidden();
   });
 });
 
@@ -96,6 +146,19 @@ test.describe('on a desktop', () => {
     await expect.poll(() => cursorIdle(page), { timeout: IDLE_CURSOR_WAIT_MS * 2 }).toBe(true);
     await page.keyboard.press('KeyP');
     await expectMode(page, 'paused');
+    expect(await cursorIdle(page)).toBe(false);
+
+    await page.getByRole('button', { name: 'Quit' }).click();
+    await expectMode(page, 'title');
+    expect(await cursorIdle(page)).toBe(false);
+  });
+
+  test('the cursor comes back when the run ends under a resting pointer', async ({ page }) => {
+    await openGameOverRun(page);
+    await startRun(page, false);
+    await expect.poll(() => cursorIdle(page), { timeout: IDLE_CURSOR_WAIT_MS * 2 }).toBe(true);
+
+    await waitForGameOver(page);
     expect(await cursorIdle(page)).toBe(false);
   });
 

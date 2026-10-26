@@ -17,7 +17,7 @@ import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
-import { inputStyleFor, TOUCH_STYLE_QUERY } from '../ui/hints';
+import { TOUCH_STYLE_QUERY } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createSettingsCard } from '../ui/settingsCard';
@@ -183,17 +183,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   function syncView(): void {
     // After a crash the recovery card owns the screen; a late event must not bring the touch layer or a card back over it.
     if (guard.tripped) return;
+    const rotating = needsRotation();
     overlay.update({
       mode,
       practiceLevel,
       score: world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
-      settingsOpen,
-      inputStyle: inputStyleFor(touchStyle.matches),
+      covered: settingsOpen || rotating,
+      inputStyle: touchStyle.matches ? 'touch' : 'keys',
     });
     settingsCard.update(settings, coarsePointer.matches);
-    rotatePrompt.show(needsRotation());
+    settingsCard.cover(rotating);
+    rotatePrompt.show(rotating);
     touch.show(mode === 'playing' && coarsePointer.matches);
     syncHudBounds();
   }
@@ -355,6 +357,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   /** Runs a key or button command unless the game-over guard is still ignoring it. */
   function applyCommand(command: Command, now: number): void {
     if (!passesGameOverGuard(mode, command, now - gameOverAt)) return;
+    // Behind the rotate prompt nothing starts or resumes; a pause still takes effect.
+    if (needsRotation() && (command.kind === 'start' || (command.kind === 'togglePause' && mode !== 'playing'))) return;
     switch (command.kind) {
       case 'start':
         start();

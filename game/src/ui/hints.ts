@@ -17,8 +17,3 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
 export function hintCopy(style: InputStyle): HintCopy {
   return HINTS[style];
 }
-
-/** The style for the result of `matchMedia(TOUCH_STYLE_QUERY).matches`. */
-export function inputStyleFor(touchStyleMatches: boolean): InputStyle {
-  return touchStyleMatches ? 'touch' : 'keys';
-}
