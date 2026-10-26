@@ -57,6 +57,8 @@ export interface Spawner {
    * gravity well's pull) nudge velocities here, and the entities it owns move, so `stepShip` is never altered.
    */
   moveOwn?(dt: number, ship: Ship): void;
+  /** Runs every step once collisions are done, even on the step the run ends: housekeeping for what the collisions spent. */
+  afterCollisions?(): void;
   /** Runs once a step, after collisions, while the ship still has lives. */
   step(dt: number): void;
   /** The points a kill worth `base` scores. */

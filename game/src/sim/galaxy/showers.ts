@@ -1,4 +1,4 @@
-import { showerSeconds } from '../../content/curves';
+import { eventsOfType, showerSeconds } from '../../content/curves';
 import type { GalaxyEvent } from '../../content/types';
 import { EDGE_COUNT, type Edge } from '../asteroid';
 import type { SimEvent } from '../events';
@@ -57,7 +57,7 @@ export class Showers {
     events: readonly GalaxyEvent[],
     private readonly rng: Rng,
   ) {
-    this.events = events.filter((event) => event.type === 'meteorShower');
+    this.events = eventsOfType(events, 'meteorShower');
   }
 
   /** The warning or active shower, or null; a live view, mutated by `step`. */

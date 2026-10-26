@@ -68,8 +68,8 @@ const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, sha
 const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A shot hurting a boss or a foe without killing it. */
 const HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
-/** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one. */
-const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[3] };
+/** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one (the sounds in sfx.ts match). */
+const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2] };
 /** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
 const WARP_CLEAR_BURST: Counts = { shards: 2, sparks: 4, rings: 0, smoke: 0, shake: 0, flash: 0 };
 

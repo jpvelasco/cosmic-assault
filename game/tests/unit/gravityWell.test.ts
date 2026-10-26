@@ -11,6 +11,7 @@ import type { Field } from '../../src/sim/field';
 import { FoePool, type Foe } from '../../src/sim/foes/foe';
 import { wellAcceleration, Wells, type Pullable } from '../../src/sim/hazards/gravityWell';
 import { createRng } from '../../src/sim/rng';
+import { rescale } from '../../src/sim/wrap';
 import { World } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
 
@@ -287,6 +288,24 @@ describe('a well in a World', () => {
     expect(seen.filter((e) => e.type === 'wellStart')).toHaveLength(1);
     expect(w.well).toBeNull();
     expect(w.elapsed).toBeCloseTo(WELL_AT + WELL_SECONDS, 1);
+  });
+
+  it('keeps a well inside the field, at the same place in it, when the field is resized mid-well', () => {
+    const wide: Field = { width: 1680, height: 720 };
+    const narrow: Field = { width: 960, height: 720 };
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const w = new World({ seed, field: wide, rules: { kind: 'galaxy', galaxy: calm, mode: 'free' }, initialShip: { x: 100, y: 100, angle: 0 } });
+      until(w, (events) => events.some((e) => e.type === 'wellStart'));
+      // `well` is a live view: copy it before the resize moves it.
+      const before = w.well === null ? null : { ...w.well };
+      if (before === null) throw new Error('expected a well');
+      w.resize(narrow);
+      expect(w.well?.x).toBeCloseTo(rescale(before.x, wide.width, narrow.width), 9);
+      expect(w.well?.y).toBeCloseTo(before.y, 9);
+      expect(w.well?.x).toBeGreaterThanOrEqual(0);
+      expect(w.well?.x).toBeLessThanOrEqual(narrow.width);
+      expect(w.well).toMatchObject({ id: before.id, stage: 'active' });
+    }
   });
 
   it('reports no well in practice', () => {

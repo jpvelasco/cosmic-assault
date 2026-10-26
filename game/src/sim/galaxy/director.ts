@@ -118,7 +118,10 @@ export class GalaxyDirector {
     return { kind, count, speedMultiplier: rockSpeedMultiplier(this.tier) };
   }
 
-  /** A rock comes alone; a foe by its group: only a swarm, whose size varies, draws. */
+  /**
+   * A rock comes alone; a foe by its group. Only a swarm, whose size varies, draws, and from the director's stream:
+   * how many arrive is a spawn decision the budget check needs, while the 'foes' stream covers behaviour after spawn.
+   */
   private groupSize(kind: ThreatKind): number {
     if (!isFoeKind(kind)) return 1;
     const [min, max] = FOES[kind].group;

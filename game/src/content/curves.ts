@@ -42,6 +42,11 @@ export function eventSeconds({ type, intensity }: Pick<GalaxyEvent, 'type' | 'in
   return type === 'gravityWell' ? WELL_SECONDS : showerSeconds(intensity);
 }
 
+/** The events of a schedule that are of `type`, in order: each hazard runs only its own. */
+export function eventsOfType(events: readonly GalaxyEvent[], type: GalaxyEvent['type']): GalaxyEvent[] {
+  return events.filter((event) => event.type === type);
+}
+
 /** Eases the first galaxy of each Dimension after the first, so a new Dimension starts gently. */
 export function sawtooth(g: Pick<GalaxyDef, 'dimension' | 'index'>): number {
   return g.index === 1 && g.dimension > 1 ? 0.85 : 1;

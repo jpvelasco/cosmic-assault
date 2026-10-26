@@ -62,10 +62,10 @@ function assertDt(dt: number): void {
  * - 'split': the angles and speeds of split children;
  * - 'shape': asteroid outlines (vertex count and radii) on every creation path, so
  *   outline changes never shift gameplay draws;
- * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams;
+ * - 'director': a galaxy's spawns (what, when, and how many drones come as a group) and showers, so galaxy rules never shift the practice streams;
  * - 'boss': a boss fight's drift and attacks;
  * - 'pickups': whether a kill drops a pickup, and which;
- * - 'foes': where foes enter, how they head and where their fragments fly;
+ * - 'foes': foe behaviour once spawned: where they enter, how they head and where their fragments fly;
  * - 'hazards': where gravity wells sit.
  */
 export class World {
@@ -264,6 +264,7 @@ export class World {
       this.collideProjectiles();
     }
     this.breakAsteroids();
+    this.rules.afterCollisions?.();
     if (stillPlaying) {
       this.rules.step(dt);
     }
@@ -385,7 +386,7 @@ export class World {
     return this.asteroidList[index] as Asteroid;
   }
 
-  /** Live rule: one hit per step, on the last-indexed overlapping asteroid, else a fighting boss' core. Returns false once the run ends. */
+  /** Live rule: one hit per step, on the last-indexed overlapping asteroid, else a foe, else a fighting boss' core. Returns false once the run ends. */
   private collideShip(): boolean {
     const ship = this.shipState;
     if (ship.invulnerable || this.statusValue === 'warping') {
@@ -414,7 +415,7 @@ export class World {
     return true;
   }
 
-  /** Each projectile breaks at most one asteroid, or is spent on a boss' core, and is removed once (fixes CA-021). */
+  /** Each projectile breaks at most one asteroid, or is spent on a boss' core or a foe, and is removed once (fixes CA-021). */
   private collideProjectiles(): void {
     const projectiles = this.projectileList;
     for (let i = projectiles.length - 1; i >= 0; i--) {

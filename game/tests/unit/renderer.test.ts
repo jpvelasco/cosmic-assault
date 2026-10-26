@@ -331,6 +331,14 @@ describe('createRenderer', () => {
         expect(drawsOf(sprite?.canvas)).toHaveLength(1);
       });
 
+      it('skips a foe that is spent (HP 0) but not yet swept', () => {
+        const { world, stub } = drawnDrone();
+        const sprite = baker.cached('foe|drone');
+        stub.foes[0] = { ...drone(), hp: 0 };
+        drawFrame(world, 1);
+        expect(drawsOf(sprite?.canvas)).toHaveLength(0);
+      });
+
       it.each([
         ['hit', hurt],
         ['destroyed', slain],

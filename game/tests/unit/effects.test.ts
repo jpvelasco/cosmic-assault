@@ -56,7 +56,7 @@ describe('burstFor: foes', () => {
   it('gives a foe hit the sparks of a boss hit, and a destroyed foe the burst of a rock of its weight', () => {
     expect(burstFor(hurt, DRIFT)).toEqual(burstFor({ type: 'bossHit', x: 0, y: 0, hp: 3 }, DRIFT));
     expect(burstFor(slain('splitter'), DRIFT)).toEqual(burstFor(DESTROYED(1), DRIFT));
-    expect(burstFor(slain('drone'), DRIFT)).toEqual(burstFor(DESTROYED(3), DRIFT));
+    expect(burstFor(slain('drone'), DRIFT)).toEqual(burstFor(DESTROYED(2), DRIFT));
   });
 
   it('gives a foe the warp cleared or the ship rammed the light puff of a cleared rock', () => {

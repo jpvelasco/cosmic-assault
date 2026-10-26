@@ -80,7 +80,7 @@ function reachesBossFight(seed: number, galaxy: GalaxyId, field: Field): boolean
 /**
  * An idle Free play ship is alive WELL_WARNING_SECONDS in with the galaxy's gravity well in its warning, and keeps a
  * foe on the field and its life through the next FIGHT_SLACK_SECONDS (the spec plays a little in real time first); it is
- * still alive WELL_PULL_SECONDS after the warning, with the well pulling.
+ * still alive then, with the well pulling.
  */
 function seesIonReach(seed: number, galaxy: GalaxyId, field: Field): boolean {
   const world = newWorld(seed, field, galaxy, 'free');

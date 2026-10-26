@@ -75,6 +75,8 @@ export function createFoePass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker
   return {
     drawFoes(foes, alpha, field) {
       for (const foe of foes) {
+        // Spent this step and not yet swept: its burst is the picture now.
+        if (foe.hp <= 0) continue;
         interpolatePose(foe.px, foe.py, foe.protation, foe.x, foe.y, foe.rotation, alpha, field, pose);
         const sprite = baker.custom(FOE_KEYS[foe.kind], foe.radius + SPRITE_PAD, painters[foe.kind]);
         stamp(sprite, pose.x, pose.y, Math.cos(pose.angle), Math.sin(pose.angle), foe.radius, field);

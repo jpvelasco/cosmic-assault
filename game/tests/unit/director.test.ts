@@ -222,7 +222,7 @@ describe('GalaxyDirector foes', () => {
   it('counts a whole group against the budget: a drone group is refused when its full cost does not fit', () => {
     const drones: GalaxyDef = { ...g21, kinds: { ...MUTED_KINDS, drone: { from: 0, base: 1, step: 0, max: 1 } } };
     const budget = fieldBudget(drones, 40, 1, AREA);
-    // Room for one drone but not three.
+    // Room for two drones but not three.
     const tight = budget - 2 * FOES.drone.cost;
     const director = new GalaxyDirector(drones, createRng(1), AREA);
     for (let i = 0; i < 600; i++) expect(director.step(DT, { elapsed: 40 + i * DT, onFieldCost: tight, mercy: 1 })).toBeNull();

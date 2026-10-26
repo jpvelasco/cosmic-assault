@@ -20,12 +20,13 @@ function only(id: GalaxyId, kind: FoeKind): GalaxyDef {
   return { ...galaxyById(id), kinds: { ...MUTED_KINDS, [kind]: ALWAYS }, events: [] };
 }
 
-function make(galaxy: GalaxyDef, opts: { seed?: number; lives?: number } = {}): World {
+function make(galaxy: GalaxyDef, opts: { seed?: number; lives?: number; rocks?: readonly { x: number; y: number }[] } = {}): World {
   return new World({
     seed: opts.seed ?? 1,
     field: FIELD,
     rules: { kind: 'galaxy', galaxy, mode: 'rank' },
     ...(opts.lives === undefined ? {} : { startLives: opts.lives }),
+    ...(opts.rocks === undefined ? {} : { initialAsteroids: opts.rocks.map(({ x, y }) => ({ x, y, size: 2 as const, angle: 0, speedMultiplier: 0 })) }),
     initialShip: { x: 200, y: 360, angle: 0 },
   });
 }
@@ -212,5 +213,72 @@ describe('foes in other rules', () => {
     expect(run(6)).toBe(run(6));
     expect(run(6)).not.toBe(run(7));
     expect(run(6)).toContain('foeSpawned');
+  });
+});
+
+describe('foe collisions', () => {
+  const splitters = only('1-3', 'splitter');
+  const drones = only('2-1', 'drone');
+
+  it('spends one shot on a foe and a rock overlapping it: the rock is left whole', () => {
+    const w = make(splitters, { rocks: [{ x: 900, y: 100 }] });
+    const splitter = untilFoe(w);
+    for (let i = 0; i < 240 && !w.projectiles.some((p) => p.x > 450); i++) step(w, FIRE);
+    const shot = w.projectiles.find((p) => p.x > 450);
+    const rock = w.asteroids.find((a) => a.size === 2 && a.transient !== true);
+    if (shot === undefined || rock === undefined) throw new Error('the ship should have fired, and the rock should be there');
+    // Under the shot's next position: both the splitter and the rock overlap it in the same step.
+    const [x, y] = [shot.x + shot.vx * STEP_SECONDS, shot.y + shot.vy * STEP_SECONDS];
+    park(splitter, x, y);
+    Object.assign(rock, { x, y, px: x, py: y });
+    const events = step(w);
+    expect(ofType(events, 'foeHit')).toHaveLength(1);
+    expect(ofType(events, 'asteroidDestroyed')).toEqual([]);
+    expect(w.asteroids).toContain(rock);
+    expect(w.projectiles.find((p) => p.id === shot.id)).toBeUndefined();
+  });
+
+  it('passes a foe by while the ship is invulnerable: no hit, no life lost, and the foe lives', () => {
+    const w = make(drones);
+    const drone = untilFoe(w);
+    // The director's first order comes after the spawn invulnerability; put it back, as a hit would.
+    Object.assign(w.ship, { invulnerable: true, invulnerableFor: 3 });
+    park(drone, w.ship.x, w.ship.y);
+    const events = step(w);
+    expect(events.some((e) => e.type === 'shipHit' || e.type === 'foeDestroyed')).toBe(false);
+    expect(w.lives).toBe(3);
+    expect(w.foes).toContain(drone);
+  });
+
+  it('breaks the Shield once on a foe and keeps the life; the foe is destroyed, and the next contact is a hit', () => {
+    const w = make(drones);
+    untilFoe(w);
+    w['run']?.loadout.collect('shield');
+    for (let i = 0; i < 3.1 * 120; i++) step(w);
+    expect(w.ship.invulnerable).toBe(false);
+    expect(w.shield).toBe(true);
+    const [first, second] = w.foes;
+    if (first === undefined || second === undefined) throw new Error('a group of drones should be on the field');
+    park(first, w.ship.x, w.ship.y);
+    const events = step(w);
+    expect(events.filter((e) => e.type === 'shieldBroken')).toHaveLength(1);
+    expect(events.some((e) => e.type === 'shipHit')).toBe(false);
+    expect(ofType(events, 'foeDestroyed')).toMatchObject([{ id: first.id, points: 0 }]);
+    expect(w.lives).toBe(3);
+    expect(w.shield).toBe(false);
+    expect(w.ship.invulnerable).toBe(true);
+  });
+
+  it('removes a foe that rams the ship on its last life, so none is left at game over', () => {
+    const w = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: splitters, mode: 'rank' }, startLives: 1, initialShip: { x: 200, y: 360, angle: 0 } });
+    const splitter = untilFoe(w);
+    for (let i = 0; i < 3.1 * 120 && w.status === 'playing'; i++) step(w);
+    expect(w.status).toBe('playing');
+    park(splitter, w.ship.x, w.ship.y);
+    const events = step(w);
+    expect(w.status).toBe('gameOver');
+    expect(ofType(events, 'foeDestroyed')).toMatchObject([{ id: splitter.id, points: 0 }]);
+    expect(w.foes.filter((f) => f.hp <= 0)).toEqual([]);
+    expect(w.foes).toEqual([]);
   });
 });

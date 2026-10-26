@@ -147,6 +147,7 @@ export class GalaxyRun implements Spawner {
     this.director.fieldArea = areaOf(field);
     this.pickupField.resize(old, field);
     this.foes.resize(old, field);
+    this.wells.resize(old, field);
     this.bossRunner?.resize(old, field);
   }
 
@@ -169,9 +170,13 @@ export class GalaxyRun implements Spawner {
     this.foes.step(dt);
   }
 
+  /** Takes off the field the foes this step's collisions destroyed, whether or not the ship survived them. */
+  afterCollisions(): void {
+    this.foes.sweep();
+  }
+
   step(dt: number): void {
     const elapsed = this.arena.elapsed();
-    this.foes.sweep();
     if (this.warpEndsAt === null && !this.bossBeaten) {
       this.combo.expire(elapsed);
       this.announceCombo();
@@ -228,7 +233,7 @@ export class GalaxyRun implements Spawner {
     this.loadout.die(this.arena.events, this.mode === 'rank');
   }
 
-  /** A kill may drop a pickup, unless the rock was a pass-through one (a meteor or a shard). */
+  /** A kill may drop a pickup, unless the rock was a pass-through one (a meteor, a shard or a splitter's fragment). */
   rockKilled(rock: Readonly<Asteroid>): void {
     if (rock.transient !== true) this.dropFrom(rock.x, rock.y);
   }
@@ -296,7 +301,8 @@ export class GalaxyRun implements Spawner {
 
   /**
    * Removes the meteors that have passed out of the field, totting up the field's cost into the
-   * director's context as it goes. Returns how many meteors are still on the field.
+   * director's context as it goes. Returns how many meteors are still on the field: every transient rock counts, a
+   * boss's shards and a broken splitter's fragments included, so they thin a shower while they last.
    */
   private sweepField(): number {
     const { asteroids, events } = this.arena;

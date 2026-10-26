@@ -141,6 +141,29 @@ describe('splitter', () => {
     expect(foes.list).toEqual([]);
   });
 
+  it('lets more shots in the same step pass on once it is dead: one score, one kill, one set of fragments, one pickup roll', () => {
+    const { arena, foes, foe, awarded, killed } = withSplitter();
+    foes.step(DT);
+    foes.hit(foe.x, foe.y, PROJECTILE.radius);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(true);
+    // The dead splitter is still listed until the step's sweep, but it can no longer be hit.
+    expect(foes.list).toContain(foe);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(false);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(false);
+    expect(ofType(arena.events, 'foeDestroyed')).toHaveLength(1);
+    expect(awarded).toHaveLength(1);
+    expect(killed).toHaveLength(1);
+    expect(arena.asteroids).toHaveLength(SPLITTER_FRAGMENTS);
+    expect(foes.ram(foe.x, foe.y, PLAYER.radius)).toBe(false);
+  });
+
+  it('brings in as many as asked for, each announced', () => {
+    const r = rig();
+    r.foes.spawn('splitter', 3, 1);
+    expect(r.foes.list).toHaveLength(3);
+    expect(ofType(r.arena.events, 'foeSpawned')).toHaveLength(3);
+  });
+
   it('fans its fragments evenly round the circle', () => {
     const { foes, foe, arena } = withSplitter();
     foes.step(DT);

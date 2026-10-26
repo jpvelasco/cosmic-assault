@@ -1,4 +1,4 @@
-import { eventSeconds } from '../../content/curves';
+import { eventSeconds, eventsOfType } from '../../content/curves';
 import { FOES } from '../../content/foes';
 import { WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH, WELL_TELEGRAPH_SECONDS } from '../../content/hazards';
 import type { GalaxyEvent } from '../../content/types';
@@ -7,6 +7,7 @@ import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import type { Foe } from '../foes/foe';
+import { rescale } from '../wrap';
 
 /** A body a well can pull: anything with a place and a velocity. */
 export interface Pullable {
@@ -68,7 +69,7 @@ export class Wells {
     private readonly rng: Rng,
     private readonly nextId: () => number,
   ) {
-    this.events = events.filter((event) => event.type === 'gravityWell');
+    this.events = eventsOfType(events, 'gravityWell');
   }
 
   /** The warning or active well, or null; a live view, mutated by `step`. */
@@ -103,6 +104,14 @@ export class Wells {
     pullBody(well, ship, dt);
     for (const rock of rocks) pullBody(well, rock, dt);
     for (const foe of foes) if (FOES[foe.kind].pulled) pullBody(well, foe, dt);
+  }
+
+  /** Stretches the well's place to the new field, like the World's other entities, so it never ends up outside it. */
+  resize(old: Field, field: Field): void {
+    const well = this.current;
+    if (well === null) return;
+    well.x = rescale(well.x, old.width, field.width);
+    well.y = rescale(well.y, old.height, field.height);
   }
 
   /** Ends any warning or well at once, without an event: the galaxy is over. */

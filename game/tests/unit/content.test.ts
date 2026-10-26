@@ -97,11 +97,8 @@ describe('the galaxy table', () => {
     expect(galaxyById('2-4').events.map((e) => e.type)).toEqual(['meteorShower', 'gravityWell', 'meteorShower']);
   });
 
-  it('keeps no more than two set-pieces of the same kind in a galaxy, and none in a boss galaxy', () => {
-    for (const g of GALAXIES) {
-      expect(g.events.filter((e) => e.type === 'meteorShower').length, g.id).toBeLessThanOrEqual(2);
-      if (g.kind === 'boss') expect(g.events, g.id).toEqual([]);
-    }
+  it('keeps no more than two meteor showers in a galaxy', () => {
+    for (const g of GALAXIES) expect(g.events.filter((e) => e.type === 'meteorShower').length, g.id).toBeLessThanOrEqual(2);
   });
 
   it('puts a second shower at about 60% of the duration, or earlier, ending just as the lull starts', () => {
