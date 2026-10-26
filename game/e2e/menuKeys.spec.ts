@@ -43,6 +43,21 @@ test('Space on a focused level chip selects it and stays on the title', async ({
   await expectModeHolds(page, 'title');
 });
 
+test('a mouse press on a card button drops the focus the keys had reached, so Space still starts a run', async ({ page }) => {
+  await openGame(page);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: '2', exact: true })).toBeFocused();
+
+  await page.getByRole('button', { name: '3', exact: true }).click();
+  await expect.poll(async () => (await gameState(page)).practiceLevel).toBe(3);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await expectModeHolds(page, 'title');
+
+  await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+});
+
 test('Enter on the focused game-over Title button lands on the title', async ({ page }) => {
   await openGameOverRun(page);
   await page.keyboard.press('Space');

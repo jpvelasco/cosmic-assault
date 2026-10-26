@@ -17,7 +17,7 @@ export const START: Command = { kind: 'start' };
 export const TO_TITLE: Command = { kind: 'toTitle' };
 const TOGGLE_PAUSE: Command = { kind: 'togglePause' };
 const TOGGLE_MUTE: Command = { kind: 'toggleMute' };
-/** The full-screen chip's command. The F key does not use it: see `attachFullscreenKey`. */
+/** The full-screen chip's command, and the F key's too: the router's `attachFullscreenKey` listener applies it from inside the key handler. */
 export const TOGGLE_FULLSCREEN: Command = { kind: 'toggleFullscreen' };
 /** The arrow keys are left out: on the title they move menu focus, as on every other card. */
 const START_KEYS: ReadonlySet<string> = new Set([...GAME_KEY_CODES, 'Enter'].filter((code) => arrowDirection(code) === null));
