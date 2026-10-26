@@ -13,6 +13,5 @@ test('release build registers its service worker for the directory it is served 
   await page.goto('/');
 
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
-  expect(scope).toBe(new URL('/', baseURL).href);
-  expect(scope.endsWith('/')).toBe(true);
+  expect(scope, 'the server root, ending in /').toBe(new URL('/', baseURL).href);
 });

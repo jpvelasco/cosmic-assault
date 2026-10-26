@@ -64,7 +64,7 @@ export default defineConfig(
           patterns: [
             {
               group: ['**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**'],
-              message: 'The service worker has no DOM: import only DOM-free helpers such as src/platform/swLogic.ts',
+              message: "The service worker runs without a DOM, so it may not import the app's DOM folders; tsc -p src/sw checks everything else it imports",
             },
           ],
         },

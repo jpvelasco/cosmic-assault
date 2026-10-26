@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../../src/platform/swLogic';
+import { cacheFirst, isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../../src/platform/swLogic';
 
 const SCOPE = new URL('https://example.test/cosmic-assault/next/');
 const at = (path: string) => new URL(path, SCOPE);
@@ -118,5 +118,39 @@ describe('networkFirst', () => {
   it('passes the network failure on when nothing is cached', async () => {
     const failure = new TypeError('offline');
     await expect(networkFirst(Promise.reject(failure), () => Promise.resolve(undefined), 1000)).rejects.toBe(failure);
+  });
+});
+
+describe('cacheFirst', () => {
+  /** A Response as a browser types a same-origin one; Node's own are typed 'default'. */
+  const basic = (body: string, status = 200) => Object.defineProperty(new Response(body, { status }), 'type', { value: 'basic' });
+  const cached = new Response('cached');
+
+  it('answers from the cache without touching the network', async () => {
+    const network = vi.fn(() => Promise.resolve(basic('fresh')));
+    expect(await cacheFirst(() => Promise.resolve(cached), network, vi.fn())).toBe(cached);
+    expect(network).not.toHaveBeenCalled();
+  });
+
+  it('fetches a miss and stores a copy of a whole success', async () => {
+    const fresh = basic('fresh');
+    const store = vi.fn();
+    expect(await cacheFirst(() => Promise.resolve(undefined), () => Promise.resolve(fresh), store)).toBe(fresh);
+    expect(store).toHaveBeenCalledOnce();
+    const [copy] = store.mock.calls[0] as [Response];
+    expect(copy).not.toBe(fresh);
+    expect(await copy.text()).toBe('fresh');
+  });
+
+  it('serves but never stores a response it must not cache', async () => {
+    const store = vi.fn();
+    const missing = basic('missing', 404);
+    expect(await cacheFirst(() => Promise.resolve(undefined), () => Promise.resolve(missing), store)).toBe(missing);
+    expect(store).not.toHaveBeenCalled();
+  });
+
+  it('falls through to the network when the cache cannot be read', async () => {
+    const fresh = basic('fresh');
+    expect(await cacheFirst(() => Promise.reject(new DOMException('read failed', 'UnknownError')), () => Promise.resolve(fresh), vi.fn())).toBe(fresh);
   });
 });

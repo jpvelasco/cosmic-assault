@@ -1,9 +1,10 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
-import { build } from 'vite';
-import { afterAll, describe, expect, it } from 'vitest';
+import { build, type Plugin } from 'vite';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { injectPrecache, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
 
 const WORKER_CODE = 'const a=__PRECACHE__,b=__VERSION__;self.addEventListener("install",()=>caches.open(b).then(c=>c.addAll(a)));';
@@ -76,26 +77,58 @@ describe('injectPrecache', () => {
 });
 
 describe('the release build', () => {
-  const outDir = mkdtempSync(join(tmpdir(), 'precache-build-'));
+  const outDirs: string[] = [];
+  const configFile = fileURLToPath(new URL('../../vite.config.ts', import.meta.url));
+
+  /** Builds into a fresh temp directory with a fixed build date, so only `plugins` can make two builds differ. */
+  async function buildOnce(plugins: Plugin[] = []): Promise<{ outDir: string; code: string; list: string[]; version: string }> {
+    const outDir = mkdtempSync(join(tmpdir(), 'precache-build-'));
+    outDirs.push(outDir);
+    await build({
+      configFile,
+      logLevel: 'silent',
+      plugins,
+      define: { __BUILD_DATE__: JSON.stringify('2026-01-01T00:00:00.000Z') },
+      build: { outDir, emptyOutDir: true },
+    });
+    const code = readFileSync(join(outDir, SW_FILE_NAME), 'utf8');
+    const list = JSON.parse(/\["\.\/"[^\]]*\]/.exec(code)?.[0] ?? '[]') as string[];
+    return { outDir, code, list, version: /"([0-9a-f]{12})"/.exec(code)?.[1] ?? '' };
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('GITHUB_SHA', '');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
   afterAll(() => {
-    rmSync(outDir, { recursive: true, force: true });
+    for (const dir of outDirs) rmSync(dir, { recursive: true, force: true });
   });
 
   it('writes sw.js as one classic script with the list and version filled in', { timeout: 60000 }, async () => {
-    await build({ configFile: new URL('../../vite.config.ts', import.meta.url).pathname, logLevel: 'silent', build: { outDir, emptyOutDir: true } });
+    const { outDir, code, list, version } = await buildOnce();
 
-    const swPath = join(outDir, SW_FILE_NAME);
-    expect(existsSync(swPath)).toBe(true);
-    const code = readFileSync(swPath, 'utf8');
     expect(code).not.toMatch(/__PRECACHE__|__VERSION__/);
     // A classic script cannot hold import or export statements: compiling one as a script would throw.
     expect(() => new Script(code)).not.toThrow();
     expect(code).not.toMatch(/\bimport\s*\(/);
+    expect(version).not.toBe('');
 
-    const list = JSON.parse(/\["\.\/"[^\]]*\]/.exec(code)?.[0] ?? '[]') as string[];
     expect(list).toContain('index.html');
     expect(list.some((entry) => /^assets\/.+\.js$/.test(entry))).toBe(true);
     expect(list).not.toContain(SW_FILE_NAME);
     for (const entry of list.filter((name) => name !== './')) expect(existsSync(join(outDir, entry)), entry).toBe(true);
+  });
+
+  it('versions by every emitted file, index.html included, so a change to the page alone changes the version', { timeout: 60000 }, async () => {
+    const editPage: Plugin = { name: 'edit-page', transformIndexHtml: (html) => html.replace('</body>', '<!-- edited --></body>') };
+    const first = await buildOnce();
+    const again = await buildOnce();
+    const edited = await buildOnce([editPage]);
+
+    expect(again.version, 'the same sources give the same version').toBe(first.version);
+    expect(edited.list, 'only the page changed').toEqual(first.list);
+    expect(edited.version).not.toBe(first.version);
   });
 });

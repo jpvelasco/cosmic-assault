@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import type { Plugin } from 'vite';
 
 export const SW_FILE_NAME = 'sw.js';
@@ -66,20 +66,26 @@ function readPublicFiles(dir: string): PublicFile[] {
 
 /** Builds `src/sw/worker.ts` into an unhashed `sw.js` and fills in its precache list and version. */
 export function precachePlugin(): Plugin {
+  let workerEntry = WORKER_ENTRY;
   let publicDir = '';
   let copyPublicDir = true;
   return {
     name: 'cosmic-assault:precache',
     apply: 'build',
     configResolved(config) {
+      workerEntry = resolve(config.root, WORKER_ENTRY);
       ({ publicDir } = config);
       copyPublicDir = config.build.copyPublicDir;
     },
     buildStart() {
-      this.emitFile({ type: 'chunk', id: WORKER_ENTRY, fileName: SW_FILE_NAME });
+      this.emitFile({ type: 'chunk', id: workerEntry, fileName: SW_FILE_NAME });
     },
-    generateBundle(_options, bundle) {
-      injectPrecache(bundle, copyPublicDir ? readPublicFiles(publicDir) : [], process.env['GITHUB_SHA']);
+    generateBundle: {
+      // After Vite's own hooks, which emit index.html and drop or add files: the list and hash must see the final bundle.
+      order: 'post',
+      handler(_options, bundle) {
+        injectPrecache(bundle, copyPublicDir ? readPublicFiles(publicDir) : [], process.env['GITHUB_SHA']);
+      },
     },
   };
 }

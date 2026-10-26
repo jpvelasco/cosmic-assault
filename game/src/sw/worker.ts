@@ -1,4 +1,4 @@
-import { isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../platform/swLogic';
+import { cacheFirst, isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldHandle } from '../platform/swLogic';
 
 /*
  * The offline worker, built to `sw.js` by vite/precache.ts. It is registered from the preview directory with the
@@ -31,18 +31,6 @@ async function dropStaleCaches(): Promise<void> {
   await Promise.all(names.filter((name) => isStaleCache(name, CACHE)).map((name) => caches.delete(name)));
 }
 
-async function cacheFirst(event: FetchEvent): Promise<Response> {
-  const cached = await caches.match(event.request, MATCH);
-  if (cached) return cached;
-  const response = await fetch(event.request);
-  if (shouldCache(response)) {
-    const copy = response.clone();
-    // A full or evicted cache only means the next visit downloads this again.
-    event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => undefined));
-  }
-  return response;
-}
-
 self.addEventListener('install', (event) => {
   // Assets are content-hashed and nothing loads lazily after start, so taking over at once is safe.
   event.waitUntil(Promise.all([self.skipWaiting(), precache()]));
@@ -55,9 +43,18 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (!shouldHandle(new URL(request.url), request.method, scope)) return;
+  // DevTools can send these; fetch() throws on them outside same-origin mode, so the browser keeps them.
+  if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
   event.respondWith(
     request.mode === 'navigate'
       ? networkFirst(fetch(request), () => caches.match(INDEX_URL, MATCH), NAVIGATION_TIMEOUT_MS)
-      : cacheFirst(event),
+      : cacheFirst(
+          () => caches.match(request, MATCH),
+          () => fetch(request),
+          (copy) => {
+            // A full or evicted cache only means the next visit downloads this again, so a failed write is dropped.
+            event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined));
+          },
+        ),
   );
 });

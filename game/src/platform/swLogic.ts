@@ -53,3 +53,19 @@ export async function networkFirst(
   }
   return (await fallback()) ?? network;
 }
+
+/**
+ * The cached copy if there is one, else the network's answer, of which a copy goes to `store` when `shouldCache`
+ * allows. A cache that cannot be read counts as a miss, so a storage fault never fails a request the network can serve.
+ */
+export async function cacheFirst(
+  cached: () => Promise<Response | undefined>,
+  network: () => Promise<Response>,
+  store: (copy: Response) => void,
+): Promise<Response> {
+  const hit = await cached().catch(() => undefined);
+  if (hit) return hit;
+  const response = await network();
+  if (shouldCache(response)) store(response.clone());
+  return response;
+}
