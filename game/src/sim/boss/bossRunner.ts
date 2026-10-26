@@ -1,5 +1,6 @@
 import type { BossDef } from '../../content/bosses';
 import { clamp } from '../../content/curves';
+import { BOSS_INTRO_SECONDS } from '../../content/pacingRules';
 import type { AttackId } from '../../content/types';
 import { circlesOverlap } from '../collision';
 import type { Field } from '../field';
@@ -10,7 +11,6 @@ import { rescale } from '../wrap';
 
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
 export const MIN_WINDUP_SECONDS = 0.35;
-const INTRO_SECONDS = 2;
 /** How long a beaten boss takes to die; the renderer fades it over this. */
 export const DYING_SECONDS = 2;
 /** Where a boss arrives, as a share of the field height from the top. */
@@ -228,7 +228,7 @@ export class BossRunner {
   private stepIntro(dt: number, arena: Arena): void {
     if (this.clock === 0) arena.events.push({ type: 'bossIntro', id: this.def.id });
     this.clock += dt;
-    if (this.reached(INTRO_SECONDS)) this.enter('fighting');
+    if (this.reached(BOSS_INTRO_SECONDS)) this.enter('fighting');
   }
 
   private stepDying(dt: number, arena: Arena): void {

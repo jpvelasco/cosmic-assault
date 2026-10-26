@@ -1,3 +1,4 @@
+import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../src/content/pacingRules';
 import type { GalaxyId } from '../src/content/types';
 
 /** The `?galaxy=` the gameplay specs play: the first galaxy, in Free play. */
@@ -19,9 +20,19 @@ export const GAME_OVER_GALAXY: GalaxyId = '5-5';
  * consumption changed, re-pick: from game/, run
  * `E2E_SEED_SCAN=0-300 npx vitest run tests/unit/e2eSeed.test.ts --reporter=verbose`
  * (PowerShell: `$env:E2E_SEED_SCAN='0-300'; npx vitest run tests/unit/e2eSeed.test.ts --reporter=verbose`),
- * set E2E_SEED to the lowest lane-clear seed it prints, then rerun the test without the variable.
+ * set E2E_SEED to the lowest seed it prints that both clears the lanes and reaches the boss fight, then rerun the test
+ * without the variable.
+ *
+ * The boss specs also play BOSS_GALAXY with it: its idle ship must live through the approach and the intro, to
+ * TO_BOSS_FIGHT_SECONDS and a little past, on both e2e fields. The same test guards that.
  */
 export const E2E_SEED = 3;
+
+/** The boss galaxy the boss specs play with E2E_SEED. */
+export const BOSS_GALAXY: GalaxyId = '1-6';
+
+/** Sim seconds into a boss galaxy by which its boss is fighting: the approach, the intro, and half a second. */
+export const TO_BOSS_FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 0.5;
 
 /**
  * The `?seed=` the game-over specs load with GAME_OVER_GALAXY and `?lives=1`: an idle ship at the centre is hit

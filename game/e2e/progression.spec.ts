@@ -17,10 +17,8 @@ import {
   waitForBridge,
 } from './fixtures';
 import { STEP_SECONDS } from '../src/sim/config';
-import { CLEAR_1_1_SECONDS, E2E_SEED, SURVIVES_1_1 } from './seed';
+import { BOSS_GALAXY, CLEAR_1_1_SECONDS, E2E_SEED, SURVIVES_1_1, TO_BOSS_FIGHT_SECONDS } from './seed';
 
-/** A boss galaxy's approach (20 s) and the boss' intro (2 s), with a margin: after this the boss is fighting. */
-const TO_BOSS_FIGHT_SECONDS = 22.5;
 /** More than any boss' hit points. */
 const KILL_DAMAGE = 100;
 
@@ -76,9 +74,9 @@ test('Free play: 1-1 clears to a results card with its stars, opens 1-2 on the m
   await expect(page.getByTestId('galaxy-1-2')).toBeEnabled();
 });
 
-test.describe('boss galaxy 1-6', () => {
+test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
   test('a debug run beats the Sentinel and shows the results card, and leaves the save alone', async ({ page }) => {
-    await openGame(page, { galaxy: '1-6' });
+    await openGame(page, { galaxy: BOSS_GALAXY });
     await page.keyboard.press('Space');
     await expectMode(page, 'playing');
     expect((await gameState(page)).save.frontier).toBe('1-1');
@@ -90,7 +88,7 @@ test.describe('boss galaxy 1-6', () => {
     await fastForward(page, STEP_SECONDS);
 
     const { screen, galaxy, save } = await gameState(page);
-    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: '1-6' });
+    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: BOSS_GALAXY });
     await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
     // A debug run keeps its progress in memory (the card shows the clear) and never writes storage.
     expect(save.frontier).toBe('2-1');
@@ -98,7 +96,7 @@ test.describe('boss galaxy 1-6', () => {
   });
 
   test('damaging a boss that is not fighting is refused, with what to do', async ({ page }) => {
-    await openGame(page, { galaxy: '1-6' });
+    await openGame(page, { galaxy: BOSS_GALAXY });
     await page.keyboard.press('Space');
     await expectMode(page, 'playing');
 
@@ -114,7 +112,7 @@ test.describe('boss galaxy 1-6', () => {
   });
 
   test('the normal flow records the boss clear and opens Dimension 2', async ({ page }) => {
-    const save: SaveData = { ...defaultSave(), frontier: '1-6' };
+    const save: SaveData = { ...defaultSave(), frontier: BOSS_GALAXY };
     await seedSave(page, save);
     await pinClockSeed(page, E2E_SEED);
     await openFreshGame(page);
@@ -122,7 +120,7 @@ test.describe('boss galaxy 1-6', () => {
     await page.getByTestId('mode-free').click();
     await expect(page.getByTestId('dimension-2')).toBeDisabled();
     await page.getByTestId('dimension-1').click();
-    await page.getByTestId('galaxy-1-6').click();
+    await page.getByTestId(`galaxy-${BOSS_GALAXY}`).click();
     await expectMode(page, 'playing');
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
@@ -133,7 +131,7 @@ test.describe('boss galaxy 1-6', () => {
     expect((await gameState(page)).screen).toBe('results');
     const stored = await storedSave(page);
     expect(stored.frontier).toBe('2-1');
-    expect(stored.galaxies?.['1-6']?.stars).toBeGreaterThan(0);
+    expect(stored.galaxies?.[BOSS_GALAXY]?.stars).toBeGreaterThan(0);
     await clickPastGuard(page, 'results-map', 'map');
     await expect(page.getByTestId('dimension-2')).toBeEnabled();
     await page.getByTestId('dimension-2').click();
