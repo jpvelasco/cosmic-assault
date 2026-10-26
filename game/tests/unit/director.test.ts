@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rockSpeedMultiplier, sawtooth, threatBudget } from '../../src/content/curves';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
-import type { GalaxyDef } from '../../src/content/types';
+import type { GalaxyDef, RockKind } from '../../src/content/types';
 import { fieldBudget, GalaxyDirector, ROCK_COST, type SpawnOrder } from '../../src/sim/galaxy/director';
 import { pressureScale } from '../../src/sim/galaxy/pacing';
 import { createRng } from '../../src/sim/rng';
@@ -131,11 +131,14 @@ describe('GalaxyDirector mercy', () => {
 
 describe('GalaxyDirector kinds', () => {
   it('opens with only the kinds whose ramp starts at 0', () => {
+    const g51 = galaxyById('5-1');
     const kinds = new Set<string>();
     for (let seed = 1; seed <= 30; seed++) {
-      for (const o of run(galaxyById('5-1'), seed, { start: 0, seconds: 14.9, decay: 1 }).orders) kinds.add(o.kind);
+      for (const o of run(g51, seed, { start: 0, seconds: 14.9, decay: 1 }).orders) kinds.add(o.kind);
     }
-    expect(kinds.has('small')).toBe(false);
+    const late = (Object.keys(g51.kinds) as RockKind[]).filter((kind) => g51.kinds[kind].from !== 0);
+    expect(late.length).toBeGreaterThan(0);
+    for (const kind of late) expect(kinds.has(kind), kind).toBe(false);
     expect(kinds.size).toBeGreaterThan(0);
   });
 
@@ -147,7 +150,7 @@ describe('GalaxyDirector kinds', () => {
     expect([...kinds].sort()).toEqual(['large', 'medium', 'small']);
   });
 
-  it('weights kinds by kindProbability: large rocks (0.6) outnumber medium (0.3 + steps) at tier 0', () => {
+  it('weights kinds by kindProbability: large rocks (0.6) outnumber small (0.1, from tier 0.5) at tier 0', () => {
     const counts = { large: 0, medium: 0, small: 0 };
     for (let seed = 1; seed <= 40; seed++) {
       for (const o of run(galaxyById('1-1'), seed, { start: 20, seconds: 30, decay: 2 }).orders) counts[o.kind]++;
@@ -188,5 +191,27 @@ describe('GalaxyDirector determinism', () => {
 describe('GalaxyDirector construction', () => {
   it.each([0, -5, Number.NaN, Infinity])('rejects a field area of %s and says what to pass', (area) => {
     expect(() => new GalaxyDirector(g53, createRng(1), area)).toThrow(/fieldArea.*positive/);
+  });
+
+  it.each([
+    ['dt', { dt: 0 }],
+    ['dt', { dt: Number.NaN }],
+    ['elapsed', { elapsed: -1 }],
+    ['elapsed', { elapsed: Infinity }],
+    ['mercy', { mercy: 0 }],
+    ['mercy', { mercy: 1.5 }],
+    ['mercy', { mercy: Number.NaN }],
+  ] as const)('rejects a bad %s in step() with a RangeError that says what to pass (%o)', (name, bad: { dt?: number; elapsed?: number; mercy?: number }) => {
+    const director = new GalaxyDirector(g53, createRng(1), AREA);
+    const { dt = DT, ...ctx } = { elapsed: 40, onFieldCost: 0, mercy: 1, ...bad };
+    expect(() => director.step(dt, ctx)).toThrow(RangeError);
+    expect(() => director.step(dt, ctx)).toThrow(new RegExp(`${name}.*(finite|between)`));
+  });
+
+  it('takes a new field area on resize, and refuses a bad one', () => {
+    const director = new GalaxyDirector(g53, createRng(1), AREA);
+    director.fieldArea = AREA * 2;
+    expect(director.fieldArea).toBe(AREA * 2);
+    expect(() => (director.fieldArea = -1)).toThrow(/fieldArea.*positive/);
   });
 });

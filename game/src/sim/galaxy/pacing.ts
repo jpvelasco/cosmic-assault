@@ -30,7 +30,11 @@ export function phaseAt(galaxy: GalaxyDef, elapsed: number): Phase {
 
 /** How hard the field is pressed at `elapsed` seconds in: the build climbs linearly from 0.6 to 1 across its span. */
 export function pressureScale(galaxy: GalaxyDef, elapsed: number): number {
-  const phase = phaseAt(galaxy, elapsed);
+  return phasePressure(galaxy, phaseAt(galaxy, elapsed), elapsed);
+}
+
+/** `pressureScale` for a caller that already knows the phase at `elapsed`. */
+export function phasePressure(galaxy: GalaxyDef, phase: Phase, elapsed: number): number {
   if (phase !== 'build') return FIXED_SCALE[phase];
   const progress = (elapsed - OPENING_SECONDS) / (lullStart(galaxy) - OPENING_SECONDS);
   return BUILD_FROM + (BUILD_TO - BUILD_FROM) * progress;

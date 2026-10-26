@@ -1,132 +1,40 @@
-import {
-  createAsteroid,
-  practiceSettings,
-  spawnPracticeAsteroid,
-  splitAsteroid,
-  stepAsteroid,
-  type Asteroid,
-  type AsteroidSize,
-  type PracticeSettings,
-} from './asteroid';
+import type { GalaxyDef } from '../content/types';
+import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
 import { circlesOverlap, SpatialHash } from './collision';
 import { ASTEROID, PLAYER, PROJECTILE, WRAP_MARGIN } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
-import { isPositiveFiniteSize, type Field } from './field';
+import type { Field } from './field';
+import { GalaxyRun } from './galaxy/galaxyRun';
+import type { Phase } from './galaxy/pacing';
+import type { ShowerState } from './galaxy/showers';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
+import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
 import { createShip, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { assertAsteroidPlacement, assertField, assertFinite, resolveOptions, type ShipPlacement, type WorldOptions } from './worldOptions';
 
-export type WorldStatus = 'playing' | 'gameOver';
+export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
+export {
+  isStartLives,
+  isWorldSeed,
+  MAX_GALAXY_START_LIVES,
+  UINT32_MAX,
+  type AsteroidPlacement,
+  type ShipPlacement,
+  type WorldOptions,
+} from './worldOptions';
 
-export interface ShipPlacement {
-  readonly x: number;
-  readonly y: number;
-  readonly angle: number;
-}
+/** `'warping'` lasts 1.5 s at the end of a galaxy; once `'cleared'` or `'gameOver'`, `step` is a no-op. */
+export type WorldStatus = 'playing' | 'warping' | 'cleared' | 'gameOver';
 
-export interface AsteroidPlacement {
-  readonly x: number;
-  readonly y: number;
-  readonly size: AsteroidSize;
-  readonly angle: number;
-  readonly speedMultiplier: number;
-}
-
-export interface WorldOptions {
-  readonly seed: number;
-  readonly field: Field;
-  /** Integer 1–7; defaults to 1. */
-  readonly practiceLevel?: number;
-  /** Starting pose instead of the field centre; the ship is still invulnerable for 3 s. */
-  readonly initialShip?: ShipPlacement;
-  /** Replaces the 3 practice spawns at the start of the run. */
-  readonly initialAsteroids?: readonly AsteroidPlacement[];
-  /** Integer 1–3; defaults to 3. */
-  readonly startLives?: number;
-}
-
-export const MIN_PRACTICE_LEVEL = 1;
-export const MAX_PRACTICE_LEVEL = 7;
-const MIN_START_LIVES = 1;
-const START_ASTEROIDS = 3;
-export const UINT32_MAX = 0xffffffff;
-/** Absorbs float residue from summing dt steps so the timer fires on the step its interval ends. */
-const SPAWN_EPSILON = 1e-9;
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
-const ASTEROID_SIZES: readonly AsteroidSize[] = [0, 1, 2, 3];
-
-/** World seeds are unsigned 32-bit integers. */
-export function isWorldSeed(seed: number): boolean {
-  return Number.isInteger(seed) && seed >= 0 && seed <= UINT32_MAX;
-}
-
-function assertSeed(seed: number): void {
-  if (!isWorldSeed(seed)) {
-    throw new RangeError(
-      `World needs an unsigned 32-bit integer seed (got ${String(seed)}); pass e.g. hashString(text) or value >>> 0`,
-    );
-  }
-}
-
-/** Practice levels are the integers 1–7. */
-export function isPracticeLevel(level: number): boolean {
-  return Number.isInteger(level) && level >= MIN_PRACTICE_LEVEL && level <= MAX_PRACTICE_LEVEL;
-}
-
-function assertPracticeLevel(level: number): void {
-  if (!isPracticeLevel(level)) {
-    throw new RangeError(
-      `World practiceLevel must be an integer from ${String(MIN_PRACTICE_LEVEL)} to ${String(MAX_PRACTICE_LEVEL)} (got ${String(level)}); clamp or round it first`,
-    );
-  }
-}
-
-/** A run starts with an integer 1–3 lives. */
-export function isStartLives(lives: number): boolean {
-  return Number.isInteger(lives) && lives >= MIN_START_LIVES && lives <= PLAYER.startLives;
-}
-
-function assertStartLives(lives: number): void {
-  if (!isStartLives(lives)) {
-    throw new RangeError(
-      `World startLives must be an integer from ${String(MIN_START_LIVES)} to ${String(PLAYER.startLives)} (got ${String(lives)}); omit it for the default ${String(PLAYER.startLives)}`,
-    );
-  }
-}
-
-function assertField(field: Field): void {
-  const { width, height } = field;
-  if (!isPositiveFiniteSize(width, height)) {
-    throw new RangeError(
-      `World needs a field with positive finite width and height (got ${String(width)}×${String(height)}); build it with fieldForViewport()`,
-    );
-  }
-}
 
 function assertDt(dt: number): void {
   if (!(dt > 0 && Number.isFinite(dt))) {
     throw new RangeError(
       `World.step() needs a finite dt > 0 seconds (got ${String(dt)}); drive it from the fixed-step loop`,
     );
-  }
-}
-
-function assertFinite(owner: string, values: Readonly<Record<string, number>>): void {
-  for (const [name, value] of Object.entries(values)) {
-    if (!Number.isFinite(value)) {
-      throw new RangeError(
-        `${owner}.${name} must be a finite number (got ${String(value)}); pass a real position, angle or multiplier`,
-      );
-    }
-  }
-}
-
-function assertAsteroidPlacement(p: AsteroidPlacement, index: number): void {
-  const owner = `WorldOptions.initialAsteroids[${String(index)}]`;
-  assertFinite(owner, { x: p.x, y: p.y, angle: p.angle, speedMultiplier: p.speedMultiplier });
-  if (!ASTEROID_SIZES.includes(p.size)) {
-    throw new RangeError(`${owner}.size must be 0, 1, 2 or 3 (got ${String(p.size)}); 0 is large, 3 is tiny`);
   }
 }
 
@@ -154,15 +62,19 @@ function resetFlags(flags: boolean[], length: number): void {
 
 /**
  * The deterministic game: same seed and same `step` inputs always give the same run.
- * Randomness comes from three streams derived from the seed:
+ * The rules decide what spawns and how a run ends: practice, or a timed galaxy.
+ * Randomness comes from streams derived from the seed:
  * - 'spawn': practice spawns and the rotation, spin and speed of `initialAsteroids`;
  * - 'split': the angles and speeds of split children;
  * - 'shape': asteroid outlines (vertex count and radii) on every creation path, so
- *   outline changes never shift gameplay draws.
+ *   outline changes never shift gameplay draws;
+ * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams.
  */
 export class World {
   private readonly level: number;
-  private readonly practice: PracticeSettings;
+  private readonly rules: Spawner;
+  /** The same object as `rules` under galaxy rules, else null. */
+  private readonly run: GalaxyRun | null = null;
   private readonly spawnRng: Rng;
   private readonly splitRng: Rng;
   private readonly shapeRng: Rng;
@@ -177,32 +89,31 @@ export class World {
   private readonly brokenFlags: boolean[] = [];
   private readonly spentFlags: boolean[] = [];
   private readonly children: Asteroid[] = [];
-  /** Live `SpawningSystem.reset()` zeroes the timer, so the first step spawns at once. */
-  private spawnTimer = 0;
   /** Last id handed out; asteroids and projectiles share it. Consumes no RNG. */
   private lastId = 0;
   private scoreValue = 0;
   private livesValue: number;
   private statusValue: WorldStatus = 'playing';
   private elapsedValue = 0;
+  private deathsValue = 0;
 
   constructor(opts: WorldOptions) {
-    assertSeed(opts.seed);
-    assertField(opts.field);
-    this.level = opts.practiceLevel ?? MIN_PRACTICE_LEVEL;
-    assertPracticeLevel(this.level);
-    this.livesValue = opts.startLives ?? PLAYER.startLives;
-    assertStartLives(this.livesValue);
-    this.practice = practiceSettings(this.level);
+    const { rules, lives } = resolveOptions(opts);
+    this.level = rules.kind === 'practice' ? rules.level : MIN_PRACTICE_LEVEL;
+    this.livesValue = lives;
     this.currentField = opts.field;
     this.spawnRng = createRng(deriveSeed(opts.seed, 'spawn'));
     this.splitRng = createRng(deriveSeed(opts.seed, 'split'));
     this.shapeRng = createRng(deriveSeed(opts.seed, 'shape'));
     this.shipState = World.placeShip(opts.field, opts.initialShip);
+    const arena = this.createArena();
+    if (rules.kind === 'practice') {
+      this.rules = new PracticeSpawner(rules.level, this.spawnRng, arena);
+    } else {
+      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), arena);
+    }
     if (opts.initialAsteroids === undefined) {
-      for (let i = 0; i < START_ASTEROIDS; i++) {
-        this.spawnAsteroid(true);
-      }
+      this.rules.open?.();
     } else {
       opts.initialAsteroids.forEach((a, i) => {
         assertAsteroidPlacement(a, i);
@@ -253,7 +164,7 @@ export class World {
     return this.elapsedValue;
   }
 
-  /** The level this run was created with (1–7). */
+  /** The practice level this run was created with (1–7); 1 under galaxy rules. */
   get practiceLevel(): number {
     return this.level;
   }
@@ -262,16 +173,50 @@ export class World {
     return this.currentField;
   }
 
+  /** Lives lost so far. */
+  get deaths(): number {
+    return this.deathsValue;
+  }
+
+  /** The galaxy being played, or null in practice. */
+  get galaxy(): GalaxyDef | null {
+    return this.run?.galaxy ?? null;
+  }
+
+  /** Seconds left on the galaxy timer (a boss galaxy's approach), or null in practice. */
+  get timeLeft(): number | null {
+    return this.run?.timeLeft ?? null;
+  }
+
+  get phase(): Phase | null {
+    return this.run?.phase ?? null;
+  }
+
+  /** Kills chained inside the combo window; always 0 in practice. */
+  get combo(): number {
+    return this.run?.comboCount ?? 0;
+  }
+
+  /** What the next kill's points are multiplied by; always 1 in practice. */
+  get multiplier(): number {
+    return this.run?.multiplier ?? 1;
+  }
+
+  /** The meteor shower being telegraphed or falling, for the HUD warning; a live view. */
+  get shower(): ShowerState | null {
+    return this.run?.shower ?? null;
+  }
+
   /**
    * Advances the run by `dt` seconds. The returned array is reused: it is valid only
    * until the next `step`, so copy any events you need to keep.
    *
-   * Once `status` is `'gameOver'`, `step` is a no-op and previous poses are not refreshed — draw at alpha = 1.
+   * Once `status` is `'gameOver'` or `'cleared'`, `step` is a no-op and previous poses are not refreshed — draw at alpha = 1.
    */
   step(dt: number, controls: Controls): readonly SimEvent[] {
     assertDt(dt);
     this.events.length = 0;
-    if (this.statusValue === 'gameOver') {
+    if (this.statusValue === 'gameOver' || this.statusValue === 'cleared') {
       return this.events;
     }
     this.rememberPoses();
@@ -285,7 +230,7 @@ export class World {
     }
     this.breakAsteroids();
     if (stillPlaying) {
-      this.spawnPractice(dt);
+      this.rules.step(dt);
     }
     return this.events;
   }
@@ -304,6 +249,7 @@ export class World {
       e.px = rescale(e.px, old.width, field.width);
       e.py = rescale(e.py, old.height, field.height);
     }
+    this.run?.resize(field);
   }
 
   /** Ends the run without emitting anything (used by "Quit"). */
@@ -324,6 +270,27 @@ export class World {
 
   private nextId(): number {
     return ++this.lastId;
+  }
+
+  /** The rules' window onto this World. */
+  private createArena(): Arena {
+    return {
+      asteroids: this.asteroidList,
+      events: this.events,
+      ship: this.shipState,
+      shapeRng: this.shapeRng,
+      field: () => this.currentField,
+      elapsed: () => this.elapsedValue,
+      score: () => this.scoreValue,
+      deaths: () => this.deathsValue,
+      nextId: () => this.nextId(),
+      award: (points) => {
+        this.scoreValue += points;
+      },
+      setStatus: (status) => {
+        this.statusValue = status;
+      },
+    };
   }
 
   /** Stores every entity's pose before anything moves, so the renderer can interpolate from it. */
@@ -396,7 +363,7 @@ export class World {
   /** Live rule: one hit per step, on the last-indexed overlapping asteroid. Returns false once the run ends. */
   private collideShip(): boolean {
     const ship = this.shipState;
-    if (ship.invulnerable) {
+    if (ship.invulnerable || this.statusValue === 'warping') {
       return true;
     }
     const index = this.lastOverlap(ship.x, ship.y, PLAYER.radius);
@@ -405,6 +372,8 @@ export class World {
     }
     this.markBroken(index);
     this.livesValue -= 1;
+    this.deathsValue += 1;
+    this.rules.shipLost?.();
     this.events.push({ type: 'shipHit', x: ship.x, y: ship.y, livesLeft: this.livesValue });
     if (this.livesValue <= 0) {
       this.statusValue = 'gameOver';
@@ -424,7 +393,7 @@ export class World {
       if (index >= 0) {
         this.spentFlags[i] = true;
         const a = this.markBroken(index);
-        const points = ASTEROID.scores[a.size];
+        const points = this.rules.scoreKill(ASTEROID.scores[a.size]);
         this.scoreValue += points;
         this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
       }
@@ -441,31 +410,5 @@ export class World {
     removeFlagged(this.asteroidList, this.brokenFlags);
     this.asteroidList.push(...this.children);
     this.children.length = 0;
-  }
-
-  /** Live `_updateAsteroidSpawning`: a timed spawn, then one top-up below the minimum. */
-  private spawnPractice(dt: number): void {
-    this.spawnTimer -= dt;
-    if (this.spawnTimer <= SPAWN_EPSILON) {
-      this.spawnAsteroid(false);
-      this.spawnTimer = this.practice.spawnInterval;
-    }
-    if (this.asteroidList.length < this.practice.minAsteroids) {
-      this.spawnAsteroid(true);
-    }
-  }
-
-  private spawnAsteroid(awayFromShip: boolean): void {
-    this.asteroidList.push(
-      spawnPracticeAsteroid(
-        this.spawnRng,
-        this.level,
-        this.currentField,
-        this.shipState,
-        awayFromShip,
-        this.shapeRng,
-        this.nextId(),
-      ),
-    );
   }
 }

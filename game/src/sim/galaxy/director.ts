@@ -2,13 +2,13 @@ import { kindProbability, rockSpeedMultiplier, sawtooth, spawnInterval, threatBu
 import { tierOf } from '../../content/galaxies';
 import type { GalaxyDef, RockKind } from '../../content/types';
 import type { Rng } from '../rng';
-import { phaseAt, pressureScale } from './pacing';
+import { phaseAt, phasePressure, pressureScale } from './pacing';
 
 /** What a rock weighs on the budget while it is on the field; tiny fragments weigh 0.5. */
 export const ROCK_COST: Readonly<Record<RockKind, number>> = { large: 4, medium: 2, small: 1 };
 
-/** The field the budget curve is written for. */
-const REFERENCE_AREA = 1280 * 720;
+/** The field the budget and shower curves are written for. */
+export const REFERENCE_AREA = 1280 * 720;
 
 export interface SpawnOrder {
   readonly kind: RockKind;
@@ -26,7 +26,31 @@ export interface DirectorContext {
 
 /** Cost units of rocks the field may hold at `elapsed` seconds into `galaxy`. */
 export function fieldBudget(galaxy: GalaxyDef, elapsed: number, mercy: number, fieldArea: number): number {
-  return threatBudget(tierOf(galaxy)) * sawtooth(galaxy) * pressureScale(galaxy, elapsed) * mercy * (fieldArea / REFERENCE_AREA);
+  return budgetAt(galaxy, pressureScale(galaxy, elapsed), mercy, fieldArea);
+}
+
+function budgetAt(galaxy: GalaxyDef, pressure: number, mercy: number, fieldArea: number): number {
+  return threatBudget(tierOf(galaxy)) * sawtooth(galaxy) * pressure * mercy * (fieldArea / REFERENCE_AREA);
+}
+
+/** Throws unless `value` is a positive finite number, naming it and what to pass. */
+function assertPositive(name: string, value: number, fix: string): void {
+  if (!(value > 0 && Number.isFinite(value))) throw new RangeError(`${name} must be a positive finite number, got ${String(value)}: ${fix}`);
+}
+
+/** Throws unless `fieldArea` is a usable playfield width times height. */
+export function assertFieldArea(fieldArea: number): void {
+  assertPositive('fieldArea', fieldArea, 'pass the playfield width times height');
+}
+
+function assertContext(dt: number, { elapsed, mercy }: DirectorContext): void {
+  assertPositive('dt', dt, 'step the director with the fixed simulation step');
+  if (!(elapsed >= 0 && Number.isFinite(elapsed))) {
+    throw new RangeError(`elapsed must be a finite number of seconds from 0, got ${String(elapsed)}: pass the seconds since the galaxy began`);
+  }
+  if (!(mercy > 0 && mercy <= 1)) {
+    throw new RangeError(`mercy must be between 0 (exclusive) and 1, got ${String(mercy)}: pass 0.4 for 4 s after a death, else 1`);
+  }
 }
 
 const ROCK_KINDS = Object.keys(ROCK_COST) as RockKind[];
@@ -35,33 +59,45 @@ const ROCK_KINDS = Object.keys(ROCK_COST) as RockKind[];
 export class GalaxyDirector {
   private readonly tier: number;
   private untilNext = 0;
+  private area: number;
 
   constructor(
     private readonly galaxy: GalaxyDef,
     private readonly rng: Rng,
-    private readonly fieldArea: number,
+    fieldArea: number,
   ) {
-    if (!Number.isFinite(fieldArea) || fieldArea <= 0) {
-      throw new RangeError(`fieldArea must be a positive finite number, got ${String(fieldArea)}: pass the playfield width times height`);
-    }
+    assertFieldArea(fieldArea);
+    this.area = fieldArea;
     this.tier = tierOf(galaxy);
+  }
+
+  /** The playfield width times height the budget scales with; set it when the field resizes. */
+  get fieldArea(): number {
+    return this.area;
+  }
+
+  set fieldArea(value: number) {
+    assertFieldArea(value);
+    this.area = value;
   }
 
   /** Advances `dt` seconds; returns the rock to spawn now, if any. A refused attempt is dropped, not queued. */
   step(dt: number, ctx: DirectorContext): SpawnOrder | null {
-    const scale = pressureScale(this.galaxy, ctx.elapsed);
-    if (scale <= 0) {
+    assertContext(dt, ctx);
+    const phase = phaseAt(this.galaxy, ctx.elapsed);
+    const pressure = phasePressure(this.galaxy, phase, ctx.elapsed);
+    if (pressure <= 0) {
       this.untilNext = 0;
       return null;
     }
     this.untilNext += dt;
-    const interval = spawnInterval(this.tier) / scale;
+    const interval = spawnInterval(this.tier) / pressure;
     if (this.untilNext < interval) return null;
     this.untilNext %= interval;
 
-    const kind = this.pickKind(phaseAt(this.galaxy, ctx.elapsed) === 'opening');
+    const kind = this.pickKind(phase === 'opening');
     if (kind === null) return null;
-    if (ctx.onFieldCost + ROCK_COST[kind] > fieldBudget(this.galaxy, ctx.elapsed, ctx.mercy, this.fieldArea)) return null;
+    if (ctx.onFieldCost + ROCK_COST[kind] > budgetAt(this.galaxy, pressure, ctx.mercy, this.area)) return null;
     return { kind, speedMultiplier: rockSpeedMultiplier(this.tier) };
   }
 

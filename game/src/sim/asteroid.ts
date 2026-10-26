@@ -132,9 +132,9 @@ function sizeForLevel(rng: Rng, level: number): AsteroidSize {
 }
 
 /** 0 top, 1 right, 2 bottom, 3 left. */
-type Edge = 0 | 1 | 2 | 3;
+export type Edge = 0 | 1 | 2 | 3;
 
-const EDGE_COUNT = 4;
+export const EDGE_COUNT = 4;
 
 function oppositeEdge(edge: Edge): Edge {
   return ((edge + 2) % EDGE_COUNT) as Edge;
@@ -164,10 +164,15 @@ function edgePoint(edge: Edge, along: number, field: Field): SpawnPoint {
   }
 }
 
+/** How far a point can lie along `edge`: the width on the top and bottom, the height on the sides. */
+function edgeLength(edge: Edge, field: Field): number {
+  return edge % 2 === 0 ? field.width : field.height;
+}
+
 /** Picks a random edge and a point on its wrap line, flipped to the opposite edge when it lands near the ship. */
-function pickSpawnPoint(rng: Rng, field: Field, ship: Ship | null): SpawnPoint {
+function pickSpawnPoint(rng: Rng, field: Field, ship: Readonly<Ship> | null): SpawnPoint {
   const edge = rng.int(0, EDGE_COUNT) as Edge;
-  const along = rng.range(0, edge % 2 === 0 ? field.width : field.height);
+  const along = rng.range(0, edgeLength(edge, field));
   const point = edgePoint(edge, along, field);
   const reach = SPAWN_POINT_RADIUS + ASTEROID.safeRadius;
   if (ship !== null && Math.hypot(point.x - ship.x, point.y - ship.y) < reach) {
@@ -196,22 +201,43 @@ function headInward(a: Asteroid, edge: Edge): void {
   }
 }
 
+/** How `spawnFromEdge` places a rock. */
+export interface EdgeSpawn {
+  /** Drawn after the aim, as practice always has, so the practice draw order holds. */
+  readonly size: () => AsteroidSize;
+  readonly speedMultiplier: number;
+  /** Enter from this edge; otherwise a random one, flipped away from `avoid`. */
+  readonly edge?: Edge;
+  readonly avoid?: Readonly<Ship> | null;
+}
+
+/** A rock entering on an edge's wrap line, aimed across the centre of the field. */
+export function spawnFromEdge(rng: Rng, field: Field, spec: EdgeSpawn, shapeRng: Rng = rng, id = 0): Asteroid {
+  const point =
+    spec.edge === undefined
+      ? pickSpawnPoint(rng, field, spec.avoid ?? null)
+      : edgePoint(spec.edge, rng.range(0, edgeLength(spec.edge, field)), field);
+  const targetX = field.width * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
+  const targetY = field.height * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
+  const angle = Math.atan2(targetY - point.y, targetX - point.x) + rng.range(-AIM_JITTER, AIM_JITTER);
+  const asteroid = createAsteroid(rng, point.x, point.y, spec.size(), angle, spec.speedMultiplier, shapeRng, id);
+  headInward(asteroid, point.edge);
+  return asteroid;
+}
+
 export function spawnPracticeAsteroid(
   rng: Rng,
   level: number,
   field: Field,
-  ship: Ship | null,
+  ship: Readonly<Ship> | null,
   awayFromShip: boolean,
   shapeRng: Rng = rng,
   id = 0,
 ): Asteroid {
-  const point = pickSpawnPoint(rng, field, awayFromShip ? ship : null);
-  const targetX = field.width * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
-  const targetY = field.height * rng.range(TARGET_BAND[0], TARGET_BAND[1]);
-  const angle = Math.atan2(targetY - point.y, targetX - point.x) + rng.range(-AIM_JITTER, AIM_JITTER);
-  const size = sizeForLevel(rng, level);
-  const speedMultiplier = practiceSettings(level).speedMultiplier;
-  const asteroid = createAsteroid(rng, point.x, point.y, size, angle, speedMultiplier, shapeRng, id);
-  headInward(asteroid, point.edge);
-  return asteroid;
+  const spec: EdgeSpawn = {
+    size: () => sizeForLevel(rng, level),
+    speedMultiplier: practiceSettings(level).speedMultiplier,
+    avoid: awayFromShip ? ship : null,
+  };
+  return spawnFromEdge(rng, field, spec, shapeRng, id);
 }

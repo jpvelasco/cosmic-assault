@@ -25,5 +25,14 @@ export function sfxFor(event: SimEvent): SfxName | null {
       return 'shipHit';
     case 'gameOver':
       return 'gameOver';
+    // Galaxy flow events get their sounds with the galaxy HUD.
+    case 'galaxyStart':
+    case 'showerWarning':
+    case 'showerStart':
+    case 'showerEnd':
+    case 'warpOut':
+    case 'galaxyCleared':
+    case 'combo':
+      return null;
   }
 }

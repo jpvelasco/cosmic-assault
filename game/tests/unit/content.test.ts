@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
+import { phaseAt } from '../../src/sim/galaxy/pacing';
+import { showerSeconds } from '../../src/sim/galaxy/showers';
 
 const KINDS: readonly RockKind[] = ['large', 'medium', 'small'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
@@ -57,6 +59,14 @@ describe('the galaxy table', () => {
       for (const e of g.events) expect(e.intensity, g.id).toBe(Math.min(3, g.dimension));
     }
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events).toEqual([]);
+  });
+
+  it('never starts a shower in a lull or the warp, and ends every one before the warp', () => {
+    for (const g of GALAXIES)
+      for (const e of g.events) {
+        expect(['lull', 'warp'], `${g.id} at ${String(e.at)}`).not.toContain(phaseAt(g, e.at));
+        expect(e.at + showerSeconds(e.intensity), g.id).toBeLessThanOrEqual(g.duration);
+      }
   });
 
   it('puts a second shower at about 60% of the duration', () => {
