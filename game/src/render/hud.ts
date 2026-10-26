@@ -5,7 +5,7 @@ import type { BossId, GalaxyDef } from '../content/types';
 import type { World } from '../sim/world';
 import { rgba } from './color';
 import { BOSS_MIN_W, bossBarWidth, bossNameX, drawBossHp, placeHpTrack } from './hudBoss';
-import { COMBO_PAD, drawShowerWarning, drawTimer, showerWarningAngle, TIMER_GAP, TIMER_H, timerFraction, type ChevronView } from './hudGalaxy';
+import { drawShowerWarning, drawTimer, showerWarningAngle, timerFraction, type ChevronView } from './hudGalaxy';
 import { across, bottom, box, BRIGHT_STROKE, PILL_PAD, tracePill, WHITE, type HudRect } from './hudShapes';
 import type { Palette } from './palette';
 import { SHIP_HULL } from './sprites';
@@ -74,6 +74,11 @@ const LIVES_H = 20;
 const LIFE_FIRST_X = 14;
 const LIFE_SPACING = 16;
 const LIFE_ICON_SCALE = 0.5;
+/** The timer bar's gap under the galaxy pill, and its height. */
+const TIMER_GAP = 4;
+const TIMER_H = 4;
+/** The combo pill's padding either side of its text. */
+const COMBO_PAD = 8;
 /** Room between the right pill and the score pill or the corner box it avoids. */
 const PILL_GAP = 8;
 /** The HUD grows with the viewport height, from 1 at this height up to MAX_SCALE. */

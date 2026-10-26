@@ -4,12 +4,6 @@ import { TAU } from '../sim/math';
 import { rgba } from './color';
 import { fillBar, WHITE, type HudRect } from './hudShapes';
 
-/** The timer bar's gap under the galaxy pill, and its height, in CSS px at scale 1. */
-export const TIMER_GAP = 4;
-export const TIMER_H = 4;
-/** The combo pill's padding either side of its text. */
-export const COMBO_PAD = 8;
-
 const TRACK = rgba(WHITE, 0.14);
 // Shower arrows: three chevrons pointing in from the edge, pulsing in turn.
 const CHEVRONS = 3;
