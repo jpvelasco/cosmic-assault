@@ -9,7 +9,7 @@ import { interpolatePose } from './interp';
 import type { Palette } from './palette';
 import { drawGlyph, expiryAlpha, PICKUP_COLORS, SHIELD_RING_RADIUS } from './pickupArt';
 import { createZoom, easeOut, type SceneLook, type Stamp } from './scene';
-import { addStops, type SpriteBaker } from './sprites';
+import { addStops, strokePath, type SpriteBaker } from './sprites';
 
 export interface PickupPass {
   /** A `shieldBroken` cracks the ring. */
@@ -53,9 +53,7 @@ function paintCapsule(ctx: CanvasRenderingContext2D, kind: PickupId, color: stri
   ctx.roundRect(-w, -h, w * 2, h * 2, h);
   ctx.fillStyle = addStops(ctx.createLinearGradient(0, -h, 0, h), [mix(color, WHITE, 0.55), color, mix(color, BLACK, 0.55)], [0, 0.45, 1]);
   ctx.fill();
-  ctx.strokeStyle = rgba(WHITE, 0.8);
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  strokePath(ctx, rgba(WHITE, 0.8), 1.2);
   ctx.beginPath();
   ctx.ellipse(0, -h * 0.5, w * 0.68, h * 0.26, 0, 0, TAU);
   ctx.fillStyle = rgba(WHITE, 0.42);
@@ -75,15 +73,11 @@ function paintShield(ctx: CanvasRenderingContext2D, color: string): void {
   ctx.fillRect(-r, -r, r * 2, r * 2);
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.9, 0, TAU);
-  ctx.strokeStyle = rgba(mix(color, WHITE, 0.45), 0.85);
-  ctx.lineWidth = 1.3;
-  ctx.stroke();
+  strokePath(ctx, rgba(mix(color, WHITE, 0.45), 0.85), 1.3);
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.76, Math.PI * 1.08, Math.PI * 1.38);
-  ctx.strokeStyle = rgba(WHITE, 0.8);
   ctx.lineCap = 'round';
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
+  strokePath(ctx, rgba(WHITE, 0.8), 1.6);
 }
 
 /** The ring broken: jagged pieces with gaps between them, each with a crack running in from its middle. */
@@ -98,18 +92,13 @@ function paintCrack(ctx: CanvasRenderingContext2D, color: string): void {
     const mid = (from + to) / 2;
     ctx.beginPath();
     ctx.arc(0, 0, r, from, to);
-    ctx.strokeStyle = rgba(color, 0.4);
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.strokeStyle = bright;
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    strokePath(ctx, rgba(color, 0.4), 4);
+    strokePath(ctx, bright, 1.6);
     ctx.beginPath();
     ctx.moveTo(Math.cos(mid) * r, Math.sin(mid) * r);
     ctx.lineTo(Math.cos(mid + 0.12) * r * 0.8, Math.sin(mid + 0.12) * r * 0.8);
     ctx.lineTo(Math.cos(mid - 0.05) * r * 0.66, Math.sin(mid - 0.05) * r * 0.66);
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    strokePath(ctx, bright, 1);
   }
 }
 

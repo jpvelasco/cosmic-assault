@@ -108,7 +108,7 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'splitter', x: 0, y: 0 })).toBeNull();
   });
 
-  it('plays one swarm buzz a frame however many drones arrive in it, and caps shots at three', () => {
+  it('caps the swarm buzz at one a frame and shots at three (the engine applies the caps)', () => {
     expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1 });
   });
 

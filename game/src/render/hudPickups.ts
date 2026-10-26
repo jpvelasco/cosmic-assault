@@ -4,6 +4,7 @@ import { TAU } from '../sim/math';
 import { rgba } from './color';
 import { WHITE, type HudRect } from './hudShapes';
 import { drawGlyph, expiryAlpha, PICKUP_COLORS } from './pickupArt';
+import { strokePath } from './sprites';
 
 /** A pickup pill is a round badge this many CSS px across at scale 1, centred on the lives row. */
 export const PICKUP_PILL_SIZE = 24;
@@ -39,21 +40,16 @@ export function drawPickupPill(ctx: CanvasRenderingContext2D, r: HudRect, kind: 
   ctx.arc(cx, cy, half, 0, TAU);
   ctx.fillStyle = TINTS[kind];
   ctx.fill();
-  ctx.strokeStyle = RIM;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.lineWidth = ARC_WIDTH * scale;
+  strokePath(ctx, RIM, 1);
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.arc(cx, cy, arc, 0, TAU);
-  ctx.strokeStyle = TRACK;
-  ctx.stroke();
+  strokePath(ctx, TRACK, ARC_WIDTH * scale);
   const share = pillFraction(kind, left);
   if (share > 0) {
     ctx.beginPath();
     ctx.arc(cx, cy, arc, -Math.PI / 2, -Math.PI / 2 + share * TAU);
-    ctx.strokeStyle = PICKUP_COLORS[kind];
-    ctx.stroke();
+    strokePath(ctx, PICKUP_COLORS[kind], ARC_WIDTH * scale);
   }
   drawGlyph(ctx, kind, cx, cy, half * GLYPH_SHARE * 2, WHITE);
   ctx.globalAlpha = 1;

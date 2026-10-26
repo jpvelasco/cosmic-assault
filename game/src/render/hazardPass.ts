@@ -6,12 +6,12 @@ import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
 import type { Palette } from './palette';
 import type { SceneLook, Stamp } from './scene';
-import type { Sprite, SpriteBaker } from './sprites';
+import { strokePath, type Sprite, type SpriteBaker } from './sprites';
 
 export interface HazardPass {
   /**
    * A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls, a glow, three arcs
-   * swirling round it and a dark lens at its heart. Expects `source-over`, which it leaves as it found it, with alpha 1.
+   * swirling round it (held still and breathing under reduced motion) and a dark lens at its heart. Expects `source-over`, which it leaves as it found it, with alpha 1.
    */
   drawWell(well: Readonly<WellState> | null, field: Field, look: SceneLook): void;
 }
@@ -32,6 +32,9 @@ const OUTLINE_PULSE_HZ = 2;
 /** Seconds the well takes to swirl up as it starts and to fade as it ends. */
 const FADE_IN_SECONDS = 0.5;
 const FADE_OUT_SECONDS = 0.8;
+/** Under reduced motion the arcs hold still and the swirl only breathes: this slowly, between this alpha and 1. */
+const STILL_PULSE_HZ = 0.7;
+const STILL_PULSE_LOW = 0.6;
 
 /** The swirling arcs: radius share, how far round each sweeps, width, turn rate (rad/s; inner ones faster) and phase. */
 const ARCS = [
@@ -53,9 +56,7 @@ function paintArc(ctx: CanvasRenderingContext2D, r: number, sweep: number, width
     const to = -(1 - t) * sweep * TAU;
     ctx.beginPath();
     ctx.arc(0, 0, r, from, to + 0.02);
-    ctx.strokeStyle = rgba(t > 0.85 ? head : color, t * t * 0.95);
-    ctx.lineWidth = width * (0.35 + 0.65 * t);
-    ctx.stroke();
+    strokePath(ctx, rgba(t > 0.85 ? head : color, t * t * 0.95), width * (0.35 + 0.65 * t));
   }
 }
 
@@ -70,9 +71,7 @@ function paintHorizon(ctx: CanvasRenderingContext2D, r: number, rim: string): vo
   ctx.fillRect(-inner * 2, -inner * 2, inner * 4, inner * 4);
   ctx.beginPath();
   ctx.arc(0, 0, inner * 1.05, 0, TAU);
-  ctx.strokeStyle = rgba(mix(rim, WHITE, 0.6), 0.9);
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
+  strokePath(ctx, rgba(mix(rim, WHITE, 0.6), 0.9), 1.6);
 }
 
 /** The warning: a thin ring with a fainter halo either side of it. */
@@ -84,9 +83,7 @@ function paintOutline(ctx: CanvasRenderingContext2D, r: number, color: string): 
   ] as const) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);
-    ctx.strokeStyle = rgba(color, alpha);
-    ctx.lineWidth = width;
-    ctx.stroke();
+    strokePath(ctx, rgba(color, alpha), width);
   }
 }
 
@@ -135,16 +132,16 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
     put(baker.custom(outlineKey, half, paintOutlineNow), well, size, 0, field);
   }
 
-  function drawActive(well: Readonly<WellState>, field: Field, { glow, time }: SceneLook): void {
+  function drawActive(well: Readonly<WellState>, field: Field, { glow, time, still }: SceneLook): void {
     const shown = wellPresence(well.remaining);
     const size = sizeOf(well.intensity);
+    // Reduced motion freezes the swirl; a slow breath in its opacity still shows the well is pulling.
+    const breath = still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * (0.5 + 0.5 * Math.sin(time * TAU * STILL_PULSE_HZ)) : 1;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = GLOW_ALPHA * glow * shown;
-    const halo = baker.glow(violet, GLOW_DIAMETER);
-    put(halo, well, size, 0, field);
-    ctx.globalAlpha = shown;
-    // Even under reduced motion the arcs turn: the swirl shows the well is pulling, and it is slow.
-    for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), well, size * (0.92 + 0.08 * shown), time * arc.rate + arc.phase, field);
+    ctx.globalAlpha = GLOW_ALPHA * glow * shown * breath;
+    put(baker.glow(violet, GLOW_DIAMETER), well, size, 0, field);
+    ctx.globalAlpha = shown * breath;
+    for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), well, size * (0.92 + 0.08 * shown), (still ? 0 : time * arc.rate) + arc.phase, field);
     ctx.globalCompositeOperation = 'source-over';
     if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), well, size * shown, 0, field);
   }

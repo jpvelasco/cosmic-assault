@@ -6,6 +6,7 @@ import { FoePool } from '../../src/sim/foes/foe';
 import { FOE_CAPACITY, FoeField, type FoeHooks } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
+import { wrapDelta } from '../../src/sim/wrap';
 import { ofType, stubArena, type StubArena } from '../helpers/bossArena';
 
 const FIELD_43: Field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
@@ -303,6 +304,21 @@ describe('drone', () => {
     expect(closest).toBeGreaterThanOrEqual(16);
   });
 
+  it('keeps apart from a drone just across the wrap edge, as from one beside it', () => {
+    // Two drones either side of the left and right edges, 4 units apart through the wrap; the ship straight below both.
+    const r = rig({ field: FIELD_43, shipX: 0, shipY: 700 });
+    r.foes.spawn('drone', 2, 1);
+    const [a, b] = r.foes.list;
+    if (a === undefined || b === undefined) throw new Error('two drones should have arrived');
+    Object.assign(a, { x: -WRAP_MARGIN + 2, y: 300, rotation: Math.PI / 2 });
+    Object.assign(b, { x: FIELD_43.width + WRAP_MARGIN - 2, y: 300, rotation: Math.PI / 2 });
+    r.arena.ship.x = a.x;
+    r.foes.step(DT);
+    // Each turns away from the other: a toward +x (into the field), b toward −x.
+    expect(Math.cos(a.rotation)).toBeGreaterThan(1e-6);
+    expect(Math.cos(b.rotation)).toBeLessThan(-1e-6);
+  });
+
   it('spends one shot on one drone even where two overlap', () => {
     const r = rig();
     r.foes.spawn('drone', 3, 1);
@@ -440,5 +456,18 @@ describe('FoeField', () => {
     r.foes.step(DT);
     expect([foe.px, foe.py, foe.protation]).toEqual([x, y, rotation]);
     expect(foe.x).not.toBe(x);
+  });
+});
+
+describe('wrapDelta', () => {
+  const period = 1000 + 2 * WRAP_MARGIN;
+
+  it('keeps an offset within half the wrap band as it is', () => {
+    for (const d of [0, 10, -10, period / 2, -period / 2]) expect(wrapDelta(d, 1000)).toBe(d);
+  });
+
+  it('takes the short way round across an edge', () => {
+    expect(wrapDelta(period - 4, 1000)).toBe(-4);
+    expect(wrapDelta(-(period - 4), 1000)).toBe(4);
   });
 });

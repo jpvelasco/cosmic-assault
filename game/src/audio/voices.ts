@@ -282,15 +282,14 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
 
 /** A sound that plays until it is stopped. */
 export interface Loop {
-  /** Fades it out at once and stops it; its nodes disconnect themselves when they end. */
+  /** Fades it out from now and stops it once silent; its nodes disconnect themselves when they end. */
   stop(): void;
 }
 
 const HUM_PEAK = 0.09;
 const HUM_FADE_IN = 0.8;
-/** The time constant of its fade out, and when its oscillators stop after it starts. */
-const HUM_RELEASE = 0.08;
-const HUM_STOP_AFTER = 0.5;
+/** Seconds its fade out takes; its oscillators stop a tail after that, once it is silent. */
+const HUM_RELEASE = 0.3;
 /** Hz: a low fundamental and its fifth, with a slow swell in the level. */
 const HUM_HZ = 49;
 const HUM_FIFTH_HZ = 73.5;
@@ -299,7 +298,8 @@ const HUM_SWELL_DEPTH = 0.4;
 
 /**
  * The gravity well's hum: a low sine and a detuned triangle a fifth above, swelling slowly, looped until `stop`. It
- * fades in from silence and out to it, so it never clicks.
+ * fades in from silence; `stop` ramps both its level and its swell to 0 from wherever they are, on the audio clock,
+ * and stops the oscillators only after that, so it ends without a step.
  */
 export function startWellHum({ ctx }: VoiceBed, out: AudioNode): Loop {
   const t = ctx.currentTime;
@@ -330,9 +330,14 @@ export function startWellHum({ ctx }: VoiceBed, out: AudioNode): Loop {
   return {
     stop() {
       const now = ctx.currentTime;
-      level.gain.cancelScheduledValues(now);
-      level.gain.setTargetAtTime(0, now, HUM_RELEASE);
-      for (const osc of voices) osc.stop(now + HUM_STOP_AFTER);
+      // Held at the value it has now (mid fade-in, too), then ramped down; the swell must reach 0 as well, since it
+      // adds to the level.
+      for (const param of [level.gain, swellDepth.gain]) {
+        param.cancelScheduledValues(now);
+        param.setValueAtTime(param.value, now);
+        param.linearRampToValueAtTime(0, now + HUM_RELEASE);
+      }
+      for (const osc of voices) osc.stop(now + HUM_RELEASE + TAIL);
     },
   };
 }

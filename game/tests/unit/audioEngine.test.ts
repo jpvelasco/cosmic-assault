@@ -514,6 +514,24 @@ describe('the gravity well hum', () => {
     expect(ctx().nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0)).toEqual([]);
   });
 
+  it('fades it out on the audio clock, level and swell both ramped to silence, before its voices stop', () => {
+    const e = playingEngine();
+    const c = ctx();
+    c.currentTime = 3;
+    const before = nodesOf('gain').length;
+    e.handle([START]);
+    const hum = looping();
+    const made = nodesOf('gain').slice(before);
+    c.currentTime = 9;
+    e.handle([END]);
+    const ramps = made.filter((g) => g.gain.linearRampToValueAtTime.mock.calls.some(([value, at]) => value === 0 && (at as number) > 9));
+    // The hum's level and the depth of its swell: nothing is left modulating the gain once they reach 0.
+    expect(ramps).toHaveLength(2);
+    const silentAt = Math.max(...ramps.flatMap((g) => g.gain.linearRampToValueAtTime.mock.calls.filter(([value]) => value === 0).map(([, at]) => at as number)));
+    for (const g of ramps) expect(g.gain.setValueAtTime).toHaveBeenCalledWith(g.gain.value, 9);
+    for (const osc of hum) expect(osc.stop.mock.calls[0]?.[0] as number).toBeGreaterThan(silentAt);
+  });
+
   it('starts it once, however many starts a frame brings', () => {
     const e = playingEngine();
     e.handle([START]);

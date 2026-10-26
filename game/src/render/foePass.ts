@@ -8,7 +8,7 @@ import { HIT_FLASH_SECONDS, type FoeFlash } from './hitFlash';
 import { interpolatePose } from './interp';
 import type { Palette } from './palette';
 import { createZoom, type SceneLook, type Stamp } from './scene';
-import { addStops, paintGlow, tracePath, type Point, type SpriteBaker } from './sprites';
+import { addStops, paintGlow, strokePath, tracePath, type Point, type SpriteBaker } from './sprites';
 
 export interface FoePass {
   /** The foes, `alpha` of the way from their previous pose: a glow under each, then its body. */
@@ -51,12 +51,6 @@ const DRONE_ENGINE: Point = { x: -8, y: 0 };
 /** The sprite cache keys of the foes in `palette`, made once so drawing builds no strings. A splitter has a cracked look at 1 HP. */
 export function foeKeys(palette: Palette): Readonly<Record<FoeKind | 'crackedSplitter', string>> {
   return { splitter: `foe|${palette.id}|splitter`, crackedSplitter: `foe|${palette.id}|splitter|cracked`, drone: `foe|${palette.id}|drone` };
-}
-
-function strokePath(ctx: CanvasRenderingContext2D, color: string, width: number): void {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.stroke();
 }
 
 function traceSeams(ctx: CanvasRenderingContext2D, r: number): void {

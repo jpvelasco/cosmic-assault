@@ -191,6 +191,13 @@ export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[
   ctx.closePath();
 }
 
+/** Strokes the current path in `color` at `width`. */
+export function strokePath(ctx: CanvasRenderingContext2D, color: string, width: number): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
 /** A soft radial glow of `color` around (x, y), for bakes; `alpha` scales every stop. */
 export function paintGlow(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, radius: number, alpha = 1): void {
   const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);

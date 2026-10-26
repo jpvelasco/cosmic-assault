@@ -3,7 +3,7 @@ import { edgeLength, edgePoint, oppositeEdge, EDGE_COUNT, type Edge } from '../a
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import { TAU } from '../math';
-import { wrapPosition } from '../wrap';
+import { wrapDelta, wrapPosition } from '../wrap';
 import type { Foe, FoeBehaviour } from './foe';
 import type { Ship } from '../ship';
 import type { Rng } from '../rng';
@@ -21,15 +21,16 @@ function turnBetween(from: number, to: number): number {
 
 /**
  * The push away from the drones crowding `foe`, in seek units: each neighbour within `DRONE_SEPARATION.radius` adds a
- * unit vector away from it, scaled by `DRONE_SEPARATION.weight` and by how deep inside that radius it is. Written
- * into `out`, so a step allocates nothing.
+ * unit vector away from it, scaled by `DRONE_SEPARATION.weight` and by how deep inside that radius it is. Distances
+ * are taken across the wrap, so a drone just over an edge counts as near. Written into `out`, so a step allocates
+ * nothing.
  */
-function separation(foe: Readonly<Foe>, foes: readonly Readonly<Foe>[], out: { x: number; y: number }): void {
+function separation(foe: Readonly<Foe>, foes: readonly Readonly<Foe>[], field: Field, out: { x: number; y: number }): void {
   out.x = out.y = 0;
   for (const other of foes) {
     if (other === foe || other.kind !== 'drone' || other.hp <= 0) continue;
-    const dx = foe.x - other.x;
-    const dy = foe.y - other.y;
+    const dx = wrapDelta(foe.x - other.x, field.width);
+    const dy = wrapDelta(foe.y - other.y, field.height);
     const gap = Math.hypot(dx, dy);
     // Two drones on one point have no "away"; the turn cap would spread them a step later anyway.
     if (gap === 0 || gap >= DRONE_SEPARATION.radius) continue;
@@ -90,7 +91,7 @@ export const DRONE: FoeBehaviour = {
     const dy = arena.ship.y - foe.y;
     // The seek is the unit vector to the ship; scaling the push by the distance instead keeps a lone drone's heading
     // exactly atan2(dy, dx).
-    separation(foe, list, away);
+    separation(foe, list, field, away);
     const distance = Math.hypot(dx, dy);
     const wanted = Math.atan2(dy + away.y * distance, dx + away.x * distance);
     const limit = DRONE_TURN_RATE * dt;

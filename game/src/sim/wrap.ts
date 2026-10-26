@@ -19,3 +19,13 @@ export function wrapPosition(p: { x: number; y: number }, field: Field, margin: 
     p.y = -margin;
   }
 }
+
+/**
+ * The shortest signed offset equal to `delta` across a wrap band `size` wide plus `margin` each side, as `wrapPosition`
+ * wraps it: two points either side of an edge are close, not a field apart.
+ */
+export function wrapDelta(delta: number, size: number, margin: number = WRAP_MARGIN): number {
+  const period = size + 2 * margin;
+  if (delta > period / 2) return delta - period;
+  return delta < -period / 2 ? delta + period : delta;
+}

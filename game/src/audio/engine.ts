@@ -42,6 +42,8 @@ export interface AudioEngine {
 }
 
 const MUSIC_LEVELS: Readonly<Record<MusicLevel, number>> = { play: 1, paused: 0.3, menu: 0.45 };
+/** The sounds with a per-frame cap, listed once so a new frame resets them without allocating. */
+const CAPPED_SOUNDS = Object.keys(PER_FRAME_CAPS) as readonly SfxName[];
 const MUSIC_LOWPASS_HZ = 2600;
 /** Seconds of settling for gain changes (mute, music level): fast enough to feel instant, slow enough not to click. */
 const MUTE_SMOOTHING = 0.015;
@@ -304,7 +306,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       return muted;
     },
     beginFrame() {
-      for (const name of Object.keys(startedThisFrame) as SfxName[]) startedThisFrame[name] = 0;
+      for (const name of CAPPED_SOUNDS) startedThisFrame[name] = 0;
     },
     handle(events) {
       const bossKill = isBossKill(events);

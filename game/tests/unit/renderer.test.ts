@@ -457,6 +457,26 @@ describe('createRenderer', () => {
         expect(drawsOf(arcs[0])[0]?.a).not.toBeCloseTo(before ?? 0, 3);
       });
 
+      it('holds its arcs still under reduced motion, breathing only in opacity, gently', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        renderer.effects.reducedMotion = true;
+        stub.well = well('active');
+        const frames = [0, 0.35, 0.7, 1.05, 1.4].map((elapsed) => {
+          stub.elapsed = elapsed;
+          drawFrame(world, 1);
+          return ARCS.map((name) => drawsOf(sprite(name))[0]);
+        });
+        for (const [i] of ARCS.entries()) {
+          const angles = new Set(frames.map((arcs) => arcs[i]?.a));
+          expect(angles.size, ARCS[i]).toBe(1);
+          const alphas = frames.map((arcs) => arcs[i]?.alpha ?? Number.NaN);
+          expect(new Set(alphas).size).toBeGreaterThan(1);
+          expect(Math.min(...alphas)).toBeGreaterThanOrEqual(0.6 - 1e-9);
+          expect(Math.max(...alphas)).toBeLessThanOrEqual(1);
+        }
+      });
+
       it('swirls up as it starts and fades out as it ends', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
