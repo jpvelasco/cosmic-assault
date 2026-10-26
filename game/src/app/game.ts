@@ -14,13 +14,11 @@ import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
-import { galaxyById } from '../content/galaxies';
 import type { SaveData } from '../meta/save';
-import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
-import { World } from '../sim/world';
+import type { World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
@@ -28,13 +26,12 @@ import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
-import { END_SCREENS, localDate, MENU_SCREENS, type FlowState, type Screen } from './flow';
-import { createFlowController } from './flowController';
+import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { coversFor, createInputRouter, type Cover } from './inputRouting';
-import { createSaveStore } from './saveStore';
-import { clockSeed, isDebugRun, runOverrides } from './seed';
+import { createRunController } from './runController';
+import { runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
 import { createSettingsController } from './settingsController';
 import { createViewSync } from './viewSync';
@@ -122,19 +119,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const installPrompt = createInstallPrompt(window, log, syncView);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
-  // A debug run keeps its progress in memory: the real save is never written.
-  const store = createSaveStore({ storage, writes: !isDebugRun(overrides), log });
-  store.importClassicOnce();
-  const flow = createFlowController({
-    store,
+  const run = createRunController({
+    storage,
     overrides,
-    today: () => localDate(new Date()),
-    startRun,
+    log,
+    field: () => {
+      applyPendingResize();
+      return field;
+    },
     showScreen: setMode,
+    onRunStarted,
   });
 
   let mode: Screen = 'title';
-  let world: World | null = null;
   let field: Field | null = null;
   let resizePending = true;
   /** Outside play the frame only changes on a screen change or resize, so it is redrawn only then. */
@@ -195,9 +192,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     touch,
     renderer,
     read: () => ({
-      flow: flow.state,
-      save: store.save,
-      score: world?.score ?? 0,
+      flow: run.flow,
+      save: run.save,
+      score: run.world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       installOffer: installPrompt.offer,
@@ -212,7 +209,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     keyboard,
     startKeys,
     run: {
-      flow: flow.command,
+      flow: run.command,
       pause: pauseByPlayer,
       resume,
       toggleMute: prefs.toggleMute,
@@ -249,7 +246,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const now = performance.now();
     log.add('mode', next, now);
     if (END_SCREENS.includes(next)) runEndedAt = now;
-    if (MENU_SCREENS.includes(next)) dropRun();
+    if (MENU_SCREENS.includes(next)) hitStop.clear();
     audio.setMusicLevel(musicFor(next));
     redrawPending = true;
     view.armIdleCursor();
@@ -264,26 +261,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     field = fieldForViewport(clientWidth, clientHeight);
     renderer.resize(clientWidth, clientHeight, field);
     view.syncHudBounds();
-    world?.resize(field);
+    run.world?.resize(field);
     redrawPending = true;
   }
 
-  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives. */
-  function startRun({ galaxy, mode: playMode, rankRun }: FlowState): void {
-    applyPendingResize();
-    if (field === null) {
-      throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
-    }
-    if (galaxy === null || playMode === null) {
-      throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow (mode select or ?galaxy=)');
-    }
-    world = new World({
-      seed: overrides.seed ?? clockSeed(),
-      field,
-      rules: { kind: 'galaxy', galaxy: galaxyById(galaxy), mode: playMode },
-      // Free play always starts with the default lives; Rank carries its own.
-      startLives: rankRun?.lives ?? PLAYER.startLives,
-    });
+  /** A new World is in place: fresh input latches, loop, renderer and frame stats for it. */
+  function onRunStarted(): void {
     startKeys.latch(keyboard.held);
     padFire.latch(previousPad);
     loop.reset();
@@ -294,18 +277,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     audio.play('uiClick');
   }
 
-  /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */
-  function dropRun(): void {
-    world?.endRun();
-    world = null;
-    hitStop.clear();
-  }
-
   /** Pauses a run in play; returns whether it did. */
   function pause(): boolean {
     if (mode !== 'playing') return false;
     hitStop.clear();
-    flow.dispatch({ kind: 'pause' });
+    run.pause();
     return true;
   }
 
@@ -319,13 +295,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     audio.play('pause');
     loop.reset();
     padFire.latch(previousPad);
-    flow.dispatch({ kind: 'resume' });
+    run.resume();
   }
 
   function quit(): void {
-    if (world === null || mode !== 'paused') return;
+    if (mode !== 'paused') return;
     audio.play('uiClick');
-    flow.quit(world);
+    run.quit();
   }
 
   /** Pads grant no user activation, so the first A while sound waits for one says how to turn it on. */
@@ -341,14 +317,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   /** Steps the run; a clear or game over moves the flow to its end card, after which the steps do nothing. */
-  function stepWorld(run: World, controls: Controls, frameSeconds: number): void {
+  function stepWorld(world: World, controls: Controls, frameSeconds: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
-      const events = run.step(dt, controls);
+      const events = world.step(dt, controls);
       hitStop.trigger(events);
-      renderer.handle(events, run);
+      renderer.handle(events, world);
       audio.handle(events);
-      flow.handle(events, run);
+      run.handle(events);
     });
   }
 
@@ -389,6 +365,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
     // Still screens cost next to nothing, so their frame interval is the display's own rate.
     if (mode !== 'playing' && !settling) scaler.sampleIdle(frameMs);
+    const { world } = run;
     if (world === null) return;
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
     const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
@@ -439,8 +416,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
     // Another tab's clear shows on this tab's map and galaxy select at once.
-    store.onExternalChange(syncView),
-    store.onWriteFailure(() => {
+    run.onExternalChange(syncView),
+    run.onWriteFailure(() => {
       toast.show(SAVE_FAILED_TOAST);
     }),
     fullscreen.onChange(onFullscreenChange),
@@ -455,13 +432,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       return mode;
     },
     get flow() {
-      return flow.state;
+      return run.flow;
     },
     get save() {
-      return store.save;
+      return run.save;
     },
     get world() {
-      return world;
+      return run.world;
     },
     get hudRects() {
       return renderer.hudRects;

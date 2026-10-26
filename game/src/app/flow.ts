@@ -216,9 +216,3 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
 function endRank(save: SaveData, entry: Parameters<typeof addEntry>[1]): SaveData {
   return setRankRun({ ...save, rankBoard: addEntry(save.rankBoard, entry) }, null);
 }
-
-/** The local calendar date as `YYYY-MM-DD`, for Rank start dates and board entries. */
-export function localDate(date: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}

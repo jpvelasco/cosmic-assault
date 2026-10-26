@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { freeNext, INITIAL_FLOW, localDate, saveChange, transition, type FlowAction, type FlowState } from '../../src/app/flow';
+import { localDate } from '../../src/app/date';
+import { freeNext, INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState } from '../../src/app/flow';
 import type { GalaxyId } from '../../src/content/types';
 import { startRank, type RankRun } from '../../src/meta/rankRun';
 import { defaultSave, type SaveData } from '../../src/meta/save';
