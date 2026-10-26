@@ -1,3 +1,5 @@
+import { lullStart } from '../sim/galaxy/pacing';
+import { showerSeconds } from './curves';
 import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, RockKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
@@ -24,11 +26,13 @@ const SHOWER_SHARES: Readonly<Record<1 | 2, readonly number[]>> = { 1: [0.45], 2
 
 const survivalSeconds = (dimension: Dimension): number => 90 + 15 * (dimension - 1);
 
+/** Showers fall at their share of the duration, but late enough ones move earlier so they end by the lull. */
 function showers(dimension: Dimension, index: GalaxyIndex, duration: number): GalaxyEvent[] {
   if (dimension === 1 && index <= 3) return [];
   if (dimension === 1 && index === 4) return [{ at: 50, type: 'meteorShower', intensity: 1 }];
   const intensity = Math.min(3, dimension) as GalaxyEvent['intensity'];
-  return SHOWER_SHARES[index <= 3 ? 1 : 2].map((share) => ({ at: Math.round(duration * share), type: 'meteorShower', intensity }));
+  const latest = lullStart({ duration }) - showerSeconds(intensity);
+  return SHOWER_SHARES[index <= 3 ? 1 : 2].map((share) => ({ at: Math.min(latest, Math.round(duration * share)), type: 'meteorShower', intensity }));
 }
 
 function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {

@@ -1,13 +1,13 @@
 import { rockSpeedMultiplier } from '../../content/curves';
 import { tierOf } from '../../content/galaxies';
 import type { GalaxyDef, RockKind } from '../../content/types';
-import { spawnFromEdge, type AsteroidSize, type EdgeSpawn } from '../asteroid';
+import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
 import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import type { Arena, Spawner } from '../rules';
 import { clearReport, Combo, type GalaxyMode } from '../scoring';
-import { GalaxyDirector, ROCK_COST } from './director';
+import { GalaxyDirector, SIZE_COST } from './director';
 import { phaseAt, type Phase } from './pacing';
 import { Showers, type ShowerState } from './showers';
 
@@ -17,8 +17,6 @@ const MERCY = 0.4;
 const KIND_SIZE: Readonly<Record<RockKind, AsteroidSize>> = { large: 0, medium: 1, small: 2 };
 /** Meteors are tiny: fast, and they do not split. */
 const SHOWER_SIZE: AsteroidSize = 3;
-/** Budget cost by asteroid size; a tiny fragment weighs half a small rock. */
-const SIZE_COST: Readonly<Record<AsteroidSize, number>> = { 0: ROCK_COST.large, 1: ROCK_COST.medium, 2: ROCK_COST.small, 3: ROCK_COST.small / 2 };
 
 const areaOf = (field: Field): number => field.width * field.height;
 
@@ -35,6 +33,8 @@ export class GalaxyRun implements Spawner {
   private started = false;
   private warpEndsAt: number | null = null;
   private mercyUntil = 0;
+  /** Refilled every step, so the director's input costs no allocation. */
+  private readonly context = { elapsed: 0, onFieldCost: 0, mercy: 1 };
 
   constructor(
     readonly galaxy: GalaxyDef,
@@ -73,22 +73,24 @@ export class GalaxyRun implements Spawner {
     this.director.fieldArea = areaOf(field);
   }
 
-  step(dt: number): void {
-    const elapsed = this.arena.elapsed();
+  /** Announces the galaxy on its first step, and warps out on the step its timer runs out, before anything collides. */
+  beginStep(): void {
     if (!this.started) {
       this.started = true;
       this.arena.events.push({ type: 'galaxyStart', id: this.galaxy.id });
     }
+    const elapsed = this.arena.elapsed();
+    if (this.warpEndsAt === null && phaseAt(this.galaxy, elapsed) === 'warp') this.warpOut(elapsed);
+  }
+
+  step(dt: number): void {
+    const elapsed = this.arena.elapsed();
     if (this.warpEndsAt !== null) {
       if (elapsed + TIME_EPSILON >= this.warpEndsAt) this.finish();
       return;
     }
     this.combo.expire(elapsed);
     this.announceCombo();
-    if (phaseAt(this.galaxy, elapsed) === 'warp') {
-      this.warpOut(elapsed);
-      return;
-    }
     this.spawn(dt, elapsed);
   }
 
@@ -106,27 +108,54 @@ export class GalaxyRun implements Spawner {
 
   private spawn(dt: number, elapsed: number): void {
     const field = this.arena.field();
-    const meteors = this.showers.step(elapsed, dt, areaOf(field), this.arena.events);
+    const meteors = this.showers.step(elapsed, dt, areaOf(field), this.sweepField(), this.arena.events);
     const edge = this.showers.state?.edge;
-    if (edge !== undefined) {
-      for (let i = 0; i < meteors; i++) this.addRock({ size: () => SHOWER_SIZE, speedMultiplier: this.rockSpeed, edge });
-    }
-    const mercy = elapsed < this.mercyUntil ? MERCY : 1;
-    const order = this.director.step(dt, { elapsed, onFieldCost: this.fieldCost(), mercy });
-    if (order !== null) {
-      this.addRock({ size: () => KIND_SIZE[order.kind], speedMultiplier: order.speedMultiplier, avoid: this.arena.ship });
+    if (edge !== undefined) this.dropMeteors(meteors, edge, field);
+    this.context.elapsed = elapsed;
+    this.context.mercy = elapsed < this.mercyUntil ? MERCY : 1;
+    const order = this.director.step(dt, this.context);
+    if (order !== null) this.addRock(aimFromEdge(this.rng, field, null, this.arena.ship), KIND_SIZE[order.kind], order.speedMultiplier);
+  }
+
+  /** Meteors enter from the shower's edge and pass through: they never wrap. They count toward the field cost. */
+  private dropMeteors(count: number, edge: Edge, field: Field): void {
+    for (let i = 0; i < count; i++) {
+      this.addRock(aimFromEdge(this.rng, field, edge, null), SHOWER_SIZE, this.rockSpeed).transient = true;
+      this.context.onFieldCost += SIZE_COST[SHOWER_SIZE];
     }
   }
 
-  private addRock(spec: EdgeSpawn): void {
+  private addRock(aim: EdgeAim, size: AsteroidSize, speedMultiplier: number): Asteroid {
     const { arena } = this;
-    arena.asteroids.push(spawnFromEdge(this.rng, arena.field(), spec, arena.shapeRng, arena.nextId()));
+    const rock = launchFromEdge(this.rng, aim, size, speedMultiplier, arena.shapeRng, arena.nextId());
+    arena.asteroids.push(rock);
+    return rock;
   }
 
-  private fieldCost(): number {
+  /**
+   * Removes the meteors that have passed out of the field, totting up the field's cost into the
+   * director's context as it goes. Returns how many meteors are still on the field.
+   */
+  private sweepField(): number {
+    const { asteroids, events } = this.arena;
+    const field = this.arena.field();
+    let kept = 0;
     let cost = 0;
-    for (const a of this.arena.asteroids) cost += SIZE_COST[a.size];
-    return cost;
+    let meteors = 0;
+    for (const a of asteroids) {
+      if (a.transient === true) {
+        if (hasLeftField(a, field)) {
+          events.push({ type: 'asteroidLeft', id: a.id });
+          continue;
+        }
+        meteors++;
+      }
+      cost += SIZE_COST[a.size];
+      asteroids[kept++] = a;
+    }
+    asteroids.length = kept;
+    this.context.onFieldCost = cost;
+    return meteors;
   }
 
   /** Pushes a `combo` event when the multiplier has changed since the last one. */
@@ -143,6 +172,7 @@ export class GalaxyRun implements Spawner {
     events.push({ type: 'warpOut' });
     for (const a of asteroids) events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points: 0 });
     asteroids.length = 0;
+    this.showers.stop();
     this.warpEndsAt = elapsed + WARP_SECONDS;
     this.arena.setStatus('warping');
   }

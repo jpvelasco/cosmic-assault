@@ -26,6 +26,7 @@ export function sfxFor(event: SimEvent): SfxName | null {
     case 'gameOver':
       return 'gameOver';
     // Galaxy flow events get their sounds with the galaxy HUD.
+    case 'asteroidLeft':
     case 'galaxyStart':
     case 'showerWarning':
     case 'showerStart':

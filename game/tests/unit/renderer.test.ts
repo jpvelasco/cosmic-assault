@@ -170,6 +170,13 @@ describe('createRenderer', () => {
     expect(forget.mock.calls).toEqual([[7], [9]]);
   });
 
+  it('forgets the sprite of a meteor that left the field', () => {
+    const forget = vi.spyOn(baker, 'forget');
+    const { world } = stubWorld();
+    renderer.handle([{ type: 'asteroidLeft', id: 4 }, { type: 'showerEnd' }], world);
+    expect(forget.mock.calls).toEqual([[4]]);
+  });
+
   it('interpolates while playing and draws the latest pose at game over', () => {
     renderer.resize(1280, 720, FIELD);
     const { stub, world } = stubWorld();

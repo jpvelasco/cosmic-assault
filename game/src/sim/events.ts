@@ -6,6 +6,8 @@ import type { Stars } from './scoring';
 export type SimEvent =
   | { type: 'shot'; x: number; y: number }
   | { type: 'asteroidDestroyed'; id: number; x: number; y: number; size: AsteroidSize; points: number }
+  /** A meteor passed out of the field and was removed: no score, no burst. */
+  | { type: 'asteroidLeft'; id: number }
   | { type: 'shipHit'; x: number; y: number; livesLeft: number }
   | { type: 'gameOver'; score: number }
   | { type: 'galaxyStart'; id: GalaxyId }

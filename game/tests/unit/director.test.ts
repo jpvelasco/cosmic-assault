@@ -198,10 +198,12 @@ describe('GalaxyDirector construction', () => {
     ['dt', { dt: Number.NaN }],
     ['elapsed', { elapsed: -1 }],
     ['elapsed', { elapsed: Infinity }],
+    ['onFieldCost', { onFieldCost: -1 }],
+    ['onFieldCost', { onFieldCost: Number.NaN }],
     ['mercy', { mercy: 0 }],
     ['mercy', { mercy: 1.5 }],
     ['mercy', { mercy: Number.NaN }],
-  ] as const)('rejects a bad %s in step() with a RangeError that says what to pass (%o)', (name, bad: { dt?: number; elapsed?: number; mercy?: number }) => {
+  ] as const)('rejects a bad %s in step() with a RangeError that says what to pass (%o)', (name, bad: { dt?: number; elapsed?: number; onFieldCost?: number; mercy?: number }) => {
     const director = new GalaxyDirector(g53, createRng(1), AREA);
     const { dt = DT, ...ctx } = { elapsed: 40, onFieldCost: 0, mercy: 1, ...bad };
     expect(() => director.step(dt, ctx)).toThrow(RangeError);

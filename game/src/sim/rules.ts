@@ -2,6 +2,7 @@ import type { GalaxyDef } from '../content/types';
 import { practiceSettings, spawnPracticeAsteroid, type Asteroid, type PracticeSettings } from './asteroid';
 import type { SimEvent } from './events';
 import type { Field } from './field';
+import { TIME_EPSILON } from './math';
 import type { Rng } from './rng';
 import type { GalaxyMode } from './scoring';
 import type { Ship } from './ship';
@@ -9,8 +10,6 @@ import type { Ship } from './ship';
 export const MIN_PRACTICE_LEVEL = 1;
 export const MAX_PRACTICE_LEVEL = 7;
 const START_ASTEROIDS = 3;
-/** Absorbs float residue from summing dt steps so the timer fires on the step its interval ends. */
-const SPAWN_EPSILON = 1e-9;
 
 /** The ruleset a World runs: practice at a level, or a galaxy in Rank or Free play. */
 export type RulesOption = { readonly kind: 'practice'; readonly level: number } | { readonly kind: 'galaxy'; readonly galaxy: GalaxyDef; readonly mode: GalaxyMode };
@@ -49,6 +48,8 @@ export interface Arena {
 export interface Spawner {
   /** Places the opening rocks of a run whose scenario places none. */
   open?(): void;
+  /** Runs at the start of every step, once the clock has advanced and before anything moves or collides. */
+  beginStep?(): void;
   /** Runs once a step, after collisions, while the ship still has lives. */
   step(dt: number): void;
   /** The points a kill worth `base` scores. */
@@ -81,7 +82,7 @@ export class PracticeSpawner implements Spawner {
   /** Live `_updateAsteroidSpawning`: a timed spawn, then one top-up below the minimum. */
   step(dt: number): void {
     this.spawnTimer -= dt;
-    if (this.spawnTimer <= SPAWN_EPSILON) {
+    if (this.spawnTimer <= TIME_EPSILON) {
       this.spawnAsteroid(false);
       this.spawnTimer = this.practice.spawnInterval;
     }

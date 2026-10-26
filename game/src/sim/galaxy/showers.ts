@@ -1,3 +1,4 @@
+import { showerSeconds } from '../../content/curves';
 import type { GalaxyEvent } from '../../content/types';
 import { EDGE_COUNT, type Edge } from '../asteroid';
 import type { SimEvent } from '../events';
@@ -12,14 +13,14 @@ export const EDGE_BEARINGS: readonly [number, number, number, number] = [-Math.P
 
 type Intensity = GalaxyEvent['intensity'];
 
-/** How long a shower of `intensity` lasts, after its warning. */
-export function showerSeconds(intensity: Intensity): number {
-  return Math.min(12, 6 + 3 * intensity);
-}
-
 /** The most rocks per second a shower drops: 2 + intensity at the reference area, scaled by field area. */
 export function showerRate(intensity: Intensity, fieldArea: number): number {
   return ((2 + intensity) * fieldArea) / REFERENCE_AREA;
+}
+
+/** The most shower rocks on the field at once: 3 + 2 x intensity at the reference area, scaled by field area. */
+export function showerCap(intensity: Intensity, fieldArea: number): number {
+  return ((3 + 2 * intensity) * fieldArea) / REFERENCE_AREA;
 }
 
 export interface ShowerState {
@@ -40,7 +41,10 @@ interface Current {
   event: GalaxyEvent;
 }
 
-/** A galaxy's meteor showers, in order: a 3 s warning from one edge, then a capped stream of rocks from it. */
+/**
+ * A galaxy's meteor showers, in order: a 3 s warning from one edge, then a stream of rocks from it,
+ * capped in rate and in how many are on the field at once. Rocks held back by the cap are dropped, not queued.
+ */
 export class Showers {
   private nextIndex = 0;
   private current: Current | null = null;
@@ -59,9 +63,10 @@ export class Showers {
 
   /**
    * Advances to `elapsed` seconds into the galaxy, pushing warnings, starts and ends into `out`.
+   * `onField` is how many of the shower's rocks are still on the field.
    * Returns how many rocks to drop from `state.edge` this step.
    */
-  step(elapsed: number, dt: number, fieldArea: number, out: SimEvent[]): number {
+  step(elapsed: number, dt: number, fieldArea: number, onField: number, out: SimEvent[]): number {
     assertFieldArea(fieldArea);
     const shower = this.current ?? this.warn(elapsed, out);
     if (shower === null) return 0;
@@ -82,9 +87,15 @@ export class Showers {
       return 0;
     }
     this.owed += showerRate(intensity, fieldArea) * dt;
-    const rocks = Math.floor(this.owed + TIME_EPSILON);
-    this.owed -= rocks;
-    return rocks;
+    const due = Math.floor(this.owed + TIME_EPSILON);
+    this.owed -= due;
+    return Math.max(0, Math.min(due, Math.floor(showerCap(intensity, fieldArea) + TIME_EPSILON) - onField));
+  }
+
+  /** Ends any warning or shower at once, without an event: the galaxy is over. */
+  stop(): void {
+    this.current = null;
+    this.nextIndex = this.events.length;
   }
 
   /** Telegraphs the next shower once its warning time comes, rolling the edge it will come from. */

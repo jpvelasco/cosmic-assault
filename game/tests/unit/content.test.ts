@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
-import { phaseAt } from '../../src/sim/galaxy/pacing';
-import { showerSeconds } from '../../src/sim/galaxy/showers';
+import { showerSeconds } from '../../src/content/curves';
+import { lullStart, phaseAt } from '../../src/sim/galaxy/pacing';
+import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
 
 const KINDS: readonly RockKind[] = ['large', 'medium', 'small'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
@@ -61,16 +62,34 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events).toEqual([]);
   });
 
-  it('never starts a shower in a lull or the warp, and ends every one before the warp', () => {
+  it('keeps the lull clear: every shower ends by the time the lull starts (ending exactly then is allowed)', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
         expect(['lull', 'warp'], `${g.id} at ${String(e.at)}`).not.toContain(phaseAt(g, e.at));
-        expect(e.at + showerSeconds(e.intensity), g.id).toBeLessThanOrEqual(g.duration);
+        expect(e.at + showerSeconds(e.intensity), `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(lullStart(g));
       }
   });
 
-  it('puts a second shower at about 60% of the duration', () => {
-    for (const g of survival.filter((x) => x.events.length === 2)) expect(g.events[1]?.at).toBeCloseTo(g.duration * 0.6, 0);
+  it('gives every shower its full warning: the next one is not telegraphed until the last has ended', () => {
+    for (const g of GALAXIES)
+      for (let i = 1; i < g.events.length; i++) {
+        const [prev, next] = [g.events[i - 1], g.events[i]];
+        if (prev === undefined || next === undefined) continue;
+        expect(next.at - SHOWER_WARNING_SECONDS, g.id).toBeGreaterThanOrEqual(prev.at + showerSeconds(prev.intensity));
+      }
+  });
+
+  it('puts a second shower at about 60% of the duration, or earlier, ending just as the lull starts', () => {
+    for (const g of survival.filter((x) => x.events.length === 2)) {
+      const second = g.events[1];
+      if (second === undefined) continue;
+      const end = second.at + showerSeconds(second.intensity);
+      if (Math.abs(second.at - g.duration * 0.6) > 0.5) {
+        expect(second.at, g.id).toBeLessThan(g.duration * 0.6);
+        expect(end, g.id).toBe(lullStart(g));
+      }
+    }
+    expect(galaxyById('1-5').events.map((e) => e.at)).toEqual([27, 51]);
   });
 
   it('has no pickups yet', () => {

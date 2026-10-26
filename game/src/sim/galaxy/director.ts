@@ -1,11 +1,15 @@
 import { kindProbability, rockSpeedMultiplier, sawtooth, spawnInterval, threatBudget } from '../../content/curves';
 import { tierOf } from '../../content/galaxies';
 import type { GalaxyDef, RockKind } from '../../content/types';
+import type { AsteroidSize } from '../asteroid';
 import type { Rng } from '../rng';
 import { phaseAt, phasePressure, pressureScale } from './pacing';
 
 /** What a rock weighs on the budget while it is on the field; tiny fragments weigh 0.5. */
 export const ROCK_COST: Readonly<Record<RockKind, number>> = { large: 4, medium: 2, small: 1 };
+
+/** The same weights by asteroid size: a tiny fragment weighs half a small rock, so a split never changes the cost. */
+export const SIZE_COST: Readonly<Record<AsteroidSize, number>> = { 0: ROCK_COST.large, 1: ROCK_COST.medium, 2: ROCK_COST.small, 3: ROCK_COST.small / 2 };
 
 /** The field the budget and shower curves are written for. */
 export const REFERENCE_AREA = 1280 * 720;
@@ -43,8 +47,11 @@ export function assertFieldArea(fieldArea: number): void {
   assertPositive('fieldArea', fieldArea, 'pass the playfield width times height');
 }
 
-function assertContext(dt: number, { elapsed, mercy }: DirectorContext): void {
+function assertContext(dt: number, { elapsed, onFieldCost, mercy }: DirectorContext): void {
   assertPositive('dt', dt, 'step the director with the fixed simulation step');
+  if (!(onFieldCost >= 0 && Number.isFinite(onFieldCost))) {
+    throw new RangeError(`onFieldCost must be a finite number from 0, got ${String(onFieldCost)}: sum ROCK_COST over the rocks on the field`);
+  }
   if (!(elapsed >= 0 && Number.isFinite(elapsed))) {
     throw new RangeError(`elapsed must be a finite number of seconds from 0, got ${String(elapsed)}: pass the seconds since the galaxy began`);
   }

@@ -1,4 +1,4 @@
-import type { GalaxyDef, KindRamp } from './types';
+import type { GalaxyDef, GalaxyEvent, KindRamp } from './types';
 
 function finite(value: number, name: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be a finite number, got ${String(value)}: pass a finite number (a tier comes from tierOf())`);
@@ -29,6 +29,11 @@ export function kindProbability(ramp: KindRamp, t: number): number {
     if (!Number.isFinite(value)) throw new RangeError(`ramp.${name} must be a finite number, got ${String(value)}: set it to a finite number (from and step 0 or more, base and max from 0 to 1)`);
   }
   return clamp(base + Math.max(0, finite(t, 'tier') - from) * step, 0, max);
+}
+
+/** Seconds a meteor shower of `intensity` falls for, after its warning. */
+export function showerSeconds(intensity: GalaxyEvent['intensity']): number {
+  return Math.min(12, 6 + 3 * intensity);
 }
 
 /** Eases the first galaxy of each Dimension after the first, so a new Dimension starts gently. */

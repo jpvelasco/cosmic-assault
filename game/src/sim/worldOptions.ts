@@ -22,18 +22,21 @@ export interface WorldOptions {
   readonly field: Field;
   /** Defaults to practice level 1. */
   readonly rules?: RulesOption;
-  /** Integer 1–7; defaults to 1. A legacy alias for `rules: { kind: 'practice', level }`; pass one or the other. */
+  /**
+   * Integer 1–7; defaults to 1. Deprecated: a legacy alias for `rules: { kind: 'practice', level }`; pass one
+   * or the other. (Not tagged `@deprecated`, which would fail lint on every existing caller and test.)
+   */
   readonly practiceLevel?: number;
   /** Starting pose instead of the field centre; the ship is still invulnerable for 3 s. */
   readonly initialShip?: ShipPlacement;
   /** Replaces the 3 practice spawns at the start of the run. */
   readonly initialAsteroids?: readonly AsteroidPlacement[];
-  /** Integer 1–3 (1–5 for galaxy rules); defaults to 3. */
+  /** Integer 1–3 in practice, 1–5 in Rank; defaults to 3. Free play always starts with 3. */
   readonly startLives?: number;
 }
 
 const MIN_START_LIVES = 1;
-/** Rank sets a galaxy run's lives from 1 to 5. */
+/** Rank sets a galaxy run's lives from 1 to 5; Free play keeps the default 3. */
 export const MAX_GALAXY_START_LIVES = 5;
 export const UINT32_MAX = 0xffffffff;
 const ASTEROID_SIZES: readonly AsteroidSize[] = [0, 1, 2, 3];
@@ -110,6 +113,11 @@ export function resolveOptions(opts: WorldOptions): { readonly rules: RulesOptio
   assertField(opts.field);
   const rules = resolveRules(opts);
   const lives = opts.startLives ?? PLAYER.startLives;
+  if (rules.kind === 'galaxy' && rules.mode === 'free' && lives !== PLAYER.startLives) {
+    throw new RangeError(
+      `Free play always starts with ${String(PLAYER.startLives)} lives (got startLives ${String(lives)}); omit startLives, or play mode 'rank' for 1 to ${String(MAX_GALAXY_START_LIVES)}`,
+    );
+  }
   assertStartLives(lives, rules.kind === 'galaxy' ? MAX_GALAXY_START_LIVES : PLAYER.startLives);
   return { rules, lives };
 }

@@ -86,6 +86,7 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'shot':
       return writeBurst(into, SHOT_BURST, palette.shot);
     case 'gameOver':
+    case 'asteroidLeft':
     case 'galaxyStart':
     case 'showerWarning':
     case 'showerStart':
@@ -208,6 +209,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'shot':
         return writeOrigin(origin, event.x, event.y, 0, null, world.ship.vx * 0.5, world.ship.vy * 0.5);
       case 'gameOver':
+      case 'asteroidLeft':
       case 'galaxyStart':
       case 'showerWarning':
       case 'showerStart':

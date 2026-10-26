@@ -4,7 +4,8 @@ import type { GalaxyEvent } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import { REFERENCE_AREA } from '../../src/sim/galaxy/director';
-import { EDGE_BEARINGS, SHOWER_WARNING_SECONDS, showerRate, showerSeconds, Showers, type ShowerState } from '../../src/sim/galaxy/showers';
+import { showerSeconds } from '../../src/content/curves';
+import { EDGE_BEARINGS, SHOWER_WARNING_SECONDS, showerCap, showerRate, Showers, type ShowerState } from '../../src/sim/galaxy/showers';
 import { createRng } from '../../src/sim/rng';
 
 const AREA = 1280 * 720;
@@ -15,8 +16,11 @@ interface Trace {
   readonly states: readonly ShowerState[];
 }
 
-/** Steps a schedule from 0 to `seconds` at the fixed step, collecting its events and the elapsed time of every rock. */
-function trace(events: readonly GalaxyEvent[], seed: number, seconds: number, area = AREA): Trace {
+/**
+ * Steps a schedule from 0 to `seconds` at the fixed step, collecting its events and the elapsed time of every rock.
+ * Each rock stays on the field for `stay` seconds (0: it is gone by the next step).
+ */
+function trace(events: readonly GalaxyEvent[], seed: number, seconds: number, area = AREA, stay = 0): Trace {
   const showers = new Showers(events, createRng(seed));
   const out: SimEvent[] = [];
   const log: (SimEvent & { elapsed: number })[] = [];
@@ -26,7 +30,8 @@ function trace(events: readonly GalaxyEvent[], seed: number, seconds: number, ar
   for (let i = 1; i <= steps; i++) {
     const elapsed = i * STEP_SECONDS;
     out.length = 0;
-    const count = showers.step(elapsed, STEP_SECONDS, area, out);
+    const onField = rocks.filter((t) => elapsed - t < stay).length;
+    const count = showers.step(elapsed, STEP_SECONDS, area, onField, out);
     for (let r = 0; r < count; r++) rocks.push(elapsed);
     for (const e of out) log.push({ ...e, elapsed });
     if (showers.state !== null) states.push({ ...showers.state });
@@ -113,6 +118,21 @@ describe('shower density', () => {
     for (const t of rocks) expect(rocks.filter((u) => u >= t && u < t + 1 - 1e-6).length).toBeLessThanOrEqual(Math.ceil(showerRate(intensity, AREA)));
   });
 
+  it.each([1, 2, 3] as const)('holds at most (3 + 2 x intensity) rocks on the field at intensity %i, dropping the rest', (intensity) => {
+    const events: GalaxyEvent[] = [{ at: 30, type: 'meteorShower', intensity }];
+    expect(showerCap(intensity, REFERENCE_AREA)).toBe(3 + 2 * intensity);
+    // Rocks that never leave: the cap is all the shower can ever drop.
+    expect(trace(events, 2, 50, AREA, 1000).rocks).toHaveLength(Math.floor(showerCap(intensity, AREA)));
+    // Rocks that cross in 2 s: the field never holds more than the cap.
+    const { rocks } = trace(events, 2, 50, AREA, 2);
+    for (const t of rocks) expect(rocks.filter((u) => u <= t && t - u < 2).length).toBeLessThanOrEqual(showerCap(intensity, AREA));
+    expect(rocks.length).toBeGreaterThan(showerCap(intensity, AREA));
+  });
+
+  it('scales the field cap with area', () => {
+    expect(showerCap(2, 1680 * 720) / showerCap(2, 960 * 720)).toBeCloseTo(1680 / 960, 10);
+  });
+
   it('scales with field area', () => {
     const narrow = trace(ONE, 3, 70, 960 * 720).rocks.length;
     const wide = trace(ONE, 3, 70, 1680 * 720).rocks.length;
@@ -123,6 +143,21 @@ describe('shower density', () => {
 
 describe('Showers validation', () => {
   it('rejects a non-positive field area, saying what to pass', () => {
-    expect(() => new Showers(ONE, createRng(1)).step(1, STEP_SECONDS, 0, [])).toThrow(/fieldArea.*positive/);
+    expect(() => new Showers(ONE, createRng(1)).step(1, STEP_SECONDS, 0, 0, [])).toThrow(/fieldArea.*positive/);
+  });
+});
+
+describe('Showers.stop', () => {
+  it('ends the warning or shower at once, quietly, and runs no more', () => {
+    const showers = new Showers(galaxyById('3-4').events, createRng(1));
+    const out: SimEvent[] = [];
+    const first = galaxyById('3-4').events[0]?.at ?? 0;
+    showers.step(first, STEP_SECONDS, AREA, 0, out);
+    expect(showers.state?.stage).toBe('active');
+    showers.stop();
+    expect(showers.state).toBeNull();
+    out.length = 0;
+    for (let t = first; t < 200; t += 0.5) showers.step(t, STEP_SECONDS, AREA, 0, out);
+    expect(out).toEqual([]);
   });
 });

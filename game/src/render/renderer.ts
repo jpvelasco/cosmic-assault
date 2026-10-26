@@ -294,7 +294,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     handle(events, world) {
       effects.handle(events, world);
-      for (const event of events) if (event.type === 'asteroidDestroyed') baker.forget(event.id);
+      for (const event of events) if (event.type === 'asteroidDestroyed' || event.type === 'asteroidLeft') baker.forget(event.id);
     },
     advance(dt, world, frozen) {
       stepBursts(dt, world, frozen);

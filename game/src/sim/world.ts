@@ -164,7 +164,7 @@ export class World {
     return this.elapsedValue;
   }
 
-  /** The practice level this run was created with (1–7); 1 under galaxy rules. */
+  /** The practice level this run was created with (1–7). A galaxy run reports 1: tell one apart by `galaxy`, which the galaxy HUD reads instead. */
   get practiceLevel(): number {
     return this.level;
   }
@@ -221,6 +221,7 @@ export class World {
     }
     this.rememberPoses();
     this.elapsedValue += dt;
+    this.rules.beginStep?.();
     this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField));
     this.moveEntities(dt);
     this.prepareCollisions();
