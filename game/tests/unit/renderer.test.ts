@@ -233,7 +233,8 @@ describe('createRenderer', () => {
     function breakRock(world: World): HTMLCanvasElement {
       renderer.resize(1280, 720, FIELD);
       drawFrame(world, 1);
-      const white = baker.whiteRock(5);
+      const key = baker.whiteRock(5);
+      const white = key === undefined ? undefined : baker.cached(key);
       if (white === undefined) throw new Error('the drawn rock must have a white silhouette');
       renderer.handle([destroyed(5)], world);
       return white.canvas;
@@ -278,12 +279,23 @@ describe('createRenderer', () => {
       expect(drawsOf(white)).toHaveLength(1);
     });
 
+    it('draws no flash, and nothing empty, when a rebake drops the silhouette mid-flash', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      baker.setScale(2, 1);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(0);
+      expect(canvas.draws.every((call) => (call.image as HTMLCanvasElement).width > 0)).toBe(true);
+    });
+
     it('shows no flash for a rock that was never drawn, or that the warp cleared', () => {
       const { world } = stubWorld();
       renderer.resize(1280, 720, FIELD);
       renderer.handle([destroyed(5), { type: 'asteroidDestroyed', id: 5, x: 300, y: 300, size: 0, points: 0 }], world);
       drawFrame(world, 1);
-      expect(canvas.draws.some((call) => call.image === baker.whiteRock(5)?.canvas)).toBe(false);
+      // The frame bakes the rock; its silhouette (made now, after the fact) was never drawn.
+      const key = baker.whiteRock(5);
+      expect(drawsOf(key === undefined ? null : baker.cached(key)?.canvas)).toHaveLength(0);
     });
 
     /** The x scale the ship hull is drawn with now. */

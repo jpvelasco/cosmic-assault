@@ -188,7 +188,13 @@ export function createRunController(deps: RunControllerDeps): RunController {
     }
     // The forfeit re-checks inGalaxy and rankSeq inside its update: a run another tab already forfeited loses no second
     // life, and one it has written to since the probe is still live.
-    if (flow.forfeitLeftRun(rankSeq)) deps.notify(LEFT_RUN_NOTICE);
+    if (flow.forfeitLeftRun(rankSeq)) {
+      deps.notify(LEFT_RUN_NOTICE);
+    } else if (store.save.rankSeq !== rankSeq) {
+      // The forfeit found the run written to since the probe: another tab is playing it. Ask about it as it is now.
+      checkLeftRun();
+      return;
+    }
     setLock('free');
   }
   checkLeftRun();

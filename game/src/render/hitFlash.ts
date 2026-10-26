@@ -1,5 +1,5 @@
 import { isWarpClear, type SimEvent } from '../sim/events';
-import type { Sprite, SpriteBaker } from './sprites';
+import type { SpriteBaker } from './sprites';
 
 /** How long a hit object shows white. */
 export const HIT_FLASH_SECONDS = 0.06;
@@ -12,7 +12,8 @@ const MAX_ROCK_FLASHES = 24;
 
 /** A destroyed rock's white silhouette, held where it broke. */
 export interface RockFlash {
-  readonly sprite: Sprite;
+  /** The silhouette's cache key, not the sprite: a rebake can free the sprite mid-flash, so the renderer looks it up each frame. */
+  readonly key: string;
   readonly x: number;
   readonly y: number;
   /** Seconds of the flash still to show, from `HIT_FLASH_SECONDS` down; the renderer fades by `left / HIT_FLASH_SECONDS`. */
@@ -50,9 +51,9 @@ export function createHitFlash(baker: Pick<SpriteBaker, 'whiteRock'>): HitFlash 
         if (event.type === 'shipHit') {
           squashAge = 0;
         } else if (event.type === 'asteroidDestroyed' && !isWarpClear(event) && rocks.length < MAX_ROCK_FLASHES) {
-          // Looked up now: the renderer forgets the rock's sprites right after it hears of its end.
-          const sprite = baker.whiteRock(event.id);
-          if (sprite !== undefined) rocks.push({ sprite, x: event.x, y: event.y, left: HIT_FLASH_SECONDS });
+          // Baked now: the renderer forgets the rock's sprites right after it hears of its end.
+          const key = baker.whiteRock(event.id);
+          if (key !== undefined) rocks.push({ key, x: event.x, y: event.y, left: HIT_FLASH_SECONDS });
         }
       }
     },

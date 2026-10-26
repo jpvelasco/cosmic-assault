@@ -187,7 +187,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
 
   /** The silhouettes of rocks that just broke, fading over their flash; unturned, since the event holds no rotation. */
   function drawRockFlashes(field: Field): void {
-    for (const { sprite, x, y, left } of hitFlash.rocks) {
+    for (const { key, x, y, left } of hitFlash.rocks) {
+      // A rebake or an eviction may have freed the silhouette since the break: skip it, never draw an empty canvas.
+      const sprite = baker.cached(key);
+      if (sprite === undefined || sprite.canvas.width === 0) continue;
       ctx.globalAlpha = left / HIT_FLASH_SECONDS;
       stamp(sprite, x, y, 1, 0, sprite.halfW, field);
     }

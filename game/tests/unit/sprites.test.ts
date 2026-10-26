@@ -347,7 +347,8 @@ describe('createSpriteBaker', () => {
       const baker = createSpriteBaker();
       const a = rock(3);
       const body = baker.asteroid(a, DRIFT);
-      const white = baker.whiteRock(a.id);
+      const key = baker.whiteRock(a.id);
+      const white = key === undefined ? undefined : baker.cached(key);
       expect(white).toBeDefined();
       expect(white?.canvas).not.toBe(body.canvas);
       expect(white?.halfW).toBe(body.halfW);
@@ -363,17 +364,20 @@ describe('createSpriteBaker', () => {
       const a = rock(3);
       expect(baker.whiteRock(a.id)).toBeUndefined();
       baker.asteroid(a, DRIFT);
-      const white = baker.whiteRock(a.id);
-      expect(baker.whiteRock(a.id)).toBe(white);
+      const key = baker.whiteRock(a.id);
+      expect(key).toBeDefined();
+      expect(baker.whiteRock(a.id)).toBe(key);
+      const key2 = key ?? '';
+      expect(baker.cached(key2)).toBe(baker.cached(key2));
     });
 
     it('outlives the rock\'s own sprite, so a flash can finish after the rock is forgotten', () => {
       const baker = createSpriteBaker();
       const a = rock(3);
       baker.asteroid(a, DRIFT);
-      const white = baker.whiteRock(a.id);
+      const key = baker.whiteRock(a.id) ?? '';
       baker.forget(a.id);
-      expect(white?.canvas.width).toBeGreaterThan(0);
+      expect(baker.cached(key)?.canvas.width).toBeGreaterThan(0);
       expect(baker.whiteRock(a.id)).toBeUndefined();
     });
 
@@ -385,6 +389,24 @@ describe('createSpriteBaker', () => {
       expect(white?.canvas).not.toBe(core.canvas);
       expect(white?.halfW).toBe(core.halfW);
       expect(baker.white('boss|core|70')).toBe(white);
+    });
+
+    it('is gone from the cache, not a zero-size canvas, once the scale changes', () => {
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      baker.asteroid(a, DRIFT);
+      const key = baker.whiteRock(a.id) ?? '';
+      const white = baker.cached(key);
+      baker.setScale(2, 1);
+      expect(white?.canvas.width).toBe(0);
+      expect(baker.cached(key)).toBeUndefined();
+    });
+
+    it('asks for no new key string each time a custom sprite is whitened', () => {
+      const baker = createSpriteBaker();
+      baker.custom('boss|core|70', 72, () => undefined);
+      const first = baker.white('boss|core|70');
+      expect(baker.white('boss|core|70')).toBe(first);
     });
 
     it('is rebaked with the rest when the scale changes', () => {

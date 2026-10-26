@@ -223,6 +223,17 @@ describe('createRunController', () => {
       expect(run.rankLock).toBe('free');
     });
 
+    it('asks again, rather than offering Resume, when its forfeit finds the run moved on since the probe', async () => {
+      const held = heldPresence();
+      const { run, storage } = setup({}, () => FIELD, leftMidGalaxy, held.presence);
+      // Another tab's hit: stored, but its storage event has not reached this tab.
+      storage.items.set(SAVE_KEY, JSON.stringify({ ...leftMidGalaxy, rankSeq: leftMidGalaxy.rankSeq + 1 }));
+      await held.answer(false);
+      expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+      expect(run.rankLock).toBe('checking');
+      expect(held.waiting()).toBe(1);
+    });
+
     it('nothing is forfeited after dispose, even when the pending probe then goes unanswered', async () => {
       const held = heldPresence();
       const { run } = setup({}, () => FIELD, leftMidGalaxy, held.presence);

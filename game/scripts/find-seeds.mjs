@@ -5,12 +5,14 @@ import { createServer } from 'vite';
 
 const USAGE = 'usage: npm run find-seeds -- <claim> [--count N] [--from SEED] [--to SEED]';
 
-/** Reads a non-negative integer flag, or exits saying how to fix it. */
+const FLAGS = { count: 1, from: 0, to: 1 };
+
+/** Reads a whole-number flag of at least its minimum, or exits saying how to fix it. */
 function numberFlag(args, name) {
   const at = args.indexOf(`--${name}`);
   if (at < 0) return undefined;
   const value = Number(args[at + 1]);
-  if (!Number.isInteger(value) || value < 0) fail(`--${name} needs a whole number of 0 or more (got "${args[at + 1] ?? ''}")`);
+  if (!Number.isInteger(value) || value < FLAGS[name]) fail(`--${name} needs a whole number of ${String(FLAGS[name])} or more (got "${args[at + 1] ?? ''}")`);
   return value;
 }
 
@@ -27,6 +29,8 @@ try {
   const claim = args[0];
   if (claim === undefined || claim.startsWith('--')) fail(`name a claim: ${claims.join(', ')}`);
   if (!claims.includes(claim)) fail(`unknown claim "${claim}"; the claims are ${claims.join(', ')}`);
+  const unknown = args.slice(1).find((arg) => arg.startsWith('--') && !(arg.slice(2) in FLAGS));
+  if (unknown !== undefined) fail(`unknown option "${unknown}"; the options are ${Object.keys(FLAGS).map((flag) => `--${flag}`).join(', ')}`);
   const options = { from: numberFlag(args, 'from'), count: numberFlag(args, 'count'), to: numberFlag(args, 'to') };
   const found = findSeeds(claim, Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)));
   if (found.length === 0) fail(`no seed from ${String(options.from ?? 1)} keeps "${claim}"; widen the range with --to, or the claim may need rethinking`);

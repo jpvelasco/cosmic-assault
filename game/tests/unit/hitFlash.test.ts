@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createHitFlash, HIT_FLASH_SECONDS, SQUASH_SCALE, SQUASH_SECONDS } from '../../src/render/hitFlash';
-import type { Sprite } from '../../src/render/sprites';
 import type { SimEvent } from '../../src/sim/events';
 
-const SPRITE = { canvas: {}, halfW: 10, halfH: 10 } as unknown as Sprite;
+const KEY = 'white|rock';
 const destroyed = (id: number, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id, x: 300, y: 200, size: 0, points });
 const hit: SimEvent = { type: 'shipHit', x: 640, y: 360, livesLeft: 2 };
 const FRAME = 1 / 60;
 
-function make(whiteRock: (id: number) => Sprite | undefined = () => SPRITE) {
+function make(whiteRock: (id: number) => string | undefined = () => KEY) {
   return createHitFlash({ whiteRock });
 }
 
@@ -22,12 +21,12 @@ describe('createHitFlash: a destroyed rock', () => {
     const asked: number[] = [];
     const flash = make((id) => {
       asked.push(id);
-      return SPRITE;
+      return KEY;
     });
     flash.handle([destroyed(7)]);
     expect(asked).toEqual([7]);
     expect(flash.rocks).toHaveLength(1);
-    expect(flash.rocks[0]).toMatchObject({ sprite: SPRITE, x: 300, y: 200 });
+    expect(flash.rocks[0]).toMatchObject({ key: KEY, x: 300, y: 200 });
     run(flash, 0.05);
     expect(flash.rocks).toHaveLength(1);
     run(flash, 0.02);
@@ -55,7 +54,7 @@ describe('createHitFlash: a destroyed rock', () => {
   });
 
   it('skips a rock the warp cleared, one never drawn, and every other event', () => {
-    const flash = make((id) => (id === 3 ? undefined : SPRITE));
+    const flash = make((id) => (id === 3 ? undefined : KEY));
     flash.handle([destroyed(1, 0), destroyed(3), { type: 'shot', x: 0, y: 0 }, { type: 'asteroidLeft', id: 4 }, { type: 'bossHit', x: 0, y: 0, hp: 5 }]);
     expect(flash.rocks).toHaveLength(0);
   });

@@ -62,6 +62,15 @@ describe('npm run find-seeds', () => {
     expect(output).toContain('usage: npm run find-seeds -- <claim>');
   });
 
+  it('refuses a count of 0 and an option it does not know, saying what to use', () => {
+    const none = runFinder('lanes-clear', '--count', '0');
+    expect(none.status).toBe(1);
+    expect(none.output).toContain('--count needs a whole number of 1 or more');
+    const typo = runFinder('lanes-clear', '--cnt', '2');
+    expect(typo.status).toBe(1);
+    expect(typo.output).toContain('unknown option "--cnt"; the options are --count, --from, --to');
+  });
+
   it('names the known claims when given an unknown one', () => {
     const { status, output } = runFinder('nope');
     expect(status).toBe(1);

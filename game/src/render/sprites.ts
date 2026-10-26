@@ -50,10 +50,16 @@ export interface SpriteBaker {
    */
   white(key: string): Sprite | undefined;
   /**
-   * The white silhouette of a rock `asteroidId` has drawn, or undefined if it has not. Unlike the rock's own sprites it
-   * survives `forget`, so a flash can finish after the renderer lets the rock go; the cache's size bound frees it in the end.
+   * Bakes the white silhouette of a rock `asteroidId` has drawn and returns the key to find it by (see `cached`), or
+   * undefined if the rock has not been drawn. Unlike the rock's own sprites it survives `forget`, so a flash can finish
+   * after the renderer lets the rock go; the cache's size bound frees it in the end.
    */
-  whiteRock(asteroidId: number): Sprite | undefined;
+  whiteRock(asteroidId: number): string | undefined;
+  /**
+   * The sprite under `key` if it is still cached. A rebake (`setScale`, `clear`) or an eviction frees a sprite's canvas, so
+   * anything that outlives a frame holds a key and looks it up each time it draws.
+   */
+  cached(key: string): Sprite | undefined;
   /** Frees every baked sprite, for example when a new run starts. */
   clear(): void;
 }
@@ -427,13 +433,19 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     return { canvas, halfW: source.halfW, halfH: source.halfH };
   }
 
-  /** The white variant of the sprite under `key`, kept as an ordinary entry of its own: not an asteroid's, so `forget` leaves it. */
-  function whiteOf(key: string): Sprite | undefined {
+  /**
+   * Bakes the white variant of the sprite under `key` (if it is cached) as an ordinary entry under `whiteKey`, not an
+   * asteroid's, so `forget` leaves it. Returns `whiteKey`, or undefined without a source.
+   */
+  function bakeWhiteUnder(key: string, whiteKey: string): string | undefined {
     const source = cache.get(key)?.sprite;
     if (source === undefined) return undefined;
-    // Not through `keyOf`, whose table never forgets a name: a rock's key is new every time. This runs only while a flash shows.
-    const whiteKey = `white|${key}`;
-    return cache.get(whiteKey)?.sprite ?? store(whiteKey, bakeWhite(source));
+    if (cache.get(whiteKey) === undefined) store(whiteKey, bakeWhite(source));
+    return whiteKey;
+  }
+
+  function cachedSprite(key: string): Sprite | undefined {
+    return cache.get(key)?.sprite;
   }
 
   // Each method looks the key up first and only builds the bake closure on a miss.
@@ -519,11 +531,17 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     forget(asteroidId) {
       for (const key of [...(asteroidKeys.get(asteroidId) ?? [])]) cache.delete(key);
     },
-    white: whiteOf,
+    white(key) {
+      // `keyOf` builds each name's string once, so a boss hit's frames build none. It is for the few custom keys only: a
+      // rock's key is new every time and would never be forgotten there.
+      const whiteKey = bakeWhiteUnder(key, keyOf('white', key, 0));
+      return whiteKey === undefined ? undefined : cachedSprite(whiteKey);
+    },
     whiteRock(asteroidId) {
       const [key] = asteroidKeys.get(asteroidId) ?? [];
-      return key === undefined ? undefined : whiteOf(key);
+      return key === undefined ? undefined : bakeWhiteUnder(key, `white|${key}`);
     },
+    cached: cachedSprite,
     clear() {
       cache.clear();
     },
