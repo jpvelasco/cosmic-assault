@@ -1,5 +1,5 @@
 import type { Screen } from '../app/flow';
-import type { SimEvent } from '../sim/events';
+import { isWarpClear, type SimEvent } from '../sim/events';
 
 /** Every sound effect, in the order voices.ts defines them. */
 export const SFX_NAMES = [
@@ -32,17 +32,14 @@ export interface SfxCue {
   readonly delay: number;
 }
 
-/**
- * On a boss kill the boss's death plays first and the warp follows this much later, so the two never land as one
- * blast; the warp's rock booms follow with it.
- */
+/** On a boss kill the boss's death plays first and the warp follows this much later, so the two never land as one blast. */
 export const WARP_AFTER_BOSS_SECONDS = 0.3;
 /** The clear fanfare starts this long after the results card opens: after a boss kill's warp, as the card's stars fill. */
 export const FANFARE_DELAY_SECONDS = 0.6;
 
 /** One undelayed cue per sound, made once, so mapping an event allocates nothing. */
 const NOW = Object.fromEntries(SFX_NAMES.map((name) => [name, { name, delay: 0 }])) as Readonly<Record<SfxName, SfxCue>>;
-const AFTER_BOSS = Object.fromEntries(SFX_NAMES.map((name) => [name, { name, delay: WARP_AFTER_BOSS_SECONDS }])) as Readonly<Record<SfxName, SfxCue>>;
+const WARP_AFTER_BOSS: SfxCue = { name: 'warp', delay: WARP_AFTER_BOSS_SECONDS };
 const FANFARE: SfxCue = { name: 'cleared', delay: FANFARE_DELAY_SECONDS };
 
 /** Asteroid sizes 0 (large) to 3 (tiny) in order. */
@@ -58,8 +55,9 @@ function soundOf(event: SimEvent): SfxName | null {
   switch (event.type) {
     case 'shot':
       return 'shoot';
+    // The rocks a warp clears are heard as the warp itself, not as a boom each.
     case 'asteroidDestroyed':
-      return BOOM_BY_SIZE[event.size];
+      return isWarpClear(event) ? null : BOOM_BY_SIZE[event.size];
     case 'bossHit':
       return 'boomTiny';
     case 'shipHit':
@@ -94,17 +92,14 @@ function soundOf(event: SimEvent): SfxName | null {
   }
 }
 
-/** The warp and the rocks it clears (scored 0) are the warp's own sounds. */
-const isWarpSound = (event: SimEvent): boolean => event.type === 'warpOut' || (event.type === 'asteroidDestroyed' && event.points === 0);
-
 /**
  * The cue for `event`, or null for a silent one. In a step where a boss went down (`bossKill`, from `isBossKill`), the
- * warp's sounds wait `WARP_AFTER_BOSS_SECONDS`, so the boss's death is heard first.
+ * warp waits `WARP_AFTER_BOSS_SECONDS`, so the boss's death is heard first.
  */
 export function sfxFor(event: SimEvent, bossKill = false): SfxCue | null {
   const name = soundOf(event);
   if (name === null) return null;
-  return bossKill && isWarpSound(event) ? AFTER_BOSS[name] : NOW[name];
+  return bossKill && event.type === 'warpOut' ? WARP_AFTER_BOSS : NOW[name];
 }
 
 /** The sound a screen opens with: the clear fanfare on the results and Rank complete cards, after the warp. */

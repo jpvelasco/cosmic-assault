@@ -1,5 +1,5 @@
 import { ASTEROID } from '../sim/config';
-import type { SimEvent } from '../sim/events';
+import { isWarpClear, type SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { createRng, type Rng } from '../sim/rng';
 import type { World } from '../sim/world';
@@ -65,6 +65,8 @@ const ASTEROID_BURSTS: readonly [Counts, Counts, Counts, Counts] = [
 const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45 };
 const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
 const BOSS_HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
+const WARP_CLEAR_BURST: Counts = { shards: 2, sparks: 4, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
 const blankBurst = (): Writable<BurstSpec> => ({ ...SHOT_BURST, flashColor: '' });
 
@@ -81,7 +83,7 @@ function writeBurst(into: Writable<BurstSpec>, counts: Counts, flashColor: strin
 export function burstFor(event: SimEvent, palette: Palette, into = blankBurst()): BurstSpec | null {
   switch (event.type) {
     case 'asteroidDestroyed':
-      return writeBurst(into, ASTEROID_BURSTS[event.size], palette.ring);
+      return writeBurst(into, isWarpClear(event) ? WARP_CLEAR_BURST : ASTEROID_BURSTS[event.size], palette.ring);
     case 'shipHit':
       return writeBurst(into, SHIP_HIT_BURST, HIT_TINT);
     case 'shot':

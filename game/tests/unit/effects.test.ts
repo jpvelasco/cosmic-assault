@@ -8,7 +8,7 @@ import type { SimEvent } from '../../src/sim/events';
 import { World } from '../../src/sim/world';
 
 const THRUST = { ...NO_CONTROLS, thrust: true };
-const DESTROYED = (size: 0 | 1 | 2 | 3): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 300, y: 200, size, points: 20 });
+const DESTROYED = (size: 0 | 1 | 2 | 3, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 300, y: 200, size, points });
 const SHIP_HIT: SimEvent = { type: 'shipHit', x: 640, y: 360, livesLeft: 2 };
 
 function makeWorld(): World {
@@ -66,6 +66,15 @@ describe('burstFor', () => {
     for (const key of ['shards', 'sparks', 'smoke', 'shake', 'flash'] as const) {
       const values = bursts.map((b) => b?.[key] ?? -1);
       expect(values).toEqual([...values].sort((a, b) => a - b));
+    }
+  });
+
+  it('gives a rock the warp clears (0 points) a light puff with no shake or flash, whatever its size', () => {
+    const smallest = burstFor(DESTROYED(3), DRIFT);
+    for (const size of [0, 1, 2, 3] as const) {
+      const warped = burstFor(DESTROYED(size, 0), DRIFT);
+      expect(warped).toMatchObject({ rings: 0, smoke: 0, shake: 0, flash: 0 });
+      expect((warped?.shards ?? 99) + (warped?.sparks ?? 99)).toBeLessThan((smallest?.shards ?? 0) + (smallest?.sparks ?? 0));
     }
   });
 

@@ -7,7 +7,7 @@ import { createFixedStepLoop } from '../../src/sim/loop';
 import { World } from '../../src/sim/world';
 
 const SHIP_HIT: SimEvent = { type: 'shipHit', x: 1, y: 2, livesLeft: 2 };
-const destroyed = (size: 0 | 1 | 2 | 3): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 1, y: 2, size, points: 20 });
+const destroyed = (size: 0 | 1 | 2 | 3, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 1, y: 2, size, points });
 const SHOT: SimEvent = { type: 'shot', x: 1, y: 2 };
 
 describe('hitStopFor', () => {
@@ -20,6 +20,10 @@ describe('hitStopFor', () => {
     expect(hitStopFor(SHOT)).toBe(0);
     expect(hitStopFor({ type: 'gameOver', score: 5 })).toBe(0);
     expect(hitStopFor({ type: 'bossHit', x: 0, y: 0, hp: 5 })).toBe(0);
+  });
+
+  it('never freezes for a large rock the warp clears for 0 points', () => {
+    expect(hitStopFor(destroyed(0, 0))).toBe(0);
   });
 });
 

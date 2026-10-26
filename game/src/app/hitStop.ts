@@ -1,4 +1,4 @@
-import type { SimEvent } from '../sim/events';
+import { isWarpClear, type SimEvent } from '../sim/events';
 
 const SHIP_HIT_SECONDS = 0.11;
 const LARGE_ASTEROID_SECONDS = 0.055;
@@ -10,7 +10,7 @@ export function hitStopFor(event: SimEvent): number {
     case 'shipHit':
       return SHIP_HIT_SECONDS;
     case 'asteroidDestroyed':
-      return event.size === LARGE_ASTEROID_SIZE ? LARGE_ASTEROID_SECONDS : 0;
+      return event.size === LARGE_ASTEROID_SIZE && !isWarpClear(event) ? LARGE_ASTEROID_SECONDS : 0;
     default:
       return 0;
   }

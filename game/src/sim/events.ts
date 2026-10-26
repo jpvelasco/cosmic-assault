@@ -33,3 +33,8 @@ export type SimEvent =
   | { type: 'bossPhase'; phase: 2 | 3 }
   /** A boss was beaten, its HP at 0: the galaxy warps out on the same step, and the boss dies over the warp. */
   | { type: 'bossDown'; id: BossId };
+
+/** A rock the warp cleared: destroyed for 0 points, which no kill scores. Its feedback is the warp's, not a kill's. */
+export function isWarpClear(event: SimEvent): boolean {
+  return event.type === 'asteroidDestroyed' && event.points === 0;
+}

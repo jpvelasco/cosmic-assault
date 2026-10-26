@@ -74,19 +74,19 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'galaxyCleared', score: 900, deaths: 0, stars: 3, bonus: 750 })).toBeNull();
   });
 
-  it('warps at once when the timer runs out', () => {
-    const step: SimEvent[] = [{ type: 'warpOut' }, destroyed(1, 0)];
+  it('warps at once when the timer runs out, the rocks it clears adding no boom of their own', () => {
+    const step: SimEvent[] = [{ type: 'warpOut' }, destroyed(1, 0), destroyed(0, 0), destroyed(3, 0)];
     expect(isBossKill(step)).toBe(false);
-    expect(step.map((event) => sfxFor(event, isBossKill(step))?.delay)).toEqual([0, 0]);
+    expect(step.map((event) => sfxFor(event, isBossKill(step)))).toEqual([{ name: 'warp', delay: 0 }, null, null, null]);
   });
 });
 
 describe('a boss kill', () => {
-  it('plays the boss down first, the warp and its booms 0.3 s later, and the fanfare as the results card fills', () => {
+  it('plays the boss down first, the warp 0.3 s later (its rocks silent), and the fanfare as the results card fills', () => {
     const bossKill = isBossKill(BOSS_KILL_STEP);
     expect(bossKill).toBe(true);
     const cues = BOSS_KILL_STEP.map((event) => sfxFor(event, bossKill));
-    expect(cues).toEqual([{ name: 'bossDown', delay: 0 }, { name: 'warp', delay: WARP_AFTER_BOSS_SECONDS }, { name: 'boomSmall', delay: WARP_AFTER_BOSS_SECONDS }, null]);
+    expect(cues).toEqual([{ name: 'bossDown', delay: 0 }, { name: 'warp', delay: WARP_AFTER_BOSS_SECONDS }, null, null]);
     // The card opens on this same step; its fanfare comes after the warp.
     const fanfare = screenCue('results');
     expect(fanfare).toEqual({ name: 'cleared', delay: FANFARE_DELAY_SECONDS });
