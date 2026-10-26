@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById, GALAXIES } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
-import { afterClear, afterGameOver, compareRuns, startRank, type RankRun } from '../../src/meta/rankRun';
+import { afterClear, afterForfeit, afterGameOver, compareRuns, startRank, type RankRun } from '../../src/meta/rankRun';
 
 const TODAY = '2026-10-26';
 
 describe('startRank', () => {
   it('starts at 1-1 with no score, 3 lives, base weapon and no Continue used', () => {
-    expect(startRank(TODAY)).toEqual({ next: '1-1', score: 0, lives: 3, weaponTier: 0, continued: false, startedAt: TODAY });
+    expect(startRank(TODAY)).toEqual({ next: '1-1', score: 0, lives: 3, weaponTier: 0, continued: false, startedAt: TODAY, inGalaxy: false });
   });
 });
 
@@ -68,8 +68,8 @@ describe('afterClear', () => {
 
 describe('afterGameOver (Continue)', () => {
   it('keeps the galaxy, restores 3 lives, zeroes the score and marks the run continued', () => {
-    const run: RankRun = { next: '3-4', score: 4200, lives: 1, weaponTier: 2, continued: false, startedAt: TODAY };
-    expect(afterGameOver(run)).toEqual({ next: '3-4', score: 0, lives: 3, weaponTier: 2, continued: true, startedAt: TODAY });
+    const run: RankRun = { next: '3-4', score: 4200, lives: 0, weaponTier: 2, continued: false, startedAt: TODAY, inGalaxy: false };
+    expect(afterGameOver(run)).toEqual({ next: '3-4', score: 0, lives: 3, weaponTier: 2, continued: true, startedAt: TODAY, inGalaxy: false });
     expect(run.score).toBe(4200);
   });
 
@@ -79,7 +79,7 @@ describe('afterGameOver (Continue)', () => {
 });
 
 describe('compareRuns', () => {
-  const base: RankRun = { next: '2-3', score: 1500, lives: 3, weaponTier: 1, continued: false, startedAt: TODAY };
+  const base: RankRun = { next: '2-3', score: 1500, lives: 3, weaponTier: 1, continued: false, startedAt: TODAY, inGalaxy: false };
   /** `better` beats `worse` whichever is passed first. */
   const expectAhead = (better: RankRun, worse: RankRun): void => {
     expect(compareRuns(worse, better)).toBeGreaterThan(0);
@@ -102,5 +102,29 @@ describe('compareRuns', () => {
     // More lives beat a better weapon and an earlier start; a better weapon beats an earlier start.
     expectAhead({ ...base, lives: 4, weaponTier: 0, startedAt: '2026-12-31' }, { ...base, startedAt: '2026-01-01', weaponTier: 3 });
     expectAhead({ ...base, weaponTier: 2, startedAt: '2026-12-31' }, { ...base, startedAt: '2026-01-01' });
+  });
+});
+
+describe('afterClear between galaxies', () => {
+  it('saves the run as between galaxies, whatever it was while playing', () => {
+    const playing = { ...startRank(TODAY), inGalaxy: true };
+    expect(afterClear(playing, galaxyById('1-1'), 500, 3)).toMatchObject({ next: '1-2', inGalaxy: false });
+  });
+});
+
+describe('afterForfeit (a Rank galaxy left unfinished)', () => {
+  const playing: RankRun = { next: '2-4', score: 3100, lives: 3, weaponTier: 1, continued: false, startedAt: TODAY, inGalaxy: true };
+
+  it('costs one life and keeps the score the run had before the galaxy, back between galaxies', () => {
+    expect(afterForfeit(playing)).toEqual({ ...playing, lives: 2, inGalaxy: false });
+    expect(playing.lives).toBe(3);
+  });
+
+  it('leaves a last-life run with no lives, which only a Continue can take on', () => {
+    expect(afterForfeit({ ...playing, lives: 1 })).toMatchObject({ lives: 0, score: 3100, next: '2-4', inGalaxy: false });
+  });
+
+  it('never goes below no lives', () => {
+    expect(afterForfeit({ ...playing, lives: 0 }).lives).toBe(0);
   });
 });

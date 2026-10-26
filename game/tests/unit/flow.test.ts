@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { localDate } from '../../src/app/date';
-import { freeNext, INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState } from '../../src/app/flow';
+import { applySaveChange, freeNext, INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState, type SaveChange } from '../../src/app/flow';
 import type { GalaxyId } from '../../src/content/types';
 import { startRank, type RankRun } from '../../src/meta/rankRun';
 import { defaultSave, type SaveData } from '../../src/meta/save';
@@ -14,17 +14,19 @@ const REPORT: ClearReport = { score: 1200, bonus: 750, deaths: 0, stars: 3 };
 const at = (screen: FlowState['screen'], extra: Partial<FlowState> = {}): FlowState => ({ ...INITIAL_FLOW, screen, ...extra });
 const freeOn = (screen: FlowState['screen'], galaxy: GalaxyId, extra: Partial<FlowState> = {}): FlowState =>
   at(screen, { mode: 'free', galaxy, dimension: Number(galaxy[0]) as FlowState['dimension'], runs: 1, ...extra });
+/** The screens a Rank run is in its galaxy on: the flow's run is marked so. */
+const IN_GALAXY: readonly FlowState['screen'][] = ['playing', 'paused', 'gameOver'];
 const rankOn = (screen: FlowState['screen'], run: RankRun, extra: Partial<FlowState> = {}): FlowState =>
-  at(screen, { mode: 'rank', galaxy: run.next, rankRun: run, runs: 1, ...extra });
+  at(screen, { mode: 'rank', galaxy: run.next, rankRun: IN_GALAXY.includes(screen) ? { ...run, inGalaxy: true } : run, runs: 1, ...extra });
 
 /** Applies `actions` in order, as the app would. */
 const run = (state: FlowState, ...actions: FlowAction[]): FlowState => actions.reduce(transition, state);
 
-/** The save after `action` from `state`, written as the app writes it. */
+/** The save after `action` from `state`, written as the app writes it, by a tab that is up to date. */
 function saved(save: SaveData, state: FlowState, action: FlowAction): { state: FlowState; save: SaveData } {
   const next = transition(state, action);
   const change = saveChange(state, action, next, TODAY);
-  return { state: next, save: change === null ? save : change(save) };
+  return { state: next, save: change === null ? save : applySaveChange(save, change, save.rankSeq).save };
 }
 
 describe('INITIAL_FLOW', () => {
@@ -38,8 +40,16 @@ describe('transition: into a run', () => {
     expect(transition(INITIAL_FLOW, { kind: 'start' })).toEqual(at('modeSelect'));
   });
 
-  it('Rank on mode select starts the run at its next galaxy', () => {
+  it('Rank on mode select starts the run at its next galaxy, marked as in it', () => {
     expect(transition(at('modeSelect'), { kind: 'startRank', run: RUN })).toEqual(rankOn('playing', RUN));
+    expect(transition(at('modeSelect'), { kind: 'startRank', run: RUN }).rankRun?.inGalaxy).toBe(true);
+  });
+
+  it('with a run saved, Rank asks first: the confirm card starts the new run, or Back returns to mode select', () => {
+    const asking = transition(at('modeSelect'), { kind: 'askNewRank' });
+    expect(asking).toEqual(at('confirmNewRank'));
+    expect(transition(asking, { kind: 'startRank', run: RUN })).toEqual(rankOn('playing', RUN));
+    expect(transition(asking, { kind: 'back' })).toEqual(at('modeSelect'));
   });
 
   it('Free play on mode select opens the Dimension map', () => {
@@ -95,11 +105,11 @@ describe('transition: pause', () => {
     expect(transition(paused, { kind: 'resume' })).toEqual(playing);
   });
 
-  it('Quit leaves for the title; a Rank run stays suspended in the save as it was at the galaxy start', () => {
-    expect(transition(freeOn('paused', '1-2'), { kind: 'quit' })).toMatchObject({ screen: 'title', rankRun: null });
-    const quit = transition(rankOn('paused', RUN), { kind: 'quit' });
+  it('Quit leaves for the title, writing nothing in Free play', () => {
+    const paused = freeOn('paused', '1-2');
+    const quit = transition(paused, { kind: 'quit' });
     expect(quit).toMatchObject({ screen: 'title', rankRun: null });
-    expect(saveChange(rankOn('paused', RUN), { kind: 'quit' }, quit, TODAY)).toBeNull();
+    expect(saveChange(paused, { kind: 'quit' }, quit, TODAY)).toBeNull();
   });
 });
 
@@ -210,64 +220,95 @@ describe('transition: ignored actions', () => {
     [freeOn('playing', '1-1'), { kind: 'quit' }],
     [freeOn('paused', '1-1'), { kind: 'pause' }],
     [freeOn('paused', '1-1'), { kind: 'die', score: 0 }],
+    [freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3 }],
+    [at('confirmNewRank'), { kind: 'chooseFree' }],
+    [at('map', { mode: 'free' }), { kind: 'askNewRank' }],
     [freeOn('gameOver', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 1 }],
     [freeOn('results', '1-1'), { kind: 'pause' }],
   ])('%j ignores %j', (state, action) => {
     expect(transition(state, action)).toBe(state);
   });
 
-  it('a clear can still land while paused, when a quit finishes a warp-out', () => {
-    expect(transition(freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3 })).toMatchObject({ screen: 'results' });
-  });
 });
 
 describe('saveChange', () => {
-  it('records a Free play clear and leaves the Rank run alone', () => {
+  const rankPart = (change: SaveChange | null): SaveChange['rank'] => change?.rank ?? null;
+
+  it('records a Free play clear as progress only, leaving the Rank run alone', () => {
     const save = { ...defaultSave(), rankRun: RUN, rankSeq: 4 };
-    const after = saved(save, freeOn('playing', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3 }).save;
+    const playing = freeOn('playing', '1-1');
+    const action: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 3 };
+    expect(rankPart(saveChange(playing, action, transition(playing, action), TODAY))).toBeNull();
+    const after = saved(save, playing, action).save;
     expect(after).toMatchObject({ frontier: '1-2', galaxies: { '1-1': { bestScore: 1200, stars: 3 } }, rankRun: RUN, rankSeq: 4, rankBoard: [] });
   });
 
-  it('writes nothing for a Free play game over, navigation or a resume', () => {
+  it('writes nothing for a Free play game over or quit, or for navigation', () => {
     const cases: [FlowState, FlowAction][] = [
       [freeOn('playing', '1-1'), { kind: 'die', score: 50 }],
+      [freeOn('paused', '1-1'), { kind: 'quit' }],
       [INITIAL_FLOW, { kind: 'start' }],
-      [INITIAL_FLOW, { kind: 'resumeRank', run: RUN }],
+      [at('modeSelect'), { kind: 'askNewRank' }],
       [at('galaxySelect', { mode: 'free' }), { kind: 'playGalaxy', id: '1-1' }],
     ];
     for (const [state, action] of cases) expect(saveChange(state, action, transition(state, action), TODAY)).toBeNull();
   });
 
-  it('a new Rank run is saved through setRankRun, replacing any saved one', () => {
-    const save = { ...defaultSave(), rankRun: { ...RUN, next: '2-2' as const }, rankSeq: 7 };
-    expect(saved(save, at('modeSelect'), { kind: 'startRank', run: RUN }).save).toMatchObject({ rankRun: RUN, rankSeq: 8 });
+  it('a new Rank run is saved through setRankRun, marked as in its galaxy', () => {
+    expect(saved(defaultSave(), at('modeSelect'), { kind: 'startRank', run: RUN }).save).toMatchObject({ rankRun: { ...RUN, inGalaxy: true }, rankSeq: 1 });
   });
 
-  it('suspend and resume: a Rank clear saves the run at its next galaxy, and Resume picks it up with the same score and lives', () => {
+  it('a new Rank run over a saved one posts the abandoned run, as it stood, before replacing it', () => {
+    const old = { ...RUN, next: '2-2' as const, score: 4100, continued: true };
+    const after = saved({ ...defaultSave(), rankRun: old, rankSeq: 7 }, at('confirmNewRank'), { kind: 'startRank', run: RUN }).save;
+    expect(after).toMatchObject({ rankRun: { ...RUN, inGalaxy: true }, rankSeq: 8 });
+    expect(after.rankBoard).toEqual([{ score: 4100, reached: 'D2 · G2', date: TODAY, continued: true }]);
+  });
+
+  it('suspend and resume: a clear saves the run between galaxies at the next one, and Resume marks it in that galaxy', () => {
     let save: SaveData = saved(defaultSave(), at('modeSelect'), { kind: 'startRank', run: RUN }).save;
     const cleared = saved(save, rankOn('playing', RUN), { kind: 'clear', report: REPORT, livesLeft: 2 });
     save = cleared.save;
-    expect(save).toMatchObject({ frontier: '1-2', rankRun: { next: '1-2', score: 1200, lives: 2 }, rankSeq: 2 });
+    expect(save).toMatchObject({ frontier: '1-2', rankRun: { next: '1-2', score: 1200, lives: 2, inGalaxy: false }, rankSeq: 2 });
     // The player leaves from results (suspend): nothing more is written, and the title offers the saved run.
     const left = saved(save, cleared.state, { kind: 'title' });
     expect(left.save).toBe(save);
     const savedRun = left.save.rankRun;
     if (savedRun === null) throw new Error('the suspended run must be in the save');
-    expect(transition(left.state, { kind: 'resumeRank', run: savedRun })).toEqual(rankOn('playing', savedRun, { runs: 2 }));
+    const resumed = saved(left.save, left.state, { kind: 'resumeRank', run: savedRun });
+    expect(resumed.state).toEqual(rankOn('playing', savedRun, { runs: 2 }));
+    expect(resumed.save).toMatchObject({ rankRun: { ...savedRun, inGalaxy: true }, rankSeq: 3 });
   });
 
-  it('a Rank game over writes a board entry with the run score and ends the saved run', () => {
+  it('Quit mid-galaxy in Rank forfeits it: one life gone, back at the score it carried in', () => {
+    const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 2 };
+    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('paused', playing), { kind: 'quit' });
+    expect(after.state).toMatchObject({ screen: 'title', rankRun: null });
+    expect(after.save).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 6, rankBoard: [] });
+  });
+
+  it('Quit on the last life loses the run: its entry posted and Continue left for the title', () => {
+    const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 1 };
+    const after = saved(defaultSave(), rankOn('paused', playing), { kind: 'quit' }).save;
+    expect(after.rankRun).toMatchObject({ lives: 0, score: 2500, inGalaxy: false });
+    expect(after.rankBoard).toEqual([{ score: 2500, reached: 'D1 · G3', date: TODAY, continued: false }]);
+  });
+
+  it('a Rank game over posts the run total and keeps the run, with no lives, for a Continue', () => {
     const run1 = { ...RUN, next: '3-4' as const, score: 5000, lives: 1 };
-    const save = { ...defaultSave(), rankRun: run1, rankSeq: 3 };
-    const after = saved(save, rankOn('playing', run1), { kind: 'die', score: 640 }).save;
-    expect(after).toMatchObject({ rankRun: null, rankSeq: 4, rankBoard: [{ score: 5640, reached: 'D3 · G4', date: TODAY, continued: false }] });
+    const save = { ...defaultSave(), rankRun: { ...run1, inGalaxy: true }, rankSeq: 3 };
+    const after = saved(save, rankOn('playing', run1), { kind: 'die', score: 640 });
+    expect(after.save).toMatchObject({ rankRun: { ...run1, lives: 0, inGalaxy: false }, rankSeq: 4 });
+    expect(after.save.rankBoard).toEqual([{ score: 5640, reached: 'D3 · G4', date: TODAY, continued: false }]);
+    // Title from the card writes nothing more: the title offers the Continue.
+    expect(saved(after.save, after.state, { kind: 'title' }).save).toBe(after.save);
   });
 
   it('Continue: the continued run is saved with the score reset and marked, and its later game over is marked too', () => {
     const run1 = { ...RUN, next: '1-3' as const, score: 2500, lives: 1 };
     let step = saved({ ...defaultSave(), rankRun: run1, rankSeq: 1 }, rankOn('playing', run1), { kind: 'die', score: 100 });
     step = saved(step.save, step.state, { kind: 'continue' });
-    expect(step.save).toMatchObject({ rankRun: { next: '1-3', score: 0, lives: 3, continued: true }, rankSeq: 3 });
+    expect(step.save).toMatchObject({ rankRun: { next: '1-3', score: 0, lives: 3, continued: true, inGalaxy: true }, rankSeq: 3 });
     expect(step.save.rankBoard).toEqual([{ score: 2600, reached: 'D1 · G3', date: TODAY, continued: false }]);
     step = saved(step.save, step.state, { kind: 'die', score: 300 });
     expect(step.save.rankBoard).toEqual([
@@ -281,6 +322,33 @@ describe('saveChange', () => {
     const after = saved({ ...defaultSave(), frontier: '5-6', rankRun: last, rankSeq: 9 }, rankOn('playing', last), { kind: 'clear', report: REPORT, livesLeft: 1 }).save;
     expect(after).toMatchObject({ rankRun: null, rankSeq: 10, galaxies: { '5-6': { bestScore: 1200, stars: 3 } } });
     expect(after.rankBoard).toEqual([{ score: 91200, reached: 'D5 · ★', date: TODAY, continued: false }]);
+  });
+});
+
+describe('applySaveChange (the stale-tab guard)', () => {
+  const run1 = { ...RUN, next: '1-2' as const, score: 900, lives: 2 };
+  const playing = rankOn('playing', run1);
+  const clear: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 2 };
+  const change = saveChange(playing, clear, transition(playing, clear), TODAY);
+  if (change === null) throw new Error('a Rank clear must write');
+
+  it('applies the whole change for a tab that saw the run at the stored rankSeq', () => {
+    const save = { ...defaultSave(), rankRun: run1, rankSeq: 4 };
+    expect(applySaveChange(save, change, 4)).toMatchObject({ stale: false, save: { frontier: '1-3', rankRun: { next: '1-3' }, rankSeq: 5 } });
+  });
+
+  it('drops the Rank part, but keeps the clear, once another tab has moved the run on', () => {
+    // Another tab ended the run since this tab last saw it at rankSeq 4.
+    const save = { ...defaultSave(), rankRun: null, rankSeq: 5 };
+    const { save: after, stale } = applySaveChange(save, change, 4);
+    expect(stale).toBe(true);
+    expect(after).toMatchObject({ frontier: '1-3', rankRun: null, rankSeq: 5, rankBoard: [] });
+  });
+
+  it('never blocks a change with no Rank part', () => {
+    const free = saveChange(freeOn('playing', '1-1'), clear, transition(freeOn('playing', '1-1'), clear), TODAY);
+    if (free === null) throw new Error('a Free clear must write');
+    expect(applySaveChange({ ...defaultSave(), rankSeq: 9 }, free, 0).stale).toBe(false);
   });
 });
 

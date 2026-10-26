@@ -3,20 +3,24 @@ import type { Screen } from '../../src/app/flow';
 import { createRunController, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
-import { SAVE_KEY } from '../../src/meta/save';
+import { setRankRun } from '../../src/meta/progress';
+import { startRank } from '../../src/meta/rankRun';
+import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
+import { STEP_SECONDS } from '../../src/sim/config';
+import { NO_CONTROLS } from '../../src/sim/controls';
 import { RingLog } from '../../src/platform/log';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
 
-function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> & { items: Map<string, string> } {
-  const items = new Map<string, string>();
+function memoryStorage(initial?: SaveData): Pick<Storage, 'getItem' | 'setItem'> & { items: Map<string, string> } {
+  const items = new Map<string, string>(initial === undefined ? [] : [[SAVE_KEY, JSON.stringify(initial)]]);
   return { items, getItem: (key) => items.get(key) ?? null, setItem: (key, value) => items.set(key, value) };
 }
 
-function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD) {
-  const storage = memoryStorage();
+function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData) {
+  const storage = memoryStorage(save);
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
   const run = createRunController({
@@ -27,6 +31,7 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
     field,
     showScreen: (screen) => screens.push(screen),
     onRunStarted,
+    notify: () => undefined,
   });
   return { run, storage, screens, onRunStarted };
 }
@@ -67,13 +72,29 @@ describe('createRunController', () => {
     expect(world?.status).toBe('gameOver');
   });
 
-  it('stands the run total on the Rank score so far plus the galaxy score', () => {
-    const { run } = setup({ galaxy: '1-1', startLives: 3 });
-    expect(run.runTotal).toBe(0);
+  it('stands the run total on the Rank score carried in plus the galaxy score, and on the clear total after it', () => {
+    const saved = { ...startRank('2026-10-26'), score: 4000 };
+    const { run } = setup({ seed: 2 }, () => FIELD, setRankRun(defaultSave(), saved));
+    run.command({ kind: 'resumeRank' });
+    const world = run.world;
+    if (world === null) throw new Error('Resume must start a run');
+    expect(run.runTotal).toBe(4000);
+    // Seed 2 keeps the idle ship alive to the warp, so the clear bonus is the galaxy's only score.
+    while (run.flow.screen === 'playing') run.handle(world.step(STEP_SECONDS, NO_CONTROLS));
+    expect(run.flow.screen).toBe('results');
+    expect(run.runTotal).toBe(run.flow.result?.total);
+    expect(run.runTotal).toBe(4000 + world.score);
+  });
+
+  it('is the galaxy score in Free play', () => {
+    const { run } = setup({ galaxy: '1-1', seed: 2 });
     run.command({ kind: 'start' });
-    expect(run.runTotal).toBe(0);
-    run.handle([{ type: 'gameOver', score: 0 }]);
-    expect(run.flow.screen).toBe('gameOver');
+    expect(run.runTotal).toBe(run.world?.score);
+  });
+
+  it('forfeits a galaxy left unfinished as it boots, before the title shows', () => {
+    const { run } = setup({}, () => FIELD, setRankRun(defaultSave(), { ...startRank('2026-10-26'), inGalaxy: true }));
+    expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
   });
 
   it('refuses to start without a field, saying what to do', () => {

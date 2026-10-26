@@ -3,8 +3,10 @@ import { RANK_START_LIVES } from '../src/meta/rankRun';
 import {
   expect,
   expectMode,
+  fastForward,
   gameState,
   nextFrames,
+  openGame,
   openGameOverRun,
   test,
   waitForGameOver,
@@ -115,4 +117,25 @@ test('a fire key held through the restart does not fire until pressed again', as
   await page.keyboard.down('Space');
   await expect.poll(async () => (await gameState(page)).projectileCount).toBeGreaterThan(0);
   await page.keyboard.up('Space');
+});
+
+test('a Free play game over offers Retry, which plays the galaxy again at once, and Map', async ({ page }) => {
+  // Three lives in 5-5: seed 30's idle ship loses its last about 17 s in, so the test fast-forwards there.
+  await openGame(page, { galaxy: '5-5', seed: 30 });
+  await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+  await fastForward(page, 40);
+  await expectMode(page, 'gameOver');
+  await expect(page.getByTestId('rank-continue')).toBeHidden();
+  await waitOutGameOverGuard(page);
+
+  await page.getByTestId('results-retry').click();
+  await expectMode(page, 'playing');
+  expect(await gameState(page)).toMatchObject({ galaxy: '5-5', lives: 3, rankRun: null });
+
+  await fastForward(page, 40);
+  await expectMode(page, 'gameOver');
+  await waitOutGameOverGuard(page);
+  await page.getByTestId('results-map').click();
+  await expectMode(page, 'map');
 });

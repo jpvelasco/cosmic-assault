@@ -141,7 +141,7 @@ describe('practice rules', () => {
 });
 
 describe('warp-out', () => {
-  it('clears every rock for 0 points at the end of the timer, then clears the galaxy 1.5 s later', () => {
+  it('clears every rock for 0 points at the end of the timer and reports the clear on that step; the status clears 1.5 s later', () => {
     const rocks = [still(100, 100, 0), still(1100, 600, 2), still(200, 650, 3)];
     const w = galaxyWorld(calm('1-1'), { initialAsteroids: rocks });
     const ids = w.asteroids.map((a) => a.id);
@@ -154,8 +154,24 @@ describe('warp-out', () => {
     const cleared = log.filter((l) => l.elapsed === at && l.event.type === 'asteroidDestroyed').map((l) => l.event);
     expect(cleared.map((e) => (e.type === 'asteroidDestroyed' ? [e.id, e.points] : null))).toEqual(ids.map((id) => [id, 0]));
     expect(w.score).toBe(250 + 500); // 1-1 scores only its clear and no-death bonus
-    const done = log.find((l) => l.event.type === 'galaxyCleared');
-    expect(done?.elapsed).toBeCloseTo(at + WARP_SECONDS, 6);
+    // The outcome is final once the warp starts (the ship cannot be hit, warp kills score 0), so it is reported then.
+    const done = log.filter((l) => l.event.type === 'galaxyCleared');
+    expect(done.map((l) => l.elapsed)).toEqual([at]);
+    const types = log.filter((l) => l.elapsed === at).map((l) => l.event.type);
+    expect(types.indexOf('warpOut')).toBeLessThan(types.indexOf('galaxyCleared'));
+    expect(w.status).toBe('cleared');
+  });
+
+  it('is already scored when the warp starts, and turns cleared 1.5 s later with no second event', () => {
+    const w = galaxyWorld(calm('1-1'));
+    const log = play(w, 90.01);
+    expect(w.status).toBe('warping');
+    expect(ofType(eventsOf(log), 'galaxyCleared')).toEqual([{ type: 'galaxyCleared', score: 750, deaths: 0, stars: 3, bonus: 750 }]);
+    expect(w.score).toBe(750);
+    const after = play(w, WARP_SECONDS + 0.1);
+    expect(w.status).toBe('cleared');
+    expect(eventsOf(after)).toEqual([]);
+    expect(w.score).toBe(750);
   });
 
   it('holds the ship safe from a rock sitting on it as the timer runs out, on the very step its shield drops', () => {

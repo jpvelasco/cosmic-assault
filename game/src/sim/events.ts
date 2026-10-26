@@ -16,6 +16,7 @@ export type SimEvent =
   | { type: 'showerStart' }
   | { type: 'showerEnd' }
   | { type: 'warpOut' }
+  /** The galaxy is won, on the step the warp starts: the outcome is final then. The status turns `'cleared'` 1.5 s later. */
   | { type: 'galaxyCleared'; score: number; deaths: number; stars: Stars; bonus: number }
   /** The combo multiplier changed. */
   | { type: 'combo'; multiplier: number }

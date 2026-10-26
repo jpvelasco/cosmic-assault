@@ -7,18 +7,22 @@ export const RANK_MAX_LIVES = 5;
 /** A Rank run in progress: the galaxy to play next and what the player carries into it. */
 export interface RankRun {
   readonly next: GalaxyId;
+  /** The score carried into `next`. */
   readonly score: number;
+  /** 0 once the run is lost: it waits, with its board entry posted, for a Continue. */
   readonly lives: number;
   readonly weaponTier: 0 | 1 | 2 | 3;
   /** True once the player used Continue; the board marks such runs. */
   readonly continued: boolean;
   /** `YYYY-MM-DD` */
   readonly startedAt: string;
+  /** True while `next` is being played. A run saved like this was left mid-galaxy (Quit or a closed tab): it forfeits. */
+  readonly inGalaxy: boolean;
 }
 
 /** A fresh run at 1-1. `today` is passed in because this module may not read the clock. */
 export function startRank(today: string): RankRun {
-  return { next: '1-1', score: 0, lives: RANK_START_LIVES, weaponTier: 0, continued: false, startedAt: today };
+  return { next: '1-1', score: 0, lives: RANK_START_LIVES, weaponTier: 0, continued: false, startedAt: today, inGalaxy: false };
 }
 
 /**
@@ -32,12 +36,20 @@ export function afterClear(run: RankRun, cleared: GalaxyDef, score: number, live
   const next = nextGalaxyId(cleared.id);
   if (next === null) return 'complete';
   const lives = cleared.kind === 'boss' ? Math.min(RANK_MAX_LIVES, livesLeft + 1) : livesLeft;
-  return { ...run, next, score, lives };
+  return { ...run, next, score, lives, inGalaxy: false };
 }
 
 /** Continue after a game over: same galaxy, fresh lives, score back to 0, and the run is marked. */
 export function afterGameOver(run: RankRun): RankRun {
   return { ...run, score: 0, lives: RANK_START_LIVES, continued: true };
+}
+
+/**
+ * The run after its galaxy is left unfinished (Quit, or a tab closed mid-galaxy): one life lost and the galaxy's score
+ * gone, back between galaxies. With no lives left the run is lost, as at a game over.
+ */
+export function afterForfeit(run: RankRun): RankRun {
+  return { ...run, lives: Math.max(0, run.lives - 1), inGalaxy: false };
 }
 
 /** Which of two runs got further: positive when `b` did. Further `next`, then higher score, then one that has not used Continue; the rest breaks ties so every pair has an order. */

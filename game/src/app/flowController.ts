@@ -1,15 +1,16 @@
 import { galaxyIdOf } from '../content/galaxies';
 import type { GalaxyId } from '../content/types';
-import { isUnlocked } from '../meta/progress';
-import { startRank, type RankRun } from '../meta/rankRun';
-import { STEP_SECONDS } from '../sim/config';
-import { NO_CONTROLS } from '../sim/controls';
+import { forfeitRankRun, isUnlocked } from '../meta/progress';
+import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
 import type { SimEvent } from '../sim/events';
 import type { World } from '../sim/world';
 import type { FlowCommand } from './commands';
-import { INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState, type Screen } from './flow';
+import { applySaveChange, INITIAL_FLOW, saveChange, toTitle, transition, type FlowAction, type FlowState, type SaveChange, type Screen } from './flow';
 import type { SaveStore } from './saveStore';
 import type { RunOverrides } from './seed';
+
+/** The toast when another tab has moved this tab's Rank run on. */
+export const STALE_RUN_NOTICE = 'This run continued in another tab';
 
 export interface FlowControllerDeps {
   readonly store: SaveStore;
@@ -19,6 +20,8 @@ export interface FlowControllerDeps {
   /** The flow has just started a run of `flow.galaxy`: build its World. Called before `showScreen('playing')`. */
   startRun(flow: FlowState): void;
   showScreen(screen: Screen): void;
+  /** Tells the player something in a toast. */
+  notify(text: string): void;
 }
 
 export interface FlowController {
@@ -28,24 +31,57 @@ export interface FlowController {
   dispatch(action: FlowAction): void;
   /** Feeds one step's events: a clear or a game over moves the flow and writes the save at once. */
   handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void;
-  /** Quits the paused run to the title. A run warping out is finished first, so its clear is kept. */
-  quit(world: World): void;
 }
 
-/** Owns the flow state: turns commands into flow actions, writes what each one saves, and tells the app what to show. */
+/**
+ * Owns the flow state: turns commands into flow actions, writes what each one saves, and tells the app what to show.
+ * A Rank run left mid-galaxy (a closed tab) is forfeited as it boots. Rank writes are guarded against other tabs: the
+ * controller remembers the `rankSeq` it last saw the run at, and a write that finds a higher one stored is dropped.
+ */
 export function createFlowController(deps: FlowControllerDeps): FlowController {
   const { store, overrides } = deps;
   let state = INITIAL_FLOW;
+
+  /** A galaxy left unfinished, here or in a tab closed mid-galaxy, costs its life before anything reads the run. */
+  function settleRun(): void {
+    if (store.save.rankRun?.inGalaxy !== true) return;
+    store.update((save) => (save.rankRun?.inGalaxy === true ? forfeitRankRun(save, save.rankRun, deps.today()) : save));
+  }
+  settleRun();
+  /** The `rankSeq` this tab last saw its Rank run at: loaded, written, or shown on the title. */
+  let knownSeq = store.save.rankSeq;
+
+  /** Writes `change`; returns false when another tab had moved the Rank run on, so its Rank part was dropped. */
+  function write(change: SaveChange): boolean {
+    const outcome = { stale: false };
+    store.update((save) => {
+      const applied = applySaveChange(save, change, knownSeq);
+      outcome.stale = applied.stale;
+      return applied.save;
+    });
+    if (!outcome.stale && change.rank !== null) knownSeq = store.save.rankSeq;
+    return !outcome.stale;
+  }
+
+  function show(before: FlowState, after: FlowState): void {
+    state = after;
+    if (after.runs !== before.runs) deps.startRun(after);
+    if (after.screen !== before.screen) deps.showScreen(after.screen);
+  }
 
   function dispatch(action: FlowAction): void {
     const before = state;
     const after = transition(before, action);
     if (after === before) return;
+    // On the title the player sees the run as the save has it now, other tabs' changes included.
+    if (before.screen === 'title') knownSeq = store.save.rankSeq;
     const change = saveChange(before, action, after, deps.today());
-    if (change !== null) store.update(change);
-    state = after;
-    if (after.runs !== before.runs) deps.startRun(after);
-    if (after.screen !== before.screen) deps.showScreen(after.screen);
+    if (change !== null && !write(change)) {
+      deps.notify(STALE_RUN_NOTICE);
+      show(before, toTitle(before));
+      return;
+    }
+    show(before, after);
   }
 
   /** A new Rank run, at `from`; `?lives=` sets its lives. */
@@ -61,16 +97,27 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     return overrides.startLives === undefined ? { kind: 'playGalaxy', id: galaxy } : { kind: 'startRank', run: newRank(galaxy) };
   }
 
+  /** Resume Rank plays the saved run on; a lost one (no lives) is a Continue: score back to 0, and marked. */
+  function resume(): FlowAction | null {
+    settleRun();
+    const run = store.save.rankRun;
+    if (run === null) return null;
+    return { kind: 'resumeRank', run: run.lives === 0 ? afterGameOver(run) : run };
+  }
+
+  /** Rank on mode select asks first when a run is saved; Rank on that confirm card starts the new run. */
+  function chooseRank(): FlowAction {
+    return state.screen === 'modeSelect' && store.save.rankRun !== null ? { kind: 'askNewRank' } : { kind: 'startRank', run: newRank() };
+  }
+
   function actionFor(command: FlowCommand): FlowAction | null {
     switch (command.kind) {
       case 'start':
         return play();
-      case 'resumeRank': {
-        const run = store.save.rankRun;
-        return run === null ? null : { kind: 'resumeRank', run };
-      }
+      case 'resumeRank':
+        return resume();
       case 'chooseMode':
-        return command.mode === 'rank' ? { kind: 'startRank', run: newRank() } : { kind: 'chooseFree' };
+        return command.mode === 'rank' ? chooseRank() : { kind: 'chooseFree' };
       case 'openDimension':
         return isUnlocked(store.save, galaxyIdOf(command.dimension, 1)) ? command : null;
       case 'openGalaxy':
@@ -101,10 +148,5 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     },
     dispatch,
     handle,
-    quit(world) {
-      // The ship cannot be hit while warping, so the rest of the warp needs no input to end in the clear.
-      while (world.status === 'warping') handle(world.step(STEP_SECONDS, NO_CONTROLS), world);
-      dispatch(state.screen === 'paused' ? { kind: 'quit' } : { kind: 'title' });
-    },
   };
 }

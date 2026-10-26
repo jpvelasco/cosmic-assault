@@ -376,14 +376,15 @@ describe('beating the Sentinel', () => {
     expect(g.world.score).toBe(total);
   });
 
-  it('is invulnerable and attack-free while dying, then warps for 1.5 s before it clears', () => {
+  it('is invulnerable and attack-free while dying, then reports the clear as it warps, and clears 1.5 s later', () => {
     const g = beaten('free');
     const killedAt = g.world.elapsed;
     playWorld(g, 6);
     const timeOf = (type: SimEvent['type']): number => g.times[g.log.findIndex((e) => e.type === type)] ?? Number.NaN;
     expect(timeOf('bossDown') - killedAt).toBeCloseTo(2, 1);
     expect(timeOf('warpOut')).toBe(timeOf('bossDown'));
-    expect(timeOf('galaxyCleared') - timeOf('bossDown')).toBeCloseTo(1.5, 1);
+    expect(timeOf('galaxyCleared')).toBe(timeOf('warpOut'));
+    expect(g.world.status).toBe('cleared');
     const types = g.log.map((e) => e.type);
     expect(types.indexOf('bossDown')).toBeLessThan(types.indexOf('warpOut'));
     expect(types.indexOf('warpOut')).toBeLessThan(types.indexOf('galaxyCleared'));

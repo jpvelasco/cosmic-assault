@@ -15,10 +15,11 @@ import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/qua
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
 import type { SaveData } from '../meta/save';
-import type { Controls } from '../sim/controls';
+import { STEP_SECONDS } from '../sim/config';
+import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
-import type { World } from '../sim/world';
+import { hasEnded, type World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
@@ -44,6 +45,8 @@ import { createViewSync } from './viewSync';
 export interface E2eHooks {
   /** Runs at the start of every guarded frame. */
   e2eBeforeFrame?: (() => void) | undefined;
+  /** Set by `createApp`: steps the run in play by fixed steps for `seconds`, or until it leaves play. */
+  e2eFastForward?: ((seconds: number) => void) | undefined;
 }
 
 export interface App {
@@ -129,6 +132,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     },
     showScreen: setMode,
     onRunStarted,
+    notify: (text) => {
+      toast.show(text);
+    },
   });
 
   let mode: Screen = 'title';
@@ -317,14 +323,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   /** Steps the run; a clear or game over moves the flow to its end card, after which the steps do nothing. */
+  /** One sim step, its events handed to the hit-stop, renderer, audio and flow. */
+  function stepOnce(world: World, dt: number, controls: Controls): void {
+    const events = world.step(dt, controls);
+    hitStop.trigger(events);
+    renderer.handle(events, world);
+    audio.handle(events);
+    run.handle(events);
+  }
+
   function stepWorld(world: World, controls: Controls, frameSeconds: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
-      const events = world.step(dt, controls);
-      hitStop.trigger(events);
-      renderer.handle(events, world);
-      audio.handle(events);
-      run.handle(events);
+      stepOnce(world, dt, controls);
     });
   }
 
@@ -377,6 +388,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       const frozen = hitStop.frozen;
       stepWorld(world, readControls(pad), frameSeconds);
       renderer.advance(visualSeconds, world, frozen);
+    } else if (END_SCREENS.includes(mode) && !hasEnded(world.status)) {
+      // The clear is recorded and its card shown as the warp starts; the warp plays out under the card, untouched by input.
+      stepWorld(world, NO_CONTROLS, frameSeconds);
+      renderer.advance(visualSeconds, world, hitStop.frozen);
+      redrawPending = true;
     } else if (settling) {
       // The death or warp burst plays out under the card; redrawing stops once the last particle is gone.
       renderer.settle(visualSeconds, world);
@@ -386,6 +402,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       renderer.draw(world, loop.alpha());
       redrawPending = false;
     }
+  }
+
+  if (import.meta.env.MODE === 'e2e' && e2e !== undefined) {
+    e2e.e2eFastForward = (seconds) => {
+      const { world } = run;
+      if (world === null) return;
+      const controls = readControls(previousPad);
+      for (let t = 0; t < seconds && mode === 'playing'; t += STEP_SECONDS) stepOnce(world, STEP_SECONDS, controls);
+      redrawPending = true;
+    };
   }
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */

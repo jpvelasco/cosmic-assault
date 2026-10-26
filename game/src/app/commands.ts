@@ -49,6 +49,7 @@ export function commandForKey(screen: Screen, code: string): Command | null {
     case 'title':
       return START_KEYS.has(code) ? START : null;
     case 'modeSelect':
+    case 'confirmNewRank':
     case 'map':
     case 'galaxySelect':
       return code === BACK_KEY ? BACK : null;

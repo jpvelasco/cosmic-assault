@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
-import { dimensionStars, isUnlocked, recordClear, setRankRun } from '../../src/meta/progress';
+import { abandonRankRun, dimensionStars, forfeitRankRun, isUnlocked, loseRankRun, recordClear, setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, MAX_RANK_SEQ, type SaveData } from '../../src/meta/save';
 
@@ -113,5 +113,35 @@ describe('setRankRun', () => {
     const next = setRankRun(save, run);
     expect(JSON.stringify(save)).toBe(before);
     expect({ ...next, rankRun: null, rankSeq: 0 }).toEqual(save);
+  });
+});
+
+describe('ending a Rank run', () => {
+  const TODAY = '2026-10-26';
+  const playing = { ...startRank('2026-10-20'), next: '2-4' as const, score: 3000, lives: 2, inGalaxy: true };
+
+  it('loseRankRun posts the run total and keeps the run, with no lives, for a Continue', () => {
+    const after = loseRankRun({ ...defaultSave(), rankSeq: 4 }, playing, 250, TODAY);
+    expect(after.rankBoard).toEqual([{ score: 3250, reached: 'D2 · G4', date: TODAY, continued: false }]);
+    expect(after).toMatchObject({ rankRun: { ...playing, lives: 0, inGalaxy: false }, rankSeq: 5 });
+  });
+
+  it('forfeitRankRun costs a life and posts nothing while lives remain', () => {
+    const after = forfeitRankRun({ ...defaultSave(), rankSeq: 1 }, playing, TODAY);
+    expect(after).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 2, rankBoard: [] });
+  });
+
+  it('forfeitRankRun on the last life loses the run at the score it carried into the galaxy', () => {
+    const after = forfeitRankRun(defaultSave(), { ...playing, lives: 1, continued: true }, TODAY);
+    expect(after.rankRun).toMatchObject({ lives: 0, score: 3000 });
+    expect(after.rankBoard).toEqual([{ score: 3000, reached: 'D2 · G4', date: TODAY, continued: true }]);
+  });
+
+  it('abandonRankRun posts a live run as it stands, and not a lost one, whose entry is already in', () => {
+    const live = { ...defaultSave(), rankRun: { ...playing, inGalaxy: false } };
+    expect(abandonRankRun(live, TODAY).rankBoard).toEqual([{ score: 3000, reached: 'D2 · G4', date: TODAY, continued: false }]);
+    const lost = { ...defaultSave(), rankRun: { ...playing, lives: 0 } };
+    expect(abandonRankRun(lost, TODAY)).toBe(lost);
+    expect(abandonRankRun(defaultSave(), TODAY)).toEqual(defaultSave());
   });
 });

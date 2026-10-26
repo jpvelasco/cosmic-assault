@@ -54,11 +54,15 @@ export function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLEle
   return { panel, card };
 }
 
-/** A glass chip with the classes `chip` and `className` and a test id (the class unless given). */
-export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
-  const el = button(`chip ${className}`, '', onClick);
+/** Gives `el` the `data-testid` the e2e specs find it by, and returns it. */
+export function withTestId<T extends HTMLElement>(el: T, testId: string): T {
   el.dataset['testid'] = testId;
   return el;
+}
+
+/** A glass chip with the classes `chip` and `className` and a test id (the class unless given). */
+export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
+  return withTestId(button(`chip ${className}`, '', onClick), testId);
 }
 
 /** Labels a sound chip with the state it will switch away from. */

@@ -25,6 +25,8 @@ export interface RunControllerDeps {
   showScreen(screen: Screen): void;
   /** A new World is in place: reset the input latches, the loop and the renderer for it. */
   onRunStarted(): void;
+  /** Tells the player something in a toast. */
+  notify(text: string): void;
 }
 
 export interface RunController {
@@ -40,7 +42,7 @@ export interface RunController {
   handle(events: readonly SimEvent[]): void;
   pause(): void;
   resume(): void;
-  /** Quits the paused run to the title. */
+  /** Quits the paused run to the title; in Rank that forfeits the galaxy, at the cost of a life. */
   quit(): void;
   readonly onExternalChange: SaveStore['onExternalChange'];
   readonly onWriteFailure: SaveStore['onWriteFailure'];
@@ -96,6 +98,9 @@ export function createRunController(deps: RunControllerDeps): RunController {
       if (MENU_SCREENS.includes(screen)) dropRun();
       deps.showScreen(screen);
     },
+    notify: (text) => {
+      deps.notify(text);
+    },
   });
 
   return {
@@ -123,7 +128,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       flow.dispatch({ kind: 'resume' });
     },
     quit() {
-      if (world !== null) flow.quit(world);
+      flow.dispatch({ kind: 'quit' });
     },
     onExternalChange: (callback) => store.onExternalChange(callback),
     onWriteFailure: (callback) => store.onWriteFailure(callback),

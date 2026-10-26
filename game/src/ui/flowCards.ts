@@ -4,7 +4,8 @@ import { DIMENSION_NUMBERS, DIMENSIONS, GALAXY_INDEXES, galaxyIdOf, galaxyLabel 
 import type { Dimension, GalaxyId } from '../content/types';
 import { dimensionStars, isUnlocked } from '../meta/progress';
 import type { SaveData } from '../meta/save';
-import { button, cardPanel, element } from './dom';
+import { button, cardPanel, element, withTestId } from './dom';
+import type { HintCopy } from './hints';
 
 /** What the mode select, map, galaxy select and end cards show. */
 export interface FlowCardsState {
@@ -12,8 +13,8 @@ export interface FlowCardsState {
   readonly save: SaveData;
   /** The run's score: the galaxy's, on its end card. */
   readonly score: number;
-  /** The game-over card's line on how to play again. */
-  readonly restartHint: string;
+  /** The lines on how to choose (mode select) and play again (game over), for keys or taps. */
+  readonly hints: HintCopy;
 }
 
 export interface FlowCards {
@@ -26,11 +27,6 @@ const PRIMARY = 'menu-button--primary';
 
 const starsText = (stars: number): string => '★'.repeat(stars) + '☆'.repeat(3 - stars);
 
-function withTestId<T extends HTMLElement>(el: T, testId: string): T {
-  el.dataset['testid'] = testId;
-  return el;
-}
-
 /** A card with a heading, its body and (moved in when shown) the shared Back button. */
 function menuCard(heading: string, ...body: HTMLElement[]): { panel: HTMLElement; card: HTMLElement; title: HTMLElement } {
   const { panel, card } = cardPanel('menu');
@@ -39,7 +35,7 @@ function menuCard(heading: string, ...body: HTMLElement[]): { panel: HTMLElement
   return { panel, card, title };
 }
 
-function modeSelectCard(act: (command: Command) => () => void): ReturnType<typeof menuCard> {
+function modeSelectCard(act: (command: Command) => () => void, hint: HTMLElement): ReturnType<typeof menuCard> {
   const rank = withTestId(button(`menu-button ${PRIMARY}`, 'Rank', act({ kind: 'chooseMode', mode: 'rank' })), 'mode-rank');
   const free = withTestId(button('menu-button', 'Free play', act({ kind: 'chooseMode', mode: 'free' })), 'mode-free');
   return menuCard(
@@ -48,7 +44,14 @@ function modeSelectCard(act: (command: Command) => () => void): ReturnType<typeo
     element('p', 'hint', 'One run through every Dimension'),
     free,
     element('p', 'hint', "Replay any galaxy you've unlocked"),
+    hint,
   );
+}
+
+/** Rank while a run is saved: starting over ends that run, so it asks. Back keeps it. */
+function confirmNewRankCard(act: (command: Command) => () => void): ReturnType<typeof menuCard> {
+  const start = withTestId(button(`menu-button ${PRIMARY}`, 'Start new run', act({ kind: 'chooseMode', mode: 'rank' })), 'confirm-new-rank');
+  return menuCard('Start a new run?', element('p', 'hint', 'Your saved run will end.'), start);
 }
 
 /**
@@ -61,7 +64,9 @@ export function createFlowCards(send: (command: Command) => void): FlowCards {
   };
   const back = withTestId(button('menu-button', 'Back', act({ kind: 'back' })), 'back');
 
-  const modeSelect = modeSelectCard(act);
+  const modeHint = element('p', 'hint');
+  const modeSelect = modeSelectCard(act, modeHint);
+  const confirmNewRank = confirmNewRankCard(act);
   const dimensionButtons = DIMENSION_NUMBERS.map((d) => ({
     el: withTestId(button('chip', '', act({ kind: 'openDimension', dimension: d })), `dimension-${String(d)}`),
     d,
@@ -71,7 +76,12 @@ export function createFlowCards(send: (command: Command) => void): FlowCards {
   let galaxyButtons: { el: HTMLButtonElement; id: GalaxyId }[] = [];
   const galaxyRow = element('div', 'chips');
   const galaxySelect = menuCard('', galaxyRow);
-  const menus: Partial<Record<Screen, HTMLElement>> = { modeSelect: modeSelect.card, map: map.card, galaxySelect: galaxySelect.card };
+  const menus: Partial<Record<Screen, HTMLElement>> = {
+    modeSelect: modeSelect.card,
+    confirmNewRank: confirmNewRank.card,
+    map: map.card,
+    galaxySelect: galaxySelect.card,
+  };
 
   const end = cardPanel('game-over');
   const endHeading = element('h2', 'heading');
@@ -122,7 +132,7 @@ export function createFlowCards(send: (command: Command) => void): FlowCards {
     const total = screen === 'gameOver' ? null : (result?.total ?? null);
     const stars = screen === 'gameOver' || result === null ? '' : `${starsText(result.report.stars)} · Bonus ${String(result.report.bonus)}`;
     endDetail.textContent = flow.mode === 'rank' && total !== null ? `${stars} · Run total ${String(total)}` : stars;
-    endHint.textContent = screen === 'gameOver' ? state.restartHint : '';
+    endHint.textContent = screen === 'gameOver' ? state.hints.restart : '';
     let first = true;
     for (const [el, shows] of endButtons) {
       el.hidden = !shows(state);
@@ -133,12 +143,13 @@ export function createFlowCards(send: (command: Command) => void): FlowCards {
   }
 
   return {
-    panels: { modeSelect: modeSelect.panel, map: map.panel, galaxySelect: galaxySelect.panel, results: end.panel, gameOver: end.panel, rankComplete: end.panel },
+    panels: { modeSelect: modeSelect.panel, confirmNewRank: confirmNewRank.panel, map: map.panel, galaxySelect: galaxySelect.panel, results: end.panel, gameOver: end.panel, rankComplete: end.panel },
     update(state) {
       const { screen, dimension } = state.flow;
       const menu = menus[screen];
       // Moved only on a screen change, so a focused Back keeps its focus.
       if (menu !== undefined && back.parentElement !== menu) menu.append(back);
+      modeHint.textContent = state.hints.choose;
       setDimensions(state.save);
       setGalaxies(dimension, state.save);
       setEnd(state);

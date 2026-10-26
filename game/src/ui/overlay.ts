@@ -3,7 +3,7 @@ import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
 import type { SaveData } from '../meta/save';
 import type { InstallOffer } from '../platform/install';
-import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
+import { button, cardPanel, chip, element, focusableControls, showSoundState, withTestId } from './dom';
 import { createFlowCards } from './flowCards';
 import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
 
@@ -71,22 +71,21 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
 
 function titlePanel(play: HTMLButtonElement, resumeRank: HTMLButtonElement, chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
-  const build = element('p', 'build', currentBuildLabel());
-  build.dataset['testid'] = 'build-label';
+  const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
   card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeRank, startHint, chipRow, build);
   return panel;
 }
 
-function pausePanel(actions: OverlayActions, chipRow: HTMLElement): HTMLElement {
+function pausePanel(actions: OverlayActions, quit: HTMLButtonElement, chipRow: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('pause');
-  card.append(
-    element('h2', 'heading', 'Paused'),
-    button('menu-button menu-button--primary', 'Resume', actions.resume),
-    button('menu-button', 'Quit', actions.quit),
-    chipRow,
-  );
+  card.append(element('h2', 'heading', 'Paused'), button('menu-button menu-button--primary', 'Resume', actions.resume), quit, chipRow);
   return panel;
 }
+
+/** In Rank a Quit mid-galaxy forfeits it, so the button says what it costs. */
+const quitLabel = (flow: FlowState): string => (flow.mode === 'rank' ? 'Quit (costs a life)' : 'Quit');
+/** A lost run (no lives) can only go on through a Continue, which resets the score. */
+const resumeLabel = (save: SaveData): string => (save.rankRun?.lives === 0 ? 'Continue Rank (score resets)' : 'Resume Rank');
 
 /**
  * The screens as DOM layers over the canvas, one visible per screen: the title and pause cards here, the rest from
@@ -96,10 +95,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const send = (command: Command) => (): void => {
     actions.command(command);
   };
-  const play = button('menu-button menu-button--primary', 'Play', send({ kind: 'start' }));
-  play.dataset['testid'] = 'play';
-  const resumeRank = button('menu-button', 'Resume Rank', send({ kind: 'resumeRank' }));
-  resumeRank.dataset['testid'] = 'resume-rank';
+  const play = withTestId(button('menu-button menu-button--primary', 'Play', send({ kind: 'start' })), 'play');
+  const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
+  const quit = withTestId(button('menu-button', '', actions.quit), 'quit');
   const flowCards = createFlowCards(actions.command);
   // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
   const sound = chip('sound-toggle', actions.toggleMute);
@@ -109,15 +107,14 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
   const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
   installChip.textContent = 'Install';
-  const iosHint = element('p', 'install-hint', IOS_INSTALL_HINT);
-  iosHint.dataset['testid'] = INSTALL_TEST_ID;
+  const iosHint = withTestId(element('p', 'install-hint', IOS_INSTALL_HINT), INSTALL_TEST_ID);
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
   const title = titlePanel(play, resumeRank, titleRow, startHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
-  const panels: Partial<Record<Screen, HTMLElement>> = { title, paused: pausePanel(actions, pauseRow), ...flowCards.panels };
+  const panels: Partial<Record<Screen, HTMLElement>> = { title, paused: pausePanel(actions, quit, pauseRow), ...flowCards.panels };
   const all = [...new Set(Object.values(panels))];
   root.append(...all);
 
@@ -142,9 +139,11 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
       resumeRank.hidden = save.rankRun === null;
+      resumeRank.textContent = resumeLabel(save);
+      quit.textContent = quitLabel(flow);
       const hints = hintCopy(inputStyle);
       startHint.textContent = hints.start;
-      flowCards.update({ flow, save, score, restartHint: hints.restart });
+      flowCards.update({ flow, save, score, hints });
     },
     focusSettingsChip() {
       settings.focus();

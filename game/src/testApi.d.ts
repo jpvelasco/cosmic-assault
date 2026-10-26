@@ -27,8 +27,6 @@ interface CosmicAssaultTestState {
   readonly save: import('./meta/save').SaveData;
   /** The Rank run as carried into the galaxy in play (on results, into the next one); null outside Rank. A frozen copy. */
   readonly rankRun: import('./meta/rankRun').RankRun | null;
-  /** Always 1: runs are galaxies now and practice levels are left to the unit tests. Kept for bridge v3. */
-  readonly practiceLevel: number;
   /** Score, lives and counts are 0 and ship is null while no run exists (title and menu screens). */
   readonly score: number;
   readonly lives: number;
@@ -62,6 +60,11 @@ interface CosmicAssaultTestState {
 interface CosmicAssaultTestApi {
   readonly version: 3;
   getState(): CosmicAssaultTestState;
+  /**
+   * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event
+   * handling as a frame; stops early once the run leaves play (a clear at warp start, or a game over).
+   */
+  fastForward(seconds: number): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }

@@ -62,11 +62,11 @@ function sanitizeGalaxies(raw: unknown): SaveData['galaxies'] {
 function sanitizeRankRun(raw: unknown): RankRun | null {
   const run = asRecord(raw);
   if (run === null) return null;
-  const { next, score, lives, weaponTier, continued, startedAt } = run;
+  const { next, score, lives, weaponTier, continued, startedAt, inGalaxy = false } = run;
   const tier = WEAPON_TIERS.find((t) => t === weaponTier);
-  if (!isGalaxyId(next) || !isCount(score) || !isCount(lives) || lives < 1 || lives > RANK_MAX_LIVES) return null;
-  if (tier === undefined || typeof continued !== 'boolean' || !isDate(startedAt)) return null;
-  return { next, score, lives, weaponTier: tier, continued, startedAt };
+  if (!isGalaxyId(next) || !isCount(score) || !isCount(lives) || lives > RANK_MAX_LIVES) return null;
+  if (tier === undefined || typeof continued !== 'boolean' || !isDate(startedAt) || typeof inGalaxy !== 'boolean') return null;
+  return { next, score, lives, weaponTier: tier, continued, startedAt, inGalaxy };
 }
 
 function sanitizeEntry(raw: unknown): RankEntry | null {

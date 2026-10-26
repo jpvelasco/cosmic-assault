@@ -5,7 +5,7 @@ import { defaultSave, MAX_RANK_SEQ, mergeSaves, parseSave, SAVE_KEY, sanitizeSav
 import type { RankEntry } from '../../src/meta/rankBoard';
 import type { RankRun } from '../../src/meta/rankRun';
 
-const RUN: RankRun = { next: '2-3', score: 1500, lives: 4, weaponTier: 1, continued: false, startedAt: '2026-10-26' };
+const RUN: RankRun = { next: '2-3', score: 1500, lives: 4, weaponTier: 1, continued: false, startedAt: '2026-10-26', inGalaxy: false };
 const ENTRY: RankEntry = { score: 900, reached: 'D2 · G1', date: '2026-10-25', continued: true };
 const GOOD: SaveData = {
   version: 1,
@@ -103,13 +103,14 @@ describe('sanitizeSave', () => {
         { ...RUN, next: '9-9' },
         { ...RUN, score: -1 },
         { ...RUN, score: '5' },
-        { ...RUN, lives: 0 },
+        { ...RUN, lives: -1 },
         { ...RUN, lives: 6 },
         { ...RUN, lives: 2.5 },
         { ...RUN, weaponTier: 4 },
         { ...RUN, continued: 'no' },
         { ...RUN, startedAt: 'yesterday' },
         { ...RUN, startedAt: 20261026 },
+        { ...RUN, inGalaxy: 'yes' },
         { score: 1 },
         null,
         [],
@@ -120,6 +121,17 @@ describe('sanitizeSave', () => {
 
     it('does not carry unknown fields', () => {
       expect(sanitizeSave({ rankRun: { ...RUN, cheat: true } }).rankRun).toEqual(RUN);
+    });
+
+    it('keeps a lost run with no lives, which waits for a Continue', () => {
+      expect(sanitizeSave({ rankRun: { ...RUN, lives: 0 } }).rankRun).toEqual({ ...RUN, lives: 0 });
+    });
+
+    it('keeps the in-galaxy mark, and reads a run saved without one as between galaxies', () => {
+      expect(sanitizeSave({ rankRun: { ...RUN, inGalaxy: true } }).rankRun).toEqual({ ...RUN, inGalaxy: true });
+      const older: Record<string, unknown> = { ...RUN };
+      delete older['inGalaxy'];
+      expect(sanitizeSave({ rankRun: older }).rankRun).toEqual({ ...RUN, inGalaxy: false });
     });
   });
 

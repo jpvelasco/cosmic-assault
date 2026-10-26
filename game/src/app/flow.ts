@@ -1,18 +1,30 @@
 import { galaxyById, nextGalaxyId } from '../content/galaxies';
 import type { Dimension, GalaxyId } from '../content/types';
-import { recordClear, setRankRun } from '../meta/progress';
-import { addEntry, reachedLabel } from '../meta/rankBoard';
+import { abandonRankRun, endRankRun, forfeitRankRun, loseRankRun, rankEntry, recordClear, setRankRun } from '../meta/progress';
 import { afterClear, afterGameOver, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
 import type { ClearReport, GalaxyMode } from '../sim/scoring';
 
-/** The screen the app is on. Results, game over and Rank complete are the end screens of a run. */
-export type Screen = 'title' | 'modeSelect' | 'map' | 'galaxySelect' | 'playing' | 'paused' | 'results' | 'gameOver' | 'rankComplete';
+/**
+ * The screen the app is on. Results, game over and Rank complete are the end screens of a run; confirmNewRank asks
+ * before a new Rank run ends the saved one.
+ */
+export type Screen =
+  | 'title'
+  | 'modeSelect'
+  | 'confirmNewRank'
+  | 'map'
+  | 'galaxySelect'
+  | 'playing'
+  | 'paused'
+  | 'results'
+  | 'gameOver'
+  | 'rankComplete';
 
 /** The screens that end a run; their input waits out the game-over guard. */
 export const END_SCREENS: readonly Screen[] = ['results', 'gameOver', 'rankComplete'];
 /** The screens with no run behind them. */
-export const MENU_SCREENS: readonly Screen[] = ['title', 'modeSelect', 'map', 'galaxySelect'];
+export const MENU_SCREENS: readonly Screen[] = ['title', 'modeSelect', 'confirmNewRank', 'map', 'galaxySelect'];
 
 export interface FlowState {
   readonly screen: Screen;
@@ -33,9 +45,11 @@ export interface FlowState {
 export type FlowAction =
   /** The title's Play. */
   | { readonly kind: 'start' }
-  /** A new Rank run, from mode select or a `?galaxy=` switch with `?lives=`. */
+  /** A new Rank run, from mode select (or its confirm card) or a `?galaxy=` switch with `?lives=`. */
   | { readonly kind: 'startRank'; readonly run: RankRun }
-  /** The title's Resume Rank, with the run from the save. */
+  /** Rank on mode select while a run is saved: ask first. */
+  | { readonly kind: 'askNewRank' }
+  /** The title's Resume Rank (or Continue Rank), with the run to play from the save. */
   | { readonly kind: 'resumeRank'; readonly run: RankRun }
   | { readonly kind: 'chooseFree' }
   | { readonly kind: 'openDimension'; readonly dimension: Dimension }
@@ -71,11 +85,13 @@ function playFree(state: FlowState, id: GalaxyId): FlowState {
   return { ...state, screen: 'playing', mode: 'free', galaxy: id, dimension: dimensionOf(id), rankRun: null, result: null, runs: state.runs + 1 };
 }
 
+/** Plays `run.next`; the run is marked as in its galaxy, so leaving it unfinished forfeits. */
 function playRank(state: FlowState, run: RankRun): FlowState {
-  return { ...state, screen: 'playing', mode: 'rank', galaxy: run.next, rankRun: run, result: null, runs: state.runs + 1 };
+  return { ...state, screen: 'playing', mode: 'rank', galaxy: run.next, rankRun: { ...run, inGalaxy: true }, result: null, runs: state.runs + 1 };
 }
 
-const toTitle = (state: FlowState): FlowState => ({ ...INITIAL_FLOW, runs: state.runs });
+/** The title, with nothing chosen; `runs` keeps counting. */
+export const toTitle = (state: FlowState): FlowState => ({ ...INITIAL_FLOW, runs: state.runs });
 
 function toMap(state: FlowState): FlowState {
   return { ...state, screen: 'map', mode: 'free', dimension: state.galaxy === null ? state.dimension : dimensionOf(state.galaxy) };
@@ -128,12 +144,19 @@ function menuMove(state: FlowState, action: FlowAction): FlowState {
   switch (state.screen) {
     case 'title':
       if (action.kind === 'start') return { ...state, screen: 'modeSelect' };
-      if (action.kind === 'resumeRank' || action.kind === 'startRank') return playRank(state, action.run);
+      if (action.kind === 'resumeRank') return playRank(state, action.run);
+      // startRank and playGalaxy on the title come only from the `?galaxy=` switch: the title's own buttons are
+      // Play and Resume Rank, and the controller sends these two only from `play()` with a switch in force.
+      if (action.kind === 'startRank') return playRank(state, action.run);
       return action.kind === 'playGalaxy' ? playFree(state, action.id) : state;
     case 'modeSelect':
       if (action.kind === 'startRank') return playRank(state, action.run);
+      if (action.kind === 'askNewRank') return { ...state, screen: 'confirmNewRank' };
       if (action.kind === 'chooseFree') return { ...state, screen: 'map', mode: 'free' };
       return action.kind === 'back' ? { ...state, screen: 'title', mode: null } : state;
+    case 'confirmNewRank':
+      if (action.kind === 'startRank') return playRank(state, action.run);
+      return action.kind === 'back' ? { ...state, screen: 'modeSelect' } : state;
     case 'map':
       if (action.kind === 'openDimension') return { ...state, screen: 'galaxySelect', dimension: action.dimension };
       return action.kind === 'back' ? { ...state, screen: 'modeSelect', mode: null } : state;
@@ -155,9 +178,8 @@ function runMove(state: FlowState, action: FlowAction): FlowState {
       return screen === 'paused' ? { ...state, screen: 'playing' } : state;
     case 'quit':
       return screen === 'paused' ? toTitle(state) : state;
-    // A quit that finishes a warp-out clears while paused.
     case 'clear':
-      return cleared(state, action.report, action.livesLeft);
+      return screen === 'playing' ? cleared(state, action.report, action.livesLeft) : state;
     case 'die':
       return screen === 'playing' ? { ...state, screen: 'gameOver' } : state;
     default:
@@ -183,36 +205,59 @@ export function transition(state: FlowState, action: FlowAction): FlowState {
   }
 }
 
+type Change = (save: SaveData) => SaveData;
+
+/** What an action writes: progress every mode keeps, and the Rank run's own change, which a stale tab must not make. */
+export interface SaveChange {
+  /** A clear's best score, stars and unlock. */
+  readonly record: Change | null;
+  /** The Rank run started, carried on, forfeited, lost or ended, with its board entries. */
+  readonly rank: Change | null;
+}
+
+const rankOnly = (rank: Change): SaveChange => ({ record: null, rank });
+
 /**
  * What `action` (which took `before` to `after`) writes to the save, or null when it writes nothing. Clears are
- * recorded the moment they happen, and every Rank start, end and Continue goes through `setRankRun`.
+ * recorded the moment they happen, and every Rank start, galaxy, end and Continue goes through `setRankRun`:
+ * - each Rank galaxy saves the run marked as in it, so leaving it unfinished (Quit, a closed tab) forfeits a life;
+ * - a clear saves it between galaxies, at the next one; 5-★ posts the run and ends it;
+ * - a game over posts the run total and keeps the run, with no lives, for a Continue.
  */
-export function saveChange(before: FlowState, action: FlowAction, after: FlowState, today: string): ((save: SaveData) => SaveData) | null {
+export function saveChange(before: FlowState, action: FlowAction, after: FlowState, today: string): SaveChange | null {
   if (after === before) return null;
   const run = before.mode === 'rank' ? before.rankRun : null;
+  if (after.runs !== before.runs && after.mode === 'rank') {
+    const started = after.rankRun;
+    if (started === null) return null;
+    return rankOnly((save) => setRankRun(action.kind === 'startRank' ? abandonRankRun(save, today) : save, started));
+  }
   switch (action.kind) {
-    case 'startRank':
-      return (save) => setRankRun(save, action.run);
     case 'clear': {
       const { galaxy, result } = after;
       if (galaxy === null || result === null) return null;
-      const record = (save: SaveData): SaveData => recordClear(save, galaxyById(galaxy), action.report.score, action.report.stars);
-      if (run === null) return record;
-      if (after.screen !== 'rankComplete') return (save) => setRankRun(record(save), after.rankRun);
-      return (save) => endRank(record(save), { score: result.total, reached: reachedLabel(galaxy), date: today, continued: run.continued });
+      const record: Change = (save) => recordClear(save, galaxyById(galaxy), action.report.score, action.report.stars);
+      if (run === null) return { record, rank: null };
+      const next = after.rankRun;
+      return { record, rank: next === null ? (save) => endRankRun(save, rankEntry(run, result.total, today), null) : (save) => setRankRun(save, next) };
     }
     case 'die':
-      if (run === null) return null;
-      return (save) => endRank(save, { score: run.score + action.score, reached: reachedLabel(run.next), date: today, continued: run.continued });
-    case 'continue':
-    case 'confirm':
-    case 'retry':
-      return before.screen === 'gameOver' && run !== null ? (save) => setRankRun(save, after.rankRun) : null;
+      return run === null ? null : rankOnly((save) => loseRankRun(save, run, action.score, today));
+    case 'quit':
+      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, today));
     default:
       return null;
   }
 }
 
-function endRank(save: SaveData, entry: Parameters<typeof addEntry>[1]): SaveData {
-  return setRankRun({ ...save, rankBoard: addEntry(save.rankBoard, entry) }, null);
+/**
+ * Applies `change` to `save` (the stored save, merged) for a tab that last saw the Rank run at `knownSeq`. When another
+ * tab has moved the run on since (a higher stored `rankSeq`), the Rank part is left out and `stale` is set; the
+ * progress part is always kept.
+ */
+export function applySaveChange(save: SaveData, change: SaveChange, knownSeq: number): { readonly save: SaveData; readonly stale: boolean } {
+  const recorded = change.record === null ? save : change.record(save);
+  if (change.rank === null) return { save: recorded, stale: false };
+  if (save.rankSeq > knownSeq) return { save: recorded, stale: true };
+  return { save: change.rank(recorded), stale: false };
 }

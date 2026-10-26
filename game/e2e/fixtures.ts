@@ -53,7 +53,34 @@ export async function openGame(page: Page, { seed = E2E_SEED, lives, quality, ga
   if (lives !== undefined) query.set('lives', String(lives));
   if (quality !== undefined) query.set('quality', quality);
   await page.goto(`/?${query.toString()}`);
+  await waitForBridge(page);
+}
+
+/** Opens the e2e build with no switches: the normal flow, whose runs write the real save. */
+export async function openFreshGame(page: Page): Promise<void> {
+  await page.goto('/');
+  await waitForBridge(page);
+}
+
+/** Waits for the test bridge, which loads after an `import()`; call it again after a reload. */
+export async function waitForBridge(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+}
+
+/** Steps the run in play by `seconds` of sim time at once, stopping early if it leaves play. */
+export function fastForward(page: Page, seconds: number): Promise<void> {
+  return page.evaluate((s) => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.fastForward(s);
+  }, seconds);
+}
+
+/** Makes the time-based run seed `seed` for every navigation of `page`, without a debug switch, so the run still saves. */
+export async function pinClockSeed(page: Page, seed: number): Promise<void> {
+  await page.addInitScript((value) => {
+    Date.now = () => value;
+  }, seed);
 }
 
 /** Resolves after `count` more animation frames, each of which runs one app frame. */

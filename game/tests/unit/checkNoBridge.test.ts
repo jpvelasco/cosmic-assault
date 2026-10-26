@@ -8,6 +8,7 @@ const { run: runGuard, tempRoot } = guardScript('check-no-bridge.mjs', 'check-no
 const BRIDGE = 'window.__COSMIC_ASSAULT_TEST_API__ = {}';
 const QUERY = 'console.warn(`__E2E_QUERY__ Ignoring ?seed=`)';
 const HOOK = 'e2e.e2eBeforeFrame?.()';
+const FAST_FORWARD = 'e2e.e2eFastForward = (s) => s';
 
 /** Writes `files` (relative path → contents) into a fresh temp build directory. */
 function writeDist(files: Record<string, string>): string {
@@ -23,7 +24,7 @@ function writeDist(files: Record<string, string>): string {
 describe('check-no-bridge (release build)', () => {
   it('passes a build without the bridge or the e2e query parsing', () => {
     const result = runGuard(writeDist({ 'index.html': '<html></html>', 'assets/index.js': 'console.log(1)' }));
-    expect(result).toEqual({ status: 0, output: 'e2e bridge, query parsing and frame hook absent\n' });
+    expect(result).toEqual({ status: 0, output: 'e2e bridge, query parsing, frame hook and fast-forward absent\n' });
   });
 
   it('fails when any nested file mentions the bridge, naming the build and the file', () => {
@@ -65,12 +66,12 @@ describe('check-no-bridge (release build)', () => {
 
 describe('check-no-bridge --e2e (e2e build)', () => {
   it('passes a build that carries every marker', () => {
-    const result = runGuard('--e2e', writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${HOOK}` }));
-    expect(result).toEqual({ status: 0, output: 'e2e bridge, query parsing and frame hook present\n' });
+    const result = runGuard('--e2e', writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${HOOK};${FAST_FORWARD}` }));
+    expect(result).toEqual({ status: 0, output: 'e2e bridge, query parsing, frame hook and fast-forward present\n' });
   });
 
   it('fails when the query mark is missing, so the release check cannot go blind', () => {
-    const dist = writeDist({ 'assets/bridge.js': `${BRIDGE};${HOOK}` });
+    const dist = writeDist({ 'assets/bridge.js': `${BRIDGE};${HOOK};${FAST_FORWARD}` });
     const result = runGuard('--e2e', dist);
     expect(result.status).toBe(1);
     expect(result.output).toContain(
@@ -91,5 +92,21 @@ describe('check-no-bridge --e2e (e2e build)', () => {
     const result = runGuard('--e2e', join(writeDist({}), 'missing'));
     expect(result.status).toBe(1);
     expect(result.output).toContain('run npm run build:e2e first');
+  });
+
+  it('fails when the fast-forward hook is missing, so the release check cannot go blind', () => {
+    const dist = writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${HOOK}` });
+    const result = runGuard('--e2e', dist);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain(`e2e build ${dist} lacks the e2e fast-forward hook (e2eFastForward)`);
+  });
+});
+
+describe('check-no-bridge (release build): the fast-forward hook', () => {
+  it('fails when a release file carries it', () => {
+    const dist = writeDist({ 'assets/index.js': FAST_FORWARD });
+    const result = runGuard(dist);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain(`release build ${dist} contains the e2e fast-forward hook`);
   });
 });

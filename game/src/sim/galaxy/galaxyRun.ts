@@ -31,7 +31,8 @@ const areaOf = (field: Field): number => field.width * field.height;
 
 /**
  * A timed galaxy: it opens on an empty field, the director meters rocks into it and showers fall on
- * schedule. When the timer runs out the ship warps out, clearing the field, and the galaxy is cleared 1.5 s later.
+ * schedule. When the timer runs out the ship warps out, clearing the field and reporting the clear; the galaxy's
+ * status turns cleared 1.5 s later.
  * A boss galaxy has no clock to beat: once its approach ends its boss arrives, and beating the boss warps out instead.
  */
 export class GalaxyRun implements Spawner {
@@ -215,22 +216,26 @@ export class GalaxyRun implements Spawner {
     this.arena.events.push({ type: 'combo', multiplier });
   }
 
-  /** Clears every rock for 0 points; the ship cannot be hit until the galaxy is cleared. */
+  /**
+   * Clears every rock for 0 points and reports the clear: from here the ship cannot be hit and nothing scores, so
+   * the outcome is final, and an app that records it now keeps the win even if the page closes during the warp.
+   */
   private warpOut(elapsed: number): void {
-    const { asteroids, events } = this.arena;
+    const { arena } = this;
+    const { asteroids, events } = arena;
     events.push({ type: 'warpOut' });
     for (const a of asteroids) events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points: 0 });
     asteroids.length = 0;
     this.showers.stop();
     this.warpEndsAt = elapsed + WARP_SECONDS;
-    this.arena.setStatus('warping');
-  }
-
-  private finish(): void {
-    const { arena } = this;
+    arena.setStatus('warping');
     const report = clearReport({ score: arena.score(), deaths: arena.deaths(), dimension: this.galaxy.dimension, mode: this.mode });
     arena.award(report.score - arena.score());
-    arena.setStatus('cleared');
-    arena.events.push({ type: 'galaxyCleared', ...report });
+    events.push({ type: 'galaxyCleared', ...report });
+  }
+
+  /** The warp is over: the galaxy is cleared, with no second event. */
+  private finish(): void {
+    this.arena.setStatus('cleared');
   }
 }

@@ -1,5 +1,5 @@
 import type { App, E2eHooks } from './app/game';
-import { MIN_PRACTICE_LEVEL, type World } from './sim/world';
+import type { World } from './sim/world';
 
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
 export const DELIBERATE_CRASH = 'e2e: deliberate crash';
@@ -29,7 +29,6 @@ function snapshot(app: App): CosmicAssaultTestState {
     galaxy: flow.galaxy,
     save: frozenCopy(app.save),
     rankRun: flow.rankRun === null ? null : frozenCopy(flow.rankRun),
-    practiceLevel: world?.practiceLevel ?? MIN_PRACTICE_LEVEL,
     score: world?.score ?? 0,
     lives: world?.lives ?? 0,
     ship: world === null ? null : shipState(world),
@@ -54,6 +53,9 @@ export function exposeTestBridge(app: App, hooks: E2eHooks): void {
   window.__COSMIC_ASSAULT_TEST_API__ = {
     version: 3,
     getState: () => snapshot(app),
+    fastForward(seconds) {
+      hooks.e2eFastForward?.(seconds);
+    },
     crash() {
       hooks.e2eBeforeFrame = () => {
         hooks.e2eBeforeFrame = undefined;
