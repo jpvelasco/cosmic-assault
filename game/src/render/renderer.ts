@@ -6,6 +6,7 @@ import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
+import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
 import { createBossPass } from './bossPass';
@@ -94,6 +95,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const palette = DRIFT;
   const baker = parts.baker ?? createSpriteBaker();
   const particles = parts.particles ?? new ParticlePool(DEFAULT_PARTICLE_CAPACITY);
+  const hitFlash = createHitFlash(baker);
   const effects = createEffects(particles, deriveSeed(RENDER_SEED, 'effects'), palette);
   const stars = createStarLayers(deriveSeed(RENDER_SEED, 'stars'), HIGH_QUALITY.starScale);
   const flicker = createRng(deriveSeed(RENDER_SEED, 'flame'));
@@ -183,6 +185,15 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
+  /** The silhouettes of rocks that just broke, fading over their flash; unturned, since the event holds no rotation. */
+  function drawRockFlashes(field: Field): void {
+    for (const { sprite, x, y, left } of hitFlash.rocks) {
+      ctx.globalAlpha = left / HIT_FLASH_SECONDS;
+      stamp(sprite, x, y, 1, 0, sprite.halfW, field);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function drawShots(world: World, alpha: number, field: Field): void {
     const sprite = baker.shot(palette);
     for (const p of world.projectiles) {
@@ -200,8 +211,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     if (ship.invulnerable && blinkHidden(world.elapsed)) return;
     interpolatePose(ship.px, ship.py, ship.pangle, ship.x, ship.y, ship.angle, alpha, field, pose);
     const { x, y } = pose;
-    const cos = Math.cos(pose.angle);
-    const sin = Math.sin(pose.angle);
+    // The squash scales the hull and its flame, not the glow: the pen's turn (cos, sin) carries a scale too.
+    const squash = effects.reducedMotion ? 1 : hitFlash.shipScale;
+    const cos = Math.cos(pose.angle) * squash;
+    const sin = Math.sin(pose.angle) * squash;
     const glowDiameter = SHIP_GLOW_DIAMETER * visual.ship;
     const radius = glowDiameter / 2;
     ctx.globalCompositeOperation = 'lighter';
@@ -244,6 +257,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.globalCompositeOperation = 'source-over';
     drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
+    drawRockFlashes(field);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
@@ -292,6 +306,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
 
   function stepBursts(dt: number, world: World, frozen: boolean): void {
     effects.step(dt, world, frozen);
+    hitFlash.step(dt);
     particles.step(dt);
     bossPass.advance(dt, world.boss);
   }
@@ -300,6 +315,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     baker.clear();
     particles.clear();
     bossPass.reset();
+    hitFlash.reset();
   }
 
   return {
@@ -310,6 +326,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     handle(events, world) {
       effects.handle(events, world);
       bossPass.handle(events);
+      // Before the forget below: a flash needs the rock's sprite, which `forget` frees.
+      hitFlash.handle(events);
       for (const event of events) if (event.type === 'asteroidDestroyed' || event.type === 'asteroidLeft') baker.forget(event.id);
     },
     advance(dt, world, frozen) {

@@ -11,6 +11,7 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { RingLog } from '../../src/platform/log';
 import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
 import { memoryStorage } from '../helpers/memoryStorage';
+import { seedFor } from '../../e2e/seeds';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
@@ -81,12 +82,12 @@ describe('createRunController', () => {
 
   it('stands the run total on the Rank score carried in plus the galaxy score, and on the clear total after it', () => {
     const saved = { ...startRank('2026-10-26'), score: 4000 };
-    const { run } = setup({ seed: 2 }, () => FIELD, setRankRun(defaultSave(), saved));
+    const { run } = setup({ seed: seedFor('clears-1-1') }, () => FIELD, setRankRun(defaultSave(), saved));
     run.command({ kind: 'resumeRank' });
     const world = run.world;
     if (world === null) throw new Error('Resume must start a run');
     expect(run.runTotal).toBe(4000);
-    // Seed 2 keeps the idle ship alive to the warp, so the clear bonus is the galaxy's only score.
+    // The 'clears-1-1' seed keeps the idle ship alive to the warp, so the clear bonus is the galaxy's only score.
     while (run.flow.screen === 'playing') run.step(STEP_SECONDS, NO_CONTROLS);
     expect(run.flow.screen).toBe('results');
     expect(run.runTotal).toBe(run.flow.result?.total);
@@ -94,7 +95,7 @@ describe('createRunController', () => {
   });
 
   it('is the galaxy score in Free play', () => {
-    const { run } = setup({ galaxy: '1-1', seed: 2 });
+    const { run } = setup({ galaxy: '1-1', seed: seedFor('clears-1-1') });
     run.command({ kind: 'start' });
     expect(run.runTotal).toBe(run.world?.score);
   });

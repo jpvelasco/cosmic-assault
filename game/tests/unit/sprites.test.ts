@@ -311,6 +311,92 @@ describe('createSpriteBaker', () => {
     expect(created).toHaveLength(3);
   });
 
+  describe('white silhouettes', () => {
+    /** Canvases whose context logs the calls that decide the look of a white bake. */
+    function recordingCanvases(): { calls: string[][]; canvases: unknown[] } {
+      const calls: string[][] = [];
+      const canvases: unknown[] = [];
+      vi.stubGlobal('document', {
+        createElement: () => {
+          const log: string[] = [];
+          calls.push(log);
+          const gradient = { addColorStop: () => undefined };
+          const ctx = new Proxy(
+            {},
+            {
+              get: (_target, name) => {
+                if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => gradient;
+                return (...args: unknown[]) => log.push(`${String(name)}(${args.map((arg) => (typeof arg === 'number' ? String(arg) : 'canvas')).join(',')})`);
+              },
+              set: (_target, name, value) => {
+                log.push(`${String(name)}=${String(value)}`);
+                return true;
+              },
+            },
+          );
+          const canvas = { width: 0, height: 0, getContext: () => ctx };
+          canvases.push(canvas);
+          return canvas;
+        },
+      });
+      return { calls, canvases };
+    }
+
+    it('bakes a rock, then stamps it solid white: draw it, then fill white only where it has pixels', () => {
+      const { calls } = recordingCanvases();
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      const body = baker.asteroid(a, DRIFT);
+      const white = baker.whiteRock(a.id);
+      expect(white).toBeDefined();
+      expect(white?.canvas).not.toBe(body.canvas);
+      expect(white?.halfW).toBe(body.halfW);
+      expect(white?.halfH).toBe(body.halfH);
+      expect(white?.canvas.width).toBe(body.canvas.width);
+      const log = calls.at(-1) ?? [];
+      expect(log).toEqual(['drawImage(canvas,0,0)', 'globalCompositeOperation=source-in', 'fillStyle=#ffffff', expect.stringMatching(/^fillRect\(0,0,/)]);
+      expect(log.some((entry) => entry.startsWith('shadowBlur') || entry.startsWith('filter'))).toBe(false);
+    });
+
+    it('is baked once per rock, and not for a rock never drawn', () => {
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      expect(baker.whiteRock(a.id)).toBeUndefined();
+      baker.asteroid(a, DRIFT);
+      const white = baker.whiteRock(a.id);
+      expect(baker.whiteRock(a.id)).toBe(white);
+    });
+
+    it('outlives the rock\'s own sprite, so a flash can finish after the rock is forgotten', () => {
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      baker.asteroid(a, DRIFT);
+      const white = baker.whiteRock(a.id);
+      baker.forget(a.id);
+      expect(white?.canvas.width).toBeGreaterThan(0);
+      expect(baker.whiteRock(a.id)).toBeUndefined();
+    });
+
+    it('whitens a custom sprite by key, and only one that is cached', () => {
+      const baker = createSpriteBaker();
+      expect(baker.white('boss|core|70')).toBeUndefined();
+      const core = baker.custom('boss|core|70', 72, () => undefined);
+      const white = baker.white('boss|core|70');
+      expect(white?.canvas).not.toBe(core.canvas);
+      expect(white?.halfW).toBe(core.halfW);
+      expect(baker.white('boss|core|70')).toBe(white);
+    });
+
+    it('is rebaked with the rest when the scale changes', () => {
+      const baker = createSpriteBaker();
+      baker.custom('k', 10, () => undefined);
+      const white = baker.white('k');
+      baker.setScale(2, 1);
+      expect(white?.canvas.width).toBe(0);
+      expect(baker.white('k')).toBeUndefined();
+    });
+  });
+
   it('rejects a scale that is not positive and finite', () => {
     const baker = createSpriteBaker();
     expect(() => {

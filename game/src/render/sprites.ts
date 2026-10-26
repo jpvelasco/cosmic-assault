@@ -44,6 +44,16 @@ export interface SpriteBaker {
   setScale(pixelsPerUnit: number, dpr: number, visual?: VisualScale): void;
   /** Drops every sprite baked for this asteroid id. */
   forget(asteroidId: number): void;
+  /**
+   * The solid white silhouette of the sprite cached under `key` (see `custom`), for a hit flash, baked once; undefined
+   * if that sprite is not cached. Dropped with the rest by `setScale` and `clear`.
+   */
+  white(key: string): Sprite | undefined;
+  /**
+   * The white silhouette of a rock `asteroidId` has drawn, or undefined if it has not. Unlike the rock's own sprites it
+   * survives `forget`, so a flash can finish after the renderer lets the rock go; the cache's size bound frees it in the end.
+   */
+  whiteRock(asteroidId: number): Sprite | undefined;
   /** Frees every baked sprite, for example when a new run starts. */
   clear(): void;
 }
@@ -404,6 +414,28 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     });
   }
 
+  /** `source` drawn solid white: its own pixels, with every colour replaced and the edge antialiasing kept. */
+  function bakeWhite(source: Sprite): Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = source.canvas.width;
+    canvas.height = source.canvas.height;
+    const ctx = get2dContext(canvas);
+    ctx.drawImage(source.canvas, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = WHITE;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return { canvas, halfW: source.halfW, halfH: source.halfH };
+  }
+
+  /** The white variant of the sprite under `key`, kept as an ordinary entry of its own: not an asteroid's, so `forget` leaves it. */
+  function whiteOf(key: string): Sprite | undefined {
+    const source = cache.get(key)?.sprite;
+    if (source === undefined) return undefined;
+    // Not through `keyOf`, whose table never forgets a name: a rock's key is new every time. This runs only while a flash shows.
+    const whiteKey = `white|${key}`;
+    return cache.get(whiteKey)?.sprite ?? store(whiteKey, bakeWhite(source));
+  }
+
   // Each method looks the key up first and only builds the bake closure on a miss.
   return {
     glow(color, diameter) {
@@ -486,6 +518,11 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     },
     forget(asteroidId) {
       for (const key of [...(asteroidKeys.get(asteroidId) ?? [])]) cache.delete(key);
+    },
+    white: whiteOf,
+    whiteRock(asteroidId) {
+      const [key] = asteroidKeys.get(asteroidId) ?? [];
+      return key === undefined ? undefined : whiteOf(key);
     },
     clear() {
       cache.clear();

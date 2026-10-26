@@ -1,0 +1,36 @@
+// Lists the lowest World seeds, from 1 up, for which an e2e seed claim holds (see e2e/seeds.ts).
+// Run from game/ with: npm run find-seeds -- <claim> [--count N] [--from SEED] [--to SEED]
+// It loads the TypeScript checks the guard tests use (tests/helpers/seedClaims.ts) through Vite, headlessly.
+import { createServer } from 'vite';
+
+const USAGE = 'usage: npm run find-seeds -- <claim> [--count N] [--from SEED] [--to SEED]';
+
+/** Reads a non-negative integer flag, or exits saying how to fix it. */
+function numberFlag(args, name) {
+  const at = args.indexOf(`--${name}`);
+  if (at < 0) return undefined;
+  const value = Number(args[at + 1]);
+  if (!Number.isInteger(value) || value < 0) fail(`--${name} needs a whole number of 0 or more (got "${args[at + 1] ?? ''}")`);
+  return value;
+}
+
+function fail(message) {
+  console.error(`${message}\n${USAGE}`);
+  process.exit(1);
+}
+
+const args = process.argv.slice(2);
+const server = await createServer({ configFile: false, appType: 'custom', server: { middlewareMode: true }, logLevel: 'silent' });
+try {
+  const { claimIds, findSeeds } = await server.ssrLoadModule('/tests/helpers/seedClaims.ts');
+  const claims = claimIds();
+  const claim = args[0];
+  if (claim === undefined || claim.startsWith('--')) fail(`name a claim: ${claims.join(', ')}`);
+  if (!claims.includes(claim)) fail(`unknown claim "${claim}"; the claims are ${claims.join(', ')}`);
+  const options = { from: numberFlag(args, 'from'), count: numberFlag(args, 'count'), to: numberFlag(args, 'to') };
+  const found = findSeeds(claim, Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)));
+  if (found.length === 0) fail(`no seed from ${String(options.from ?? 1)} keeps "${claim}"; widen the range with --to, or the claim may need rethinking`);
+  console.log(`${claim}: ${found.join(', ')}`);
+} finally {
+  await server.close();
+}

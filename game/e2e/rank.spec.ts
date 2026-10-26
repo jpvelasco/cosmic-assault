@@ -4,7 +4,7 @@ import { LEFT_RUN_NOTICE } from '../src/app/runController';
 import { RANK_START_LIVES, startRank, type RankRun } from '../src/meta/rankRun';
 import { defaultSave } from '../src/meta/save';
 import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, seedSave, storedSave, test, toastOf, waitForBridge } from './fixtures';
-import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, GAME_OVER_SEED, SURVIVES_1_1, THREE_DEATHS_SECONDS } from './seed';
+import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, seedFor, THREE_DEATHS_SECONDS } from './seeds';
 
 /** Plays a new Rank run from the title. */
 async function startRankRun(page: Page): Promise<void> {
@@ -13,12 +13,23 @@ async function startRankRun(page: Page): Promise<void> {
   await expectMode(page, 'playing');
 }
 
+/**
+ * How long a check that waits on a rendered frame may take: keys are queued and applied by the next animation frame,
+ * which a loaded headless browser can starve for longer than the default 5 s.
+ */
+const FRAME_TIMEOUT_MS = 15000;
+
+/** Pauses with Escape, but only a run still in play: a pause that is already on would be toggled off by another press. */
+async function pauseRun(page: Page): Promise<void> {
+  if ((await gameState(page)).screen === 'playing') await page.keyboard.press('Escape');
+  await expectMode(page, 'paused', { timeout: FRAME_TIMEOUT_MS });
+}
+
 /** Pauses (if the run is still in play) and quits from the pause card. */
 async function quitRun(page: Page): Promise<void> {
-  if ((await gameState(page)).screen === 'playing') await page.keyboard.press('Escape');
-  await expectMode(page, 'paused');
+  await pauseRun(page);
   await page.getByTestId('quit').click();
-  await expectMode(page, 'title');
+  await expectMode(page, 'title', { timeout: FRAME_TIMEOUT_MS });
 }
 
 /** Stores `run` as the save's Rank run before the page's first load (and only then). */
@@ -27,11 +38,13 @@ function seedRun(page: Page, run: RankRun): Promise<void> {
 }
 
 test('Quit mid-galaxy costs a life, keeps the score from before it, and leaves Resume Rank', async ({ page }) => {
+  // Pinned: the unseeded run flew a different 1-1 each time, in real time, until a frame applied the pause.
+  await pinClockSeed(page, seedFor('clears-1-1'));
   await openFreshGame(page);
   await startRankRun(page);
   expect((await gameState(page)).save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('quit')).toHaveText('Quit (costs a life)');
+  await pauseRun(page);
+  await expect(page.getByTestId('quit')).toHaveText('Quit (costs a life)', { timeout: FRAME_TIMEOUT_MS });
 
   await quitRun(page);
   await expect(page.getByTestId('resume-rank')).toHaveText('Resume Rank');
@@ -44,7 +57,7 @@ test('Quit mid-galaxy costs a life, keeps the score from before it, and leaves R
 
 /**
  * Fast-forwards the idle run a second at a time until it has lost `count` lives. A respawned ship is invulnerable for
- * longer than a second, so no step costs two; GAME_OVER_SEED loses three within THREE_DEATHS_SECONDS (e2eSeed.test.ts).
+ * longer than a second, so no step costs two; the 'three-deaths' seed loses three within THREE_DEATHS_SECONDS (e2eSeeds.test.ts).
  */
 async function loseLives(page: Page, count: number): Promise<void> {
   const target = (await gameState(page)).lives - count;
@@ -52,9 +65,9 @@ async function loseLives(page: Page, count: number): Promise<void> {
   expect((await gameState(page)).lives).toBe(target);
 }
 
-/** Resumes a seeded five-life run of GAME_OVER_GALAXY, whose idle ship GAME_OVER_SEED soon hits. */
+/** Resumes a seeded five-life run of GAME_OVER_GALAXY, whose idle ship the 'three-deaths' seed soon hits. */
 async function playFiveLifeRun(page: Page): Promise<void> {
-  await pinClockSeed(page, GAME_OVER_SEED);
+  await pinClockSeed(page, seedFor('three-deaths'));
   await seedRun(page, { ...startRank('2026-10-26'), next: GAME_OVER_GALAXY, score: 700, lives: 5 });
   await openFreshGame(page);
   await page.getByTestId('resume-rank').click();
@@ -172,7 +185,7 @@ test('a tab whose Rank run another tab replaced does not write over it, and says
 });
 
 test('a Rank clear is saved at once, and Resume Rank after a reload plays on with the same score and lives', async ({ page }) => {
-  await pinClockSeed(page, SURVIVES_1_1);
+  await pinClockSeed(page, seedFor('clears-1-1'));
   await openFreshGame(page);
   await startRankRun(page);
   await fastForward(page, CLEAR_1_1_SECONDS);
@@ -204,8 +217,8 @@ test('a Rank clear is saved at once, and Resume Rank after a reload plays on wit
 });
 
 test('a game over offers Continue, which resets the score and marks the run, and the board then shows it', async ({ page }) => {
-  // One life left at the game-over galaxy: seed GAME_OVER_SEED's idle ship loses it a few seconds in.
-  await pinClockSeed(page, GAME_OVER_SEED);
+  // One life left at the game-over galaxy: the 'one-life-death' seed's idle ship loses it a few seconds in.
+  await pinClockSeed(page, seedFor('one-life-death'));
   await seedRun(page, { ...startRank('2026-10-26'), next: GAME_OVER_GALAXY, score: 1500, lives: 1 });
   await openFreshGame(page);
   await page.getByTestId('resume-rank').click();

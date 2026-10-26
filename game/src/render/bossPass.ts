@@ -4,10 +4,11 @@ import type { SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
 import type { FieldPen } from './fieldPen';
+import { HIT_FLASH_SECONDS } from './hitFlash';
 import type { Palette } from './palette';
 import type { SpriteBaker } from './sprites';
 
-/** How long the core flashes white after a hit. */
+/** How long the glow flashes white after a hit. The core itself shows white for its first HIT_FLASH_SECONDS. */
 export const BOSS_FLASH_SECONDS = 0.12;
 
 /** What the boss is drawn with this frame: the quality's glow strength, reduced motion, and where its eye looks. */
@@ -36,6 +37,8 @@ export interface BossPass {
 }
 
 const WHITE = '#ffffff';
+/** The core shows white while the flash is above this, the share of BOSS_FLASH_SECONDS left after HIT_FLASH_SECONDS. */
+const TINT_ABOVE = 1 - HIT_FLASH_SECONDS / BOSS_FLASH_SECONDS;
 const INTRO_FADE_SECONDS = 0.8;
 const GLOW_SCALE = 3.2;
 const GLOW_ALPHA = 0.4;
@@ -140,8 +143,8 @@ function artKeys(radius: number): { readonly core: string; readonly eyes: Record
 
 /**
  * Draws the boss from baked sprites (no `shadowBlur`): a glow, the core and an eye that follows the ship, a closing
- * ring while an attack winds up, and a white flash on each hit. The core fades in through the intro and out, whitening,
- * as it dies. Its own sprite keys and painters are made once per radius, and `baker.glow` looks its key up in the
+ * ring while an attack winds up, and a white flash on each hit (the core's silhouette for 60 ms, with a glow that
+ * lingers). The core fades in through the intro and out, whitening, as it dies. Its own sprite keys and painters are made once per radius, and `baker.glow` looks its key up in the
  * baker's key table (built once per colour and size bucket), so a frame of drawing builds no strings or closures.
  */
 export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, baker: SpriteBaker, palette: Palette): BossPass {
@@ -218,7 +221,8 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = shown;
       pen.place(x, y, size, 0);
-      pen.blit(baker.custom(keys.core, r + RIM_PAD, paintCoreAt));
+      const core = baker.custom(keys.core, r + RIM_PAD, paintCoreAt);
+      pen.blit(flash > TINT_ABOVE ? (baker.white(keys.core) ?? core) : core);
       const dx = look.aimX - x;
       const dy = look.aimY - y;
       const reach = (EYE_REACH * r * size) / Math.max(1, Math.hypot(dx, dy));

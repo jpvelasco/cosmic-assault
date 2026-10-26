@@ -17,9 +17,12 @@
   carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=` URL overrides,
   and checks that it does), `check:no-bridge` (fails if the release `dist/`
   contains the bridge or that URL parsing), and `record:parity` (records the
-  parity traces), and `icons` (re-renders the committed PNG icons in
+  parity traces), `icons` (re-renders the committed PNG icons in
   `game/public/icons/` from `game/assets-src/icon.svg` with Playwright's
-  Chromium; run it after editing the SVG and commit the PNGs). Dev builds also
+  Chromium; run it after editing the SVG and commit the PNGs), and `find-seeds`
+  (re-picks an e2e seed: every seed a Playwright spec depends on is listed with its
+  claim in `game/e2e/seeds.ts`, a unit test guards each claim, and a failing guard
+  prints the `npm run find-seeds -- <claim>` command to run). Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
   also fails if an e2e hook (frame, fast-forward, boss damage) reaches `dist/`.
   `?galaxy=` jumps straight into a level (see `app/seed.ts`). A run started with `?galaxy=`,

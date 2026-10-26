@@ -15,6 +15,8 @@ const FIELD = { width: 1280, height: 720 };
 
 interface DrawCall {
   readonly image: unknown;
+  /** The transform's x scale when the image was drawn: the field scale, times the sprite's own turn and scale. */
+  readonly a: number;
   /** The transform's x and y offset when the image was drawn. */
   readonly e: number;
   readonly f: number;
@@ -36,6 +38,7 @@ interface FakeCanvas {
 /** A canvas whose 2D context accepts every call and logs each drawImage with the transform offset in force. */
 function fakeCanvas(): FakeCanvas {
   const draws: DrawCall[] = [];
+  let a = 1;
   let e = 0;
   let f = 0;
   let alpha = 1;
@@ -48,12 +51,13 @@ function fakeCanvas(): FakeCanvas {
       get: (_target, name) => {
         switch (name) {
           case 'setTransform':
-            return (_a: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+            return (nextA: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+              a = nextA;
               e = nextE;
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, e, f, alpha, smoothing });
+            return (image: unknown) => draws.push({ image, a, e, f, alpha, smoothing });
           case 'arc':
             return () => fake.arcs++;
           case 'createLinearGradient':
@@ -219,6 +223,118 @@ describe('createRenderer', () => {
     expect(shipDrawn()).toBe(true);
     stub.status = 'gameOver';
     expect(shipDrawn()).toBe(false);
+  });
+
+  describe('hit-object juice', () => {
+    const FRAME = 1 / 60;
+    const shipHit: SimEvent = { type: 'shipHit', x: 640, y: 360, livesLeft: 2 };
+
+    /** Draws the rock once so it has a sprite, then breaks it; returns the white silhouette the flash should show. */
+    function breakRock(world: World): HTMLCanvasElement {
+      renderer.resize(1280, 720, FIELD);
+      drawFrame(world, 1);
+      const white = baker.whiteRock(5);
+      if (white === undefined) throw new Error('the drawn rock must have a white silhouette');
+      renderer.handle([destroyed(5)], world);
+      return white.canvas;
+    }
+
+    function advanceFrames(world: World, frames: number): void {
+      for (let i = 0; i < frames; i++) renderer.advance(FRAME, world, false);
+    }
+
+    it('flashes a destroyed rock white where it broke, for 60 ms', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      drawFrame(world, 1);
+      // The break's shake moves the scene down, not sideways, in its first instant.
+      expect(drawsOf(white).map((call) => call.e)).toEqual([300]);
+      advanceFrames(world, 3);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(1);
+      advanceFrames(world, 2);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(0);
+    });
+
+    it('fades the flash out as it goes', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      drawFrame(world, 1);
+      const first = drawsOf(white)[0]?.alpha ?? 0;
+      advanceFrames(world, 2);
+      drawFrame(world, 1);
+      const later = drawsOf(white)[0]?.alpha ?? 0;
+      expect(first).toBe(1);
+      expect(later).toBeGreaterThan(0);
+      expect(later).toBeLessThan(first);
+    });
+
+    it('keeps the flash under reduced motion, a lighter touch than the full-screen flash it drops', () => {
+      const { world } = stubWorld();
+      renderer.effects.reducedMotion = true;
+      const white = breakRock(world);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(1);
+    });
+
+    it('shows no flash for a rock that was never drawn, or that the warp cleared', () => {
+      const { world } = stubWorld();
+      renderer.resize(1280, 720, FIELD);
+      renderer.handle([destroyed(5), { type: 'asteroidDestroyed', id: 5, x: 300, y: 300, size: 0, points: 0 }], world);
+      drawFrame(world, 1);
+      expect(canvas.draws.some((call) => call.image === baker.whiteRock(5)?.canvas)).toBe(false);
+    });
+
+    /** The x scale the ship hull is drawn with now. */
+    function shipScale(world: World): number {
+      drawFrame(world, 1);
+      return drawsOf(baker.ship(DRIFT).canvas)[0]?.a ?? 0;
+    }
+
+    it('squashes the ship to 0.9 for a hit, easing back in 80 ms', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const rest = shipScale(world);
+      expect(rest).toBeGreaterThan(0);
+      renderer.handle([shipHit], world);
+      expect(shipScale(world) / rest).toBeCloseTo(0.9);
+      advanceFrames(world, 2);
+      const middle = shipScale(world) / rest;
+      expect(middle).toBeGreaterThan(0.9);
+      expect(middle).toBeLessThan(1);
+      advanceFrames(world, 3);
+      expect(shipScale(world)).toBe(rest);
+    });
+
+    it('squashes the ship through hit-stop, which only freezes the sim', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const rest = shipScale(world);
+      renderer.handle([shipHit], world);
+      expect(shipScale(world) / rest).toBeCloseTo(0.9);
+      for (let i = 0; i < 6; i++) renderer.advance(FRAME, world, true);
+      expect(shipScale(world)).toBe(rest);
+    });
+
+    it('does not squash the ship under reduced motion', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const rest = shipScale(world);
+      renderer.effects.reducedMotion = true;
+      renderer.handle([shipHit], world);
+      expect(shipScale(world)).toBe(rest);
+    });
+
+    it('drops every flash and the squash when a new run starts', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      renderer.handle([shipHit], world);
+      renderer.reset();
+      renderer.resize(1280, 720, FIELD);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(0);
+    });
   });
 
   it('reset() frees the sprites and particles of the previous run', () => {

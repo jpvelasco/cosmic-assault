@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test';
 import type { RankEntry } from '../src/meta/rankBoard';
 import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
-import { clickPastGuard, expect, expectMode, fastForward, openFreshGame, openGame, seedSave, test } from './fixtures';
-import { BOSS_GALAXY, TO_BOSS_FIGHT_SECONDS } from './seed';
+import { clickPastGuard, expect, expectMode, fastForward, openBossGame, openFreshGame, seedSave, test } from './fixtures';
+import { TO_BOSS_FIGHT_SECONDS } from './seeds';
 
 const openChip = (page: Page) => page.getByTestId('records-open');
 const card = (page: Page) => page.getByTestId('records');
@@ -97,7 +97,7 @@ test('a phone taps through every menu card and Records, and back to the title @p
 });
 
 test('a phone taps from a won galaxy\'s results card to the map, and back to the title @phone', async ({ page }) => {
-  await openGame(page, { galaxy: BOSS_GALAXY });
+  await openBossGame(page);
   await page.getByTestId('play').tap();
   await expectMode(page, 'playing');
   await fastForward(page, TO_BOSS_FIGHT_SECONDS);
