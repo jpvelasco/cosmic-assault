@@ -5,7 +5,7 @@ import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
-import { createFullscreen } from '../platform/fullscreen';
+import { attachFullscreenKey, createFullscreen } from '../platform/fullscreen';
 import { RingLog } from '../platform/log';
 import type { CornerBox, HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
@@ -153,6 +153,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   function syncView(): void {
+    // After a crash the recovery card owns the screen; a late event must not bring the touch layer or a card back over it.
+    if (guard.tripped) return;
     overlay.update({
       mode,
       practiceLevel,
@@ -400,6 +402,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
     fullscreen.onChange(onFullscreenChange),
+    attachFullscreenKey(window, fullscreen),
     guard.attachGlobal(window),
   ];
   syncView();

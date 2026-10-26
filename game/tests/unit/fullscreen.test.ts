@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createFullscreen } from '../../src/platform/fullscreen';
+import { attachFullscreenKey, createFullscreen } from '../../src/platform/fullscreen';
 import { RingLog } from '../../src/platform/log';
 
 interface FakeDoc extends EventTarget {
@@ -114,6 +114,39 @@ describe('createFullscreen', () => {
     expect(log.entries()[0]?.message).toContain('document not active');
   });
 
+  it('is unsupported when fullscreenEnabled is missing altogether', () => {
+    const doc = fakeDoc();
+    (doc as { fullscreenEnabled: boolean | undefined }).fullscreenEnabled = undefined;
+    expect(make(doc, fakeTarget(doc).element).control.supported).toBe(false);
+  });
+
+  it('survives an engine whose request returns nothing', () => {
+    const doc = fakeDoc();
+    const target = fakeTarget(doc);
+    target.request.mockReturnValueOnce(undefined as unknown as Promise<void>);
+    const { control, log } = make(doc, target.element);
+    expect(() => {
+      control.toggle();
+    }).not.toThrow();
+    expect(target.request).toHaveBeenCalledTimes(1);
+    expect(log.size).toBe(0);
+  });
+
+  it('logs a request that throws instead of rejecting, without throwing', () => {
+    const doc = fakeDoc();
+    const target = fakeTarget(doc);
+    target.request.mockImplementationOnce(() => {
+      throw new Error('not allowed');
+    });
+    const { control, log } = make(doc, target.element);
+    expect(() => {
+      control.toggle();
+    }).not.toThrow();
+    expect(log.size).toBe(1);
+    expect(log.entries()[0]).toMatchObject({ kind: 'error' });
+    expect(log.entries()[0]?.message).toContain('not allowed');
+  });
+
   it('calls onChange on fullscreenchange until unsubscribed', () => {
     const doc = fakeDoc();
     const { control } = make(doc, fakeTarget(doc).element);
@@ -126,5 +159,44 @@ describe('createFullscreen', () => {
     off();
     doc.dispatchEvent(new Event('fullscreenchange'));
     expect(seen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('attachFullscreenKey', () => {
+  type Key = { code: string; repeat?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean };
+
+  function setup() {
+    const win = new EventTarget();
+    const toggle = vi.fn();
+    const detach = attachFullscreenKey(win as never, { toggle });
+    const press = (key: Key): void => {
+      win.dispatchEvent(Object.assign(new Event('keydown'), { repeat: false, ctrlKey: false, metaKey: false, altKey: false }, key));
+    };
+    return { toggle, detach, press };
+  }
+
+  it('toggles synchronously inside the keydown dispatch, before any frame could run', () => {
+    const { toggle, press } = setup();
+    press({ code: 'KeyF' });
+    expect(toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<[string, Key]>([
+    ['auto-repeat', { code: 'KeyF', repeat: true }],
+    ['Ctrl', { code: 'KeyF', ctrlKey: true }],
+    ['Cmd', { code: 'KeyF', metaKey: true }],
+    ['Alt', { code: 'KeyF', altKey: true }],
+    ['another key', { code: 'KeyG' }],
+  ])('ignores %s', (_name, key) => {
+    const { toggle, press } = setup();
+    press(key);
+    expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it('stops listening once detached', () => {
+    const { toggle, detach, press } = setup();
+    detach();
+    press({ code: 'KeyF' });
+    expect(toggle).not.toHaveBeenCalled();
   });
 });

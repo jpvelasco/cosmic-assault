@@ -54,7 +54,10 @@ describe('mute key', () => {
 });
 
 describe('full screen key', () => {
-  it.each<AppMode>(['title', 'playing', 'paused', 'gameOver'])('toggles full screen on KeyF while %s', (mode) => {
-    expect(commandForKey(mode, 'KeyF')).toEqual({ kind: 'toggleFullscreen' });
-  });
+  it.each<AppMode>(['title', 'playing', 'paused', 'gameOver'])(
+    'is not queued as a command while %s: it must run inside the keydown handler',
+    (mode) => {
+      expect(commandForKey(mode, 'KeyF')).toBeNull();
+    },
+  );
 });
