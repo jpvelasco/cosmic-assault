@@ -14,7 +14,6 @@ import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
-import { STEP_SECONDS } from '../sim/config';
 import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
@@ -24,7 +23,9 @@ import { SOUND_GESTURE_HINT } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
+import type { CardToggleDeps } from './cardToggle';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
+import { installE2eHooks, type E2eHooks } from './e2eHooks';
 import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
@@ -34,20 +35,7 @@ import { runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
 import { createSettingsController } from './settingsController';
 import { createViewSync } from './viewSync';
-
-/**
- * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
- * release builds carry no trace of them. The long property name is deliberate: unlike a local name it survives
- * minification, which lets `check:no-bridge` find it.
- */
-export interface E2eHooks {
-  /** Runs at the start of every guarded frame. */
-  e2eBeforeFrame?: (() => void) | undefined;
-  /** Set by `createApp`: steps the run in play by fixed steps for `seconds`, or until it leaves play. */
-  e2eFastForward?: ((seconds: number) => void) | undefined;
-  /** Set by `createApp`: takes `damage` hit points off a boss that is fighting; throws if none is. */
-  e2eDamageBoss?: ((damage: number) => void) | undefined;
-}
+import { createRecords } from './records';
 
 export interface App {
   /** The screen shown. */
@@ -82,7 +70,6 @@ export interface App {
   quit(): void;
   dispose(): void;
 }
-
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -165,6 +152,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     openSettings: () => {
       prefs.openSettings();
     },
+    openRecords: () => {
+      records.show();
+    },
     install: installPrompt.install,
   });
   // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
@@ -176,13 +166,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     touch,
     hitStop,
     effects: renderer.effects,
-    screen: () => mode,
-    covers,
-    syncView,
-    focusOpener: () => {
-      overlay.focusSettingsChip();
-    },
+    ...coverCardDeps('settings'),
   });
+  const records = createRecords(root, coverCardDeps('records'));
   const rotatePrompt = createRotatePrompt(root);
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
@@ -192,6 +178,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const view = createViewSync(root, {
     overlay,
     settingsCard: prefs.card,
+    records,
     rotatePrompt,
     touch,
     renderer,
@@ -225,13 +212,24 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     screen: () => mode,
     covers,
     msSinceRunEnd: (now) => now - runEndedAt,
-    menuControls: () => (prefs.open ? prefs.card.controls() : overlay.controls(mode)),
-    closeSettings: prefs.closeSettings,
+    menuControls: () => (prefs.open ? prefs.card.controls() : records.open ? records.card.controls() : overlay.controls(mode)),
+    closeCard: () => {
+      prefs.closeSettings();
+      records.close();
+    },
   });
+
+  /** What the settings or records card needs to open and close over the screens, its focus going back to its chip. */
+  function coverCardDeps(chip: 'settings' | 'records'): Omit<CardToggleDeps, 'opensOn'> {
+    const focusOpener = (): void => {
+      overlay.focusChip(chip);
+    };
+    return { screen: () => mode, covers, syncView, focusOpener };
+  }
 
   /** What covers the cards right now, for the router's table. */
   function covers(): Cover[] {
-    return coversFor({ settings: prefs.open, rotate: view.needsRotation(), crash: guard.tripped });
+    return coversFor({ settings: prefs.open, records: records.open, rotate: view.needsRotation(), crash: guard.tripped });
   }
 
   function syncView(): void {
@@ -396,26 +394,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     }
   }
 
-  if (import.meta.env.MODE === 'e2e' && e2e !== undefined) {
-    e2e.e2eFastForward = (seconds) => {
-      const controls = readControls(previousPad);
-      for (let t = 0; t < seconds && mode === 'playing'; t += STEP_SECONDS) run.step(STEP_SECONDS, controls);
+  installE2eHooks(e2e, {
+    run,
+    mode: () => mode,
+    controls: () => readControls(previousPad),
+    redraw: () => {
       redrawPending = true;
-    };
-    /** One shot's hit on the boss, through the galaxy rules (private on World, reached by name here); false if it is not fighting. */
-    const strikeBoss = (): boolean => {
-      const { world } = run;
-      const boss = world?.boss;
-      if (world === null || boss?.state !== 'fighting') return false;
-      return world['run']?.hitBoss(boss.x, boss.y, 1) === true;
-    };
-    e2e.e2eDamageBoss = (damage) => {
-      let struck = 0;
-      while (struck < damage && strikeBoss()) struck++;
-      if (struck === 0) throw new Error('No boss is fighting: fast-forward through the approach and the 2 s intro, and pass a damage of at least 1');
-      redrawPending = true;
-    };
-  }
+    },
+  });
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */
   const guardedFrame =
@@ -499,6 +485,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       view.dispose();
       overlay.dispose();
       prefs.dispose();
+      records.card.dispose();
       rotatePrompt.dispose();
       toast.dispose();
       crashCard.dispose();

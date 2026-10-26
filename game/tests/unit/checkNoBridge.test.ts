@@ -118,7 +118,7 @@ describe('check-no-bridge: the boss-damage hook', () => {
     const dist = writeDist({ 'assets/index.js': DAMAGE_BOSS });
     const result = runGuard(dist);
     expect(result.status).toBe(1);
-    expect(result.output).toContain(`release build ${dist} contains the e2e boss-damage hook; release builds must not — check the import.meta.env.MODE guard in src/app/game.ts`);
+    expect(result.output).toContain(`release build ${dist} contains the e2e boss-damage hook; release builds must not — check the import.meta.env.MODE guard in src/app/e2eHooks.ts`);
   });
 
   it('fails an e2e build that lacks it, so the release check cannot go blind', () => {

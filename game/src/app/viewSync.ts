@@ -8,6 +8,7 @@ import type { RotatePrompt } from '../ui/rotatePrompt';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import type { SettingsCard } from '../ui/settingsCard';
 import type { Screen } from './flow';
+import type { Records } from './records';
 import type { Settings } from './settings';
 
 /** How long the pointer must rest during play before the cursor is hidden. */
@@ -22,6 +23,8 @@ export type ViewState = Omit<OverlayState, 'covered' | 'inputStyle'> & {
 export interface ViewSyncDeps {
   readonly overlay: Overlay;
   readonly settingsCard: SettingsCard;
+  /** The records card, and whether it is up. */
+  readonly records: Pick<Records, 'card' | 'open'>;
   readonly rotatePrompt: RotatePrompt;
   readonly touch: TouchControls;
   readonly renderer: Pick<Renderer, 'setHudBounds'>;
@@ -34,7 +37,7 @@ export interface ViewSyncDeps {
 }
 
 export interface ViewSync {
-  /** Brings the cards, their `inert` covers, the rotate prompt, the touch layer and the HUD bounds in line with the state. */
+  /** Brings the cards (the settings and records cards too), their `inert` covers, the rotate prompt, the touch layer and the HUD bounds in line with the state. */
   sync(): void;
   /** A phone held upright: the game needs the wide screen, so it asks for a turn instead of playing. */
   needsRotation(): boolean;
@@ -46,7 +49,7 @@ export interface ViewSync {
 }
 
 export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync {
-  const { overlay, settingsCard, rotatePrompt, touch, renderer } = deps;
+  const { overlay, settingsCard, records, rotatePrompt, touch, renderer } = deps;
   const safeArea = createSafeAreaProbe(root);
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const touchStyle = window.matchMedia(TOUCH_STYLE_QUERY);
@@ -70,9 +73,10 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     if (deps.tripped()) return;
     const { settings, settingsOpen, ...state } = deps.read();
     const rotating = needsRotation();
-    overlay.update({ ...state, covered: settingsOpen || rotating, inputStyle: touchStyle.matches ? 'touch' : 'keys' });
+    overlay.update({ ...state, covered: settingsOpen || records.open || rotating, inputStyle: touchStyle.matches ? 'touch' : 'keys' });
     settingsCard.update(settings, coarsePointer.matches);
-    settingsCard.cover(rotating);
+    records.card.update(state.save);
+    for (const card of [settingsCard, records.card]) card.cover(rotating);
     rotatePrompt.show(rotating);
     touch.show(state.flow.screen === 'playing' && coarsePointer.matches);
     syncHudBounds();

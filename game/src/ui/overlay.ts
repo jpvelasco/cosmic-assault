@@ -22,6 +22,8 @@ export interface OverlayActions {
   readonly toggleMute: () => void;
   readonly toggleFullscreen: () => void;
   readonly openSettings: () => void;
+  /** The Records chip on the title and mode select. */
+  readonly openRecords: () => void;
   /** The title card's Install chip: shows the browser's install prompt. */
   readonly install: () => void;
 }
@@ -36,7 +38,7 @@ export interface OverlayState {
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
   readonly fullscreen: boolean | null;
-  /** While another card (settings, or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
+  /** While another card (settings, records, or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
   readonly covered: boolean;
   /** Decides whether the start and restart hints name keys or taps. */
   readonly inputStyle: InputStyle;
@@ -48,8 +50,8 @@ export interface Overlay {
   update(state: OverlayState): void;
   /** One step's events: a boss's arrival, phases and fall are announced to screen readers. */
   handle(events: readonly SimEvent[]): void;
-  /** Puts keyboard focus on the Settings chip of the visible card, as the settings card closes. */
-  focusSettingsChip(): void;
+  /** Puts keyboard focus on the visible card's Settings or Records chip, as the card it opened closes. */
+  focusChip(which: 'settings' | 'records'): void;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
   controls(screen: Screen): HTMLElement[];
   dispose(): void;
@@ -145,6 +147,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
   const settings = chip('settings-open', actions.openSettings);
   settings.textContent = 'Settings';
+  const records = chip('records-open', actions.openRecords);
+  records.textContent = 'Records';
   // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
   const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
   installChip.textContent = 'Install';
@@ -178,6 +182,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
       // stay ahead of the title's Install chip.
       if (row !== undefined && sound.parentElement !== row) row.prepend(sound, fullscreen, settings);
+      // Records sits after Settings on the title, and ahead of Back in the last row of mode select.
+      if (screen === 'title' && records.previousElementSibling !== settings) settings.after(records);
+      else if (screen === 'modeSelect' && records.parentElement !== modes.chipRow) modes.chipRow.prepend(records);
       mountWhen(installOffer === 'prompt', installChip, (el) => {
         titleRow.append(el);
       });
@@ -187,7 +194,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       showSoundState(sound, muted);
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
-      keepIn(menus[screen]?.card, back);
+      keepIn(screen === 'modeSelect' ? modes.chipRow : menus[screen]?.card, back);
       keepIn(resumeSlots[screen], resumeGroup);
       resumeGroup.hidden = save.rankRun === null;
       resumeRank.textContent = resumeLabel(save);
@@ -207,8 +214,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
     handle(events) {
       announcer.handle(events);
     },
-    focusSettingsChip() {
-      settings.focus();
+    focusChip(which) {
+      (which === 'settings' ? settings : records).focus();
     },
     controls(screen) {
       const panel = panels[screen];

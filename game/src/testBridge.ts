@@ -1,4 +1,5 @@
-import type { App, E2eHooks } from './app/game';
+import type { E2eHooks } from './app/e2eHooks';
+import type { App } from './app/game';
 import type { World } from './sim/world';
 
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
