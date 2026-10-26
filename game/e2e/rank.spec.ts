@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test';
 import { STALE_RUN_NOTICE } from '../src/app/flowController';
 import { LEFT_RUN_NOTICE } from '../src/app/runController';
 import { RANK_START_LIVES, startRank, type RankRun } from '../src/meta/rankRun';
-import { SAVE_KEY } from '../src/meta/save';
-import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, storedSave, test, toastOf, waitForBridge } from './fixtures';
+import { defaultSave } from '../src/meta/save';
+import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, seedSave, storedSave, test, toastOf, waitForBridge } from './fixtures';
 import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, GAME_OVER_SEED, SURVIVES_1_1, THREE_DEATHS_SECONDS } from './seed';
 
 /** Plays a new Rank run from the title. */
@@ -22,15 +22,8 @@ async function quitRun(page: Page): Promise<void> {
 }
 
 /** Stores `run` as the save's Rank run before the page's first load (and only then). */
-async function seedRun(page: Page, run: RankRun): Promise<void> {
-  await page.addInitScript(
-    ([key, saved]) => {
-      if (sessionStorage.getItem('seeded') !== null) return;
-      sessionStorage.setItem('seeded', '1');
-      localStorage.setItem(key, JSON.stringify({ version: 1, frontier: '1-3', rankRun: saved, rankSeq: 1 }));
-    },
-    [SAVE_KEY, run] as const,
-  );
+function seedRun(page: Page, run: RankRun): Promise<void> {
+  return seedSave(page, { ...defaultSave(), frontier: '1-3', rankRun: run, rankSeq: 1 }, { once: true });
 }
 
 test('Quit mid-galaxy costs a life, keeps the score from before it, and leaves Resume Rank', async ({ page }) => {

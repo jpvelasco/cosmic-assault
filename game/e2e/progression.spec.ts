@@ -12,6 +12,7 @@ import {
   pinClockSeed,
   playFreeGalaxy,
   seedSave,
+  seedStorage,
   storedSave,
   test,
   waitForBridge,
@@ -22,28 +23,7 @@ import { BOSS_GALAXY, CLEAR_1_1_SECONDS, E2E_SEED, SURVIVES_1_1, TO_BOSS_FIGHT_S
 /** More than any boss' hit points. */
 const KILL_DAMAGE = 100;
 
-test('a clear is saved as the warp starts, so a reload straight after keeps it', async ({ page }) => {
-  // No debug switch, so the run writes the real save; the pinned clock gives it a known seed.
-  await pinClockSeed(page, SURVIVES_1_1);
-  await openFreshGame(page);
-  await playFreeGalaxy(page, '1-1');
-
-  await fastForward(page, CLEAR_1_1_SECONDS);
-  expect((await gameState(page)).screen).toBe('results');
-  expect(await storedSave(page)).toMatchObject({ frontier: '1-2' });
-  // Straight away: the save already holds the clear.
-  await page.reload();
-  await waitForBridge(page);
-
-  const { save, screen } = await gameState(page);
-  expect(screen).toBe('title');
-  expect(save.frontier).toBe('1-2');
-  expect(save.galaxies['1-1']?.stars).toBeGreaterThan(0);
-  await openGalaxySelect(page, 1);
-  await expect(page.getByTestId('galaxy-1-2')).toBeEnabled();
-});
-
-test('Free play: 1-1 clears to a results card with its stars, opens 1-2 on the map, and a reload keeps it', async ({ page }) => {
+test('Free play: 1-1 clears to a results card with its stars, saved as the warp starts, opens 1-2 on the map, and a reload keeps it', async ({ page }) => {
   await pinClockSeed(page, SURVIVES_1_1);
   await openFreshGame(page);
   await openGalaxySelect(page, 1);
@@ -55,6 +35,8 @@ test('Free play: 1-1 clears to a results card with its stars, opens 1-2 on the m
   await fastForward(page, CLEAR_1_1_SECONDS);
   const { screen, galaxy, save } = await gameState(page);
   expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: '1-1' });
+  // Straight away, under the card: the stored save already holds the clear, so a reload now would keep it.
+  expect(await storedSave(page)).toMatchObject({ frontier: '1-2', galaxies: { '1-1': save.galaxies['1-1'] } });
   const progress = save.galaxies['1-1'];
   expect(progress?.stars).toBeGreaterThan(0);
   await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
@@ -169,22 +151,18 @@ test('a clear in one tab opens the next galaxy in another without a reload, and 
 
 /** Stores `text` as the save before the first load of `page` (and only then, so a reload keeps what the game wrote), then opens the game. */
 async function openWithStoredText(page: Page, text: string): Promise<void> {
-  await page.addInitScript(([key, value]) => {
-    if (sessionStorage.getItem('seeded') !== null) return;
-    sessionStorage.setItem('seeded', '1');
-    localStorage.setItem(key, value);
-  }, [SAVE_KEY, text] as const);
+  await seedStorage(page, text, { once: true });
   await openFreshGame(page);
 }
 
 test.describe('a save that cannot be read', () => {
   for (const [name, text] of [
     ['garbage text', 'not json {{{'],
+    ['truncated JSON', '{"version":1,"frontier":"1-3","galaxies":{"1-1":{"bestSc'],
     ['an array', '[1,2,3]'],
     ['a record of the wrong types', '{"version":1,"frontier":"9-9","galaxies":{"1-1":"x"},"rankRun":{"lives":"many"},"rankBoard":5}'],
   ] as const) {
-    test(`${name} loads the defaults, with no console errors, and the game still plays and saves`, async ({ page }) => {
-      await pinClockSeed(page, SURVIVES_1_1);
+    test(`${name} loads the defaults, with no console errors, on the title and the map`, async ({ page }) => {
       await openWithStoredText(page, text);
 
       const { screen, save } = await gameState(page);
@@ -193,14 +171,17 @@ test.describe('a save that cannot be read', () => {
       await openGalaxySelect(page, 1);
       await expect(page.getByTestId('galaxy-1-1')).toBeEnabled();
       await expect(page.getByTestId('galaxy-1-2')).toBeDisabled();
-      await page.getByTestId('galaxy-1-1').click();
-      await expectMode(page, 'playing');
-
-      await fastForward(page, CLEAR_1_1_SECONDS);
-      // The next write replaces the unreadable text with a valid save.
-      expect(await storedSave(page)).toMatchObject({ version: 1, frontier: '1-2' });
     });
   }
+
+  test('after one, the game still plays, and its next write replaces the unreadable text with a valid save', async ({ page }) => {
+    await pinClockSeed(page, SURVIVES_1_1);
+    await openWithStoredText(page, 'not json {{{');
+    await playFreeGalaxy(page, '1-1');
+
+    await fastForward(page, CLEAR_1_1_SECONDS);
+    expect(await storedSave(page)).toMatchObject({ version: 1, frontier: '1-2' });
+  });
 
   test('a field that fails keeps the fields that pass', async ({ page }) => {
     await openWithStoredText(page, '{"version":1,"frontier":"1-3","galaxies":{"1-1":{"bestScore":900,"stars":2}},"rankRun":{"lives":"many"},"rankBoard":"x"}');

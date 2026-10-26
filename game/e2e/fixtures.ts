@@ -81,11 +81,23 @@ export function fastForward(page: Page, seconds: number): Promise<void> {
   }, seconds);
 }
 
-/** Stores `save` under the save key before every navigation of `page`, as a returning player's browser would hold it. */
-export async function seedSave(page: Page, save: SaveData): Promise<void> {
-  await page.addInitScript(([key, value]) => {
+/**
+ * Stores `text` under the save key before every navigation of `page`, as a returning player's browser would hold it;
+ * with `once`, only before the first, so a reload finds what the game wrote since.
+ */
+export async function seedStorage(page: Page, text: string, { once = false } = {}): Promise<void> {
+  await page.addInitScript(([key, value, onlyOnce]) => {
+    if (onlyOnce) {
+      if (sessionStorage.getItem('seeded') !== null) return;
+      sessionStorage.setItem('seeded', '1');
+    }
     localStorage.setItem(key, value);
-  }, [SAVE_KEY, JSON.stringify(save)] as const);
+  }, [SAVE_KEY, text, once] as const);
+}
+
+/** `seedStorage` for a save object. */
+export function seedSave(page: Page, save: SaveData, options: { once?: boolean } = {}): Promise<void> {
+  return seedStorage(page, JSON.stringify(save), options);
 }
 
 /** The save as `localStorage` holds it, parsed; empty before anything is written. */
