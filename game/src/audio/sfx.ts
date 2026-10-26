@@ -1,3 +1,4 @@
+import type { Screen } from '../app/flow';
 import type { SimEvent } from '../sim/events';
 
 /** Every sound effect, in the order voices.ts defines them. */
@@ -13,6 +14,7 @@ export const SFX_NAMES = [
   'pause',
   'galaxyStart',
   'showerSting',
+  'showerWhoosh',
   'warp',
   'cleared',
   'combo',
@@ -24,11 +26,35 @@ export const SFX_NAMES = [
 
 export type SfxName = (typeof SFX_NAMES)[number];
 
+/** A sound to start `delay` seconds from now on the audio clock. */
+export interface SfxCue {
+  readonly name: SfxName;
+  readonly delay: number;
+}
+
+/**
+ * On a boss kill the boss's death plays first and the warp follows this much later, so the two never land as one
+ * blast; the warp's rock booms follow with it.
+ */
+export const WARP_AFTER_BOSS_SECONDS = 0.3;
+/** The clear fanfare starts this long after the results card opens: after a boss kill's warp, as the card's stars fill. */
+export const FANFARE_DELAY_SECONDS = 0.6;
+
+/** One undelayed cue per sound, made once, so mapping an event allocates nothing. */
+const NOW = Object.fromEntries(SFX_NAMES.map((name) => [name, { name, delay: 0 }])) as Readonly<Record<SfxName, SfxCue>>;
+const AFTER_BOSS = Object.fromEntries(SFX_NAMES.map((name) => [name, { name, delay: WARP_AFTER_BOSS_SECONDS }])) as Readonly<Record<SfxName, SfxCue>>;
+const FANFARE: SfxCue = { name: 'cleared', delay: FANFARE_DELAY_SECONDS };
+
 /** Asteroid sizes 0 (large) to 3 (tiny) in order. */
 const BOOM_BY_SIZE = ['boomLarge', 'boomMedium', 'boomSmall', 'boomTiny'] as const satisfies readonly SfxName[];
 
-/** The sound a simulation event makes, or null for a silent one. */
-export function sfxFor(event: SimEvent): SfxName | null {
+/** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
+export function isBossKill(events: readonly SimEvent[]): boolean {
+  return events.some((event) => event.type === 'bossDown');
+}
+
+/** The sound an event makes, or null for a silent one; the cleared galaxy's fanfare belongs to its results card instead. */
+function soundOf(event: SimEvent): SfxName | null {
   switch (event.type) {
     case 'shot':
       return 'shoot';
@@ -44,10 +70,10 @@ export function sfxFor(event: SimEvent): SfxName | null {
       return 'galaxyStart';
     case 'showerWarning':
       return 'showerSting';
+    case 'showerStart':
+      return 'showerWhoosh';
     case 'warpOut':
       return 'warp';
-    case 'galaxyCleared':
-      return 'cleared';
     // The multiplier only climbs within a chain, so above 1 it has just risen; back to 1 the chain broke, silently.
     case 'combo':
       return event.multiplier > 1 ? 'combo' : null;
@@ -59,10 +85,29 @@ export function sfxFor(event: SimEvent): SfxName | null {
       return 'bossPhase';
     case 'bossDown':
       return 'bossDown';
-    // A meteor leaving is not an event to the player; a shower's start and end are already told by its sting.
+    // A meteor leaving is not an event to the player, and a shower ending needs no fanfare. The clear's fanfare is
+    // cued by its results card (`screenCue`).
     case 'asteroidLeft':
-    case 'showerStart':
     case 'showerEnd':
+    case 'galaxyCleared':
       return null;
   }
+}
+
+/** The warp and the rocks it clears (scored 0) are the warp's own sounds. */
+const isWarpSound = (event: SimEvent): boolean => event.type === 'warpOut' || (event.type === 'asteroidDestroyed' && event.points === 0);
+
+/**
+ * The cue for `event`, or null for a silent one. In a step where a boss went down (`bossKill`, from `isBossKill`), the
+ * warp's sounds wait `WARP_AFTER_BOSS_SECONDS`, so the boss's death is heard first.
+ */
+export function sfxFor(event: SimEvent, bossKill = false): SfxCue | null {
+  const name = soundOf(event);
+  if (name === null) return null;
+  return bossKill && isWarpSound(event) ? AFTER_BOSS[name] : NOW[name];
+}
+
+/** The sound a screen opens with: the clear fanfare on the results and Rank complete cards, after the warp. */
+export function screenCue(screen: Screen): SfxCue | null {
+  return screen === 'results' || screen === 'rankComplete' ? FANFARE : null;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createHud, HUD_PILLS, hudScale, rightPillEdge, showerWarningAngle, timerFraction, type HudBounds, type HudRect } from '../../src/render/hud';
+import { createHud, HUD_PILLS, hudScale, rightPillEdge, type HudBounds, type HudRect } from '../../src/render/hud';
+import { showerWarningAngle, timerFraction } from '../../src/render/hudGalaxy';
 import { DRIFT } from '../../src/render/palette';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';

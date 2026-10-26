@@ -1,8 +1,8 @@
 import { DIMENSIONS, GALAXY_INDEXES, galaxyIdOf, galaxyLabel } from '../content/galaxies';
 import type { Dimension, GalaxyId, GalaxyIndex } from '../content/types';
 import { isUnlocked } from '../meta/progress';
-import type { SaveData } from '../meta/save';
-import { button, element, lockIcon, menuCard, starRow, withTestId, type Act, type MenuCard, type StarRow } from './dom';
+import type { GalaxyProgress, SaveData } from '../meta/save';
+import { button, element, lockIcon, menuCard, spokenGalaxy, spokenScore, spokenStars, starRow, withTestId, type Act, type MenuCard, type StarRow } from './dom';
 
 export interface GalaxySelect extends MenuCard {
   update(dimension: Dimension, save: SaveData): void;
@@ -18,7 +18,11 @@ interface Tile {
 
 const BOSS_INDEX: GalaxyIndex = 6;
 
-const starsText = (stars: number): string => '★'.repeat(stars) + '☆'.repeat(3 - stars);
+/** What a tile says aloud after its galaxy: its stars and best, or that it is locked. */
+function tileStatus(open: boolean, progress: GalaxyProgress | undefined): string {
+  if (!open) return 'locked; clear the previous galaxy';
+  return progress === undefined ? 'not cleared yet' : `${spokenStars(progress.stars)}, best ${spokenScore(progress.bestScore)}`;
+}
 
 /**
  * Galaxy select: six tiles (`d-1` to `d-★`, the boss tile in gold), each with its stars and best score. The tiles are
@@ -34,6 +38,8 @@ export function createGalaxySelect(act: Act): GalaxySelect {
     });
     const label = element('span', 'galaxy-tile__label');
     const stars = starRow('galaxy-tile__stars');
+    // The tile's label says its stars in words; the glyphs would be read out one by one.
+    stars.el.setAttribute('aria-hidden', 'true');
     const best = element('span', 'galaxy-tile__best');
     el.append(lockIcon(), label, stars.el, best);
     if (g === BOSS_INDEX) el.append(element('span', 'galaxy-tile__tag', 'Boss'));
@@ -51,7 +57,7 @@ export function createGalaxySelect(act: Act): GalaxySelect {
     label.textContent = galaxyLabel(id);
     stars.set(progress?.stars ?? 0);
     best.textContent = !open ? 'Clear the previous galaxy' : progress === undefined ? 'Not cleared yet' : `Best ${String(progress.bestScore)}`;
-    el.setAttribute('aria-label', open ? `${galaxyLabel(id)} ${starsText(progress?.stars ?? 0)} ${String(progress?.bestScore ?? 0)}` : `${galaxyLabel(id)} · Clear the previous galaxy`);
+    el.setAttribute('aria-label', `Galaxy ${spokenGalaxy(id)}, ${tileStatus(open, progress)}`);
   }
 
   return {

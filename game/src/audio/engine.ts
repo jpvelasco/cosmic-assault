@@ -1,7 +1,8 @@
+import type { Screen } from '../app/flow';
 import type { Settings } from '../app/settings';
 import type { SimEvent } from '../sim/events';
 import { createMusicPlayer, type MusicPlayer } from './music';
-import { sfxFor, type SfxName } from './sfx';
+import { isBossKill, screenCue, sfxFor, type SfxName } from './sfx';
 import { playSfx, type VoiceBed } from './voices';
 
 /** What the test bridge reports: no context yet, or the context's own state. */
@@ -9,6 +10,9 @@ export type AudioState = 'none' | 'suspended' | 'running' | 'closed';
 
 /** How loud the music is relative to its volume setting. */
 export type MusicLevel = 'play' | 'paused' | 'menu';
+
+/** Play and pause have their own music level; every other screen plays the menu's. */
+export const musicFor = (screen: Screen): MusicLevel => (screen === 'playing' ? 'play' : screen === 'paused' ? 'paused' : 'menu');
 
 /** Whether sound is wanted but waits for a key press or tap to start (or wake) the context: not muted, not failed, not running. */
 export function needsSoundGesture(state: AudioState, muted: boolean): boolean {
@@ -20,9 +24,12 @@ export interface AudioEngine {
   readonly muted: boolean;
   /** Starts a new frame, which resets the shot cap. */
   beginFrame(): void;
-  /** Plays the sound for each event that makes one. */
+  /** Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss). */
   handle(events: readonly SimEvent[]): void;
-  play(name: SfxName): void;
+  /** Plays `name`, `delay` seconds from now on the audio clock. */
+  play(name: SfxName, delay?: number): void;
+  /** A new screen: its music level, and the sound it opens with (the clear fanfare on the results card). */
+  setScreen(screen: Screen): void;
   setMuted(muted: boolean): void;
   /** Sets the music and effects volumes (0–1); they take hold at once, even mid-sound. */
   setVolumes(music: number, sfx: number): void;
@@ -221,12 +228,17 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   addGestureListeners();
   document.addEventListener('visibilitychange', onVisibilityChange);
 
-  function play(name: SfxName): void {
+  function setMusicLevel(level: MusicLevel): void {
+    musicLevel = level;
+    syncBusGains();
+  }
+
+  function play(name: SfxName, delay = 0): void {
     if (graph === null || !audible()) return;
     if (name === 'shoot' && ++shotsThisFrame > MAX_SHOTS_PER_FRAME) return;
     const { bed, sfx } = graph;
     guard(() => {
-      playSfx(bed, sfx, name);
+      playSfx(bed, sfx, name, delay);
     });
   }
 
@@ -243,9 +255,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       shotsThisFrame = 0;
     },
     handle(events) {
+      const bossKill = isBossKill(events);
       for (const event of events) {
-        const name = sfxFor(event);
-        if (name !== null) play(name);
+        const cue = sfxFor(event, bossKill);
+        if (cue !== null) play(cue.name, cue.delay);
       }
     },
     play,
@@ -264,9 +277,11 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       sfxVolume = sfx;
       syncBusGains();
     },
-    setMusicLevel(level) {
-      musicLevel = level;
-      syncBusGains();
+    setMusicLevel,
+    setScreen(screen) {
+      setMusicLevel(musicFor(screen));
+      const cue = screenCue(screen);
+      if (cue !== null) play(cue.name, cue.delay);
     },
     dispose() {
       disposed = true;

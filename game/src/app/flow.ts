@@ -45,7 +45,7 @@ export interface FlowState {
 export interface ClearResult {
   readonly report: ClearReport;
   readonly total: number;
-  /** The clear's score beat the best the save held for the galaxy before it. */
+  /** The galaxy had a best saved before this clear, and the clear's score beat it. A first clear is no new best. */
   readonly newBest: boolean;
 }
 
@@ -65,8 +65,11 @@ export type FlowAction =
   | { readonly kind: 'pause' }
   | { readonly kind: 'resume' }
   | { readonly kind: 'quit' }
-  /** The galaxy was cleared with `livesLeft` lives; `bestBefore` is its best score as saved before this clear (0 for none). */
-  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly bestBefore: number }
+  /**
+   * The galaxy was cleared with `livesLeft` lives. `bestBefore` is its best score as saved before this clear: null when
+   * it had none, or when the run is a debug run, which keeps no record to beat.
+   */
+  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly bestBefore: number | null }
   /** The last life went, with `score` won in this galaxy. */
   | { readonly kind: 'die'; readonly score: number }
   /** Enter, or pad A, on an end screen: its first button. */
@@ -107,7 +110,7 @@ function toMap(state: FlowState): FlowState {
 function cleared(state: FlowState, { report, livesLeft, bestBefore }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
   const { rankRun, galaxy } = state;
   if (galaxy === null) return state;
-  const newBest = report.score > bestBefore;
+  const newBest = bestBefore !== null && report.score > bestBefore;
   if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score, newBest } };
   const total = rankRun.score + report.score;
   const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft);

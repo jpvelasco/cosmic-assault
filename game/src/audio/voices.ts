@@ -186,6 +186,10 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
   showerSting: (bed, out, t) => {
     phrase(bed, out, t, STING_NOTES, { type: 'square', step: 0.13, duration: 0.11, lastDuration: 0.16, peak: 0.08 });
   },
+  // The shower arriving: a soft rush of noise, rising and falling away.
+  showerWhoosh: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'bandpass', from: 300, to: 2400, q: 0.7, start: t, duration: 0.8, peak: 0.08 });
+  },
   // A rising whoosh: a sine climbing under a widening band of noise.
   warp: (bed, out, t) => {
     tone(bed, out, { type: 'sine', from: 180, to: 1400, start: t, duration: 0.9, peak: 0.14, attack: 0.25 });
@@ -216,9 +220,9 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
   },
 };
 
-/** Starts sound effect `name` now on `out`. */
-export function playSfx(bed: VoiceBed, out: AudioNode, name: SfxName): void {
-  SFX[name](bed, out, bed.ctx.currentTime);
+/** Starts sound effect `name` on `out`, `delay` seconds from now on the audio clock. */
+export function playSfx(bed: VoiceBed, out: AudioNode, name: SfxName, delay = 0): void {
+  SFX[name](bed, out, bed.ctx.currentTime + delay);
 }
 
 const PAD_DETUNE_CENTS = 6;

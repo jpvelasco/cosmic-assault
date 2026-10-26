@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { SETTINGS_KEY } from '../src/app/settings';
 import { DELIBERATE_CRASH } from '../src/testBridge';
-import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
+import { expect, expectMode, gameState, nextFrames, openGame, test, toastOf } from './fixtures';
 
 
 test.use({ allowedErrors: [DELIBERATE_CRASH] });
@@ -74,7 +74,7 @@ test('Copy report puts the log, with the error in it, on the clipboard', async (
   await crash(page);
   await page.getByRole('button', { name: 'Copy report' }).click();
 
-  const toast = page.getByRole('status');
+  const toast = toastOf(page);
   await expect(toast).toHaveText('Report copied');
   // Visible to the player, not just present: the toast is the topmost element at its own centre, above the card's
   // backdrop. Hit testing skips `pointer-events: none`, so the probe lets the toast take hits for the one lookup.

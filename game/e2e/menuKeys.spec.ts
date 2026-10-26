@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import { expect, expectMode, gameState, nextFrames, openGame, openGameOverRun, test, waitForGameOver, waitOutGameOverGuard } from './fixtures';
+import { defaultSave } from '../src/meta/save';
+import { expect, expectMode, gameState, nextFrames, openGame, openGameOverRun, seedSave, test, waitForGameOver, waitOutGameOverGuard } from './fixtures';
 
 // Enter and Space on a focused menu button do that button's action and nothing else, the same as a click.
 
@@ -69,4 +70,38 @@ test('Enter on the focused game-over Title button lands on the title', async ({ 
   await page.keyboard.press('Enter');
 
   await expectModeHolds(page, 'title');
+});
+
+test('arrow keys walk the side-by-side mode cards and the row of Dimensions, skipping the locked ones', async ({ page }) => {
+  await seedSave(page, { ...defaultSave(), frontier: '3-1' });
+  await openGame(page, { galaxy: null });
+  await page.keyboard.press('Space');
+  await expectMode(page, 'modeSelect');
+  // The first arrow lands on the first card; Rank and Free play sit side by side.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  // Arrows move focus on the next frame, while Enter presses the focused button at once.
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expectMode(page, 'map');
+
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('dimension-1')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('dimension-3')).toBeFocused();
+  // D4 and D5 are locked, so the row ends here.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('dimension-3')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('back')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('dimension-3')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expectMode(page, 'galaxySelect');
 });

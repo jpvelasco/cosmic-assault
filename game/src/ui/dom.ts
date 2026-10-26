@@ -1,4 +1,5 @@
 import type { Command } from '../app/commands';
+import type { GalaxyId } from '../content/types';
 
 export function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -56,6 +57,11 @@ export function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLEle
   return { panel, card };
 }
 
+/** The class of a card's primary action, which wears the accent gradient; Enter and pad A take it on the end cards. */
+export const PRIMARY = 'menu-button--primary';
+/** A primary menu button's classes. */
+export const PRIMARY_BUTTON = `menu-button ${PRIMARY}`;
+
 /** A glass card on its own panel, with a heading and its body; `kind` adds a `card--kind` class for its layout. */
 export interface MenuCard {
   readonly panel: HTMLElement;
@@ -73,6 +79,17 @@ export function menuCard(kind: string, heading: string, ...body: HTMLElement[]):
 
 /** Makes the click handler that sends `command`, so every card button goes through the router like a key. */
 export type Act = (command: Command) => () => void;
+
+const SPOKEN_NUMBER = new Intl.NumberFormat();
+
+/** How a galaxy is read aloud: `1-3`, or `Dimension 1 boss` for `1-★`, whose glyph a screen reader would name. */
+export const spokenGalaxy = (id: GalaxyId): string => (id.endsWith('-6') ? `Dimension ${id.slice(0, 1)} boss` : id);
+
+/** A score as read aloud, with its thousands grouped. */
+export const spokenScore = (score: number): string => SPOKEN_NUMBER.format(score);
+
+/** Stars won, as read aloud: "2 of 3 stars". */
+export const spokenStars = (count: number): string => `${String(count)} of 3 stars`;
 
 /** A row of three stars, the first `count` lit; the row reads as one image, "2 of 3 stars". */
 export interface StarRow {
@@ -92,7 +109,7 @@ export function starRow(className: string): StarRow {
   return {
     el,
     set(count) {
-      el.setAttribute('aria-label', `${String(count)} of 3 stars`);
+      el.setAttribute('aria-label', spokenStars(count));
       stars.forEach((star, i) => star.classList.toggle('star--earned', i < count));
     },
   };

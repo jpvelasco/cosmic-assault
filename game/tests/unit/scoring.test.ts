@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clearBonuses, clearReport, Combo, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
+import { clearBonuses, clearReport, Combo, galaxyPoints, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
 
 describe('comboMultiplier', () => {
   it.each([
@@ -94,5 +94,17 @@ describe('clearReport', () => {
 
   it('keeps the bonus the raw clear and no-death bonus, before the Rank multiplier', () => {
     expect(clearReport({ score: 100, deaths: 0, dimension: 2, mode: 'rank' }).bonus).toBe(1500);
+  });
+});
+
+describe('galaxyPoints', () => {
+  it('recovers the kill points from any clear report, in either mode and every Dimension', () => {
+    for (const mode of ['free', 'rank'] as const) {
+      for (const dimension of [1, 2, 3, 4, 5] as const) {
+        for (const score of [0, 1, 7, 1235, 98_765]) {
+          for (const deaths of [0, 2]) expect(galaxyPoints(clearReport({ score, deaths, dimension, mode }), dimension, mode)).toBe(score);
+        }
+      }
+    }
   });
 });

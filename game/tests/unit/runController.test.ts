@@ -131,6 +131,19 @@ describe('createRunController', () => {
       run.command({ kind: 'resumeRank' });
       expect(run.flow.screen).toBe('title');
     });
+
+    it('stays locked on mode select too: its Resume cannot play a run another tab owns', async () => {
+      const { run } = setup({}, () => FIELD, leftMidGalaxy, fakePresence(true));
+      await vi.waitFor(() => {
+        expect(run.rankLock).toBe('elsewhere');
+      });
+      run.command({ kind: 'start' });
+      expect(run.flow.screen).toBe('modeSelect');
+      run.command({ kind: 'resumeRank' });
+      expect(run.flow.screen).toBe('modeSelect');
+      expect(run.world).toBeNull();
+      expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+    });
   });
 
   describe('the Rank lock over time', () => {

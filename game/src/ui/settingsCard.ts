@@ -1,5 +1,5 @@
 import type { ScreenShake, Settings } from '../app/settings';
-import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
+import { button, cardPanel, chip, element, focusableControls, PRIMARY_BUTTON, showSoundState } from './dom';
 
 export interface SettingsCardActions {
   /** A control moved: apply the change now (sent on every `input` event, so a slider is live while dragged). */
@@ -133,7 +133,7 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
   heading.id = HEADING_ID;
   const list = element('div', 'settings-list');
   list.append(music.row, effects.row, shake.group, leftHandedRow);
-  const done = button('menu-button menu-button--primary', 'Done', actions.done);
+  const done = button(PRIMARY_BUTTON, 'Done', actions.done);
   const footer = element('div', 'chips');
   footer.append(sound, done);
   card.append(heading, list, footer);

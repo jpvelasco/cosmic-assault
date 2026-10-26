@@ -141,7 +141,8 @@ function artKeys(radius: number): { readonly core: string; readonly eyes: Record
 /**
  * Draws the boss from baked sprites (no `shadowBlur`): a glow, the core and an eye that follows the ship, a closing
  * ring while an attack winds up, and a white flash on each hit. The core fades in through the intro and out, whitening,
- * as it dies. The paint functions and keys are made once per boss look, so drawing allocates nothing.
+ * as it dies. Its own sprite keys and painters are made once per radius, and `baker.glow` looks its key up in the
+ * baker's key table (built once per colour and size bucket), so a frame of drawing builds no strings or closures.
  */
 export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, baker: SpriteBaker, palette: Palette): BossPass {
   const eyeColors: Readonly<Record<BossPhase, string>> = { 1: palette.accent[0], 2: palette.ring, 3: palette.shot };

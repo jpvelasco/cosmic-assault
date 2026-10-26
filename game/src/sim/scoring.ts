@@ -84,3 +84,12 @@ export function clearReport({ score, deaths, dimension, mode }: ClearInput): Cle
   const total = mode === 'rank' ? Math.round((score + bonus) * dimensionMultiplier(dimension)) : score + bonus;
   return { score: total, bonus, deaths, stars: starsFor(deaths) };
 }
+
+/**
+ * The points a cleared galaxy's kills scored, before its bonus and any Rank multiplier: `clearReport` run backwards.
+ * Exact, because the report rounds once and the multiplier is at least 1.
+ */
+export function galaxyPoints(report: Pick<ClearReport, 'score' | 'bonus'>, dimension: Dimension, mode: GalaxyMode): number {
+  const factor = mode === 'rank' ? dimensionMultiplier(dimension) : 1;
+  return Math.round(report.score / factor) - report.bonus;
+}

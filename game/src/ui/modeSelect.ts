@@ -1,5 +1,5 @@
 import type { GalaxyMode } from '../sim/scoring';
-import { button, element, menuCard, withTestId, type Act, type MenuCard } from './dom';
+import { button, element, menuCard, PRIMARY_BUTTON, withTestId, type Act, type MenuCard } from './dom';
 
 export interface ModeSelect {
   readonly modeSelect: MenuCard;
@@ -45,7 +45,7 @@ export function createModeSelect(act: Act): ModeSelect {
   const resumeSlot = element('div', 'resume-slot');
   const cards = element('div', 'mode-cards');
   cards.append(...MODES.map((spec) => modeCard(spec, act)));
-  const start = withTestId(button('menu-button menu-button--primary', 'Start new run', act({ kind: 'chooseMode', mode: 'rank' })), 'confirm-new-rank');
+  const start = withTestId(button(PRIMARY_BUTTON, 'Start new run', act({ kind: 'chooseMode', mode: 'rank' })), 'confirm-new-rank');
   return {
     modeSelect: menuCard('modes', 'Choose a mode', resumeSlot, cards, hint),
     confirmNewRank: menuCard('confirm', 'Start a new run?', element('p', 'hint', 'Your saved run will end.'), start),

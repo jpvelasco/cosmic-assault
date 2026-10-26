@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
-import { expect, expectMode, gameState, nextFrames, openGame, shipState, test } from './fixtures';
+import { defaultSave } from '../src/meta/save';
+import { expect, expectMode, gameState, nextFrames, openGame, seedSave, shipState, test, toastOf } from './fixtures';
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -10,6 +11,7 @@ const RT = 7;
 const START = 9;
 const DPAD_UP = 12;
 const DPAD_DOWN = 13;
+const DPAD_LEFT = 14;
 const DPAD_RIGHT = 15;
 
 interface FakePad {
@@ -74,7 +76,7 @@ test('A on the title starts a run', { tag: '@desktop' }, async ({ page }) => {
 });
 
 test('the first A with sound still locked says how to turn it on, once', { tag: '@desktop' }, async ({ page }) => {
-  const toast = page.getByRole('status');
+  const toast = toastOf(page);
   await startRun(page);
   // A pad press is no user activation, so the browser keeps sound off until a tap or key press.
   expect((await gameState(page)).audioState).toBe('none');
@@ -237,4 +239,32 @@ test('the rotate prompt covers every card: the pad focuses nothing and cannot st
   await tap(page, START);
   await nextFrames(page, 3);
   await expectMode(page, 'title');
+});
+
+test('the D-pad walks the side-by-side mode cards and the row of Dimensions, skipping the locked ones', { tag: '@desktop' }, async ({ page }) => {
+  await seedSave(page, { ...defaultSave(), frontier: '2-1' });
+  await openGame(page, { galaxy: null });
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
+  await tap(page, A);
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await tap(page, DPAD_LEFT);
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await tap(page, A);
+  await expectMode(page, 'map');
+
+  await tap(page, A);
+  await expect(page.getByTestId('dimension-1')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('dimension-2')).toBeFocused();
+  // D3 to D5 are locked.
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('dimension-2')).toBeFocused();
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('back')).toBeFocused();
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
 });

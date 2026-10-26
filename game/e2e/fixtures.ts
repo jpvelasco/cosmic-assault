@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
+import { SAVE_KEY, type SaveData } from '../src/meta/save';
 import { E2E_GALAXY, E2E_SEED, GAME_OVER_GALAXY, GAME_OVER_SEED } from './seed';
 
 /**
@@ -28,6 +29,9 @@ export const test = base.extend<{ consoleErrors: string[]; allowedErrors: string
 });
 
 export { expect };
+
+/** The toast: the one status region the player sees (the boss announcer is a visually hidden status region too). */
+export const toastOf = (page: Page) => page.getByRole('status').and(page.locator('.toast'));
 
 /** The title screen's build label in a `vite preview` build. */
 export const BUILD_LABEL = /^preview · (local|[0-9a-f]{7}) · \d{4}-\d{2}-\d{2}$/;
@@ -74,6 +78,13 @@ export function fastForward(page: Page, seconds: number): Promise<void> {
     if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
     api.fastForward(s);
   }, seconds);
+}
+
+/** Stores `save` under the save key before every navigation of `page`, as a returning player's browser would hold it. */
+export async function seedSave(page: Page, save: SaveData): Promise<void> {
+  await page.addInitScript(([key, value]) => {
+    localStorage.setItem(key, value);
+  }, [SAVE_KEY, JSON.stringify(save)] as const);
 }
 
 /** Makes the time-based run seed `seed` for every navigation of `page`, without a debug switch, so the run still saves. */

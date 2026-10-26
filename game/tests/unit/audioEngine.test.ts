@@ -373,6 +373,36 @@ describe('sound effects', () => {
     expect(sources() - before).toBe(4);
   });
 
+  it('starts a boss kill\'s warp 0.3 s after the boss goes down, and the results fanfare after both, on the audio clock', () => {
+    const e = engine();
+    press();
+    const c = ctx();
+    c.currentTime = 2;
+    const startOf = (node: FakeNode): number => node.start.mock.calls[0]?.[0] as number;
+    /** The voices `act` starts, in the order it starts them. */
+    const started = (act: () => void): number[] => {
+      const [oscillators, sources] = [nodesOf('oscillator').length, nodesOf('bufferSource').length];
+      act();
+      return [...nodesOf('oscillator').slice(oscillators), ...nodesOf('bufferSource').slice(sources)].map(startOf);
+    };
+    const down = started(() => {
+      e.handle([{ type: 'bossDown', id: 'sentinel' }]);
+    });
+    const kill = started(() => {
+      e.handle([{ type: 'bossDown', id: 'sentinel' }, { type: 'warpOut' }]);
+    });
+    expect(new Set(down)).toEqual(new Set([2]));
+    // The same boss-down voices at once, and the warp's 0.3 s behind them.
+    expect(kill.filter((t) => t === 2)).toHaveLength(down.length);
+    expect(kill.filter((t) => t !== 2).every((t) => Math.abs(t - 2.3) < 1e-9)).toBe(true);
+    expect(kill.length).toBeGreaterThan(down.length);
+    const fanfare = started(() => {
+      e.setScreen('results');
+    });
+    expect(fanfare.length).toBeGreaterThan(0);
+    expect(Math.min(...fanfare)).toBeGreaterThan(2.3);
+  });
+
   it('does not cap other sounds', () => {
     const e = engine();
     press();

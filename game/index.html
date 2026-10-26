@@ -214,6 +214,16 @@
         font-weight: 900;
         font-variant-numeric: tabular-nums;
       }
+      /* Read by screen readers, never drawn: the boss announcer (src/ui/bossAnnouncer.ts). */
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
       /* A card's parts set their own display, which would otherwise override [hidden]. */
       .card [hidden] {
         display: none;
@@ -936,7 +946,7 @@
     </style>
   </head>
   <body>
-    <main id="app"><canvas id="game"></canvas></main>
+    <main id="app"><canvas id="game" aria-hidden="true"></canvas></main>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

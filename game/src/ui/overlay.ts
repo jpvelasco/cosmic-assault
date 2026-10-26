@@ -5,8 +5,10 @@ import type { SaveData } from '../meta/save';
 import type { RankLock } from '../app/runController';
 import { galaxyLabel } from '../content/galaxies';
 import type { InstallOffer } from '../platform/install';
+import type { SimEvent } from '../sim/events';
+import { createBossAnnouncer } from './bossAnnouncer';
 import { createDimensionMap } from './dimensionMap';
-import { button, cardPanel, chip, element, focusableControls, showSoundState, withTestId, type Act, type MenuCard } from './dom';
+import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_BUTTON, showSoundState, withTestId, type Act, type MenuCard } from './dom';
 import { createGalaxySelect } from './galaxySelect';
 import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
 import { createModeSelect } from './modeSelect';
@@ -44,6 +46,8 @@ export interface OverlayState {
 
 export interface Overlay {
   update(state: OverlayState): void;
+  /** One step's events: a boss's arrival, phases and fall are announced to screen readers. */
+  handle(events: readonly SimEvent[]): void;
   /** Puts keyboard focus on the Settings chip of the visible card, as the settings card closes. */
   focusSettingsChip(): void;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
@@ -86,7 +90,7 @@ function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLEle
 
 function pausePanel(actions: OverlayActions, quit: HTMLButtonElement, chipRow: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('pause');
-  card.append(element('h2', 'heading', 'Paused'), button('menu-button menu-button--primary', 'Resume', actions.resume), quit, chipRow);
+  card.append(element('h2', 'heading', 'Paused'), button(PRIMARY_BUTTON, 'Resume', actions.resume), quit, chipRow);
   return panel;
 }
 
@@ -118,7 +122,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const send: Act = (command: Command) => (): void => {
     actions.command(command);
   };
-  const play = withTestId(button('menu-button menu-button--primary', 'Play', send({ kind: 'start' })), 'play');
+  const play = withTestId(button(PRIMARY_BUTTON, 'Play', send({ kind: 'start' })), 'play');
   const quit = withTestId(button('menu-button', '', actions.quit), 'quit');
   // One Resume Rank group, with where the run stands and whether another tab plays it, on the title and mode select.
   const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
@@ -161,6 +165,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   for (const [screen, menu] of Object.entries(menus) as [Screen, MenuCard][]) panels[screen] = menu.panel;
   const all = [...new Set(Object.values(panels))];
   root.append(...all);
+  const announcer = createBossAnnouncer(root);
 
   return {
     update({ flow, save, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
@@ -188,7 +193,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       resumeRank.textContent = resumeLabel(save);
       resumeRank.disabled = rankLock !== 'free';
       // On mode select Resume leads, ahead of the two mode cards.
-      resumeRank.classList.toggle('menu-button--primary', screen === 'modeSelect');
+      resumeRank.classList.toggle(PRIMARY, screen === 'modeSelect');
       savedRun.textContent = savedRunText(save);
       elsewhere.hidden = rankLock !== 'elsewhere';
       quit.textContent = quitLabel(flow);
@@ -199,6 +204,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       galaxySelect.update(flow.dimension, save);
       results.update({ flow, score, restartHint: hints.restart });
     },
+    handle(events) {
+      announcer.handle(events);
+    },
     focusSettingsChip() {
       settings.focus();
     },
@@ -208,6 +216,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
     },
     dispose() {
       for (const panel of all) panel.remove();
+      announcer.dispose();
     },
   };
 }

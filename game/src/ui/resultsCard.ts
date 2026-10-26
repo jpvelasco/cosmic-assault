@@ -1,7 +1,7 @@
 import { freeNext, type FlowState } from '../app/flow';
 import { galaxyById, galaxyLabel } from '../content/galaxies';
-import { clearBonuses, dimensionMultiplier } from '../sim/scoring';
-import { button, cardPanel, element, starRow, withTestId, type Act } from './dom';
+import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
+import { button, cardPanel, element, PRIMARY, starRow, withTestId, type Act } from './dom';
 
 export interface ResultsState {
   readonly flow: FlowState;
@@ -16,8 +16,6 @@ export interface ResultsCard {
   readonly panel: HTMLElement;
   update(state: ResultsState): void;
 }
-
-const PRIMARY = 'menu-button--primary';
 
 /** A label and its amount, as on a receipt. */
 function line(): { el: HTMLElement; set(label: string, amount: string): void } {
@@ -48,6 +46,7 @@ export function createResultsCard(act: Act): ResultsCard {
   const stars = starRow('stars--big');
   const score = element('p', 'score');
   const newBest = element('p', 'badge new-best', 'New best!');
+  const points = line();
   const clearBonus = line();
   const noDeathBonus = line();
   const rankFactor = line();
@@ -64,7 +63,7 @@ export function createResultsCard(act: Act): ResultsCard {
   const row = element('div', 'end-buttons');
   row.append(...buttons.map(([el]) => el));
   const receipt = element('div', 'end-lines');
-  receipt.append(clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
+  receipt.append(points.el, clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
   card.append(galaxy, heading, stars.el, score, newBest, receipt, hint, row);
 
   /** The clear's bonuses and, in Rank, the Dimension's multiplier and the run total; no lines after a game over. */
@@ -75,6 +74,8 @@ export function createResultsCard(act: Act): ResultsCard {
     const { clear, noDeath } = clearBonuses(dimension, result.report.deaths);
     const factor = dimensionMultiplier(dimension);
     const rank = mode === 'rank';
+    // What the score is made of: the kills, the bonuses, then in Rank the Dimension's multiplier over both.
+    points.set('Galaxy score', String(galaxyPoints(result.report, dimension, mode ?? 'free')));
     clearBonus.set('Clear bonus', `+${String(clear)}`);
     noDeathBonus.set('No-death bonus', noDeath > 0 ? `+${String(noDeath)}` : '');
     rankFactor.set('Dimension bonus', rank && factor > 1 ? `×${factor.toFixed(1)}` : '');

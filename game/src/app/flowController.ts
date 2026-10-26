@@ -134,8 +134,11 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     }
   }
 
-  /** The galaxy in play's best score as saved now, before its clear is written: the results card's "New best!" compares with it. */
-  const bestBefore = (): number => (state.galaxy === null ? 0 : (store.save.galaxies[state.galaxy]?.bestScore ?? 0));
+  /**
+   * The galaxy in play's best score as saved now, before its clear is written, for the results card's "New best!": null
+   * for a galaxy never cleared, and for a debug run (a store that never writes), whose clears are never saved.
+   */
+  const bestBefore = (): number | null => (state.galaxy === null || !store.writes ? null : (store.save.galaxies[state.galaxy]?.bestScore ?? null));
 
   function handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void {
     for (const event of events) {

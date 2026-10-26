@@ -127,6 +127,8 @@ describe('update', () => {
   it('with writes off, changes memory only and never touches storage', () => {
     const storage = new FakeStorage();
     const store = createSaveStore({ storage, events: new FakeWindow(), writes: false });
+    expect(store.writes).toBe(false);
+    expect(createSaveStore({ storage, events: new FakeWindow() }).writes).toBe(true);
     const next = store.update((s) => clear(s, '1-1'));
     expect(next.frontier).toBe('1-2');
     expect(store.save.frontier).toBe('1-2');

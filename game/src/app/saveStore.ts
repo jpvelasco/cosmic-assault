@@ -24,6 +24,8 @@ export interface SaveStoreOptions {
 export interface SaveStore {
   /** The in-memory save, as of the last load, update or external change. */
   readonly save: SaveData;
+  /** Whether changes reach storage; false for a debug run, which keeps its progress in memory only. */
+  readonly writes: boolean;
   /** Reads storage and folds it into memory. */
   load(): SaveData;
   /** Re-reads storage, merges it with memory, applies `change`, writes, and returns the result. */
@@ -82,6 +84,7 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
   const merged = (stored: SaveData | null): SaveData => (stored === null ? memory : mergeSaves(memory, stored));
 
   const store: SaveStore = {
+    writes,
     get save() {
       return memory;
     },

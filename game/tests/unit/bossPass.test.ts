@@ -7,6 +7,8 @@ import type { BossView } from '../../src/sim/boss/bossRunner';
 
 interface Draw {
   readonly image: unknown;
+  /** The transform's x scale: the field scale times the sprite's size. */
+  readonly a: number;
   readonly e: number;
   readonly f: number;
   readonly alpha: number;
@@ -15,6 +17,7 @@ interface Draw {
 /** A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force. */
 function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
   const draws: Draw[] = [];
+  let a = 1;
   let e = 0;
   let f = 0;
   let alpha = 1;
@@ -25,12 +28,13 @@ function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
       get: (_target, name) => {
         switch (name) {
           case 'setTransform':
-            return (_a: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+            return (nextA: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+              a = nextA;
               e = nextE;
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, e, f, alpha });
+            return (image: unknown) => draws.push({ image, a, e, f, alpha });
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
@@ -39,6 +43,7 @@ function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
         }
       },
       set: (_target, name, value) => {
+        if (name === 'shadowBlur') throw new Error('the boss must not use shadowBlur');
         if (name === 'globalAlpha') alpha = value as number;
         return true;
       },
@@ -113,6 +118,63 @@ describe('createBossPass', () => {
     pass.advance(2, boss({ state: 'intro' }));
     pass.draw(boss({ state: 'intro' }), 1, LOOK);
     expect(early).toBeLessThan(Math.max(...draws.map((d) => d.alpha)));
+  });
+
+  /** The draw of the sprite baked under `key` in `draws`. */
+  function drawOf(key: string, spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[]; readonly results: readonly { readonly value: unknown }[] } }): Draw | undefined {
+    const index = spy.mock.calls.findIndex(([k]) => k === key);
+    const canvas = spy.mock.results[index]?.value as { canvas: unknown } | undefined;
+    return draws.findLast((d) => d.image === canvas?.canvas);
+  }
+
+  it('closes the windup ring in on the core as the attack nears, so its size tells when it lands', () => {
+    const custom = vi.spyOn(baker, 'custom');
+    const winding = boss({ windup: 'shardRing' });
+    pass.advance(0.01, winding);
+    pass.draw(winding, 1, LOOK);
+    const early = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    pass.advance(0.3, winding);
+    pass.draw(winding, 1, LOOK);
+    const later = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    pass.advance(0.4, winding);
+    pass.draw(winding, 1, LOOK);
+    const closed = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    expect(early).toBeGreaterThan(later);
+    expect(later).toBeGreaterThan(closed);
+    expect(closed).toBeCloseTo(1);
+  });
+
+  it('holds the ring steady and at one size under reduced motion', () => {
+    const custom = vi.spyOn(baker, 'custom');
+    const still = { ...LOOK, still: true };
+    const winding = boss({ windup: 'lunge' });
+    const sizes: number[] = [];
+    const alphas: number[] = [];
+    for (const dt of [0.01, 0.1, 0.2]) {
+      pass.advance(dt, winding);
+      pass.draw(winding, 1, still);
+      const ring = drawOf('boss|ring|lunge|70', custom);
+      sizes.push(ring?.a ?? 0);
+      alphas.push(ring?.alpha ?? 0);
+    }
+    expect(new Set(sizes)).toEqual(new Set([1.1]));
+    expect(new Set(alphas).size).toBe(1);
+  });
+
+  it('fades and whitens the core as it dies, and grows a little', () => {
+    const custom = vi.spyOn(baker, 'custom');
+    const dying = boss({ state: 'dying', hp: 0 });
+    pass.advance(0.01, dying);
+    pass.advance(0.5, dying);
+    pass.draw(dying, 1, LOOK);
+    const early = drawOf('boss|core|70', custom);
+    const earlyWhite = draws.filter((d) => d.alpha > 0 && d.image !== early?.image).length;
+    pass.advance(1, dying);
+    pass.draw(dying, 1, LOOK);
+    const late = drawOf('boss|core|70', custom);
+    expect(late?.alpha).toBeLessThan(early?.alpha ?? 0);
+    expect(late?.a).toBeGreaterThan(early?.a ?? Infinity);
+    expect(earlyWhite).toBeGreaterThan(0);
   });
 
   it('forgets the last fight on reset', () => {

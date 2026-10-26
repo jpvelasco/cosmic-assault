@@ -19,8 +19,8 @@ const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEven
 type Backing = Pick<Storage, 'getItem' | 'setItem'>;
 
 /** A tab: its own store over `storage` (shared between tabs to model two), and its flow. */
-function setup(options: { save?: SaveData; storage?: Backing; galaxy?: GalaxyId; startLives?: number } = {}) {
-  const store = createSaveStore({ storage: options.storage ?? memoryStorage(options.save), events: NO_EVENTS });
+function setup(options: { save?: SaveData; storage?: Backing; galaxy?: GalaxyId; startLives?: number; writes?: boolean } = {}) {
+  const store = createSaveStore({ storage: options.storage ?? memoryStorage(options.save), events: NO_EVENTS, writes: options.writes ?? true });
   store.load();
   const started: FlowState[] = [];
   const screens: Screen[] = [];
@@ -128,19 +128,31 @@ describe('createFlowController: events', () => {
     expect(store.save.galaxies['1-1']?.stars).toBe(flow.state.result?.report.stars);
   });
 
-  it('tells a new best from a replay: the stored best is read before the clear writes over it', () => {
-    const cleared = (bestScore: number) => {
-      const { flow } = setup({ galaxy: '1-1', save: { ...defaultSave(), galaxies: { '1-1': { bestScore, stars: 1 } } } });
+  it('tells a new best from a replay: a stored best, read before the clear writes over it, must be beaten', () => {
+    /** Plays 1-1 through the menus, with no debug switch, over a save holding `galaxies`. */
+    const cleared = (galaxies: SaveData['galaxies']) => {
+      const { flow } = setup({ save: { ...defaultSave(), galaxies } });
       flow.command({ kind: 'start' });
+      flow.command({ kind: 'chooseMode', mode: 'free' });
+      flow.command({ kind: 'openDimension', dimension: 1 });
+      flow.command({ kind: 'openGalaxy', id: '1-1' });
       playUntilEnd(flow, '1-1');
       return flow.state.result;
     };
-    const first = cleared(0);
-    expect(first?.newBest).toBe(true);
+    // A first clear has no best to beat.
+    const first = cleared({});
+    expect(first?.newBest).toBe(false);
     const score = first?.report.score ?? 0;
+    expect(cleared({ '1-1': { bestScore: score - 1, stars: 1 } })?.newBest).toBe(true);
     // The idle replay scores the same again: equal is no new best.
-    expect(cleared(score)?.newBest).toBe(false);
-    expect(cleared(score - 1)?.newBest).toBe(true);
+    expect(cleared({ '1-1': { bestScore: score, stars: 1 } })?.newBest).toBe(false);
+  });
+
+  it('never calls a debug run a new best: its store never writes, so it keeps no record to beat', () => {
+    const { flow } = setup({ save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1', writes: false });
+    flow.command({ kind: 'start' });
+    playUntilEnd(flow, '1-1');
+    expect(flow.state.result?.newBest).toBe(false);
   });
 
   it('Resume Rank works from mode select too', () => {

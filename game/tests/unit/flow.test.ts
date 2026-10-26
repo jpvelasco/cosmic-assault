@@ -119,14 +119,15 @@ describe('transition: pause', () => {
 });
 
 describe('transition: Free play results and game over', () => {
-  const cleared = transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: 0 });
+  const cleared = transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null });
 
   it('a clear shows the results with its report', () => {
-    expect(cleared).toEqual(freeOn('results', '1-3', { result: { report: REPORT, total: REPORT.score, newBest: true } }));
+    expect(cleared).toEqual(freeOn('results', '1-3', { result: { report: REPORT, total: REPORT.score, newBest: false } }));
   });
 
-  it('marks the clear a new best only when its score beats the best stored before it', () => {
-    const clear = (bestBefore: number) => transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore }).result?.newBest;
+  it('marks the clear a new best only when it beats a best stored before it; a first clear is none', () => {
+    const clear = (bestBefore: number | null) => transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore }).result?.newBest;
+    expect(clear(null)).toBe(false);
     expect(clear(0)).toBe(true);
     expect(clear(REPORT.score - 1)).toBe(true);
     expect(clear(REPORT.score)).toBe(false);
@@ -146,12 +147,12 @@ describe('transition: Free play results and game over', () => {
   });
 
   it('a boss clear goes Next into the next Dimension', () => {
-    const boss = transition(freeOn('playing', '2-6'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: 0 });
+    const boss = transition(freeOn('playing', '2-6'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null });
     expect(transition(boss, { kind: 'next' })).toMatchObject({ galaxy: '3-1', dimension: 3 });
   });
 
   it('after the last galaxy there is no Next, and Enter, the first button left, retries', () => {
-    const last = transition(freeOn('playing', '5-6'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: 0 });
+    const last = transition(freeOn('playing', '5-6'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null });
     expect(freeNext(last)).toBeNull();
     expect(transition(last, { kind: 'next' })).toBe(last);
     expect(transition(last, { kind: 'confirm' })).toMatchObject({ screen: 'playing', galaxy: '5-6', runs: 2 });
@@ -170,10 +171,10 @@ describe('transition: Free play results and game over', () => {
 
 describe('transition: Rank results', () => {
   const playing = rankOn('playing', { ...RUN, score: 1000, lives: 2 });
-  const cleared = transition(playing, { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: 0 });
+  const cleared = transition(playing, { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: null });
 
   it('a clear carries the score and lives into the next galaxy', () => {
-    expect(cleared).toEqual(rankOn('results', { ...RUN, next: '1-2', score: 2200, lives: 2 }, { galaxy: '1-1', result: { report: REPORT, total: 2200, newBest: true } }));
+    expect(cleared).toEqual(rankOn('results', { ...RUN, next: '1-2', score: 2200, lives: 2 }, { galaxy: '1-1', result: { report: REPORT, total: 2200, newBest: false } }));
   });
 
   it('continues automatically to the run next galaxy: Next and Enter play it', () => {
@@ -193,8 +194,8 @@ describe('transition: Rank results', () => {
 
   it('5-★ completes the run', () => {
     const last = rankOn('playing', { ...RUN, next: '5-6', score: 90000, lives: 1 });
-    const done = transition(last, { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: 0 });
-    expect(done).toMatchObject({ screen: 'rankComplete', galaxy: '5-6', rankRun: null, result: { report: REPORT, total: 91200, newBest: true } });
+    const done = transition(last, { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null });
+    expect(done).toMatchObject({ screen: 'rankComplete', galaxy: '5-6', rankRun: null, result: { report: REPORT, total: 91200, newBest: false } });
     for (const kind of ['confirm', 'title', 'back'] as const) expect(transition(done, { kind })).toMatchObject({ screen: 'title', mode: null });
     for (const kind of ['next', 'retry', 'map', 'continue'] as const) expect(transition(done, { kind })).toBe(done);
   });
@@ -233,10 +234,10 @@ describe('transition: ignored actions', () => {
     [freeOn('playing', '1-1'), { kind: 'quit' }],
     [freeOn('paused', '1-1'), { kind: 'pause' }],
     [freeOn('paused', '1-1'), { kind: 'die', score: 0 }],
-    [freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: 0 }],
+    [freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null }],
     [at('confirmNewRank'), { kind: 'chooseFree' }],
     [at('map', { mode: 'free' }), { kind: 'askNewRank' }],
-    [freeOn('gameOver', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: 0 }],
+    [freeOn('gameOver', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null }],
     [freeOn('results', '1-1'), { kind: 'pause' }],
   ])('%j ignores %j', (state, action) => {
     expect(transition(state, action)).toBe(state);
@@ -250,7 +251,7 @@ describe('saveChange', () => {
   it('records a Free play clear as progress only, leaving the Rank run alone', () => {
     const save = { ...defaultSave(), rankRun: RUN, rankSeq: 4 };
     const playing = freeOn('playing', '1-1');
-    const action: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: 0 };
+    const action: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null };
     expect(rankPart(saveChange(playing, action, transition(playing, action), () => TODAY))).toBeNull();
     const after = saved(save, playing, action).save;
     expect(after).toMatchObject({ frontier: '1-2', galaxies: { '1-1': { bestScore: 1200, stars: 3 } }, rankRun: RUN, rankSeq: 4, rankBoard: [] });
@@ -280,7 +281,7 @@ describe('saveChange', () => {
 
   it('suspend and resume: a clear saves the run between galaxies at the next one, and Resume marks it in that galaxy', () => {
     let save: SaveData = saved(defaultSave(), at('modeSelect'), { kind: 'startRank', run: RUN }).save;
-    const cleared = saved(save, rankOn('playing', RUN), { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: 0 });
+    const cleared = saved(save, rankOn('playing', RUN), { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: null });
     save = cleared.save;
     expect(save).toMatchObject({ frontier: '1-2', rankRun: { next: '1-2', score: 1200, lives: 2, inGalaxy: false }, rankSeq: 2 });
     // The player leaves from results (suspend): nothing more is written, and the title offers the saved run.
@@ -332,7 +333,7 @@ describe('saveChange', () => {
 
   it('completing 5-★ records the clear, posts the final score and ends the run', () => {
     const last = { ...RUN, next: '5-6' as const, score: 90000, lives: 1 };
-    const after = saved({ ...defaultSave(), frontier: '5-6', rankRun: last, rankSeq: 9 }, rankOn('playing', last), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: 0 }).save;
+    const after = saved({ ...defaultSave(), frontier: '5-6', rankRun: last, rankSeq: 9 }, rankOn('playing', last), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null }).save;
     expect(after).toMatchObject({ rankRun: null, rankSeq: 10, galaxies: { '5-6': { bestScore: 1200, stars: 3 } } });
     expect(after.rankBoard).toEqual([{ score: 91200, reached: 'D5 · ★', date: TODAY, continued: false }]);
   });
@@ -341,7 +342,7 @@ describe('saveChange', () => {
 describe('applySaveChange (the stale-tab guard)', () => {
   const run1 = { ...RUN, next: '1-2' as const, score: 900, lives: 2 };
   const playing = rankOn('playing', run1);
-  const clear: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: 0 };
+  const clear: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: null };
   const change = saveChange(playing, clear, transition(playing, clear), () => TODAY);
   if (change === null) throw new Error('a Rank clear must write');
 

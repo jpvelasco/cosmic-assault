@@ -1,4 +1,4 @@
-import { createAudioEngine, needsSoundGesture, type AudioState, type MusicLevel } from '../audio/engine';
+import { createAudioEngine, needsSoundGesture, type AudioState } from '../audio/engine';
 import { currentBuildLabel } from '../buildLabel';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
@@ -81,8 +81,6 @@ export interface App {
   dispose(): void;
 }
 
-/** Play and pause have their own music; every other screen plays the menu's. */
-const musicFor = (screen: Screen): MusicLevel => (screen === 'playing' ? 'play' : screen === 'paused' ? 'paused' : 'menu');
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -130,6 +128,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       hitStop.trigger(events);
       renderer.handle(events, world);
       audio.handle(events);
+      overlay.handle(events);
     },
     refresh: syncView,
   });
@@ -251,7 +250,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     log.add('mode', next, now);
     if (END_SCREENS.includes(next)) runEndedAt = now;
     if (MENU_SCREENS.includes(next)) hitStop.clear();
-    audio.setMusicLevel(musicFor(next));
+    audio.setScreen(next);
     redrawPending = true;
     view.armIdleCursor();
     view.sync();

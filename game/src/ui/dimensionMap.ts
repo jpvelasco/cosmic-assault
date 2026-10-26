@@ -2,7 +2,7 @@ import { DIMENSION_NUMBERS, DIMENSIONS, GALAXY_INDEXES, galaxyIdOf } from '../co
 import type { Dimension, GalaxyIndex } from '../content/types';
 import { dimensionStars, isUnlocked } from '../meta/progress';
 import type { SaveData } from '../meta/save';
-import { button, element, lockIcon, menuCard, withTestId, type Act, type MenuCard } from './dom';
+import { button, element, lockIcon, menuCard, spokenGalaxy, withTestId, type Act, type MenuCard } from './dom';
 
 const STARS_PER_DIMENSION = 3 * GALAXY_INDEXES.length;
 
@@ -57,7 +57,10 @@ export function createDimensionMap(act: Act): DimensionMap {
         el.classList.toggle('is-locked', !open);
         name.textContent = open ? DIMENSIONS[d] : '';
         status.textContent = open ? `★ ${String(stars)}/${String(STARS_PER_DIMENSION)}` : `Clear ${String(d - 1)}-★ to unlock`;
-        el.setAttribute('aria-label', open ? `D${String(d)} ${DIMENSIONS[d]} ${status.textContent}` : `D${String(d)} · ${status.textContent}`);
+        el.setAttribute(
+          'aria-label',
+          open ? `Dimension ${String(d)}, ${DIMENSIONS[d]}, ${String(stars)} of ${String(STARS_PER_DIMENSION)} stars` : `Dimension ${String(d)}, locked; clear the ${spokenGalaxy(galaxyIdOf((d - 1) as Dimension, 6))} to unlock`,
+        );
         for (const { g, el: pip } of pips) pip.classList.toggle('pip--lit', (save.galaxies[galaxyIdOf(d, g)]?.stars ?? 0) > 0);
       }
       total.textContent = `★ ${String(won)}/${String(STARS_PER_DIMENSION * DIMENSION_NUMBERS.length)}`;
