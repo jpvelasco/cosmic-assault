@@ -10,7 +10,7 @@
     "build": "vite build",
     "build:e2e": "vite build --mode e2e && node scripts/check-no-bridge.mjs --e2e",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/sw",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test --project=chromium-desktop --project=mobile-landscape --project=release-smoke",

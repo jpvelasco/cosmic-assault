@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_MESSAGE_LENGTH, RingLog } from '../../src/platform/log';
+import { errorMessage, MAX_MESSAGE_LENGTH, RingLog } from '../../src/platform/log';
 
 describe('RingLog', () => {
   it('lists entries oldest first', () => {
@@ -53,5 +53,13 @@ describe('RingLog', () => {
       meta: { build: 'preview · local', mode: 'playing' },
       entries: [{ t: 5, kind: 'stall', message: '1200 ms' }],
     });
+  });
+});
+
+describe('errorMessage', () => {
+  it("gives an Error's message and anything else as text", () => {
+    expect(errorMessage(new TypeError('denied'))).toBe('denied');
+    expect(errorMessage('refused')).toBe('refused');
+    expect(errorMessage(undefined)).toBe('undefined');
   });
 });

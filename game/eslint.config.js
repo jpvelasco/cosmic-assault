@@ -55,6 +55,23 @@ export default defineConfig(
     },
   },
   {
+    files: ['src/sw/**/*.ts'],
+    languageOptions: { globals: globals.serviceworker },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**'],
+              message: 'The service worker has no DOM: import only DOM-free helpers such as src/platform/swLogic.ts',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.js', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },

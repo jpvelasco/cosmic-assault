@@ -1,0 +1,122 @@
+import { describe, expect, it, vi } from 'vitest';
+import { isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../../src/platform/swLogic';
+
+const SCOPE = new URL('https://example.test/cosmic-assault/next/');
+const at = (path: string) => new URL(path, SCOPE);
+
+describe('precacheName', () => {
+  it('prefixes the version', () => {
+    expect(precacheName('abc123')).toBe('cosmic-assault-next-abc123');
+  });
+});
+
+describe('isStaleCache', () => {
+  const current = precacheName('new');
+
+  it('is true for an older version of our cache', () => {
+    expect(isStaleCache(precacheName('old'), current)).toBe(true);
+  });
+
+  it('is false for the current cache', () => {
+    expect(isStaleCache(current, current)).toBe(false);
+  });
+
+  it('is false for a cache that is not ours', () => {
+    expect(isStaleCache('workbox-precache-v2', current)).toBe(false);
+    expect(isStaleCache('cosmic-assault-legacy', current)).toBe(false);
+  });
+});
+
+describe('shouldHandle', () => {
+  it('handles a GET for an asset under the scope', () => {
+    expect(shouldHandle(at('/cosmic-assault/next/assets/x.js'), 'GET', SCOPE)).toBe(true);
+    expect(shouldHandle(at('/cosmic-assault/next/'), 'GET', SCOPE)).toBe(true);
+  });
+
+  it('leaves the legacy site at the root alone', () => {
+    expect(shouldHandle(at('/cosmic-assault/'), 'GET', SCOPE)).toBe(false);
+    expect(shouldHandle(at('/cosmic-assault/index.html'), 'GET', SCOPE)).toBe(false);
+    expect(shouldHandle(at('/cosmic-assault/next'), 'GET', SCOPE)).toBe(false);
+    expect(shouldHandle(at('/cosmic-assault/next-other/x.js'), 'GET', SCOPE)).toBe(false);
+  });
+
+  it('leaves anything but GET alone', () => {
+    expect(shouldHandle(at('/cosmic-assault/next/assets/x.js'), 'POST', SCOPE)).toBe(false);
+    expect(shouldHandle(at('/cosmic-assault/next/assets/x.js'), 'HEAD', SCOPE)).toBe(false);
+  });
+
+  it('leaves another origin alone, even on the same path', () => {
+    expect(shouldHandle(new URL('https://cdn.test/cosmic-assault/next/assets/x.js'), 'GET', SCOPE)).toBe(false);
+    expect(shouldHandle(new URL('http://example.test/cosmic-assault/next/assets/x.js'), 'GET', SCOPE)).toBe(false);
+  });
+});
+
+describe('shouldCache', () => {
+  it('caches a whole same-origin 200', () => {
+    expect(shouldCache({ status: 200, type: 'basic' })).toBe(true);
+  });
+
+  it('never caches an opaque, cross-origin or failed response', () => {
+    expect(shouldCache({ status: 0, type: 'opaque' })).toBe(false);
+    expect(shouldCache({ status: 200, type: 'cors' })).toBe(false);
+    expect(shouldCache({ status: 404, type: 'basic' })).toBe(false);
+    expect(shouldCache({ status: 500, type: 'basic' })).toBe(false);
+  });
+
+  it('never caches a partial response, which the Cache API rejects', () => {
+    expect(shouldCache({ status: 206, type: 'basic' })).toBe(false);
+  });
+});
+
+describe('networkFirst', () => {
+  const fresh = new Response('fresh');
+  const cached = new Response('cached');
+  const never = () => new Promise<Response>(() => undefined);
+
+  it('waits a few seconds at most', () => {
+    expect(NAVIGATION_TIMEOUT_MS).toBeGreaterThanOrEqual(2000);
+    expect(NAVIGATION_TIMEOUT_MS).toBeLessThanOrEqual(5000);
+  });
+
+  it('uses the network when it answers, even with an error status', async () => {
+    const notFound = new Response('missing', { status: 404 });
+    const fallback = vi.fn(() => Promise.resolve(cached));
+    expect(await networkFirst(Promise.resolve(fresh), fallback, 1000)).toBe(fresh);
+    expect(await networkFirst(Promise.resolve(notFound), fallback, 1000)).toBe(notFound);
+    expect(fallback).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the cache when the network fails', async () => {
+    expect(await networkFirst(Promise.reject(new TypeError('offline')), () => Promise.resolve(cached), 1000)).toBe(cached);
+  });
+
+  it('falls back to the cache when the network is too slow', async () => {
+    vi.useFakeTimers();
+    try {
+      const result = networkFirst(never(), () => Promise.resolve(cached), 3000);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(await result).toBe(cached);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps waiting for a slow network when nothing is cached', async () => {
+    vi.useFakeTimers();
+    try {
+      let answer: (response: Response) => void = () => undefined;
+      const slow = new Promise<Response>((resolve) => (answer = resolve));
+      const result = networkFirst(slow, () => Promise.resolve(undefined), 3000);
+      await vi.advanceTimersByTimeAsync(5000);
+      answer(fresh);
+      expect(await result).toBe(fresh);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('passes the network failure on when nothing is cached', async () => {
+    const failure = new TypeError('offline');
+    await expect(networkFirst(Promise.reject(failure), () => Promise.resolve(undefined), 1000)).rejects.toBe(failure);
+  });
+});

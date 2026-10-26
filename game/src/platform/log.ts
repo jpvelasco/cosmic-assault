@@ -7,6 +7,11 @@ export interface LogEntry {
   readonly message: string;
 }
 
+/** A thrown or rejected value as a short reason for a log line: an Error's message, or anything else as text. */
+export function errorMessage(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
 const DEFAULT_CAPACITY = 200;
 /** Long messages (stack traces) are cut to this, so 200 entries stay small enough to copy and paste. */
 export const MAX_MESSAGE_LENGTH = 1000;

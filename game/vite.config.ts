@@ -1,7 +1,9 @@
 import { defineConfig } from 'vitest/config';
+import { precachePlugin } from './vite/precache.ts';
 
 export default defineConfig(({ mode }) => ({
   base: './',
+  plugins: [precachePlugin()],
   define: {
     __BUILD_SHA__: JSON.stringify(process.env.GITHUB_SHA ?? ''),
     __BUILD_DATE__: JSON.stringify(new Date().toISOString()),

@@ -1,5 +1,5 @@
 import { hasShortcutModifier, isFormControlTarget, type KeyEventLike } from '../input/keyEvent';
-import type { RingLog } from './log';
+import { errorMessage, type RingLog } from './log';
 
 export interface FullscreenControl {
   /** Whether this browser can put the page in full screen; false on iPhone Safari, which has no element full screen. */
@@ -19,8 +19,7 @@ export function createFullscreen(doc: Document, target: HTMLElement, log: RingLo
 
   /** A refused request is routine (no user gesture, a permissions policy), so it is logged rather than raised. */
   const logRefusal = (action: string) => (reason: unknown) => {
-    const why = reason instanceof Error ? reason.message : String(reason);
-    log.add('error', `Could not ${action}: ${why}. Press F or use the Full screen button again after a click or key press.`, performance.now());
+    log.add('error', `Could not ${action}: ${errorMessage(reason)}. Press F or use the Full screen button again after a click or key press.`, performance.now());
   };
 
   return {
