@@ -3,7 +3,7 @@ import type { SimEvent } from '../sim/events';
 import { element } from './dom';
 
 export interface BossAnnouncer {
-  /** Announces a boss arriving, changing phase and going down; other events say nothing. */
+  /** Announces a boss arriving, changing phase and going down, and clears as a galaxy starts; other events say nothing. */
   handle(events: readonly SimEvent[]): void;
   dispose(): void;
 }
@@ -21,7 +21,10 @@ export function createBossAnnouncer(root: HTMLElement): BossAnnouncer {
   return {
     handle(events) {
       for (const event of events) {
-        if (event.type === 'bossIntro') {
+        // A new galaxy starts with nothing said, so the same message in a retry is a change a screen reader reads.
+        if (event.type === 'galaxyStart') {
+          el.textContent = '';
+        } else if (event.type === 'bossIntro') {
           name = BOSSES[event.id].name;
           el.textContent = `${name} approaches`;
         } else if (event.type === 'bossPhase') {

@@ -61,6 +61,17 @@ describe('createBossAnnouncer', () => {
     expect(el?.textContent).toBe('Sentinel down');
   });
 
+  it('clears its text as a galaxy starts, so a retry announces the same boss again', () => {
+    const announcer = createBossAnnouncer(root);
+    const el = made[0];
+    announcer.handle([{ type: 'bossIntro', id: 'sentinel' }]);
+    announcer.handle([{ type: 'bossDown', id: 'sentinel' }]);
+    announcer.handle([{ type: 'galaxyStart', id: '1-6' }]);
+    expect(el?.textContent).toBe('');
+    announcer.handle([{ type: 'bossIntro', id: 'sentinel' }]);
+    expect(el?.textContent).toBe('Sentinel approaches');
+  });
+
   it('leaves the page on dispose', () => {
     createBossAnnouncer(root).dispose();
     expect(made[0]?.remove).toHaveBeenCalledOnce();
