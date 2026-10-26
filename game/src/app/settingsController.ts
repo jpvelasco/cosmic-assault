@@ -34,11 +34,11 @@ export interface SettingsController {
   readonly open: boolean;
   readonly card: SettingsCard;
   /** The M key and the sound chips. */
-  toggleMute(): void;
-  openSettings(): void;
+  readonly toggleMute: () => void;
+  readonly openSettings: () => void;
   /** Done, Esc and pad Back: back to the card that opened it, with focus on the chip that did. */
-  closeSettings(): void;
-  dispose(): void;
+  readonly closeSettings: () => void;
+  readonly dispose: () => void;
 }
 
 /** Owns the settings in force and the settings card: applies changes live, saves them, and opens and closes the card. */
@@ -111,7 +111,7 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     },
     card,
     toggleMute,
-    openSettings() {
+    openSettings: () => {
       const mode = deps.mode();
       if (open || (mode !== 'title' && mode !== 'paused')) return;
       open = true;
@@ -119,7 +119,7 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
       card.show();
     },
     closeSettings,
-    dispose() {
+    dispose: () => {
       unlisten();
       card.dispose();
     },

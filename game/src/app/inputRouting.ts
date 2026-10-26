@@ -139,9 +139,16 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
   }
 
   /** Pad and arrow navigation moves focus without a keyboard event, so the page asks for the ring itself until the next pointer press. */
+  const showNavFocus = (): void => {
+    document.body.classList.add(NAV_KEYS_CLASS);
+  };
+  const hideNavFocus = (): void => {
+    document.body.classList.remove(NAV_KEYS_CLASS);
+  };
+
   function navigateMenu(dir: FocusDirection): void {
     if (!acts('navigate')) return;
-    document.body.classList.add(NAV_KEYS_CLASS);
+    showNavFocus();
     const controls = deps.menuControls();
     const focused = focusedControl(controls);
     if (focused !== null && (dir === 'left' || dir === 'right') && nudgeSlider(focused, dir)) return;
@@ -159,7 +166,7 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         const focused = acts('pressFocused') ? focusedControl(deps.menuControls()) : null;
         if (focused === null) runPadCommand('confirm', now);
         else {
-          document.body.classList.add(NAV_KEYS_CLASS);
+          showNavFocus();
           focused.click();
         }
         break;
@@ -178,9 +185,6 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
     }
   }
 
-  const hideNavFocus = (): void => {
-    document.body.classList.remove(NAV_KEYS_CLASS);
-  };
   const unlisteners = [
     listen(win, 'pointerdown', hideNavFocus),
     attachFullscreenKey(win, {

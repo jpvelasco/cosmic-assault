@@ -146,13 +146,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     resume,
     quit,
     toTitle: button(TO_TITLE),
-    toggleMute,
+    toggleMute: () => {
+      prefs.toggleMute();
+    },
     toggleFullscreen: button(TOGGLE_FULLSCREEN),
     openSettings: () => {
       prefs.openSettings();
     },
     install: installPrompt.install,
   });
+  // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
   const prefs = createSettingsController(root, {
     storage,
     initial: saved,
@@ -203,7 +206,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       selectLevel,
       pause: pauseByPlayer,
       resume,
-      toggleMute,
+      toggleMute: prefs.toggleMute,
       toggleFullscreen: () => {
         fullscreen.toggle();
       },
@@ -212,9 +215,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     covers,
     msSinceGameOver: (now) => now - gameOverAt,
     menuControls: () => (prefs.open ? prefs.card.controls() : overlay.controls(mode)),
-    closeSettings: () => {
-      prefs.closeSettings();
-    },
+    closeSettings: prefs.closeSettings,
   });
 
   /** What covers the cards right now, for the router's table. */
@@ -224,10 +225,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
 
   function syncView(): void {
     view.sync();
-  }
-
-  function toggleMute(): void {
-    prefs.toggleMute();
   }
 
   /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
