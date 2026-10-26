@@ -5,7 +5,7 @@ function finite(value: number, name: string): number {
   return value;
 }
 
-const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+export const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
 /** Seconds between spawn orders at tier `t`. */
 export function spawnInterval(t: number): number {

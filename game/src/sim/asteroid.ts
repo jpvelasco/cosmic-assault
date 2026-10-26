@@ -27,7 +27,7 @@ export interface Asteroid {
   size: AsteroidSize;
   radius: number;
   vertices: readonly { readonly x: number; readonly y: number }[];
-  /** A meteor: it never wraps, and leaves once past the field. Set when it is made; absent on every other rock. */
+  /** A pass-through rock (a meteor or a boss's shard): it never wraps, and leaves once past the field. Set when it is made and inherited by its fragments; absent on every other rock. */
   transient?: true;
 }
 
@@ -119,7 +119,9 @@ export function splitAsteroid(
   for (let i = 0; i < 2; i++) {
     const angle = a.rotation + rng.range(-spread, spread);
     const boost = 1 + rng.range(0, ASTEROID.childSpeedBoostMax);
-    children.push(createAsteroid(rng, a.x, a.y, childSize, angle, boost, shapeRng, nextId()));
+    const child = createAsteroid(rng, a.x, a.y, childSize, angle, boost, shapeRng, nextId());
+    if (a.transient === true) child.transient = true;
+    children.push(child);
   }
   return children;
 }

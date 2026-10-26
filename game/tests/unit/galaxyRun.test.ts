@@ -382,12 +382,12 @@ describe('mercy after a death', () => {
   });
 });
 
-describe('a boss galaxy before Task 4', () => {
-  it('runs its 20 s approach, then holds in the boss phase', () => {
+describe('a boss galaxy', () => {
+  it('runs its 20 s approach, then holds in the boss phase until the boss is beaten (see sentinel.test.ts)', () => {
     const w = galaxyWorld(calm('1-6'));
     play(w, 19);
     expect(w.phase).toBe('opening');
-    play(w, 20);
+    play(w, 2);
     expect(w.phase).toBe('boss');
     expect(w.status).toBe('playing');
     expect(w.timeLeft).toBe(0);

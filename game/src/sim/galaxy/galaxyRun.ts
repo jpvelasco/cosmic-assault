@@ -1,7 +1,10 @@
+import { bossHp, BOSSES } from '../../content/bosses';
 import { rockSpeedMultiplier } from '../../content/curves';
 import { tierOf } from '../../content/galaxies';
-import type { GalaxyDef, RockKind } from '../../content/types';
+import type { BossId, GalaxyDef, RockKind } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
+import { BossRunner, type BossBehaviour, type BossView } from '../boss/bossRunner';
+import { SENTINEL } from '../boss/sentinel';
 import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
@@ -15,14 +18,21 @@ const WARP_SECONDS = 1.5;
 const MERCY_SECONDS = 4;
 const MERCY = 0.4;
 const KIND_SIZE: Readonly<Record<RockKind, AsteroidSize>> = { large: 0, medium: 1, small: 2 };
-/** Meteors are tiny: fast, and they do not split. */
+/**
+ * Meteors are tiny: fast, and they do not split. Keep this tiny: a bigger meteor would split, and
+ * its fragments inherit `transient`, so they would pass through too.
+ */
 const SHOWER_SIZE: AsteroidSize = 3;
+const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossBehaviour>> = { sentinel: SENTINEL };
+/** Points for beating a boss, per Dimension, before the combo multiplier. */
+const BOSS_KILL_POINTS = 1000;
 
 const areaOf = (field: Field): number => field.width * field.height;
 
 /**
  * A timed galaxy: it opens on an empty field, the director meters rocks into it and showers fall on
  * schedule. When the timer runs out the ship warps out, clearing the field, and the galaxy is cleared 1.5 s later.
+ * A boss galaxy has no clock to beat: once its approach ends its boss arrives, and beating the boss warps out instead.
  */
 export class GalaxyRun implements Spawner {
   private readonly director: GalaxyDirector;
@@ -31,6 +41,7 @@ export class GalaxyRun implements Spawner {
   private readonly rockSpeed: number;
   private shownMultiplier = 1;
   private started = false;
+  private bossRunner: BossRunner | null = null;
   private warpEndsAt: number | null = null;
   private mercyUntil = 0;
   /** Refilled every step, so the director's input costs no allocation. */
@@ -41,6 +52,8 @@ export class GalaxyRun implements Spawner {
     private readonly mode: GalaxyMode,
     /** The 'director' stream: kinds, spawn points and showers, so practice streams never shift. */
     private readonly rng: Rng,
+    /** The 'boss' stream. */
+    private readonly bossRng: Rng,
     private readonly arena: Arena,
   ) {
     this.director = new GalaxyDirector(galaxy, rng, areaOf(arena.field()));
@@ -69,6 +82,11 @@ export class GalaxyRun implements Spawner {
     return this.showers.state;
   }
 
+  /** The boss, once its approach is over; the same object every step. */
+  get boss(): BossView | null {
+    return this.bossRunner?.view ?? null;
+  }
+
   resize(field: Field): void {
     this.director.fieldArea = areaOf(field);
   }
@@ -92,6 +110,7 @@ export class GalaxyRun implements Spawner {
     this.combo.expire(elapsed);
     this.announceCombo();
     this.spawn(dt, elapsed);
+    this.stepBoss(dt, elapsed);
   }
 
   scoreKill(base: number): number {
@@ -100,10 +119,36 @@ export class GalaxyRun implements Spawner {
     return base * multiplier;
   }
 
+  /**
+   * A shot at (x, y) has reached the core, if it overlaps it; true means the shot is spent. It takes 1 damage,
+   * unless the boss is invulnerable; the blow that kills it scores `1000 x Dimension` as a combo kill.
+   */
+  hitBoss(x: number, y: number, radius: number): boolean {
+    const boss = this.bossRunner;
+    if (boss === null || boss.state === 'down' || !boss.overlaps(x, y, radius)) return false;
+    if (boss.hit(1) === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
+    return true;
+  }
+
+  /** True when a circle at (x, y) touches a boss that is fighting; the intro and dying are harmless. */
+  touchesBoss(x: number, y: number, radius: number): boolean {
+    return this.bossRunner?.state === 'fighting' && this.bossRunner.overlaps(x, y, radius);
+  }
+
   shipLost(): void {
     this.combo.reset();
     this.announceCombo();
     this.mercyUntil = this.arena.elapsed() + MERCY_SECONDS;
+  }
+
+  /** Brings the boss in as the approach ends, runs it, and warps out once it is down. */
+  private stepBoss(dt: number, elapsed: number): void {
+    const { boss: id, dimension } = this.galaxy;
+    if (id === null || phaseAt(this.galaxy, elapsed) !== 'boss') return;
+    const def = BOSSES[id];
+    this.bossRunner ??= new BossRunner(def, BOSS_BEHAVIOURS[id], { maxHp: bossHp(def, dimension), rng: this.bossRng, rockSpeed: this.rockSpeed, field: this.arena.field() });
+    this.bossRunner.step(dt, this.arena);
+    if (this.bossRunner.state === 'down') this.warpOut(elapsed);
   }
 
   private spawn(dt: number, elapsed: number): void {

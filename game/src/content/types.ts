@@ -9,6 +9,9 @@ export type RockKind = 'large' | 'medium' | 'small';
 /** M5 widens this to one boss per Dimension. */
 export type BossId = 'sentinel';
 
+/** The moves a boss draws on; M5 adds the rest of the roster's. */
+export type AttackId = 'shardRing' | 'lunge';
+
 /** How likely a kind is to be picked: `base` from tier `from`, rising by `step` per tier, never above `max`. */
 export interface KindRamp {
   readonly from: number;

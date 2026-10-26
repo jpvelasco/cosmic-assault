@@ -1,5 +1,6 @@
 import type { GalaxyDef } from '../content/types';
 import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
+import type { BossView } from './boss/bossRunner';
 import { circlesOverlap, SpatialHash } from './collision';
 import { ASTEROID, PLAYER, PROJECTILE, WRAP_MARGIN } from './config';
 import type { Controls } from './controls';
@@ -68,7 +69,8 @@ function resetFlags(flags: boolean[], length: number): void {
  * - 'split': the angles and speeds of split children;
  * - 'shape': asteroid outlines (vertex count and radii) on every creation path, so
  *   outline changes never shift gameplay draws;
- * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams.
+ * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams;
+ * - 'boss': a boss fight's drift and attacks.
  */
 export class World {
   private readonly level: number;
@@ -110,7 +112,7 @@ export class World {
     if (rules.kind === 'practice') {
       this.rules = new PracticeSpawner(rules.level, this.spawnRng, arena);
     } else {
-      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), arena);
+      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), createRng(deriveSeed(opts.seed, 'boss')), arena);
     }
     if (opts.initialAsteroids === undefined) {
       this.rules.open?.();
@@ -192,6 +194,11 @@ export class World {
     return this.run?.phase ?? null;
   }
 
+  /** The boss of a boss galaxy once its approach is over, else null; a live view, updated in place. */
+  get boss(): Readonly<BossView> | null {
+    return this.run?.boss ?? null;
+  }
+
   /** Kills chained inside the combo window; always 0 in practice. */
   get combo(): number {
     return this.run?.comboCount ?? 0;
@@ -244,7 +251,8 @@ export class World {
     assertField(field);
     const old = this.currentField;
     this.currentField = field;
-    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) {
+    const boss = this.run?.boss ?? null;
+    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList, ...(boss === null ? [] : [boss])]) {
       e.x = rescale(e.x, old.width, field.width);
       e.y = rescale(e.y, old.height, field.height);
       e.px = rescale(e.px, old.width, field.width);
@@ -361,17 +369,18 @@ export class World {
     return this.asteroidList[index] as Asteroid;
   }
 
-  /** Live rule: one hit per step, on the last-indexed overlapping asteroid. Returns false once the run ends. */
+  /** Live rule: one hit per step, on the last-indexed overlapping asteroid, else a fighting boss' core. Returns false once the run ends. */
   private collideShip(): boolean {
     const ship = this.shipState;
     if (ship.invulnerable || this.statusValue === 'warping') {
       return true;
     }
     const index = this.lastOverlap(ship.x, ship.y, PLAYER.radius);
-    if (index < 0) {
+    if (index >= 0) {
+      this.markBroken(index);
+    } else if (this.run?.touchesBoss(ship.x, ship.y, PLAYER.radius) !== true) {
       return true;
     }
-    this.markBroken(index);
     this.livesValue -= 1;
     this.deathsValue += 1;
     this.rules.shipLost?.();
@@ -385,11 +394,15 @@ export class World {
     return true;
   }
 
-  /** Each projectile breaks at most one asteroid and is removed once (fixes CA-021). */
+  /** Each projectile breaks at most one asteroid, or is spent on a boss' core, and is removed once (fixes CA-021). */
   private collideProjectiles(): void {
     const projectiles = this.projectileList;
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i] as Projectile;
+      if (this.run?.hitBoss(p.x, p.y, PROJECTILE.radius) === true) {
+        this.spentFlags[i] = true;
+        continue;
+      }
       const index = this.lastOverlap(p.x, p.y, PROJECTILE.radius);
       if (index >= 0) {
         this.spentFlags[i] = true;

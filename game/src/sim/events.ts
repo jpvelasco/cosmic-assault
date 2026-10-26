@@ -1,4 +1,4 @@
-import type { GalaxyId } from '../content/types';
+import type { AttackId, BossId, GalaxyId } from '../content/types';
 import type { AsteroidSize } from './asteroid';
 import type { Stars } from './scoring';
 
@@ -18,4 +18,12 @@ export type SimEvent =
   | { type: 'warpOut' }
   | { type: 'galaxyCleared'; score: number; deaths: number; stars: Stars; bonus: number }
   /** The combo multiplier changed. */
-  | { type: 'combo'; multiplier: number };
+  | { type: 'combo'; multiplier: number }
+  /** A boss has arrived and cannot be hurt for its intro. */
+  | { type: 'bossIntro'; id: BossId }
+  /** A boss is telegraphing `attack` from (x, y); it does no harm until the windup ends. */
+  | { type: 'bossWindup'; attack: AttackId; x: number; y: number }
+  /** A boss fell to two thirds (2) or one third (3) of its HP. */
+  | { type: 'bossPhase'; phase: 2 | 3 }
+  /** A boss finished dying; the galaxy warps out. */
+  | { type: 'bossDown'; id: BossId };

@@ -25,7 +25,7 @@ export function sfxFor(event: SimEvent): SfxName | null {
       return 'shipHit';
     case 'gameOver':
       return 'gameOver';
-    // Galaxy flow events get their sounds with the galaxy HUD.
+    // Galaxy and boss events get their sounds with the galaxy HUD and the boss renderer.
     case 'asteroidLeft':
     case 'galaxyStart':
     case 'showerWarning':
@@ -34,6 +34,10 @@ export function sfxFor(event: SimEvent): SfxName | null {
     case 'warpOut':
     case 'galaxyCleared':
     case 'combo':
+    case 'bossIntro':
+    case 'bossWindup':
+    case 'bossPhase':
+    case 'bossDown':
       return null;
   }
 }

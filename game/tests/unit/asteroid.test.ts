@@ -141,6 +141,16 @@ describe('splitAsteroid', () => {
     }
   });
 
+  it('passes a pass-through rock on to its children, and leaves other rocks plain', () => {
+    const rng = createRng(9);
+    const shard = createAsteroid(rng, 30, 40, 2, 0, 1);
+    shard.transient = true;
+    const kids = splitAsteroid(rng, shard);
+    expect(kids).toHaveLength(2);
+    for (const kid of kids) expect(kid.transient).toBe(true);
+    for (const kid of splitAsteroid(rng, createAsteroid(rng, 30, 40, 2, 0, 1))) expect(kid).not.toHaveProperty('transient');
+  });
+
   it('does not split a tiny asteroid', () => {
     const rng = createRng(9);
     expect(splitAsteroid(rng, createAsteroid(rng, 0, 0, 3, 0, 1))).toEqual([]);

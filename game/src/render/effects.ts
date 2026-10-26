@@ -94,6 +94,10 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'warpOut':
     case 'galaxyCleared':
     case 'combo':
+    case 'bossIntro':
+    case 'bossWindup':
+    case 'bossPhase':
+    case 'bossDown':
       return null;
   }
 }
@@ -217,6 +221,10 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'warpOut':
       case 'galaxyCleared':
       case 'combo':
+      case 'bossIntro':
+      case 'bossWindup':
+      case 'bossPhase':
+      case 'bossDown':
         return null;
     }
   };
