@@ -128,6 +128,29 @@ describe('createFlowController: events', () => {
     expect(store.save.galaxies['1-1']?.stars).toBe(flow.state.result?.report.stars);
   });
 
+  it('tells a new best from a replay: the stored best is read before the clear writes over it', () => {
+    const cleared = (bestScore: number) => {
+      const { flow } = setup({ galaxy: '1-1', save: { ...defaultSave(), galaxies: { '1-1': { bestScore, stars: 1 } } } });
+      flow.command({ kind: 'start' });
+      playUntilEnd(flow, '1-1');
+      return flow.state.result;
+    };
+    const first = cleared(0);
+    expect(first?.newBest).toBe(true);
+    const score = first?.report.score ?? 0;
+    // The idle replay scores the same again: equal is no new best.
+    expect(cleared(score)?.newBest).toBe(false);
+    expect(cleared(score - 1)?.newBest).toBe(true);
+  });
+
+  it('Resume Rank works from mode select too', () => {
+    const saved = { ...startRank(TODAY), next: '1-3' as const, score: 900 };
+    const tab = setup({ save: setRankRun(defaultSave(), saved) });
+    tab.flow.command({ kind: 'start' });
+    tab.flow.command({ kind: 'resumeRank' });
+    expect(tab.flow.state).toMatchObject({ screen: 'playing', galaxy: '1-3', rankRun: { score: 900, inGalaxy: true } });
+  });
+
   it('moves to game over on gameOver, posting the galaxy score and keeping the run, lost, for a Continue', () => {
     const { flow, store } = setup({ galaxy: '1-1', startLives: 1 });
     flow.command({ kind: 'start' });

@@ -3,10 +3,14 @@ import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
 import type { SaveData } from '../meta/save';
 import type { RankLock } from '../app/runController';
+import { galaxyLabel } from '../content/galaxies';
 import type { InstallOffer } from '../platform/install';
-import { button, cardPanel, chip, element, focusableControls, showSoundState, withTestId } from './dom';
-import { createFlowCards } from './flowCards';
+import { createDimensionMap } from './dimensionMap';
+import { button, cardPanel, chip, element, focusableControls, showSoundState, withTestId, type Act, type MenuCard } from './dom';
+import { createGalaxySelect } from './galaxySelect';
 import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
+import { createModeSelect } from './modeSelect';
+import { createResultsCard } from './resultsCard';
 
 export interface OverlayActions {
   /** A screen command from a button: the router applies it, through its cover table and the end-card guard. */
@@ -25,6 +29,7 @@ export interface OverlayState {
   readonly save: SaveData;
   /** Whether the saved Rank run is being checked, or played in another tab, so it cannot be resumed here. */
   readonly rankLock: RankLock;
+  /** The galaxy's score, which the end cards show. */
   readonly score: number;
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
@@ -72,10 +77,10 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function titlePanel(rank: readonly HTMLElement[], chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
+function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(element('h1', 'title', 'Cosmic Assault'), ...rank, startHint, chipRow, build);
+  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, chipRow, build);
   return panel;
 }
 
@@ -90,19 +95,47 @@ const quitLabel = (flow: FlowState): string => (flow.mode === 'rank' ? 'Quit (co
 /** A lost run (no lives) can only go on through a Continue, which resets the score. */
 const resumeLabel = (save: SaveData): string => (save.rankRun?.lives === 0 ? 'Continue Rank (score resets)' : 'Resume Rank');
 
+/** Where the saved run stands, under its Resume button. */
+function savedRunText(save: SaveData): string {
+  const run = save.rankRun;
+  if (run === null) return '';
+  if (run.lives === 0) return `Run lost at ${galaxyLabel(run.next)}`;
+  return `${galaxyLabel(run.next)} · ${String(run.lives)} ${run.lives === 1 ? 'life' : 'lives'} · ${String(run.score)}`;
+}
+
+/** Moves `el` into `host` if it is elsewhere: only on a screen change, so a focused control keeps its focus. */
+function keepIn(host: HTMLElement | undefined, el: HTMLElement): void {
+  if (host !== undefined && el.parentElement !== host) host.append(el);
+}
+
 /**
- * The screens as DOM layers over the canvas, one visible per screen: the title and pause cards here, the rest from
- * `createFlowCards`. The end cards act only on their buttons, so taps that were aimed at the ship cannot skip the score.
+ * The screens as DOM layers over the canvas, one visible per screen: the title and pause cards here, mode select, the
+ * Dimension map, galaxy select and the end card from their own modules. Every card button sends a command, so the
+ * router's cover table and the end-card guard apply to taps as to keys. The end cards act only on their buttons, so
+ * taps that were aimed at the ship cannot skip the score.
  */
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
-  const send = (command: Command) => (): void => {
+  const send: Act = (command: Command) => (): void => {
     actions.command(command);
   };
   const play = withTestId(button('menu-button menu-button--primary', 'Play', send({ kind: 'start' })), 'play');
-  const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
   const quit = withTestId(button('menu-button', '', actions.quit), 'quit');
+  // One Resume Rank group, with where the run stands and whether another tab plays it, on the title and mode select.
+  const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
+  const savedRun = element('p', 'hint resume-summary');
   const elsewhere = withTestId(element('p', 'hint', 'This run is playing in another tab'), 'rank-elsewhere');
-  const flowCards = createFlowCards(actions.command);
+  const resumeGroup = element('div', 'resume-group');
+  resumeGroup.append(resumeRank, savedRun, elsewhere);
+  const titleResumeSlot = element('div', 'resume-slot');
+  // One shared Back, moved into the menu card shown, so its test id stays unique.
+  const back = withTestId(button('menu-button', 'Back', send({ kind: 'back' })), 'back');
+  const modes = createModeSelect(send);
+  const dimensionMap = createDimensionMap(send);
+  const galaxySelect = createGalaxySelect(send);
+  const results = createResultsCard(send);
+  /** The menu cards, which take the shared Back. */
+  const menus: Partial<Record<Screen, MenuCard>> = { modeSelect: modes.modeSelect, confirmNewRank: modes.confirmNewRank, map: dimensionMap, galaxySelect };
+  const resumeSlots: Partial<Record<Screen, HTMLElement>> = { title: titleResumeSlot, modeSelect: modes.resumeSlot };
   // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
   const sound = chip('sound-toggle', actions.toggleMute);
   const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
@@ -116,9 +149,16 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
-  const title = titlePanel([play, resumeRank, elsewhere], titleRow, startHint);
+  const title = titlePanel(play, titleResumeSlot, titleRow, startHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
-  const panels: Partial<Record<Screen, HTMLElement>> = { title, paused: pausePanel(actions, quit, pauseRow), ...flowCards.panels };
+  const panels: Partial<Record<Screen, HTMLElement>> = {
+    title,
+    paused: pausePanel(actions, quit, pauseRow),
+    results: results.panel,
+    gameOver: results.panel,
+    rankComplete: results.panel,
+  };
+  for (const [screen, menu] of Object.entries(menus) as [Screen, MenuCard][]) panels[screen] = menu.panel;
   const all = [...new Set(Object.values(panels))];
   root.append(...all);
 
@@ -142,14 +182,22 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       showSoundState(sound, muted);
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
-      resumeRank.hidden = save.rankRun === null;
+      keepIn(menus[screen]?.card, back);
+      keepIn(resumeSlots[screen], resumeGroup);
+      resumeGroup.hidden = save.rankRun === null;
       resumeRank.textContent = resumeLabel(save);
       resumeRank.disabled = rankLock !== 'free';
+      // On mode select Resume leads, ahead of the two mode cards.
+      resumeRank.classList.toggle('menu-button--primary', screen === 'modeSelect');
+      savedRun.textContent = savedRunText(save);
       elsewhere.hidden = rankLock !== 'elsewhere';
       quit.textContent = quitLabel(flow);
       const hints = hintCopy(inputStyle);
       startHint.textContent = hints.start;
-      flowCards.update({ flow, save, score, hints });
+      modes.setHint(hints.choose);
+      dimensionMap.update(save);
+      galaxySelect.update(flow.dimension, save);
+      results.update({ flow, score, restartHint: hints.restart });
     },
     focusSettingsChip() {
       settings.focus();

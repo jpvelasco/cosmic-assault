@@ -81,8 +81,8 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     const before = state;
     const after = transition(before, action);
     if (after === before) return;
-    // On the title the player sees the run as the save has it now, other tabs' changes included.
-    if (before.screen === 'title') knownSeq = store.save.rankSeq;
+    // On the title the player sees the run as the save has it now, other tabs' changes included; Resume plays it so.
+    if (before.screen === 'title' || action.kind === 'resumeRank') knownSeq = store.save.rankSeq;
     const change = saveChange(before, action, after, () => deps.today());
     if (change !== null && !write(change)) {
       deps.notify(action.kind === 'startRank' ? STALE_NEW_RUN_NOTICE : STALE_RUN_NOTICE);
@@ -134,11 +134,14 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     }
   }
 
+  /** The galaxy in play's best score as saved now, before its clear is written: the results card's "New best!" compares with it. */
+  const bestBefore = (): number => (state.galaxy === null ? 0 : (store.save.galaxies[state.galaxy]?.bestScore ?? 0));
+
   function handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void {
     for (const event of events) {
       if (event.type === 'galaxyCleared') {
         const { score, bonus, deaths, stars } = event;
-        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives });
+        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, bestBefore: bestBefore() });
       } else if (event.type === 'gameOver') {
         dispatch({ kind: 'die', score: event.score });
       }

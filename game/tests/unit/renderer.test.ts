@@ -94,7 +94,7 @@ function stubWorld(): { stub: Stub; world: World } {
     ship: { x: 640, y: 360, px: 640, py: 360, angle: 0, pangle: 0, vx: 0, vy: 0, thrusting: false, invulnerable: false },
     asteroids: [rock],
   };
-  const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1 }) as unknown as World;
+  const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null }) as unknown as World;
   return { stub, world };
 }
 
@@ -134,12 +134,12 @@ describe('createRenderer', () => {
 
   function drawFrame(world: World, alpha: number): void {
     canvas.draws.length = 0;
-    renderer.draw(world, alpha);
+    renderer.draw(world, alpha, 0);
   }
 
   it('refuses to draw before the first resize, saying what to do', () => {
     expect(() => {
-      renderer.draw(stubWorld().world, 0);
+      renderer.draw(stubWorld().world, 0, 0);
     }).toThrow('call resize() once the canvas has a size');
   });
 
@@ -255,8 +255,8 @@ describe('createRenderer', () => {
   it('counts the frames it draws', () => {
     renderer.resize(1280, 720, FIELD);
     const { world } = stubWorld();
-    renderer.draw(world, 1);
-    renderer.draw(world, 1);
+    renderer.draw(world, 1, 0);
+    renderer.draw(world, 1, 0);
     expect(renderer.drawCount).toBe(2);
   });
 
@@ -307,7 +307,7 @@ describe('createRenderer', () => {
       expect(canvas.height).toBe(900);
       expect(canvas.style['width']).toBe('1280px');
       expect(setScale).not.toHaveBeenCalled();
-      renderer.draw(stubWorld().world, 1);
+      renderer.draw(stubWorld().world, 1, 0);
       expect(setScale).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(REBAKE_DELAY_MS);
@@ -364,11 +364,11 @@ describe('createRenderer', () => {
     it('draws fewer stars at a lower level', () => {
       renderer.resize(1280, 720, FIELD);
       const { world } = stubWorld();
-      renderer.draw(world, 1);
+      renderer.draw(world, 1, 0);
       const full = canvas.arcs;
       canvas.arcs = 0;
       renderer.setQuality(lowest);
-      renderer.draw(world, 1);
+      renderer.draw(world, 1, 0);
       expect(canvas.arcs).toBeLessThan(full);
     });
   });

@@ -72,9 +72,15 @@ export interface ClearReport {
   readonly stars: Stars;
 }
 
+/** A clear's two bonuses in `dimension`, before any Rank multiplier: one for the clear, one for a clear with no deaths. */
+export function clearBonuses(dimension: Dimension, deaths: number): { readonly clear: number; readonly noDeath: number } {
+  return { clear: CLEAR_BONUS * dimension, noDeath: deaths === 0 ? NO_DEATH_BONUS * dimension : 0 };
+}
+
 /** The totals of a cleared galaxy. */
 export function clearReport({ score, deaths, dimension, mode }: ClearInput): ClearReport {
-  const bonus = CLEAR_BONUS * dimension + (deaths === 0 ? NO_DEATH_BONUS * dimension : 0);
+  const { clear, noDeath } = clearBonuses(dimension, deaths);
+  const bonus = clear + noDeath;
   const total = mode === 'rank' ? Math.round((score + bonus) * dimensionMultiplier(dimension)) : score + bonus;
   return { score: total, bonus, deaths, stars: starsFor(deaths) };
 }

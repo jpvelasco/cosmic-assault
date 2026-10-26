@@ -1,3 +1,5 @@
+import type { Command } from '../app/commands';
+
 export function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className: string,
@@ -53,6 +55,51 @@ export function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLEle
   keepActivationKeysLocal(panel);
   return { panel, card };
 }
+
+/** A glass card on its own panel, with a heading and its body; `kind` adds a `card--kind` class for its layout. */
+export interface MenuCard {
+  readonly panel: HTMLElement;
+  readonly card: HTMLElement;
+  readonly title: HTMLElement;
+}
+
+export function menuCard(kind: string, heading: string, ...body: HTMLElement[]): MenuCard {
+  const { panel, card } = cardPanel('menu');
+  card.classList.add(`card--${kind}`);
+  const title = element('h2', 'heading', heading);
+  card.append(title, ...body);
+  return { panel, card, title };
+}
+
+/** Makes the click handler that sends `command`, so every card button goes through the router like a key. */
+export type Act = (command: Command) => () => void;
+
+/** A row of three stars, the first `count` lit; the row reads as one image, "2 of 3 stars". */
+export interface StarRow {
+  readonly el: HTMLElement;
+  set(count: number): void;
+}
+
+export function starRow(className: string): StarRow {
+  const el = element('span', `stars ${className}`);
+  el.setAttribute('role', 'img');
+  const stars = [0, 1, 2].map((i) => {
+    const star = element('span', 'star', '★');
+    star.style.setProperty('--i', String(i));
+    return star;
+  });
+  el.append(...stars);
+  return {
+    el,
+    set(count) {
+      el.setAttribute('aria-label', `${String(count)} of 3 stars`);
+      stars.forEach((star, i) => star.classList.toggle('star--earned', i < count));
+    },
+  };
+}
+
+/** A padlock drawn in CSS, for locked Dimensions and galaxies. */
+export const lockIcon = (): HTMLElement => element('span', 'lock');
 
 /** Gives `el` the `data-testid` the e2e specs find it by, and returns it. */
 export function withTestId<T extends HTMLElement>(el: T, testId: string): T {

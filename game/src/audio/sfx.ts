@@ -1,15 +1,28 @@
 import type { SimEvent } from '../sim/events';
 
-export type SfxName =
-  | 'shoot'
-  | 'boomLarge'
-  | 'boomMedium'
-  | 'boomSmall'
-  | 'boomTiny'
-  | 'shipHit'
-  | 'gameOver'
-  | 'uiClick'
-  | 'pause';
+/** Every sound effect, in the order voices.ts defines them. */
+export const SFX_NAMES = [
+  'shoot',
+  'boomLarge',
+  'boomMedium',
+  'boomSmall',
+  'boomTiny',
+  'shipHit',
+  'gameOver',
+  'uiClick',
+  'pause',
+  'galaxyStart',
+  'showerSting',
+  'warp',
+  'cleared',
+  'combo',
+  'bossIntro',
+  'bossWindup',
+  'bossPhase',
+  'bossDown',
+] as const;
+
+export type SfxName = (typeof SFX_NAMES)[number];
 
 /** Asteroid sizes 0 (large) to 3 (tiny) in order. */
 const BOOM_BY_SIZE = ['boomLarge', 'boomMedium', 'boomSmall', 'boomTiny'] as const satisfies readonly SfxName[];
@@ -27,19 +40,29 @@ export function sfxFor(event: SimEvent): SfxName | null {
       return 'shipHit';
     case 'gameOver':
       return 'gameOver';
-    // Galaxy and boss events get their sounds with the galaxy HUD and the boss renderer.
-    case 'asteroidLeft':
     case 'galaxyStart':
+      return 'galaxyStart';
     case 'showerWarning':
+      return 'showerSting';
+    case 'warpOut':
+      return 'warp';
+    case 'galaxyCleared':
+      return 'cleared';
+    // The multiplier only climbs within a chain, so above 1 it has just risen; back to 1 the chain broke, silently.
+    case 'combo':
+      return event.multiplier > 1 ? 'combo' : null;
+    case 'bossIntro':
+      return 'bossIntro';
+    case 'bossWindup':
+      return 'bossWindup';
+    case 'bossPhase':
+      return 'bossPhase';
+    case 'bossDown':
+      return 'bossDown';
+    // A meteor leaving is not an event to the player; a shower's start and end are already told by its sting.
+    case 'asteroidLeft':
     case 'showerStart':
     case 'showerEnd':
-    case 'warpOut':
-    case 'galaxyCleared':
-    case 'combo':
-    case 'bossIntro':
-    case 'bossWindup':
-    case 'bossPhase':
-    case 'bossDown':
       return null;
   }
 }

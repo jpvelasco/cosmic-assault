@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudioEngine, needsSoundGesture, type AudioEngine } from '../../src/audio/engine';
+import { SFX_NAMES } from '../../src/audio/sfx';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/app/settings';
 import type { SimEvent } from '../../src/sim/events';
 
@@ -392,11 +393,9 @@ describe('sound effects', () => {
   it('builds every sound from short-lived nodes that stop and disconnect themselves', () => {
     const e = engine();
     press();
-    for (const name of ['shoot', 'boomLarge', 'boomMedium', 'boomSmall', 'boomTiny', 'shipHit', 'gameOver', 'uiClick', 'pause'] as const) {
-      e.play(name);
-    }
+    for (const name of SFX_NAMES) e.play(name);
     const voices = [...nodesOf('oscillator'), ...nodesOf('bufferSource')];
-    expect(voices.length).toBeGreaterThan(9);
+    expect(voices.length).toBeGreaterThan(SFX_NAMES.length);
     for (const voice of voices) {
       expect(voice.start).toHaveBeenCalledTimes(1);
       expect(voice.stop).toHaveBeenCalledTimes(1);

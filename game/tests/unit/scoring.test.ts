@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clearReport, Combo, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
+import { clearBonuses, clearReport, Combo, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
 
 describe('comboMultiplier', () => {
   it.each([
@@ -69,6 +69,13 @@ describe('dimensionMultiplier', () => {
     ([1, 2, 3, 4, 5] as const).forEach((d, i) => {
       expect(dimensionMultiplier(d)).toBeCloseTo(expected[i] ?? 0, 10);
     });
+  });
+});
+
+describe('clearBonuses', () => {
+  it('splits the bonus into the clear and the no-death parts, per Dimension', () => {
+    expect(clearBonuses(3, 0)).toEqual({ clear: 750, noDeath: 1500 });
+    expect(clearBonuses(1, 2)).toEqual({ clear: 250, noDeath: 0 });
   });
 });
 

@@ -8,6 +8,7 @@ import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
+import { createBossPass } from './bossPass';
 import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layout';
 import { DRIFT } from './palette';
 import { createParticlePass } from './particlePass';
@@ -39,8 +40,8 @@ export interface Renderer {
    * A changed pixel ratio re-bakes after the usual resize debounce, not on the next frame.
    */
   setQuality(level: QualityLevel): void;
-  /** Draws the world `alpha` of the way from each entity's previous pose to its current one. */
-  draw(world: World, alpha: number): void;
+  /** Draws the world `alpha` of the way from each entity's previous pose to its current one; the HUD shows `score`. */
+  draw(world: World, alpha: number, score: number): void;
   /** Frees the previous run's sprites and particles; call when a new run starts. */
   reset(): void;
   readonly effects: Effects;
@@ -100,6 +101,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const pen = createFieldPen(ctx);
   const particlePass = createParticlePass(ctx, pen, baker, particles);
   const hud = createHud(palette);
+  const bossPass = createBossPass(ctx, pen, baker, palette);
+  const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0 };
   const copies = new Float64Array(6);
   const pose = { x: 0, y: 0, angle: 0 };
   let layout: Layout | null = null;
@@ -213,6 +216,15 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     stamp(baker.ship(palette), x, y, cos, sin, radius, field);
   }
 
+  /** Under the rocks, so an attack's shards fly out of the core; its eye follows the ship. */
+  function drawBoss(world: World, alpha: number): void {
+    bossLook.glow = quality.glow;
+    bossLook.still = effects.reducedMotion;
+    bossLook.aimX = world.ship.x;
+    bossLook.aimY = world.ship.y;
+    bossPass.draw(world.boss, alpha, bossLook);
+  }
+
   /** Steps 1–2: sky and stars, unshaken, clipped to the field. */
   function drawBackdrop(world: World, { field, k, fieldX, fieldY }: Layout, sky: HTMLCanvasElement): void {
     ctx.setTransform(k, 0, 0, k, fieldX, fieldY);
@@ -230,6 +242,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawRockGlows(world, alpha, field, visual);
     particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
+    drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
@@ -257,7 +270,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
-  function draw(world: World, alpha: number): void {
+  function draw(world: World, alpha: number, score: number): void {
     const current = layout;
     const { bakes } = backdrop;
     if (current === null || bakes === null) {
@@ -273,18 +286,20 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawOverlays(current, bakes.vignette);
     ctx.restore();
     ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
-    hud.draw(ctx, world);
+    hud.draw(ctx, world, score, effects.reducedMotion);
     drawCount++;
   }
 
   function stepBursts(dt: number, world: World, frozen: boolean): void {
     effects.step(dt, world, frozen);
     particles.step(dt);
+    bossPass.advance(dt, world.boss);
   }
 
   function freeRun(): void {
     baker.clear();
     particles.clear();
+    bossPass.reset();
   }
 
   return {
@@ -294,6 +309,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     handle(events, world) {
       effects.handle(events, world);
+      bossPass.handle(events);
       for (const event of events) if (event.type === 'asteroidDestroyed' || event.type === 'asteroidLeft') baker.forget(event.id);
     },
     advance(dt, world, frozen) {

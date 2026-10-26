@@ -22,6 +22,8 @@
         --nebula-orange: #ff9a3c;
         --nebula-teal: #18d6c4;
         --nebula-violet: #7b5cff;
+        /* The Drift palette's ring gold: stars, the boss tile. */
+        --ring: #ffd36b;
         --accent-1: #22d3ff;
         --accent-2: #a855f7;
         --accent-3: #ff4fd8;
@@ -208,8 +210,13 @@
         opacity: 0.8;
       }
       .score {
-        font-size: 1.25rem;
-        font-weight: 800;
+        font-size: clamp(1.4rem, 5vmin, 2rem);
+        font-weight: 900;
+        font-variant-numeric: tabular-nums;
+      }
+      /* A card's parts set their own display, which would otherwise override [hidden]. */
+      .card [hidden] {
+        display: none;
       }
       .build {
         font-size: 0.75rem;
@@ -299,6 +306,8 @@
       .overlay button:disabled {
         cursor: default;
         opacity: 0.55;
+        filter: none;
+        transform: none;
       }
       /* The iOS install steps: longer than a chip, and not a control, so a quiet line under the row. */
       .install-hint {
@@ -460,6 +469,382 @@
         color: var(--ink);
         letter-spacing: -1px;
       }
+      /* Each Dimension's accent: two hues for its orb, glows and borders (src/ui/dimensionMap.ts, galaxySelect.ts). */
+      [data-dimension='1'] {
+        --hue: 190;
+        --hue-2: 275;
+      }
+      [data-dimension='2'] {
+        --hue: 160;
+        --hue-2: 215;
+      }
+      [data-dimension='3'] {
+        --hue: 350;
+        --hue-2: 25;
+      }
+      [data-dimension='4'] {
+        --hue: 265;
+        --hue-2: 315;
+      }
+      [data-dimension='5'] {
+        --hue: 45;
+        --hue-2: 15;
+      }
+      /* Mode select: Resume Rank (when a run is saved) over two large mode cards. */
+      .resume-slot {
+        display: contents;
+      }
+      .resume-group {
+        display: grid;
+        justify-items: center;
+        gap: 4px;
+      }
+      .resume-summary {
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+      .mode-cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: clamp(10px, 2.4vmin, 18px);
+        width: min(560px, calc(100vw - 72px));
+      }
+      .overlay .mode-card,
+      .overlay .dimension-card,
+      .overlay .galaxy-tile {
+        position: relative;
+        display: grid;
+        justify-items: center;
+        align-content: start;
+        gap: 6px;
+        border-radius: 20px;
+      }
+      .overlay .mode-card {
+        padding: clamp(14px, 3vmin, 22px) 14px;
+      }
+      .overlay .mode-card--rank {
+        border-color: rgba(255, 255, 255, 0.45);
+        box-shadow: var(--glass-edge), 0 0 22px color-mix(in srgb, var(--accent-2) 50%, transparent);
+      }
+      .mode-card__badge {
+        display: grid;
+        place-items: center;
+        width: clamp(44px, 10vmin, 64px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        font-size: clamp(1.3rem, 5vmin, 2rem);
+        color: white;
+        text-shadow: var(--text-drop);
+        background: var(--gloss), radial-gradient(circle at 35% 30%, var(--accent-1), var(--accent-2) 60%, var(--sky-1));
+        box-shadow: var(--gloss-edge), 0 0 18px color-mix(in srgb, var(--accent-2) 55%, transparent);
+      }
+      .mode-card--free .mode-card__badge {
+        background: var(--gloss), radial-gradient(circle at 35% 30%, var(--nebula-teal), var(--accent-1) 55%, var(--sky-2));
+        box-shadow: var(--gloss-edge), 0 0 18px color-mix(in srgb, var(--accent-1) 50%, transparent);
+      }
+      .mode-card__name {
+        font-size: clamp(1.15rem, 4vmin, 1.5rem);
+        font-weight: 900;
+      }
+      .mode-card__text {
+        max-width: 22ch;
+        font-size: 0.85rem;
+        font-weight: 600;
+        opacity: 0.8;
+      }
+      /* The Dimension map: five planet cards in a row, each tinted by its Dimension. */
+      .dimension-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: clamp(8px, 1.6vw, 14px);
+        width: min(940px, calc(100vw - 72px));
+      }
+      .overlay .dimension-card,
+      .overlay .galaxy-tile {
+        border-color: hsl(var(--hue) 90% 72% / 0.42);
+        box-shadow: var(--glass-edge), 0 0 18px hsl(var(--hue) 90% 60% / 0.28);
+      }
+      .overlay .dimension-card {
+        gap: 3px;
+        padding: 14px 8px 12px;
+      }
+      .dimension-card__orb {
+        position: relative;
+        width: clamp(44px, 10vmin, 72px);
+        aspect-ratio: 1;
+        margin-bottom: 6px;
+        border-radius: 50%;
+        background:
+          var(--gloss),
+          radial-gradient(circle at 34% 30%, hsl(var(--hue) 100% 86%), hsl(var(--hue) 90% 58%) 36%, hsl(var(--hue-2) 80% 42%) 70%, hsl(var(--hue-2) 70% 14%));
+        box-shadow:
+          inset 0 -4px 10px rgba(0, 0, 0, 0.35),
+          0 0 22px hsl(var(--hue) 90% 60% / 0.55);
+      }
+      /* A planet's ring, tilted across the orb. */
+      .dimension-card__orb::after {
+        content: '';
+        position: absolute;
+        inset: 40% -24%;
+        border: 2px solid hsl(var(--hue) 90% 82% / 0.55);
+        border-radius: 50%;
+        transform: rotate(-18deg);
+      }
+      .dimension-card__index {
+        font-size: 0.7rem;
+        letter-spacing: 0.14em;
+        opacity: 0.7;
+      }
+      .dimension-card__name {
+        font-size: 0.95rem;
+        font-weight: 900;
+        line-height: 1.15;
+      }
+      .dimension-card__status {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: hsl(var(--hue) 100% 84%);
+      }
+      .pips {
+        display: flex;
+        gap: 4px;
+        margin-top: 3px;
+      }
+      .pip {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .pip--lit {
+        background: hsl(var(--hue) 100% 72%);
+        box-shadow: 0 0 6px hsl(var(--hue) 100% 65%);
+      }
+      .pip--boss.pip--lit {
+        background: var(--ring);
+        box-shadow: 0 0 6px var(--ring);
+      }
+      /* Galaxy select: six tiles, three to a row; the boss tile is gold. */
+      .galaxy-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(8px, 1.6vmin, 12px);
+        width: min(560px, calc(100vw - 72px));
+      }
+      .overlay .galaxy-tile {
+        align-content: center;
+        gap: 4px;
+        min-height: clamp(78px, 17vmin, 112px);
+        padding: 10px 8px;
+        border-radius: 16px;
+      }
+      .card--galaxies .heading {
+        text-shadow: 0 0 18px hsl(var(--hue) 90% 60% / 0.7);
+      }
+      .galaxy-tile__label {
+        font: 900 clamp(1.2rem, 4.2vmin, 1.6rem) / 1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      }
+      .galaxy-tile__stars {
+        font-size: 1.05rem;
+      }
+      .galaxy-tile__best {
+        font-size: 0.75rem;
+        font-weight: 700;
+        opacity: 0.8;
+      }
+      .overlay .galaxy-tile--boss {
+        border-color: color-mix(in srgb, var(--ring) 60%, transparent);
+        box-shadow: var(--glass-edge), 0 0 18px color-mix(in srgb, var(--ring) 35%, transparent);
+      }
+      .galaxy-tile--boss .galaxy-tile__label {
+        color: var(--ring);
+      }
+      .galaxy-tile__tag {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        font-size: 0.6rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--space);
+        background: var(--ring);
+      }
+      /* Locked: a dim silhouette with a padlock and what opens it. */
+      .overlay .is-locked:disabled {
+        opacity: 0.85;
+        border-color: var(--glass-stroke);
+        box-shadow: var(--glass-edge);
+      }
+      .is-locked .dimension-card__orb {
+        background:
+          var(--gloss),
+          radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 60%, rgba(0, 0, 0, 0.45));
+        box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.35);
+      }
+      .is-locked .dimension-card__orb::after {
+        border-color: rgba(255, 255, 255, 0.18);
+      }
+      .is-locked .dimension-card__status,
+      .is-locked .galaxy-tile__best {
+        max-width: 16ch;
+        color: inherit;
+        opacity: 0.7;
+      }
+      .is-locked .galaxy-tile__label,
+      .is-locked .dimension-card__index,
+      .is-locked .galaxy-tile__tag {
+        opacity: 0.45;
+      }
+      .is-locked .stars {
+        display: none;
+      }
+      /* A padlock in CSS: a body and, above it, its shackle. Shown only on locked items. */
+      .lock {
+        display: none;
+        position: relative;
+        width: 14px;
+        height: 11px;
+        margin-top: 8px;
+        border-radius: 3px;
+        background: currentColor;
+      }
+      .lock::before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 2px;
+        right: 2px;
+        height: 8px;
+        box-sizing: border-box;
+        border: 2.5px solid currentColor;
+        border-bottom: 0;
+        border-radius: 6px 6px 0 0;
+      }
+      .is-locked .lock {
+        display: block;
+      }
+      .dimension-card__orb .lock {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        margin: 0;
+        color: rgba(255, 255, 255, 0.75);
+        transform: translate(-50%, -25%);
+      }
+      /* Stars: gold when won. On the end card they light one after another as it pops in. */
+      .stars {
+        display: inline-flex;
+        gap: 2px;
+        font-size: 0.95rem;
+        line-height: 1;
+        color: rgba(255, 255, 255, 0.22);
+      }
+      .star--earned {
+        color: var(--ring);
+        text-shadow: 0 0 8px color-mix(in srgb, var(--ring) 70%, transparent);
+      }
+      .stars--big {
+        gap: 6px;
+        font-size: clamp(1.8rem, 7vmin, 2.6rem);
+      }
+      .stars--big .star--earned {
+        display: inline-block;
+        animation: star-fill 420ms var(--pop) both;
+        animation-delay: calc(200ms + var(--i) * 160ms);
+      }
+      @keyframes star-fill {
+        from {
+          opacity: 0;
+          transform: scale(0.2) rotate(-50deg);
+        }
+      }
+      /* The end card: what was won, then what comes next. */
+      .overlay .card--end {
+        min-width: min(340px, calc(100vw - 48px));
+        animation-duration: 440ms;
+      }
+      .badge {
+        padding: 3px 12px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: white;
+        text-shadow: var(--text-drop);
+        background: var(--gloss), var(--accent-gradient);
+        box-shadow:
+          var(--gloss-edge),
+          0 0 16px color-mix(in srgb, var(--accent-3) 55%, transparent);
+        animation: pop-in 360ms var(--pop) 700ms both;
+      }
+      .end-lines {
+        display: grid;
+        gap: 2px;
+        width: min(280px, 100%);
+      }
+      .end-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 0.85rem;
+        opacity: 0.85;
+      }
+      .end-line__amount {
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+      }
+      .end-line--total {
+        margin-top: 4px;
+        padding-top: 6px;
+        border-top: 1px solid var(--glass-stroke);
+        font-size: 1rem;
+        font-weight: 800;
+        opacity: 1;
+      }
+      .end-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      /* Narrow screens: the mode cards stack and the map becomes a list of rows. */
+      @media (max-width: 640px) {
+        .dimension-row {
+          grid-template-columns: 1fr;
+          width: min(360px, calc(100vw - 48px));
+        }
+        .overlay .dimension-card {
+          grid-template-columns: auto auto 1fr auto;
+          align-items: center;
+          justify-items: start;
+          column-gap: 10px;
+          padding: 8px 14px;
+        }
+        .dimension-card__orb {
+          width: 36px;
+          margin: 0;
+        }
+        .pips {
+          grid-column: 3;
+          margin: 0;
+        }
+        .is-locked .dimension-card__status {
+          max-width: none;
+        }
+        .card--map {
+          max-height: 100%;
+          overflow-y: auto;
+        }
+      }
+      @media (max-width: 480px) {
+        .mode-cards {
+          grid-template-columns: 1fr;
+        }
+      }
       /* The cursor rests out of the way once a run has gone 2 s without pointer movement (src/app/viewSync.ts). */
       body.cursor-idle,
       body.cursor-idle #app,
@@ -500,9 +885,46 @@
         .segment {
           padding: 4px 0;
         }
+        .overlay .mode-card {
+          gap: 4px;
+          padding: 10px 12px;
+        }
+        .mode-card__badge,
+        .dimension-card__orb {
+          width: 40px;
+        }
+        .mode-card__badge {
+          font-size: 1.25rem;
+        }
+        .mode-card__text {
+          font-size: 0.75rem;
+        }
+        .overlay .dimension-card {
+          padding: 10px 6px 8px;
+        }
+        .overlay .galaxy-tile {
+          min-height: 62px;
+          padding: 6px;
+          gap: 2px;
+        }
+        .galaxy-tile__label {
+          font-size: 1.15rem;
+        }
+        .stars--big {
+          font-size: 1.6rem;
+        }
+        .score {
+          font-size: 1.3rem;
+        }
+        .end-buttons .menu-button {
+          min-width: 112px;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
-        .card {
+        .card,
+        .overlay .card--end,
+        .stars--big .star--earned,
+        .badge {
           animation: none;
         }
         .overlay button,

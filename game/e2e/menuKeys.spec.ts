@@ -62,8 +62,9 @@ test('Enter on the focused game-over Title button lands on the title', async ({ 
   await waitForGameOver(page);
   await waitOutGameOverGuard(page);
 
+  // The first arrow focuses Continue; Title sits beside it in the card's button row.
   await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Title' })).toBeFocused();
   await page.keyboard.press('Enter');
 

@@ -11,7 +11,8 @@ import { rescale } from '../wrap';
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
 export const MIN_WINDUP_SECONDS = 0.35;
 const INTRO_SECONDS = 2;
-const DYING_SECONDS = 2;
+/** How long a beaten boss takes to die; the renderer fades it over this. */
+export const DYING_SECONDS = 2;
 /** Where a boss arrives, as a share of the field height from the top. */
 const HOME_HEIGHT_SHARE = 0.28;
 

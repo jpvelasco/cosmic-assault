@@ -390,7 +390,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       redrawPending = true;
     }
     if (mode === 'playing' || redrawPending) {
-      renderer.draw(world, loop.alpha());
+      renderer.draw(world, loop.alpha(), run.runTotal);
       redrawPending = false;
     }
   }

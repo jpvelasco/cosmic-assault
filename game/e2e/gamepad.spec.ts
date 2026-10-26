@@ -201,7 +201,8 @@ test('on mode select A focuses the first button, A presses it, and B goes back a
   await tap(page, A);
   await expect(page.getByTestId('mode-rank')).toBeFocused();
   await expectMode(page, 'modeSelect');
-  await tap(page, DPAD_DOWN);
+  // The two mode cards sit side by side.
+  await tap(page, DPAD_RIGHT);
   await expect(page.getByTestId('mode-free')).toBeFocused();
   await tap(page, A);
   await expectMode(page, 'map');

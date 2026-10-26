@@ -36,10 +36,17 @@ export interface FlowState {
   readonly galaxy: GalaxyId | null;
   /** In Rank, the run as carried into `galaxy`; on results, as carried into the next galaxy. Null outside Rank. */
   readonly rankRun: RankRun | null;
-  /** The last clear: its report and the score it leaves the run on (in Rank, the run's total). */
-  readonly result: { readonly report: ClearReport; readonly total: number } | null;
+  /** The last clear: its report, the score it leaves the run on (in Rank, the run's total), and whether it beat the galaxy's best. */
+  readonly result: ClearResult | null;
   /** Counts the runs started; a change means the app must build a new World for `galaxy`. */
   readonly runs: number;
+}
+
+export interface ClearResult {
+  readonly report: ClearReport;
+  readonly total: number;
+  /** The clear's score beat the best the save held for the galaxy before it. */
+  readonly newBest: boolean;
 }
 
 export type FlowAction =
@@ -58,8 +65,8 @@ export type FlowAction =
   | { readonly kind: 'pause' }
   | { readonly kind: 'resume' }
   | { readonly kind: 'quit' }
-  /** The galaxy was cleared with `livesLeft` lives. */
-  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number }
+  /** The galaxy was cleared with `livesLeft` lives; `bestBefore` is its best score as saved before this clear (0 for none). */
+  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly bestBefore: number }
   /** The last life went, with `score` won in this galaxy. */
   | { readonly kind: 'die'; readonly score: number }
   /** Enter, or pad A, on an end screen: its first button. */
@@ -97,13 +104,14 @@ function toMap(state: FlowState): FlowState {
   return { ...state, screen: 'map', mode: 'free', dimension: state.galaxy === null ? state.dimension : dimensionOf(state.galaxy) };
 }
 
-function cleared(state: FlowState, report: ClearReport, livesLeft: number): FlowState {
+function cleared(state: FlowState, { report, livesLeft, bestBefore }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
   const { rankRun, galaxy } = state;
   if (galaxy === null) return state;
-  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score } };
+  const newBest = report.score > bestBefore;
+  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score, newBest } };
   const total = rankRun.score + report.score;
   const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft);
-  const result = { report, total };
+  const result = { report, total, newBest };
   return next === 'complete' ? { ...state, screen: 'rankComplete', rankRun: null, result } : { ...state, screen: 'results', rankRun: next, result };
 }
 
@@ -144,13 +152,12 @@ function menuMove(state: FlowState, action: FlowAction): FlowState {
   switch (state.screen) {
     case 'title':
       if (action.kind === 'start') return { ...state, screen: 'modeSelect' };
-      if (action.kind === 'resumeRank') return playRank(state, action.run);
-      // startRank and playGalaxy on the title come only from the `?galaxy=` switch: the title's own buttons are
+      // startRank on the title comes only from the `?galaxy=` switch, as does playGalaxy: the title's own buttons are
       // Play and Resume Rank, and the controller sends these two only from `play()` with a switch in force.
-      if (action.kind === 'startRank') return playRank(state, action.run);
+      if (action.kind === 'resumeRank' || action.kind === 'startRank') return playRank(state, action.run);
       return action.kind === 'playGalaxy' ? playFree(state, action.id) : state;
     case 'modeSelect':
-      if (action.kind === 'startRank') return playRank(state, action.run);
+      if (action.kind === 'startRank' || action.kind === 'resumeRank') return playRank(state, action.run);
       if (action.kind === 'askNewRank') return { ...state, screen: 'confirmNewRank' };
       if (action.kind === 'chooseFree') return { ...state, screen: 'map', mode: 'free' };
       return action.kind === 'back' ? { ...state, screen: 'title', mode: null } : state;
@@ -179,7 +186,7 @@ function runMove(state: FlowState, action: FlowAction): FlowState {
     case 'quit':
       return screen === 'paused' ? toTitle(state) : state;
     case 'clear':
-      return screen === 'playing' ? cleared(state, action.report, action.livesLeft) : state;
+      return screen === 'playing' ? cleared(state, action) : state;
     case 'die':
       return screen === 'playing' ? { ...state, screen: 'gameOver' } : state;
     default:
