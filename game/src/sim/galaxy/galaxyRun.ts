@@ -87,8 +87,9 @@ export class GalaxyRun implements Spawner {
     return this.bossRunner?.view ?? null;
   }
 
-  resize(field: Field): void {
+  resize(old: Field, field: Field): void {
     this.director.fieldArea = areaOf(field);
+    this.bossRunner?.resize(old, field);
   }
 
   /** Announces the galaxy on its first step, and warps out on the step its timer runs out, before anything collides. */
@@ -120,13 +121,16 @@ export class GalaxyRun implements Spawner {
   }
 
   /**
-   * A shot at (x, y) has reached the core, if it overlaps it; true means the shot is spent. It takes 1 damage,
-   * unless the boss is invulnerable; the blow that kills it scores `1000 x Dimension` as a combo kill.
+   * A shot at (x, y) has reached the core, if it overlaps it; true means the shot is spent. It takes 1 damage and
+   * reports a `bossHit`, unless the boss is invulnerable; the blow that kills it scores `1000 x Dimension` as a combo kill.
    */
   hitBoss(x: number, y: number, radius: number): boolean {
     const boss = this.bossRunner;
     if (boss === null || boss.state === 'down' || !boss.overlaps(x, y, radius)) return false;
-    if (boss.hit(1) === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
+    const result = boss.hit(1);
+    if (result === 'blocked') return true;
+    this.arena.events.push({ type: 'bossHit', x, y, hp: boss.hp });
+    if (result === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
     return true;
   }
 

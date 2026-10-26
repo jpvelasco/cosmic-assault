@@ -6,6 +6,7 @@ import type { Field } from '../field';
 import { TAU, TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
+import { rescale } from '../wrap';
 
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
 export const MIN_WINDUP_SECONDS = 0.35;
@@ -139,6 +140,20 @@ export class BossRunner {
 
   get state(): BossState {
     return this.view.state;
+  }
+
+  /** Stretches the core, and the points an attack under way aims at, to the new field like every other entity. */
+  resize(old: Field, field: Field): void {
+    const { view, context } = this;
+    view.x = rescale(view.x, old.width, field.width);
+    view.px = rescale(view.px, old.width, field.width);
+    view.y = rescale(view.y, old.height, field.height);
+    view.py = rescale(view.py, old.height, field.height);
+    if (context === null) return;
+    context.aimX = rescale(context.aimX, old.width, field.width);
+    context.fromX = rescale(context.fromX, old.width, field.width);
+    context.aimY = rescale(context.aimY, old.height, field.height);
+    context.fromY = rescale(context.fromY, old.height, field.height);
   }
 
   /** True when a circle at (x, y) overlaps the core. */

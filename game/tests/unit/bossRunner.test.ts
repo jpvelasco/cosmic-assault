@@ -67,6 +67,19 @@ describe('BossRunner intro and phases', () => {
     expect(timedOfType(log, 'bossPhase').map((l) => l.event.phase)).toEqual([2, 3]);
   });
 
+  // 2/3 and 1/3 of 20 are 13.33 and 6.67; of 44 (Dimension 5), 29.33 and 14.67.
+  it.each([
+    [20, [14, 13, 7, 6]],
+    [44, [30, 29, 15, 14]],
+  ] as const)('puts the thresholds of a %i HP boss between %j', (maxHp, [phase1, phase2, phase2Low, phase3]) => {
+    const phaseAt = (hp: number): number => {
+      const { r } = fighting(maxHp);
+      r.hit(maxHp - hp);
+      return r.phase;
+    };
+    expect([phaseAt(phase1), phaseAt(phase2), phaseAt(phase2Low), phaseAt(phase3)]).toEqual([1, 2, 2, 3]);
+  });
+
   it('announces every phase a single big blow skips over', () => {
     const { r, arena } = fighting(30);
     r.hit(25);
@@ -96,6 +109,30 @@ describe('BossRunner attacks', () => {
     const third = runFor(stepper(r), arena, 25);
     const phase3 = timedOfType(third, 'bossWindup').map((l) => l.event.attack);
     expect(phase3.slice(0, 6)).toEqual(['lunge', 'shardRing', 'shardRing', 'lunge', 'shardRing', 'shardRing']);
+  });
+
+  it('lets an attack under way finish when the phase changes, fires it at the new phase, then rests the new phase\'s time', () => {
+    const { r, arena } = fighting();
+    let hitDuringWindup = false;
+    const ring = { at: -1, rocks: 0 };
+    const log = runFor(stepper(r), arena, 9, () => {
+      if (!hitDuringWindup && arena.events.some((e) => e.type === 'bossWindup')) {
+        expect(r.hit(10)).toBe('hit');
+        hitDuringWindup = true;
+      }
+      if (ring.at < 0 && arena.asteroids.length > 0) {
+        ring.at = arena.elapsed();
+        ring.rocks = arena.asteroids.length;
+      }
+    });
+    const windups = timedOfType(log, 'bossWindup');
+    expect(windups.map((w) => w.event.attack).slice(0, 3)).toEqual(['shardRing', 'shardRing', 'lunge']);
+    // The telegraphed ring was not cancelled: it fires once, with phase 2's 8 rocks.
+    expect(ring.rocks).toBe(8);
+    const [first, second] = [windups[0], windups[1]];
+    expect(ring.at - (first?.at ?? 0)).toBeGreaterThanOrEqual(SENTINEL.attacks.shardRing.windup - EPS);
+    // And the rest after it is phase 2's 1.6 s, not phase 1's 2.2 s.
+    expect((second?.at ?? 0) - ring.at).toBeCloseTo(1.6, 1);
   });
 
   it('is deterministic: the same seed gives the same log, a different seed a different one', () => {

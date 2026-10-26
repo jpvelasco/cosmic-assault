@@ -78,6 +78,21 @@ describe('burstFor', () => {
     expect(burstFor({ type: 'shot', x: 0, y: 0 }, DRIFT)).toMatchObject({ shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 });
   });
 
+  it('gives a boss hit a small spark burst and no shake or flash', () => {
+    expect(burstFor({ type: 'bossHit', x: 0, y: 0, hp: 5 }, DRIFT)).toMatchObject({ shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 });
+  });
+
+  it('sprays a boss hit\'s sparks from where it struck', () => {
+    const pool = new ParticlePool(400);
+    createEffects(pool, 1).handle([{ type: 'bossHit', x: 300, y: 200, hp: 5 }], makeWorld());
+    const sparks: { x: number; y: number }[] = [];
+    pool.forEach((p) => {
+      sparks.push({ x: p.x, y: p.y });
+    });
+    expect(sparks).toHaveLength(6);
+    for (const s of sparks) expect(Math.hypot(s.x - 300, s.y - 200)).toBeLessThan(5);
+  });
+
   it('has no burst for game over', () => {
     expect(burstFor({ type: 'gameOver', score: 10 }, DRIFT)).toBeNull();
   });

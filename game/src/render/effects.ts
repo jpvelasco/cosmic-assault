@@ -64,6 +64,7 @@ const ASTEROID_BURSTS: readonly [Counts, Counts, Counts, Counts] = [
 
 const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45 };
 const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
+const BOSS_HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
 const blankBurst = (): Writable<BurstSpec> => ({ ...SHOT_BURST, flashColor: '' });
 
@@ -85,6 +86,8 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
       return writeBurst(into, SHIP_HIT_BURST, HIT_TINT);
     case 'shot':
       return writeBurst(into, SHOT_BURST, palette.shot);
+    case 'bossHit':
+      return writeBurst(into, BOSS_HIT_BURST, palette.shot);
     case 'gameOver':
     case 'asteroidLeft':
     case 'galaxyStart':
@@ -212,6 +215,8 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         return writeOrigin(origin, event.x, event.y, 30, HIT_TINT);
       case 'shot':
         return writeOrigin(origin, event.x, event.y, 0, null, world.ship.vx * 0.5, world.ship.vy * 0.5);
+      case 'bossHit':
+        return writeOrigin(origin, event.x, event.y, 0, null);
       case 'gameOver':
       case 'asteroidLeft':
       case 'galaxyStart':

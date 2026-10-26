@@ -23,6 +23,8 @@ export type SimEvent =
   | { type: 'bossIntro'; id: BossId }
   /** A boss is telegraphing `attack` from (x, y); it does no harm until the windup ends. */
   | { type: 'bossWindup'; attack: AttackId; x: number; y: number }
+  /** A shot hurt a boss: it struck at (x, y) and left the boss with `hp`. Shots into an invulnerable boss make none. */
+  | { type: 'bossHit'; x: number; y: number; hp: number }
   /** A boss fell to two thirds (2) or one third (3) of its HP. */
   | { type: 'bossPhase'; phase: 2 | 3 }
   /** A boss finished dying; the galaxy warps out. */

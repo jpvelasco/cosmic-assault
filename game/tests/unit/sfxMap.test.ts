@@ -19,6 +19,10 @@ describe('sfxFor', () => {
     expect(sfxFor(destroyed(size))).toBe(name);
   });
 
+  it('maps a hit on a boss to a short boom', () => {
+    expect(sfxFor({ type: 'bossHit', x: 0, y: 0, hp: 5 })).toBe('boomTiny');
+  });
+
   it('maps a ship hit and game over to their own sounds', () => {
     expect(sfxFor({ type: 'shipHit', x: 0, y: 0, livesLeft: 1 })).toBe('shipHit');
     expect(sfxFor({ type: 'gameOver', score: 10 })).toBe('gameOver');

@@ -21,6 +21,8 @@ export function sfxFor(event: SimEvent): SfxName | null {
       return 'shoot';
     case 'asteroidDestroyed':
       return BOOM_BY_SIZE[event.size];
+    case 'bossHit':
+      return 'boomTiny';
     case 'shipHit':
       return 'shipHit';
     case 'gameOver':

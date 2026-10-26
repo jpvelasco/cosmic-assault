@@ -2,7 +2,7 @@ import type { GalaxyDef } from '../content/types';
 import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
 import type { BossView } from './boss/bossRunner';
 import { circlesOverlap, SpatialHash } from './collision';
-import { ASTEROID, PLAYER, PROJECTILE, WRAP_MARGIN } from './config';
+import { ASTEROID, PLAYER, PROJECTILE } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
 import type { Field } from './field';
@@ -13,6 +13,7 @@ import { projectileFromShot, stepProjectile, type Projectile } from './projectil
 import { createRng, deriveSeed, type Rng } from './rng';
 import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
 import { createShip, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { rescale } from './wrap';
 import { assertAsteroidPlacement, assertField, assertFinite, resolveOptions, type ShipPlacement, type WorldOptions } from './worldOptions';
 
 export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
@@ -48,12 +49,6 @@ function removeFlagged(items: unknown[], flagged: readonly boolean[]): void {
     }
   }
   items.length = kept;
-}
-
-/** Maps a coordinate from a `from`-sized wrap band onto a `to`-sized one; unchanged sizes keep it exact. */
-function rescale(value: number, from: number, to: number): number {
-  if (from === to) return value;
-  return ((value + WRAP_MARGIN) * (to + 2 * WRAP_MARGIN)) / (from + 2 * WRAP_MARGIN) - WRAP_MARGIN;
 }
 
 function resetFlags(flags: boolean[], length: number): void {
@@ -251,14 +246,13 @@ export class World {
     assertField(field);
     const old = this.currentField;
     this.currentField = field;
-    const boss = this.run?.boss ?? null;
-    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList, ...(boss === null ? [] : [boss])]) {
+    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) {
       e.x = rescale(e.x, old.width, field.width);
       e.y = rescale(e.y, old.height, field.height);
       e.px = rescale(e.px, old.width, field.width);
       e.py = rescale(e.py, old.height, field.height);
     }
-    this.run?.resize(field);
+    this.run?.resize(old, field);
   }
 
   /** Ends the run without emitting anything (used by "Quit"). */

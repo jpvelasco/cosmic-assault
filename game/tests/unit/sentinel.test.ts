@@ -5,12 +5,15 @@ import type { Dimension, GalaxyDef, GalaxyId } from '../../src/content/types';
 import type { Asteroid } from '../../src/sim/asteroid';
 import { bossHome, BossRunner } from '../../src/sim/boss/bossRunner';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
-import { STEP_SECONDS } from '../../src/sim/config';
+import { PLAYER, PROJECTILE, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
+import type { Field } from '../../src/sim/field';
+import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { comboMultiplier } from '../../src/sim/scoring';
+import type { GalaxyMode } from '../../src/sim/scoring';
 import type { Ship } from '../../src/sim/ship';
+import { rescale } from '../../src/sim/wrap';
 import { World, type WorldOptions } from '../../src/sim/world';
 import { BOSS_FIELD, ofType, runFor, stubArena, type StubArena } from '../helpers/bossArena';
 
@@ -29,9 +32,9 @@ const step = (r: BossRunner) => (dt: number, arena: StubArena) => {
 };
 
 /** A 30 HP boss that has finished its intro and then lost enough HP to stand at `hp`. */
-function fightingAt(hp: number): { r: BossRunner; arena: StubArena } {
+function fightingAt(hp: number, field: Field = BOSS_FIELD): { r: BossRunner; arena: StubArena } {
   const r = runnerFor();
-  const arena = stubArena();
+  const arena = stubArena(undefined, field);
   runFor(step(r), arena, INTRO + 0.05);
   if (hp < 30) r.hit(30 - hp);
   return { r, arena };
@@ -106,16 +109,20 @@ describe('the Sentinel shardRing', () => {
 
 describe('the Sentinel lunge', () => {
   /** Phase 3 opens with a lunge. Steps to the step its windup begins, with the ship at `at`; returns the boss' pose after each later step. */
-  function lungeTo(at: { x: number; y: number }, moveTo: { x: number; y: number } | null) {
-    const { r, arena } = fightingAt(10);
-    arena.ship.x = at.x;
-    arena.ship.y = at.y;
+  function atLungeWindup(at: { x: number; y: number }, field: Field = BOSS_FIELD): { r: BossRunner; arena: StubArena } {
+    const { r, arena } = fightingAt(10, field);
+    Object.assign(arena.ship, at);
     for (let started = false; !started; ) {
       arena.events.length = 0;
       arena.tick();
       r.step(STEP_SECONDS, arena);
       started = arena.events.some((e) => e.type === 'bossWindup' && e.attack === 'lunge');
     }
+    return { r, arena };
+  }
+
+  function lungeTo(at: { x: number; y: number }, moveTo: { x: number; y: number } | null) {
+    const { r, arena } = atLungeWindup(at);
     if (moveTo !== null) Object.assign(arena.ship, moveTo);
     const trail: { x: number; y: number }[] = [];
     runFor(step(r), arena, 1.5, () => trail.push({ x: r.view.x, y: r.view.y }));
@@ -144,6 +151,17 @@ describe('the Sentinel lunge', () => {
     expect(speed(DASH_END + 20)).toBeLessThan(40);
   });
 
+  it('moves its aim with the field when the field is resized mid-windup', () => {
+    const field = { ...BOSS_FIELD };
+    const wide = { width: 1680, height: BOSS_FIELD.height };
+    const { r, arena } = atLungeWindup({ x: 1000, y: 500 }, field);
+    r.resize(BOSS_FIELD, wide);
+    Object.assign(field, wide);
+    runFor(step(r), arena, 1.3);
+    expect(r.view.x).toBeCloseTo(rescale(1000, BOSS_FIELD.width, wide.width), 0);
+    expect(r.view.y).toBeCloseTo(500, 0);
+  });
+
   it('keeps the whole core inside the field, however far into a corner the ship was', () => {
     const trail = lungeTo({ x: BOSS_FIELD.width - 2, y: BOSS_FIELD.height - 2 }, null);
     const end = trail[DASH_END];
@@ -165,12 +183,12 @@ function calm(id: GalaxyId): GalaxyDef {
   return { ...galaxyById(id), kinds: { large: MUTE, medium: MUTE, small: MUTE }, events: [] };
 }
 
-function bossWorld(id: GalaxyId, opts: Partial<WorldOptions> = {}): GalaxyWorld {
+function bossWorld(id: GalaxyId, opts: Partial<WorldOptions> = {}, mode: GalaxyMode = 'rank'): GalaxyWorld {
   const world = new World({
     seed: 3,
     field: BOSS_FIELD,
-    rules: { kind: 'galaxy', galaxy: calm(id), mode: 'rank' },
-    startLives: 5,
+    rules: { kind: 'galaxy', galaxy: calm(id), mode },
+    startLives: PLAYER.startLives,
     initialShip: { x: BOSS_FIELD.width / 2, y: 640, angle: -Math.PI / 2 },
     ...opts,
   });
@@ -195,6 +213,21 @@ function playWorld(g: GalaxyWorld, seconds: number, controls: (w: World) => Cont
     }
     onStep?.(events);
   }
+}
+
+/**
+ * Call it after each step: it returns how many shots vanished since the last call next to the boss' core
+ * (shots that ran out of life are far from it), and so were spent on it.
+ */
+function shotWatcher(world: World): () => number {
+  let before: { id: number; x: number; y: number }[] = [];
+  return () => {
+    const alive = new Set(world.projectiles.map((p) => p.id));
+    const { boss } = world;
+    const spent = before.filter((p) => !alive.has(p.id) && boss !== null && Math.hypot(p.x - boss.x, p.y - boss.y) < boss.radius + PROJECTILE.radius + 5);
+    before = world.projectiles.map(({ id, x, y }) => ({ id, x, y }));
+    return spent.length;
+  };
 }
 
 describe('the Sentinel in a boss galaxy', () => {
@@ -223,45 +256,48 @@ describe('the Sentinel in a boss galaxy', () => {
     expect(view?.state).toBe('fighting');
   });
 
-  it('consumes shots on the core and ignores them while it is invulnerable', () => {
+  it('spends shots on the core without hurting it, or reporting a hit, while it is invulnerable', () => {
     const g = bossWorld('1-6');
-    playWorld(g, APPROACH + INTRO - 0.2, aimAtBoss);
-    const inIntro = (): boolean => g.world.boss?.state === 'intro';
-    expect(inIntro()).toBe(true);
-    const intro = g.world.boss;
-    let swallowed = 0;
-    const core = (p: { x: number; y: number }): boolean => Math.hypot(p.x - (intro?.x ?? 0), p.y - (intro?.y ?? 0)) < (intro?.radius ?? 0);
-    playWorld(g, 0.15, aimAtBoss, () => {
-      expect(g.world.projectiles.filter(core)).toEqual([]);
-      swallowed++;
+    playWorld(g, APPROACH + 0.5, aimAtBoss);
+    const consumedBy = shotWatcher(g.world);
+    let consumed = 0;
+    playWorld(g, 1.4, aimAtBoss, () => {
+      consumed += consumedBy();
     });
-    expect(swallowed).toBeGreaterThan(0);
+    expect(g.world.boss?.state).toBe('intro');
+    expect(consumed).toBeGreaterThanOrEqual(3);
     expect(g.world.boss?.hp).toBe(20);
+    expect(ofType(g.log, 'bossHit')).toEqual([]);
   });
 
-  it('takes 1 damage per shot that reaches the core, and the shot is gone', () => {
+  it('takes 1 damage and reports a bossHit for each shot spent on the core', () => {
     const g = bossWorld('1-6');
     playWorld(g, APPROACH + INTRO + 0.05, aimAtBoss);
-    let lost = 0;
-    let previous = g.world.boss?.hp ?? 0;
+    const consumedBy = shotWatcher(g.world);
+    const boss = g.world.boss;
+    let [lost, previous] = [0, boss?.hp ?? 0];
     playWorld(g, 2, aimAtBoss, () => {
-      const hp = g.world.boss?.hp ?? 0;
-      expect(previous - hp).toBeLessThanOrEqual(1);
+      const hp = boss?.hp ?? 0;
+      expect(previous - hp, 'one shot, one damage').toBe(consumedBy());
       lost += previous - hp;
       previous = hp;
     });
     expect(lost).toBeGreaterThanOrEqual(3);
+    const hits = ofType(g.log, 'bossHit');
+    // The log also holds any hit from before the window opened.
+    expect(hits.map((h) => h.hp)).toEqual(Array.from({ length: 20 - (boss?.hp ?? 0) }, (_, i) => 19 - i));
+    for (const h of hits) expect(Math.hypot(h.x - (boss?.x ?? 0), h.y - (boss?.y ?? 0))).toBeLessThan(DEF.radius + PROJECTILE.radius + 5);
     expect(g.world.score).toBe(0);
   });
 
   it('counts the core touching the ship as a ship hit, but not during the intro', () => {
     const g = bossWorld('1-6', { initialShip: { ...HOME, angle: 0 } });
     playWorld(g, APPROACH + INTRO - 0.1);
-    expect(g.world.lives).toBe(5);
+    expect(g.world.lives).toBe(3);
     playWorld(g, 0.3);
     const hits = ofType(g.log, 'shipHit');
     expect(hits).toHaveLength(1);
-    expect(hits[0]?.livesLeft).toBe(4);
+    expect(hits[0]?.livesLeft).toBe(2);
     expect(g.world.ship.invulnerable).toBe(true);
   });
 
@@ -276,80 +312,133 @@ describe('the Sentinel in a boss galaxy', () => {
   });
 
   it('keeps shard rocks and their fragments pass-through', () => {
-    const g = bossWorld('1-6');
     let fragments = 0;
-    playWorld(g, 40, aimAtBoss, () => {
-      for (const a of g.world.asteroids) {
-        expect(a.transient, `size ${String(a.size)} rock`).toBe(true);
-        if (a.size === 3) fragments++;
-      }
-    });
+    for (const seed of [1, 2, 3]) {
+      const g = bossWorld('1-6', { seed });
+      playWorld(g, 40, aimAtBoss, () => {
+        for (const a of g.world.asteroids) {
+          expect(a.transient, `size ${String(a.size)} rock`).toBe(true);
+          if (a.size === 3) fragments++;
+        }
+      });
+    }
     expect(fragments).toBeGreaterThan(0);
   });
 });
 
+/** The galaxy rules behind a world, for the tests that need to land a blow without aiming a ship. */
+function runOf(world: World): GalaxyRun {
+  return (world as unknown as { run: GalaxyRun }).run;
+}
+
 describe('beating the Sentinel', () => {
-  interface KillStep {
-    readonly events: SimEvent[];
-    readonly scored: number;
-    readonly combo: number;
-    readonly at: number;
+  const BOSS_DIMENSION = 2;
+  const BOSS_HP = 26;
+
+  /** A 2-6 game in which the ship dies on the core at the start of the fight, then a chain of 4 kills is built and the boss is beaten. */
+  function beaten(mode: GalaxyMode): GalaxyWorld {
+    const g = bossWorld('2-6', { initialShip: { ...HOME, angle: 0 } }, mode);
+    playWorld(g, APPROACH + INTRO + 0.1);
+    expect(g.world.deaths).toBe(1);
+    const run = runOf(g.world);
+    for (let i = 0; i < 4; i++) run.scoreKill(0);
+    const boss = g.world.boss;
+    if (boss === null) throw new Error('the boss should be fighting by now');
+    let blows = 0;
+    while (boss.state === 'fighting') {
+      expect(run.hitBoss(boss.x, boss.y, 1)).toBe(true);
+      blows++;
+    }
+    expect(blows).toBe(BOSS_HP);
+    return g;
   }
 
-  /** Plays seed `seed` of 3-6 with the ship shooting at the core until the galaxy clears. */
-  function beaten(seed: number): { g: GalaxyWorld; kill: KillStep | null } {
-    const g = bossWorld('3-6', { seed });
-    let kill: KillStep | null = null;
-    let before = 0;
-    playWorld(
-      g,
-      120,
-      (w) => {
-        before = w.score;
-        return aimAtBoss(w);
-      },
-      (events) => {
-        if (kill === null && g.world.boss?.state === 'dying') {
-          kill = { events: events.map((e) => ({ ...e })), scored: g.world.score - before, combo: g.world.combo, at: g.world.elapsed };
-        }
-      },
-    );
-    return { g, kill };
-  }
+  it('scores 1000 x the Dimension at the combo multiplier of the kill, 5th in the chain here', () => {
+    const g = beaten('free');
+    expect(g.world.boss).toMatchObject({ state: 'dying', hp: 0 });
+    expect(g.world.combo).toBe(5);
+    expect(g.world.multiplier).toBe(2);
+    expect(g.world.score).toBe(1000 * BOSS_DIMENSION * 2);
+  });
 
-  it('scores 1000 x the Dimension as a combo kill, then warps out and clears the galaxy', () => {
-    const { g, kill } = beaten(3);
-    if (kill === null) throw new Error('the Sentinel never reached dying in 120 s');
-    const rocks = ofType(kill.events, 'asteroidDestroyed').reduce((sum, e) => sum + e.points, 0);
-    expect(kill.scored - rocks).toBe(3000 * comboMultiplier(kill.combo));
-
+  it.each([
+    // kill 4000 + clear bonus 500 (250 x 2, no no-death bonus after a death), then x1.1 in Rank
+    ['rank', 4950],
+    ['free', 4500],
+  ] as const)('in %s mode the cleared galaxy reports %i points and 2 stars after a death on the core', (mode, total) => {
+    const g = beaten(mode);
+    playWorld(g, 6);
     expect(g.world.status).toBe('cleared');
+    const [cleared] = ofType(g.log, 'galaxyCleared');
+    expect(cleared).toMatchObject({ score: total, bonus: 500, deaths: 1, stars: 2 });
+    expect(g.world.score).toBe(total);
+  });
+
+  it('is invulnerable and attack-free while dying, then warps for 1.5 s before it clears', () => {
+    const g = beaten('free');
+    const killedAt = g.world.elapsed;
+    playWorld(g, 6);
+    const timeOf = (type: SimEvent['type']): number => g.times[g.log.findIndex((e) => e.type === type)] ?? Number.NaN;
+    expect(timeOf('bossDown') - killedAt).toBeCloseTo(2, 1);
+    expect(timeOf('warpOut')).toBe(timeOf('bossDown'));
+    expect(timeOf('galaxyCleared') - timeOf('bossDown')).toBeCloseTo(1.5, 1);
     const types = g.log.map((e) => e.type);
-    const [down, warp, cleared] = [types.indexOf('bossDown'), types.indexOf('warpOut'), types.indexOf('galaxyCleared')];
-    expect(down).toBeGreaterThan(-1);
-    expect(down).toBeLessThan(warp);
-    expect(warp).toBeLessThan(cleared);
+    expect(types.indexOf('bossDown')).toBeLessThan(types.indexOf('warpOut'));
+    expect(types.indexOf('warpOut')).toBeLessThan(types.indexOf('galaxyCleared'));
     expect(types.filter((t) => t === 'galaxyCleared')).toHaveLength(1);
     expect(g.world.boss).toMatchObject({ state: 'down', hp: 0 });
   });
 
-  it('is invulnerable and attack-free for 2 s of dying, then warps for 1.5 s before it clears', () => {
-    const { g, kill } = beaten(3);
-    const timeOf = (type: SimEvent['type']): number => g.times[g.log.findIndex((e) => e.type === type)] ?? Number.NaN;
-    expect(timeOf('bossDown') - (kill?.at ?? 0)).toBeCloseTo(2, 1);
-    expect(timeOf('warpOut')).toBe(timeOf('bossDown'));
-    expect(timeOf('galaxyCleared') - timeOf('bossDown')).toBeCloseTo(1.5, 1);
-  });
-
-  it('announces both phase changes on the way', () => {
-    const { g } = beaten(3);
-    expect(ofType(g.log, 'bossPhase').map((e) => e.phase)).toEqual([2, 3]);
-    expect(ofType(g.log, 'bossWindup').length).toBeGreaterThan(3);
-  });
-
-  it('runs the same way twice for one seed', () => {
-    const [a, b] = [beaten(3).g, beaten(3).g];
+  it('runs the same way twice', () => {
+    const [a, b] = [beaten('rank'), beaten('rank')];
+    playWorld(a, 6);
+    playWorld(b, 6);
     expect(a.log).toEqual(b.log);
     expect(a.times).toEqual(b.times);
+  });
+});
+
+describe('GalaxyRun.hitBoss', () => {
+  /** Runs a 1-6 galaxy on a stub arena for `to` seconds; the arena's events are left empty. */
+  function approach(to: number) {
+    const arena = stubArena();
+    const run = new GalaxyRun(calm('1-6'), 'free', createRng(1), createRng(2), arena);
+    for (let i = 0; i < Math.round(to / STEP_SECONDS); i++) {
+      arena.events.length = 0;
+      arena.tick();
+      run.beginStep();
+      run.step(STEP_SECONDS);
+    }
+    arena.events.length = 0;
+    return { arena, run };
+  }
+
+  it('reports nothing for a shot that misses or arrives before the boss', () => {
+    const { run } = approach(19);
+    expect(run.hitBoss(HOME.x, HOME.y, 3)).toBe(false);
+    const { arena, run: later } = approach(23);
+    expect(later.hitBoss(0, 0, 3)).toBe(false);
+    expect(arena.events).toEqual([]);
+  });
+
+  it('spends a shot in the intro without a hit, then reports each damaging hit with the HP it left, the last at 0', () => {
+    const intro = approach(21);
+    expect(intro.run.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
+    expect(intro.arena.events).toEqual([]);
+    expect(intro.run.boss?.hp).toBe(20);
+
+    const { arena, run } = approach(22.1);
+    const hits: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      arena.events.length = 0;
+      expect(run.hitBoss(HOME.x + 5, HOME.y - 6, 3)).toBe(true);
+      expect(arena.events).toEqual([{ type: 'bossHit', x: HOME.x + 5, y: HOME.y - 6, hp: 19 - i }]);
+      hits.push(run.boss?.hp ?? -1);
+    }
+    expect(hits).toEqual(Array.from({ length: 20 }, (_, i) => 19 - i));
+    expect(run.boss?.state).toBe('dying');
+    arena.events.length = 0;
+    expect(run.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
+    expect(arena.events).toEqual([]);
   });
 });

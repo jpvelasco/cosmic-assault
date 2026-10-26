@@ -14,7 +14,7 @@ export interface StubArena extends Arena {
 }
 
 /** The slice of a World a boss runner sees, with a still ship and a clock that `tick` advances. */
-export function stubArena(ship: Ship = createShip(BOSS_FIELD.width / 2, 600)): StubArena {
+export function stubArena(ship: Ship = createShip(BOSS_FIELD.width / 2, 600), field: Field = BOSS_FIELD): StubArena {
   let elapsed = 0;
   let lastId = 0;
   return {
@@ -22,7 +22,7 @@ export function stubArena(ship: Ship = createShip(BOSS_FIELD.width / 2, 600)): S
     events: [],
     ship,
     shapeRng: createRng(7),
-    field: () => BOSS_FIELD,
+    field: () => field,
     elapsed: () => elapsed,
     score: () => 0,
     deaths: () => 0,
