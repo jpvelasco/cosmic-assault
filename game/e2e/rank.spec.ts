@@ -3,7 +3,7 @@ import { STALE_RUN_NOTICE } from '../src/app/flowController';
 import { RANK_START_LIVES, startRank, type RankRun } from '../src/meta/rankRun';
 import { SAVE_KEY } from '../src/meta/save';
 import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, storedSave, test, waitForBridge } from './fixtures';
-import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, GAME_OVER_SEED, SURVIVES_1_1 } from './seed';
+import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, GAME_OVER_SEED, SURVIVES_1_1, THREE_DEATHS_SECONDS } from './seed';
 
 /** Plays a new Rank run from the title. */
 async function startRankRun(page: Page): Promise<void> {
@@ -46,6 +46,44 @@ test('Quit mid-galaxy costs a life, keeps the score from before it, and leaves R
   await page.reload();
   await waitForBridge(page);
   expect((await gameState(page)).save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+});
+
+/**
+ * Fast-forwards the idle run a second at a time until it has lost `count` lives. A respawned ship is invulnerable for
+ * longer than a second, so no step costs two; GAME_OVER_SEED loses three within THREE_DEATHS_SECONDS (e2eSeed.test.ts).
+ */
+async function loseLives(page: Page, count: number): Promise<void> {
+  const target = (await gameState(page)).lives - count;
+  for (let s = 0; s < THREE_DEATHS_SECONDS && (await gameState(page)).lives > target; s++) await fastForward(page, 1);
+  expect((await gameState(page)).lives).toBe(target);
+}
+
+/** Resumes a seeded five-life run of GAME_OVER_GALAXY, whose idle ship GAME_OVER_SEED soon hits. */
+async function playFiveLifeRun(page: Page): Promise<void> {
+  await pinClockSeed(page, GAME_OVER_SEED);
+  await seedRun(page, { ...startRank('2026-10-26'), next: GAME_OVER_GALAXY, score: 700, lives: 5 });
+  await openFreshGame(page);
+  await page.getByTestId('resume-rank').click();
+  await expectMode(page, 'playing');
+}
+
+test('Quit after two deaths forfeits from the lives left: three down from the galaxy start, never more', async ({ page }) => {
+  await playFiveLifeRun(page);
+  await loseLives(page, 2);
+  // Each death is saved as it happens, still in the galaxy.
+  expect((await storedSave(page)).rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+
+  await quitRun(page);
+  expect((await storedSave(page)).rankRun).toMatchObject({ next: GAME_OVER_GALAXY, score: 700, lives: 2, inGalaxy: false });
+});
+
+test('a reload after a death forfeits from the lives left, not from the galaxy start', async ({ page }) => {
+  await playFiveLifeRun(page);
+  await loseLives(page, 1);
+  await page.reload();
+  await waitForBridge(page);
+
+  await expect.poll(async () => (await gameState(page)).save.rankRun).toMatchObject({ lives: 3, score: 700, inGalaxy: false });
 });
 
 test('a reload mid-galaxy forfeits it the same way, once no tab answers for it', async ({ page }) => {
@@ -193,7 +231,7 @@ test('a game over offers Continue, which resets the score and marks the run, and
   expect((await storedSave(page)).rankRun).toMatchObject({ score: 0, continued: true });
 
   // Lose the continued run too: its entry carries the continued flag, beside the first one.
-  await fastForward(page, 120);
+  await fastForward(page, THREE_DEATHS_SECONDS);
   await expectMode(page, 'gameOver');
   const { rankBoard } = await storedSave(page);
   expect(rankBoard).toHaveLength(2);

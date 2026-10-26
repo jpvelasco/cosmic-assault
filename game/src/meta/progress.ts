@@ -42,9 +42,9 @@ export function loseRankRun(save: SaveData, run: RankRun, galaxyScore: number, t
   return endRankRun(save, rankEntry(run, run.score + galaxyScore, today), { ...run, lives: 0, inGalaxy: false });
 }
 
-/** `run`'s galaxy left unfinished: one life lost; on the last life the run is lost as at a game over, at its saved score. */
-export function forfeitRankRun(save: SaveData, run: RankRun, today: string): SaveData {
-  const next = afterForfeit(run);
+/** `run`'s galaxy left unfinished with `livesLeft`: one more life lost; on the last life the run is lost as at a game over, at its saved score. */
+export function forfeitRankRun(save: SaveData, run: RankRun, livesLeft: number, today: string): SaveData {
+  const next = afterForfeit(run, livesLeft);
   return next.lives > 0 ? setRankRun(save, next) : loseRankRun(save, run, 0, today);
 }
 

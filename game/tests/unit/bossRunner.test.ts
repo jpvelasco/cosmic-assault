@@ -210,21 +210,24 @@ describe('BossRunner attacks', () => {
 });
 
 describe('BossRunner death', () => {
-  it('goes down after 2 s of invulnerable dying, once, announcing bossDown', () => {
+  it('announces bossDown on its first dying step, then goes down silently after 2 s of invulnerable dying', () => {
     const { r, arena } = fighting(3);
     expect(r.hit(2)).toBe('hit');
     expect(r.hit(1)).toBe('killed');
     expect(r.hp).toBe(0);
     expect(r.state).toBe('dying');
     expect(r.hit(1)).toBe('blocked');
+    const killedAt = arena.elapsed();
     const log = runFor(stepper(r), arena, DYING - 0.1, () => {
       expect(r.hit(1)).toBe('blocked');
     });
     expect(r.state).toBe('dying');
-    expect(timedOfType(log, 'bossDown')).toEqual([]);
+    const down = timedOfType(log, 'bossDown');
+    expect(down.map((l) => l.event)).toEqual([{ type: 'bossDown', id: 'sentinel' }]);
+    expect(down[0]?.at).toBeCloseTo(killedAt + STEP_SECONDS, 9);
     const rest = runFor(stepper(r), arena, 0.2);
     expect(r.state).toBe('down');
-    expect(timedOfType(rest, 'bossDown').map((l) => l.event)).toEqual([{ type: 'bossDown', id: 'sentinel' }]);
+    expect(rest).toEqual([]);
     expect(runFor(stepper(r), arena, 2)).toEqual([]);
     expect(r.hit(1)).toBe('blocked');
   });

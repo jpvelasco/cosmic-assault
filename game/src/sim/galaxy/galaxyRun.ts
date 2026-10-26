@@ -3,7 +3,7 @@ import { rockSpeedMultiplier } from '../../content/curves';
 import { tierOf } from '../../content/galaxies';
 import type { BossId, GalaxyDef, RockKind } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
-import { BossRunner, type BossBehaviour, type BossView } from '../boss/bossRunner';
+import { BossRunner, DYING_SECONDS, type BossBehaviour, type BossView } from '../boss/bossRunner';
 import { SENTINEL } from '../boss/sentinel';
 import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
@@ -15,6 +15,8 @@ import { phaseAt, type Phase } from './pacing';
 import { Showers, type ShowerState } from './showers';
 
 const WARP_SECONDS = 1.5;
+/** A beaten boss dies over the warp, so that warp lasts as long as its dying. */
+const BOSS_WARP_SECONDS = Math.max(WARP_SECONDS, DYING_SECONDS);
 const MERCY_SECONDS = 4;
 const MERCY = 0.4;
 const KIND_SIZE: Readonly<Record<RockKind, AsteroidSize>> = { large: 0, medium: 1, small: 2 };
@@ -33,7 +35,8 @@ const areaOf = (field: Field): number => field.width * field.height;
  * A timed galaxy: it opens on an empty field, the director meters rocks into it and showers fall on
  * schedule. When the timer runs out the ship warps out, clearing the field and reporting the clear; the galaxy's
  * status turns cleared 1.5 s later.
- * A boss galaxy has no clock to beat: once its approach ends its boss arrives, and beating the boss warps out instead.
+ * A boss galaxy has no clock to beat: once its approach ends its boss arrives, and the step its HP hits 0 warps out
+ * instead. The boss dies over that warp, which lasts its 2 s of dying.
  */
 export class GalaxyRun implements Spawner {
   private readonly director: GalaxyDirector;
@@ -100,19 +103,29 @@ export class GalaxyRun implements Spawner {
       this.arena.events.push({ type: 'galaxyStart', id: this.galaxy.id });
     }
     const elapsed = this.arena.elapsed();
-    if (this.warpEndsAt === null && phaseAt(this.galaxy, elapsed) === 'warp') this.warpOut(elapsed);
+    if (this.warpEndsAt === null && phaseAt(this.galaxy, elapsed) === 'warp') this.warpOut(elapsed, WARP_SECONDS);
   }
 
   step(dt: number): void {
     const elapsed = this.arena.elapsed();
-    if (this.warpEndsAt !== null) {
-      if (elapsed + TIME_EPSILON >= this.warpEndsAt) this.finish();
-      return;
+    if (this.warpEndsAt === null && !this.bossBeaten) {
+      this.combo.expire(elapsed);
+      this.announceCombo();
+      this.spawn(dt, elapsed);
     }
-    this.combo.expire(elapsed);
-    this.announceCombo();
-    this.spawn(dt, elapsed);
+    // The fight, or a beaten boss dying under the warp.
     this.stepBoss(dt, elapsed);
+    if (this.warpEndsAt === null) {
+      if (this.bossBeaten) this.warpOut(elapsed, BOSS_WARP_SECONDS);
+    } else if (elapsed + TIME_EPSILON >= this.warpEndsAt) {
+      this.finish();
+    }
+  }
+
+  /** The boss's HP has hit 0: it is dying, or down. */
+  private get bossBeaten(): boolean {
+    const state = this.bossRunner?.state;
+    return state === 'dying' || state === 'down';
   }
 
   scoreKill(base: number): number {
@@ -146,14 +159,13 @@ export class GalaxyRun implements Spawner {
     this.mercyUntil = this.arena.elapsed() + MERCY_SECONDS;
   }
 
-  /** Brings the boss in as the approach ends, runs it, and warps out once it is down. */
+  /** Brings the boss in as the approach ends, and runs it. */
   private stepBoss(dt: number, elapsed: number): void {
     const { boss: id, dimension } = this.galaxy;
     if (id === null || phaseAt(this.galaxy, elapsed) !== 'boss') return;
     const def = BOSSES[id];
     this.bossRunner ??= new BossRunner(def, BOSS_BEHAVIOURS[id], { maxHp: bossHp(def, dimension), rng: this.bossRng, rockSpeed: this.rockSpeed, field: this.arena.field() });
     this.bossRunner.step(dt, this.arena);
-    if (this.bossRunner.state === 'down') this.warpOut(elapsed);
   }
 
   private spawn(dt: number, elapsed: number): void {
@@ -220,14 +232,14 @@ export class GalaxyRun implements Spawner {
    * Clears every rock for 0 points and reports the clear: from here the ship cannot be hit and nothing scores, so
    * the outcome is final, and an app that records it now keeps the win even if the page closes during the warp.
    */
-  private warpOut(elapsed: number): void {
+  private warpOut(elapsed: number, seconds: number): void {
     const { arena } = this;
     const { asteroids, events } = arena;
     events.push({ type: 'warpOut' });
     for (const a of asteroids) events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points: 0 });
     asteroids.length = 0;
     this.showers.stop();
-    this.warpEndsAt = elapsed + WARP_SECONDS;
+    this.warpEndsAt = elapsed + seconds;
     arena.setStatus('warping');
     const report = clearReport({ score: arena.score(), deaths: arena.deaths(), dimension: this.galaxy.dimension, mode: this.mode });
     arena.award(report.score - arena.score());

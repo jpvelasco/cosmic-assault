@@ -33,7 +33,7 @@ export interface FlowController {
   /** A key, pad or button command; a locked Dimension or galaxy is ignored. */
   readonly command: (command: FlowCommand) => void;
   dispatch(action: FlowAction): void;
-  /** Feeds one step's events: a clear or a game over moves the flow and writes the save at once. */
+  /** Feeds one step's events: a clear or a game over moves the flow and writes the save at once, as does a Rank hit. */
   handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void;
   /** Forfeits a saved run left mid-galaxy (a closed tab), once the caller knows no other tab is playing it. */
   forfeitLeftRun(): void;
@@ -53,7 +53,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
 
   function forfeitLeftRun(): void {
     if (store.save.rankRun?.inGalaxy !== true) return;
-    store.update((save) => (save.rankRun?.inGalaxy === true ? forfeitRankRun(save, save.rankRun, deps.today()) : save));
+    store.update((save) => (save.rankRun?.inGalaxy === true ? forfeitRankRun(save, save.rankRun, save.rankRun.lives, deps.today()) : save));
     knownSeq = store.save.rankSeq;
   }
 
@@ -147,6 +147,8 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
         dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, bestBefore: bestBefore() });
       } else if (event.type === 'gameOver') {
         dispatch({ kind: 'die', score: event.score });
+      } else if (event.type === 'shipHit') {
+        dispatch({ kind: 'hit', livesLeft: event.livesLeft });
       }
     }
   }

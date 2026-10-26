@@ -238,7 +238,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       flow.dispatch({ kind: 'resume' });
     },
     quit() {
-      flow.dispatch({ kind: 'quit' });
+      if (world !== null) flow.dispatch({ kind: 'quit', livesLeft: world.lives });
     },
     dispose() {
       if (disposed) return;

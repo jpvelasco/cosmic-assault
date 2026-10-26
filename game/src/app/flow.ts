@@ -1,7 +1,7 @@
 import { galaxyById, nextGalaxyId } from '../content/galaxies';
 import type { Dimension, GalaxyId } from '../content/types';
 import { abandonRankRun, endRankRun, forfeitRankRun, loseRankRun, rankEntry, recordClear, setRankRun } from '../meta/progress';
-import { afterClear, afterGameOver, type RankRun } from '../meta/rankRun';
+import { afterClear, afterGameOver, afterHit, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
 import type { ClearReport, GalaxyMode } from '../sim/scoring';
 
@@ -64,7 +64,10 @@ export type FlowAction =
   | { readonly kind: 'playGalaxy'; readonly id: GalaxyId }
   | { readonly kind: 'pause' }
   | { readonly kind: 'resume' }
-  | { readonly kind: 'quit' }
+  /** Quit from the pause card, with the ship on `livesLeft`: in Rank the galaxy is forfeited from them. */
+  | { readonly kind: 'quit'; readonly livesLeft: number }
+  /** The ship was hit and plays on with `livesLeft`: in Rank the run keeps them, so leaving now forfeits from them. */
+  | { readonly kind: 'hit'; readonly livesLeft: number }
   /**
    * The galaxy was cleared with `livesLeft` lives. `bestBefore` is its best score as saved before this clear: null when
    * it had none, or when the run is a debug run, which keeps no record to beat.
@@ -192,9 +195,18 @@ function runMove(state: FlowState, action: FlowAction): FlowState {
       return screen === 'playing' ? cleared(state, action) : state;
     case 'die':
       return screen === 'playing' ? { ...state, screen: 'gameOver' } : state;
+    case 'hit':
+      return hit(state, action.livesLeft);
     default:
       return state;
   }
+}
+
+/** A Rank run in play keeps the lives the ship has left; the hit that takes the last one is the game over's to post. */
+function hit(state: FlowState, livesLeft: number): FlowState {
+  const { rankRun } = state;
+  if (state.screen !== 'playing' || state.mode !== 'rank' || rankRun === null || livesLeft <= 0 || livesLeft >= rankRun.lives) return state;
+  return { ...state, rankRun: afterHit(rankRun, livesLeft) };
 }
 
 /**
@@ -231,6 +243,7 @@ const rankOnly = (rank: Change): SaveChange => ({ record: null, rank });
  * What `action` (which took `before` to `after`) writes to the save, or null when it writes nothing. Clears are
  * recorded the moment they happen, and every Rank start, galaxy, end and Continue goes through `setRankRun`:
  * - each Rank galaxy saves the run marked as in it, so leaving it unfinished (Quit, a closed tab) forfeits a life;
+ * - each hit in it saves the lives left, so that forfeit counts from them;
  * - a clear saves it between galaxies, at the next one; 5-★ posts the run and ends it;
  * - a game over posts the run total and keeps the run, with no lives, for a Continue.
  */
@@ -254,8 +267,12 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
     }
     case 'die':
       return run === null ? null : rankOnly((save) => loseRankRun(save, run, action.score, today()));
+    case 'hit': {
+      const next = after.rankRun;
+      return next === null ? null : rankOnly((save) => setRankRun(save, next));
+    }
     case 'quit':
-      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, today()));
+      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, action.livesLeft, today()));
     default:
       return null;
   }

@@ -28,7 +28,7 @@ export {
   type WorldOptions,
 } from './worldOptions';
 
-/** `'warping'` lasts 1.5 s at the end of a galaxy; once `'cleared'` or `'gameOver'`, `step` is a no-op. */
+/** `'warping'` ends a galaxy: 1.5 s, or 2 s while a beaten boss dies. Once `'cleared'` or `'gameOver'`, `step` is a no-op. */
 export type WorldStatus = 'playing' | 'warping' | 'cleared' | 'gameOver';
 
 /** Whether a run with `status` is over, cleared or lost: it no longer steps, and is drawn at its latest pose. */

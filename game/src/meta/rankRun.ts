@@ -45,11 +45,17 @@ export function afterGameOver(run: RankRun): RankRun {
 }
 
 /**
- * The run after its galaxy is left unfinished (Quit, or a tab closed mid-galaxy): one life lost and the galaxy's score
- * gone, back between galaxies. With no lives left the run is lost, as at a game over.
+ * The run after its galaxy is left unfinished (Quit, or a tab closed mid-galaxy) with the ship on `livesLeft`: one
+ * more life lost and the galaxy's score gone, back between galaxies. The lives lost in the galaxy stay lost, and more
+ * lives left than the run carried never refund any. With no lives left the run is lost, as at a game over.
  */
-export function afterForfeit(run: RankRun): RankRun {
-  return { ...run, lives: Math.max(0, run.lives - 1), inGalaxy: false };
+export function afterForfeit(run: RankRun, livesLeft: number): RankRun {
+  return { ...run, lives: Math.max(0, Math.min(run.lives, livesLeft) - 1), inGalaxy: false };
+}
+
+/** The run, still in its galaxy, after the ship is hit with `livesLeft` left: a forfeit from here counts from them. */
+export function afterHit(run: RankRun, livesLeft: number): RankRun {
+  return { ...run, lives: Math.min(run.lives, livesLeft) };
 }
 
 /** Which of two runs got further: positive when `b` did. Further `next`, then higher score, then one that has not used Continue; the rest breaks ties so every pair has an order. */

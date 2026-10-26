@@ -16,14 +16,13 @@ import {
   test,
   waitForBridge,
 } from './fixtures';
+import { STEP_SECONDS } from '../src/sim/config';
 import { CLEAR_1_1_SECONDS, E2E_SEED, SURVIVES_1_1 } from './seed';
 
 /** A boss galaxy's approach (20 s) and the boss' intro (2 s), with a margin: after this the boss is fighting. */
 const TO_BOSS_FIGHT_SECONDS = 22.5;
 /** More than any boss' hit points. */
 const KILL_DAMAGE = 100;
-/** The boss' death (2 s) and the warp that starts when it is down. */
-const BOSS_DEATH_SECONDS = 3;
 
 test('a clear is saved as the warp starts, so a reload straight after keeps it', async ({ page }) => {
   // No debug switch, so the run writes the real save; the pinned clock gives it a known seed.
@@ -87,7 +86,8 @@ test.describe('boss galaxy 1-6', () => {
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     expect((await gameState(page)).screen).toBe('playing');
     await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_DAMAGE);
-    await fastForward(page, BOSS_DEATH_SECONDS);
+    // The killing blow ends the galaxy on the next step: the boss dies under the results card.
+    await fastForward(page, STEP_SECONDS);
 
     const { screen, galaxy, save } = await gameState(page);
     expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: '1-6' });
@@ -127,7 +127,8 @@ test.describe('boss galaxy 1-6', () => {
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_DAMAGE);
-    await fastForward(page, BOSS_DEATH_SECONDS);
+    // The killing blow ends the galaxy on the next step: the boss dies under the results card.
+    await fastForward(page, STEP_SECONDS);
 
     expect((await gameState(page)).screen).toBe('results');
     const stored = await storedSave(page);

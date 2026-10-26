@@ -112,9 +112,9 @@ describe('transition: pause', () => {
 
   it('Quit leaves for the title, writing nothing in Free play', () => {
     const paused = freeOn('paused', '1-2');
-    const quit = transition(paused, { kind: 'quit' });
+    const quit = transition(paused, { kind: 'quit', livesLeft: 3 });
     expect(quit).toMatchObject({ screen: 'title', rankRun: null });
-    expect(saveChange(paused, { kind: 'quit' }, quit, () => TODAY)).toBeNull();
+    expect(saveChange(paused, { kind: 'quit', livesLeft: 3 }, quit, () => TODAY)).toBeNull();
   });
 });
 
@@ -231,7 +231,10 @@ describe('transition: ignored actions', () => {
     [at('galaxySelect', { mode: 'free' }), { kind: 'openDimension', dimension: 2 }],
     [freeOn('playing', '1-1'), { kind: 'start' }],
     [freeOn('playing', '1-1'), { kind: 'resume' }],
-    [freeOn('playing', '1-1'), { kind: 'quit' }],
+    [freeOn('playing', '1-1'), { kind: 'quit', livesLeft: 3 }],
+    [freeOn('playing', '1-1'), { kind: 'hit', livesLeft: 2 }],
+    [rankOn('paused', RUN), { kind: 'hit', livesLeft: 2 }],
+    [rankOn('playing', RUN), { kind: 'hit', livesLeft: 0 }],
     [freeOn('paused', '1-1'), { kind: 'pause' }],
     [freeOn('paused', '1-1'), { kind: 'die', score: 0 }],
     [freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null }],
@@ -260,7 +263,7 @@ describe('saveChange', () => {
   it('writes nothing for a Free play game over or quit, or for navigation', () => {
     const cases: [FlowState, FlowAction][] = [
       [freeOn('playing', '1-1'), { kind: 'die', score: 50 }],
-      [freeOn('paused', '1-1'), { kind: 'quit' }],
+      [freeOn('paused', '1-1'), { kind: 'quit', livesLeft: 3 }],
       [INITIAL_FLOW, { kind: 'start' }],
       [at('modeSelect'), { kind: 'askNewRank' }],
       [at('galaxySelect', { mode: 'free' }), { kind: 'playGalaxy', id: '1-1' }],
@@ -296,14 +299,36 @@ describe('saveChange', () => {
 
   it('Quit mid-galaxy in Rank forfeits it: one life gone, back at the score it carried in', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 2 };
-    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('paused', playing), { kind: 'quit' });
+    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('paused', playing), { kind: 'quit', livesLeft: 2 });
     expect(after.state).toMatchObject({ screen: 'title', rankRun: null });
     expect(after.save).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 6, rankBoard: [] });
   });
 
+  it('a hit in a Rank galaxy saves the lives left, still in the galaxy, so a closed tab forfeits from them', () => {
+    const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 3 };
+    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 2 });
+    expect(after.state).toEqual(rankOn('playing', { ...playing, lives: 2 }));
+    expect(after.save).toMatchObject({ rankRun: { ...playing, lives: 2, inGalaxy: true }, rankSeq: 6 });
+  });
+
+  it('Quit after two deaths forfeits from the lives left: three lives down from the galaxy start, never a refund', () => {
+    const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 5 };
+    let step = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 4 });
+    step = saved(step.save, step.state, { kind: 'hit', livesLeft: 3 });
+    step = saved(step.save, step.state, { kind: 'pause' });
+    step = saved(step.save, step.state, { kind: 'quit', livesLeft: 3 });
+    expect(step.save.rankRun).toMatchObject({ lives: 2, score: 2500, inGalaxy: false });
+  });
+
+  it('Quit forfeits from the ship lives even when no hit was reported, and from the run lives when it has more', () => {
+    const playing = { ...RUN, next: '1-3' as const, lives: 3 };
+    expect(saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 2 }).save.rankRun).toMatchObject({ lives: 1 });
+    expect(saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 5 }).save.rankRun).toMatchObject({ lives: 2 });
+  });
+
   it('Quit on the last life loses the run: its entry posted and Continue left for the title', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 1 };
-    const after = saved(defaultSave(), rankOn('paused', playing), { kind: 'quit' }).save;
+    const after = saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 1 }).save;
     expect(after.rankRun).toMatchObject({ lives: 0, score: 2500, inGalaxy: false });
     expect(after.rankBoard).toEqual([{ score: 2500, reached: 'D1 · G3', date: TODAY, continued: false }]);
   });

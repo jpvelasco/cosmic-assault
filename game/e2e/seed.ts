@@ -32,6 +32,12 @@ export const E2E_SEED = 3;
 export const GAME_OVER_SEED = 27;
 
 /**
+ * Sim seconds within which GAME_OVER_SEED's idle ship loses three lives in GAME_OVER_GALAXY on the desktop field: the
+ * Rank specs lose a continued run, and lives one at a time, by it. tests/unit/e2eSeed.test.ts guards it.
+ */
+export const THREE_DEATHS_SECONDS = 120;
+
+/**
  * The `?seed=` the perf spec loads. Any seed works, as it measures frame time rather than a
  * scripted outcome; this one is fixed so every run spawns the same rocks.
  */

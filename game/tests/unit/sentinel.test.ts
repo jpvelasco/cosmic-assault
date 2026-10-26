@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { Dimension, GalaxyDef, GalaxyId } from '../../src/content/types';
-import type { Asteroid } from '../../src/sim/asteroid';
-import { bossHome, BossRunner } from '../../src/sim/boss/bossRunner';
+import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
+import { bossHome, BossRunner, DYING_SECONDS } from '../../src/sim/boss/bossRunner';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { PLAYER, PROJECTILE, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
@@ -376,20 +376,53 @@ describe('beating the Sentinel', () => {
     expect(g.world.score).toBe(total);
   });
 
-  it('is invulnerable and attack-free while dying, then reports the clear as it warps, and clears 1.5 s later', () => {
+  it('ends the galaxy on the next step: bossDown, warpOut and galaxyCleared together, then the boss dies over a 2 s warp', () => {
     const g = beaten('free');
     const killedAt = g.world.elapsed;
-    playWorld(g, 6);
-    const timeOf = (type: SimEvent['type']): number => g.times[g.log.findIndex((e) => e.type === type)] ?? Number.NaN;
-    expect(timeOf('bossDown') - killedAt).toBeCloseTo(2, 1);
-    expect(timeOf('warpOut')).toBe(timeOf('bossDown'));
-    expect(timeOf('galaxyCleared')).toBe(timeOf('warpOut'));
-    expect(g.world.status).toBe('cleared');
+    playWorld(g, STEP_SECONDS);
+    expect(g.world.status).toBe('warping');
+    expect(g.world.boss).toMatchObject({ state: 'dying', hp: 0 });
     const types = g.log.map((e) => e.type);
+    for (const type of ['bossDown', 'warpOut', 'galaxyCleared'] as const) expect(g.times[types.indexOf(type)]).toBeCloseTo(killedAt + STEP_SECONDS, 9);
     expect(types.indexOf('bossDown')).toBeLessThan(types.indexOf('warpOut'));
     expect(types.indexOf('warpOut')).toBeLessThan(types.indexOf('galaxyCleared'));
-    expect(types.filter((t) => t === 'galaxyCleared')).toHaveLength(1);
+    playWorld(g, DYING_SECONDS - 0.1);
+    expect(g.world.status).toBe('warping');
+    expect(g.world.boss?.state).toBe('dying');
+    playWorld(g, 0.2);
+    expect(g.world.status).toBe('cleared');
     expect(g.world.boss).toMatchObject({ state: 'down', hp: 0 });
+    const all = g.log.map((e) => e.type);
+    for (const type of ['bossDown', 'warpOut', 'galaxyCleared'] as const) expect(all.filter((t) => t === type)).toHaveLength(1);
+  });
+
+  it('cannot lose the clear once the killing shot lands: a last-life ship on the dying core, under a rock, stays unhit', () => {
+    const g = bossWorld('1-6', { startLives: 1 });
+    playWorld(g, APPROACH + INTRO + 0.1);
+    const boss = g.world.boss;
+    if (boss === null) throw new Error('the boss should be fighting by now');
+    const run = runOf(g.world);
+    while (boss.hp > 1) run.hitBoss(boss.x, boss.y, 1);
+    // The last blow is a real shot, so it lands inside a step, as in play.
+    let killStep: SimEvent['type'][] = [];
+    for (let i = 0; i < 3 * STEPS_PER_SECOND && boss.state === 'fighting'; i++) killStep = g.world.step(STEP_SECONDS, aimAtBoss(g.world)).map((e) => e.type);
+    expect(killStep).toEqual(expect.arrayContaining(['bossHit', 'bossDown', 'warpOut', 'galaxyCleared']));
+    expect(g.world.status).toBe('warping');
+    // Through the boss's dying, the ship sits shield down on the core and under a fresh rock every step.
+    const ship: Ship = g.world.ship;
+    const rocks = g.world.asteroids as Asteroid[];
+    playWorld(g, DYING_SECONDS + 0.5, () => {
+      ship.x = boss.x;
+      ship.y = boss.y;
+      ship.invulnerable = false;
+      ship.invulnerableFor = 0;
+      rocks.push(createAsteroid(createRng(1), ship.x, ship.y, 0, 0, 1));
+      return NO_CONTROLS;
+    });
+    expect(ofType(g.log, 'shipHit')).toEqual([]);
+    expect(ofType(g.log, 'gameOver')).toEqual([]);
+    expect(g.world.lives).toBe(1);
+    expect(g.world.status).toBe('cleared');
   });
 
   it('runs the same way twice', () => {

@@ -8,6 +8,7 @@ import { setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, type SaveData } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
+import type { SimEvent } from '../../src/sim/events';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
 import { memoryStorage } from '../helpers/memoryStorage';
@@ -36,10 +37,13 @@ function setup(options: { save?: SaveData; storage?: Backing; galaxy?: GalaxyId;
   return { flow: createFlowController(deps), store, started, screens, notify };
 }
 
-/** Steps a World of `id` idle, feeding `flow`, until the flow leaves play; the seed keeps the idle ship alive. */
-function playUntilEnd(flow: ReturnType<typeof setup>['flow'], id: GalaxyId, mode: 'free' | 'rank' = 'free'): World {
+/**
+ * Steps a World of `id` idle, feeding `flow` the events `heard` lets through, until the flow leaves play; the seed
+ * keeps the idle ship alive.
+ */
+function playUntilEnd(flow: ReturnType<typeof setup>['flow'], id: GalaxyId, mode: 'free' | 'rank' = 'free', heard: (event: SimEvent) => boolean = () => true): World {
   const world = new World({ seed: 2, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode } });
-  while (flow.state.screen === 'playing' && world.status !== 'gameOver') flow.handle(world.step(STEP_SECONDS, NO_CONTROLS), world);
+  while (flow.state.screen === 'playing' && world.status !== 'gameOver') flow.handle(world.step(STEP_SECONDS, NO_CONTROLS).filter(heard), world);
   return world;
 }
 
@@ -192,9 +196,42 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     const tab = setup();
     startRankRun(tab);
     tab.flow.dispatch({ kind: 'pause' });
-    tab.flow.dispatch({ kind: 'quit' });
+    tab.flow.dispatch({ kind: 'quit', livesLeft: 3 });
     expect(tab.flow.state.screen).toBe('title');
     expect(tab.store.save.rankRun).toMatchObject({ next: '1-1', score: 0, lives: 2, inGalaxy: false });
+  });
+
+  it('saves the lives left on each hit, so a closed tab forfeits from them, and Quit from the ship lives', () => {
+    const storage = memoryStorage();
+    const tab = setup({ storage });
+    startRankRun(tab);
+    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    expect(tab.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: true });
+    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 1 }], { lives: 1 });
+    // The tab closes here: the next one forfeits from the 1 life left, which loses the run.
+    const next = setup({ storage });
+    next.flow.forfeitLeftRun();
+    expect(next.store.save.rankRun).toMatchObject({ lives: 0, inGalaxy: false });
+    expect(next.store.save.rankBoard).toHaveLength(1);
+  });
+
+  it('a hit that ends the run saves nothing itself: the game over posts it', () => {
+    const tab = setup();
+    startRankRun(tab);
+    const update = vi.spyOn(tab.store, 'update');
+    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 0 }], { lives: 0 });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('a live Rank galaxy keeps answering for the run as each hit moves its rankSeq on', () => {
+    const live: (number | null)[] = [];
+    const tab = setup();
+    const flow = createFlowController({ store: tab.store, overrides: { galaxy: undefined, startLives: undefined }, today: () => TODAY, startRun: () => undefined, showScreen: () => undefined, notify: () => undefined, liveRun: (seq) => live.push(seq) });
+    flow.command({ kind: 'start' });
+    flow.command({ kind: 'chooseMode', mode: 'rank' });
+    flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    expect(live.at(-1)).toBe(tab.store.save.rankSeq);
+    expect(live.at(-1)).toBeGreaterThan(live.at(-2) ?? Number.POSITIVE_INFINITY);
   });
 
   it('a Free play quit writes nothing', () => {
@@ -202,7 +239,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     tab.flow.command({ kind: 'start' });
     tab.flow.dispatch({ kind: 'pause' });
     const update = vi.spyOn(tab.store, 'update');
-    tab.flow.dispatch({ kind: 'quit' });
+    tab.flow.dispatch({ kind: 'quit', livesLeft: 3 });
     expect(tab.flow.state.screen).toBe('title');
     expect(update).not.toHaveBeenCalled();
   });
@@ -238,7 +275,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     b.flow.forfeitLeftRun();
     expect(b.store.save.rankRun).toMatchObject({ lives: 2 });
     a.flow.dispatch({ kind: 'pause' });
-    a.flow.dispatch({ kind: 'quit' });
+    a.flow.dispatch({ kind: 'quit', livesLeft: 3 });
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');
     // A's own forfeit was not applied on top of B's: one life lost, not two.
@@ -251,10 +288,22 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const a = setup({ storage });
     startRankRun(a);
     setup({ storage }).flow.forfeitLeftRun();
-    playUntilEnd(a.flow, '1-1', 'rank');
+    // Hits are left out: the first one would find the run moved on, and go to the title before the clear.
+    playUntilEnd(a.flow, '1-1', 'rank', (event) => event.type !== 'shipHit');
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');
     expect(a.store.save).toMatchObject({ frontier: '1-2', rankRun: { next: '1-1', lives: 2 } });
+  });
+
+  it('a hit after another tab moved the run on saves nothing, and goes to the title with the notice', () => {
+    const storage = memoryStorage();
+    const a = setup({ storage });
+    startRankRun(a);
+    setup({ storage }).flow.forfeitLeftRun();
+    a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
+    expect(a.flow.state.screen).toBe('title');
+    expect(a.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
   });
 
   it('a confirmed new run dropped because another tab wrote meanwhile says to try again', () => {
@@ -277,7 +326,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const a = setup({ storage });
     startRankRun(a);
     a.flow.dispatch({ kind: 'pause' });
-    a.flow.dispatch({ kind: 'quit' });
+    a.flow.dispatch({ kind: 'quit', livesLeft: 3 });
     const b = setup({ storage });
     b.flow.command({ kind: 'resumeRank' });
     a.store.load();

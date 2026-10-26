@@ -127,12 +127,19 @@ describe('ending a Rank run', () => {
   });
 
   it('forfeitRankRun costs a life and posts nothing while lives remain', () => {
-    const after = forfeitRankRun({ ...defaultSave(), rankSeq: 1 }, playing, TODAY);
+    const after = forfeitRankRun({ ...defaultSave(), rankSeq: 1 }, playing, 2, TODAY);
     expect(after).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 2, rankBoard: [] });
   });
 
+  it('forfeitRankRun counts from the lives left in the galaxy, losing the run when that was the last', () => {
+    expect(forfeitRankRun(defaultSave(), { ...playing, lives: 3 }, 2, TODAY).rankRun).toMatchObject({ lives: 1, inGalaxy: false });
+    const lost = forfeitRankRun(defaultSave(), { ...playing, lives: 3 }, 1, TODAY);
+    expect(lost.rankRun).toMatchObject({ lives: 0, score: 3000 });
+    expect(lost.rankBoard).toHaveLength(1);
+  });
+
   it('forfeitRankRun on the last life loses the run at the score it carried into the galaxy', () => {
-    const after = forfeitRankRun(defaultSave(), { ...playing, lives: 1, continued: true }, TODAY);
+    const after = forfeitRankRun(defaultSave(), { ...playing, lives: 1, continued: true }, 1, TODAY);
     expect(after.rankRun).toMatchObject({ lives: 0, score: 3000 });
     expect(after.rankBoard).toEqual([{ score: 3000, reached: 'D2 · G4', date: TODAY, continued: true }]);
   });

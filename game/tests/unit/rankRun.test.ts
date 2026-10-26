@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById, GALAXIES } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
-import { afterClear, afterForfeit, afterGameOver, compareRuns, startRank, type RankRun } from '../../src/meta/rankRun';
+import { afterClear, afterForfeit, afterGameOver, afterHit, compareRuns, startRank, type RankRun } from '../../src/meta/rankRun';
 
 const TODAY = '2026-10-26';
 
@@ -116,15 +116,37 @@ describe('afterForfeit (a Rank galaxy left unfinished)', () => {
   const playing: RankRun = { next: '2-4', score: 3100, lives: 3, weaponTier: 1, continued: false, startedAt: TODAY, inGalaxy: true };
 
   it('costs one life and keeps the score the run had before the galaxy, back between galaxies', () => {
-    expect(afterForfeit(playing)).toEqual({ ...playing, lives: 2, inGalaxy: false });
+    expect(afterForfeit(playing, 3)).toEqual({ ...playing, lives: 2, inGalaxy: false });
     expect(playing.lives).toBe(3);
   });
 
+  it('counts from the lives the ship has now, so the lives lost in the galaxy stay lost', () => {
+    expect(afterForfeit(playing, 1)).toMatchObject({ lives: 0, inGalaxy: false });
+    expect(afterForfeit({ ...playing, lives: 5 }, 3)).toMatchObject({ lives: 2 });
+  });
+
+  it('never refunds a life: more lives left than the run carried count as the run\'s own', () => {
+    expect(afterForfeit(playing, 5)).toMatchObject({ lives: 2 });
+  });
+
   it('leaves a last-life run with no lives, which only a Continue can take on', () => {
-    expect(afterForfeit({ ...playing, lives: 1 })).toMatchObject({ lives: 0, score: 3100, next: '2-4', inGalaxy: false });
+    expect(afterForfeit({ ...playing, lives: 1 }, 1)).toMatchObject({ lives: 0, score: 3100, next: '2-4', inGalaxy: false });
   });
 
   it('never goes below no lives', () => {
-    expect(afterForfeit({ ...playing, lives: 0 }).lives).toBe(0);
+    expect(afterForfeit({ ...playing, lives: 0 }, 0).lives).toBe(0);
+  });
+});
+
+describe('afterHit (the ship hit mid-galaxy)', () => {
+  const playing: RankRun = { ...startRank(TODAY), next: '1-3', score: 900, lives: 4, inGalaxy: true };
+
+  it('keeps the run in its galaxy on the lives left, so a later forfeit counts from them', () => {
+    expect(afterHit(playing, 3)).toEqual({ ...playing, lives: 3 });
+    expect(afterForfeit(afterHit(afterHit(playing, 3), 2), 2)).toMatchObject({ lives: 1, score: 900 });
+  });
+
+  it('never adds lives', () => {
+    expect(afterHit(playing, 5).lives).toBe(4);
   });
 });

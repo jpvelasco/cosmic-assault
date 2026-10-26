@@ -100,8 +100,8 @@ function assertWindups(behaviour: BossBehaviour): void {
 
 /**
  * A phased boss fight: a 2 s intro, then rests and attacks (each a telegraphed windup, then its active time)
- * through three phases, then 2 s of dying. It cannot be hurt in the intro or dying. Everything it does is
- * driven by `step` and its seeded stream, so a fight replays exactly.
+ * through three phases, then 2 s of dying, announced with `bossDown` as it starts. It cannot be hurt in the intro or
+ * dying. Everything it does is driven by `step` and its seeded stream, so a fight replays exactly.
  */
 export class BossRunner {
   readonly view: BossView;
@@ -232,10 +232,9 @@ export class BossRunner {
   }
 
   private stepDying(dt: number, arena: Arena): void {
+    if (this.clock === 0) arena.events.push({ type: 'bossDown', id: this.def.id });
     this.clock += dt;
-    if (!this.reached(DYING_SECONDS)) return;
-    this.enter('down');
-    arena.events.push({ type: 'bossDown', id: this.def.id });
+    if (this.reached(DYING_SECONDS)) this.enter('down');
   }
 
   private stepFighting(dt: number, arena: Arena): void {

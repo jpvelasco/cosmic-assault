@@ -16,7 +16,10 @@ export type SimEvent =
   | { type: 'showerStart' }
   | { type: 'showerEnd' }
   | { type: 'warpOut' }
-  /** The galaxy is won, on the step the warp starts: the outcome is final then. The status turns `'cleared'` 1.5 s later. */
+  /**
+   * The galaxy is won, on the step the warp starts (the timer runs out, or a boss's HP hits 0): the outcome is final
+   * then. The status turns `'cleared'` 1.5 s later, or once a beaten boss has died, 2 s later.
+   */
   | { type: 'galaxyCleared'; score: number; deaths: number; stars: Stars; bonus: number }
   /** The combo multiplier changed. */
   | { type: 'combo'; multiplier: number }
@@ -28,5 +31,5 @@ export type SimEvent =
   | { type: 'bossHit'; x: number; y: number; hp: number }
   /** A boss fell to two thirds (2) or one third (3) of its HP. */
   | { type: 'bossPhase'; phase: 2 | 3 }
-  /** A boss finished dying; the galaxy warps out. */
+  /** A boss was beaten, its HP at 0: the galaxy warps out on the same step, and the boss dies over the warp. */
   | { type: 'bossDown'; id: BossId };
