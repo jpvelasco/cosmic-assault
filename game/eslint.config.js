@@ -55,6 +55,23 @@ export default defineConfig(
     },
   },
   {
+    files: ['src/sw/**/*.ts'],
+    languageOptions: { globals: globals.serviceworker },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**'],
+              message: "The service worker runs without a DOM, so it may not import the app's DOM folders; tsc -p src/sw checks everything else it imports",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.js', '**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },

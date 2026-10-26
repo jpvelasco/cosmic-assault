@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAudioEngine, type AudioEngine } from '../../src/audio/engine';
+import { createAudioEngine, needsSoundGesture, type AudioEngine } from '../../src/audio/engine';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/app/settings';
 import type { SimEvent } from '../../src/sim/events';
 
@@ -132,6 +132,19 @@ afterEach(() => {
   for (const e of engines.splice(0)) e.dispose();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('needsSoundGesture', () => {
+  it('is true while wanted sound waits for a key press or tap to start the context', () => {
+    expect(needsSoundGesture('none', false)).toBe(true);
+    expect(needsSoundGesture('suspended', false)).toBe(true);
+  });
+
+  it('is false once sound runs, while muted, and after the audio failed for good', () => {
+    expect(needsSoundGesture('running', false)).toBe(false);
+    expect(needsSoundGesture('none', true)).toBe(false);
+    expect(needsSoundGesture('closed', false)).toBe(false);
+  });
 });
 
 describe('unlocking', () => {
@@ -329,7 +342,7 @@ describe('node graph', () => {
   });
 
   it('applies the volumes to the buses and creates one shared noise buffer', () => {
-    engine({ muted: false, musicVolume: 0.5, sfxVolume: 0.25 });
+    engine({ ...DEFAULT_SETTINGS, musicVolume: 0.5, sfxVolume: 0.25 });
     press();
     const [master, sfx, music] = nodesOf('gain') as [FakeNode, FakeNode, FakeNode];
     expect(master.gain.value).toBe(1);
@@ -449,6 +462,28 @@ describe('music', () => {
     expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.5, 0, expect.any(Number));
     e.setMusicLevel('menu');
     expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.5 * 0.45, 0, expect.any(Number));
+  });
+
+  it('ramps both buses to new volumes, the music one scaled by the current level', () => {
+    const e = engine();
+    press();
+    const [, sfx, music] = nodesOf('gain') as [FakeNode, FakeNode, FakeNode];
+    e.setMusicLevel('play');
+    e.setVolumes(0.2, 0.9);
+    expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.2, 0, expect.any(Number));
+    expect(sfx.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.9, 0, expect.any(Number));
+    e.setMusicLevel('paused');
+    expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.2 * 0.3, 0, expect.any(Number));
+    expect(sfx.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.9, 0, expect.any(Number));
+  });
+
+  it('builds the buses with volumes set before the context exists', () => {
+    const e = engine();
+    e.setVolumes(0.2, 0.9);
+    press();
+    const [, sfx, music] = nodesOf('gain') as [FakeNode, FakeNode, FakeNode];
+    expect(sfx.gain.value).toBe(0.9);
+    expect(music.gain.value).toBeCloseTo(0.2 * 0.45, 10);
   });
 
   it('remembers a level set before the context exists', () => {

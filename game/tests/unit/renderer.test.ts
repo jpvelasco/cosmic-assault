@@ -8,6 +8,7 @@ import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
+import { visualScaleFor } from '../../src/render/visualScale';
 import type { World } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
@@ -157,7 +158,7 @@ describe('createRenderer', () => {
 
     vi.advanceTimersByTime(1);
     expect(setScale).toHaveBeenCalledTimes(2);
-    expect(setScale).toHaveBeenLastCalledWith(0.75, 1);
+    expect(setScale).toHaveBeenLastCalledWith(0.75, 1, visualScaleFor(0.75));
     expect(renderer.consumeRedrawRequest()).toBe(true);
     expect(renderer.consumeRedrawRequest()).toBe(false);
   });
@@ -240,6 +241,32 @@ describe('createRenderer', () => {
     expect(renderer.drawCount).toBe(2);
   });
 
+  describe('visual scale', () => {
+    it('draws at the field size on a desktop screen', () => {
+      renderer.resize(1280, 720, FIELD);
+      expect(renderer.visualScale).toEqual({ ship: 1, rock: 1, shot: 1, effect: 1 });
+    });
+
+    it('bakes the sprites at the visual scale of a phone-sized screen, and reports it at once', () => {
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.resize(390, 219.375, FIELD);
+      const visual = visualScaleFor(390 / 1280);
+      expect(visual.ship).toBeCloseTo(1.4);
+      expect(renderer.visualScale).toEqual(visual);
+      expect(setScale).toHaveBeenCalledExactlyOnceWith(390 / 1280, 1, visual);
+    });
+
+    it('sizes the ship glow and its wrap copies by the scaled radius', () => {
+      renderer.resize(390, 219.375, FIELD);
+      const { stub, world } = stubWorld();
+      const glow = baker.glow(DRIFT.ship[1], 64 * 1.4).canvas;
+      // A copy is needed where x < radius - 2 × WRAP_MARGIN: below -68 for the field-size glow, below -55.2 for the scaled one.
+      stub.ship.x = stub.ship.px = -60;
+      drawFrame(world, 1);
+      expect(drawsOf(glow)).toHaveLength(2);
+    });
+  });
+
   describe('setQuality', () => {
     const [high, , low, lowest] = QUALITY_LEVELS as [(typeof QUALITY_LEVELS)[number], unknown, (typeof QUALITY_LEVELS)[number], (typeof QUALITY_LEVELS)[number]];
 
@@ -265,7 +292,7 @@ describe('createRenderer', () => {
       expect(setScale).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(REBAKE_DELAY_MS);
-      expect(setScale).toHaveBeenCalledExactlyOnceWith(1, 1.25);
+      expect(setScale).toHaveBeenCalledExactlyOnceWith(1, 1.25, visualScaleFor(1));
       expect(renderer.consumeRedrawRequest()).toBe(true);
     });
 

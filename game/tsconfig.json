@@ -8,9 +8,12 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "tests", "e2e", "*.config.ts", "scripts"]
+  "include": ["src", "tests", "e2e", "*.config.ts", "scripts", "vite"],
+  // The service worker has its own lib (WebWorker, no DOM); src/sw/tsconfig.json checks it.
+  "exclude": ["src/sw"]
 }

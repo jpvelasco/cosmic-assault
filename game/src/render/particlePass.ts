@@ -4,10 +4,10 @@ import type { Particle, ParticlePool } from './particles';
 import type { SpriteBaker } from './sprites';
 
 export interface ParticlePass {
-  /** Expanding rings, drawn additively under the rocks. The caller sets `'lighter'`; leaves alpha at 1. */
-  drawRings(): void;
-  /** Smoke and shards (normal blend), then trail glows and sparks (additive). Leaves `source-over` and alpha 1. */
-  drawBursts(): void;
+  /** Expanding rings, drawn additively under the rocks. The caller sets `'lighter'`; leaves alpha at 1. `zoom` enlarges them, not their positions. */
+  drawRings(zoom: number): void;
+  /** Smoke and shards (normal blend), then trail glows and sparks (additive). Leaves `source-over` and alpha 1. `zoom` as for rings. */
+  drawBursts(zoom: number): void;
 }
 
 const WHITE = '#ffffff';
@@ -35,24 +35,25 @@ export function createParticlePass(
   baker: SpriteBaker,
   particles: ParticlePool,
 ): ParticlePass {
+  let zoom = 1;
   const drawRing = (p: Readonly<Particle>): void => {
     if (p.kind !== 'ring') return;
     const f = fade(p);
     ctx.globalAlpha = f;
     ctx.strokeStyle = p.color;
-    ctx.lineWidth = RING_MAX_WIDTH * f + RING_MIN_WIDTH;
+    ctx.lineWidth = (RING_MAX_WIDTH * f + RING_MIN_WIDTH) * zoom;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * (1 - f), 0, TAU);
+    ctx.arc(p.x, p.y, p.size * zoom * (1 - f), 0, TAU);
     ctx.stroke();
   };
   const drawDebris = (p: Readonly<Particle>): void => {
     if (p.kind === 'smoke') {
       ctx.globalAlpha = fade(p) * SMOKE_ALPHA;
       pen.place(p.x, p.y, 1, 0);
-      pen.blit(baker.glow(p.color, p.size * 2));
+      pen.blit(baker.glow(p.color, p.size * 2 * zoom));
     } else if (p.kind === 'shard') {
       const f = fade(p);
-      const s = p.size;
+      const s = p.size * zoom;
       pen.place(p.x, p.y, Math.cos(p.rot), Math.sin(p.rot));
       ctx.globalAlpha = f;
       ctx.fillStyle = p.color;
@@ -66,7 +67,7 @@ export function createParticlePass(
     if (p.kind !== 'glow') return;
     ctx.globalAlpha = fade(p);
     pen.place(p.x, p.y, 1, 0);
-    pen.blit(baker.glow(p.color, p.size * TRAIL_GLOW_SCALE));
+    pen.blit(baker.glow(p.color, p.size * TRAIL_GLOW_SCALE * zoom));
   };
   const drawSpark = (p: Readonly<Particle>): void => {
     if (p.kind !== 'spark') return;
@@ -79,18 +80,20 @@ export function createParticlePass(
   };
 
   return {
-    drawRings() {
+    drawRings(scale) {
+      zoom = scale;
       pen.field();
       particles.forEach(drawRing);
       ctx.globalAlpha = 1;
     },
-    drawBursts() {
+    drawBursts(scale) {
+      zoom = scale;
       ctx.globalCompositeOperation = 'source-over';
       particles.forEach(drawDebris);
       ctx.globalCompositeOperation = 'lighter';
       particles.forEach(drawTrailGlow);
       pen.field();
-      ctx.lineWidth = SPARK_WIDTH;
+      ctx.lineWidth = SPARK_WIDTH * zoom;
       ctx.lineCap = 'round';
       particles.forEach(drawSpark);
       ctx.globalAlpha = 1;

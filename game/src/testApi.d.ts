@@ -30,19 +30,31 @@ interface CosmicAssaultTestState {
   readonly hudRects: readonly CosmicAssaultTestRect[];
   /** Frames the renderer has drawn; a still screen (paused, game over) draws only when something changes. */
   readonly drawCount: number;
+  /** How much larger than their field size the ship, rocks, shots and effects are drawn; 1 on a large screen. Hitboxes never change. */
+  readonly visualScale: { readonly ship: number; readonly rock: number; readonly shot: number; readonly effect: number };
   /** The quality level in force: index into the ladder (0 high … 3 lowest) and its name. */
   readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest' };
   /** Frame times of the current run in ms, less its first 3 s; zeros until a run is past that. */
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
+  /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
+  readonly settings: import('./app/settings').Settings;
+  /** The motion rules in force: reduced motion (the browser's setting) and whether shake is on once the shake setting is applied. */
+  readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or pointer press creates the audio context. */
   readonly audioState: 'none' | 'suspended' | 'running' | 'closed';
+  /** Entries in the in-memory event and error log (at most 200). */
+  readonly logSize: number;
+  /** Whether the page is in full screen (`document.fullscreenElement` is set). */
+  readonly fullscreen: boolean;
 }
 
 interface CosmicAssaultTestApi {
   readonly version: 3;
   getState(): CosmicAssaultTestState;
+  /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
+  crash(): void;
 }
 
 interface Window {

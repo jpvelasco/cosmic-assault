@@ -8,6 +8,8 @@ const PAUSE_SIZE_PX = 44;
 const MAX_HANDLE_TRAVEL_PX = (BASE_SIZE_PX - HANDLE_SIZE_PX) / 2;
 const inset = (side: 'top' | 'left' | 'right' | 'bottom', px: number): string =>
   `max(${String(px)}px, env(safe-area-inset-${side}))`;
+const STICK_EDGE_PX = 35;
+const FIRE_EDGE_PX = 20;
 const TOUCH_CSS =
   'pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent';
 
@@ -18,6 +20,8 @@ export interface TouchControls {
   /** The pause button's viewport box in CSS px, or null while the touch layer is hidden. */
   pauseRect(): DOMRect | null;
   show(visible: boolean): void;
+  /** Puts the joystick on the right and FIRE on the left (or back); the pause button stays top right. */
+  setLeftHanded(on: boolean): void;
   dispose(): void;
 }
 
@@ -94,11 +98,17 @@ function trackSinglePointer(el: HTMLElement, handlers: PointerHandlers): Pointer
   };
 }
 
-const BASE_CSS = `position:absolute;left:${inset('left', 35)};bottom:${inset('bottom', 35)};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
+const BASE_CSS = `position:absolute;bottom:${inset('bottom', STICK_EDGE_PX)};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
 const HANDLE_CSS = `position:absolute;left:50%;top:50%;width:${String(HANDLE_SIZE_PX)}px;height:${String(HANDLE_SIZE_PX)}px;margin:-${String(HANDLE_SIZE_PX / 2)}px 0 0 -${String(HANDLE_SIZE_PX / 2)}px;border-radius:50%;pointer-events:none`;
-const FIRE_CSS = `position:absolute;right:${inset('right', 20)};bottom:${inset('bottom', 20)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
+const FIRE_CSS = `position:absolute;bottom:${inset('bottom', FIRE_EDGE_PX)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
 const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('right', 16)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
-const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:1000';
+const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:var(--layer-touch)';
+
+/** Anchors `el` to one side of the screen, clearing the other. */
+function anchorTo(el: HTMLElement, side: 'left' | 'right', px: number): void {
+  el.style.left = side === 'left' ? inset('left', px) : '';
+  el.style.right = side === 'right' ? inset('right', px) : '';
+}
 
 function pauseButton(): HTMLButtonElement {
   const button = styled('button', 'touch-pause', PAUSE_CSS, 'touch-pause');
@@ -166,6 +176,11 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
     layer.style.display = visible ? '' : 'none';
     if (!visible) releaseAll();
   };
+  const setLeftHanded = (on: boolean): void => {
+    anchorTo(base, on ? 'right' : 'left', STICK_EDGE_PX);
+    anchorTo(fireButton, on ? 'left' : 'right', FIRE_EDGE_PX);
+  };
+  setLeftHanded(false);
   show(window.matchMedia('(pointer: coarse)').matches);
 
   return {
@@ -179,6 +194,7 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
       return layer.style.display === 'none' ? null : pause.getBoundingClientRect();
     },
     show,
+    setLeftHanded,
     dispose() {
       for (const tracker of trackers) tracker.detach();
       layer.remove();

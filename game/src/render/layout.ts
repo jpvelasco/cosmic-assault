@@ -2,6 +2,7 @@ import type { Field } from '../sim/field';
 import type { Palette } from './palette';
 import { bakeSky, bakeVignette } from './sky';
 import type { SpriteBaker } from './sprites';
+import { visualScaleFor, type VisualScale } from './visualScale';
 
 /** Where the field sits on the canvas for one viewport size. */
 export interface Layout {
@@ -11,6 +12,8 @@ export interface Layout {
   readonly scale: number;
   /** Device pixels per field unit (`scale × dpr`). */
   readonly k: number;
+  /** How much larger than their field size sprites are drawn at this scale; hitboxes are unaffected. */
+  readonly visual: VisualScale;
   /** The field's top-left corner in device pixels; above 0 on an axis that is letterboxed. */
   readonly fieldX: number;
   readonly fieldY: number;
@@ -53,6 +56,7 @@ export function layoutFor(cssWidth: number, cssHeight: number, field: Field, dpr
     dpr,
     scale,
     k: scale * dpr,
+    visual: visualScaleFor(scale),
     fieldX: ((cssWidth - field.width * scale) / 2) * dpr,
     fieldY: ((cssHeight - field.height * scale) / 2) * dpr,
   };
@@ -71,11 +75,11 @@ export function createBackdrop(baker: SpriteBaker, palette: Palette, skySeed: nu
   let timer: ReturnType<typeof setTimeout> | undefined;
   let rebaked = false;
 
-  function bake({ field, scale, dpr, k }: Layout): void {
+  function bake({ field, scale, dpr, k, visual }: Layout): void {
     const previous = bakes;
     bakes = { sky: bakeSky(field, k, palette, skySeed), vignette: bakeVignette(field, k) };
     if (previous !== null) freeBakes(previous);
-    baker.setScale(scale, dpr);
+    baker.setScale(scale, dpr, visual);
   }
 
   return {

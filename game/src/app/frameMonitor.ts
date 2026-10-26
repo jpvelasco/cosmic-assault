@@ -3,6 +3,9 @@ import { WARMUP_MS } from '../render/quality';
 /** A frame this long or longer is a visible hitch. */
 export const LONG_FRAME_MS = 50;
 
+/** A frame longer than this is a stall: the page was frozen, not merely slow. */
+export const STALL_MS = 1000;
+
 export interface FrameSummary {
   readonly count: number;
   readonly p50: number;
@@ -26,8 +29,12 @@ export class FrameMonitor {
   private count = 0;
   private longFrames = 0;
 
+  /** `onStall` hears of every frame over STALL_MS, warm-up included. */
+  constructor(private readonly onStall: (frameMs: number) => void = () => undefined) {}
+
   sample(frameMs: number): void {
     if (!(frameMs >= 0)) return;
+    if (frameMs > STALL_MS) this.onStall(frameMs);
     if (this.elapsed < WARMUP_MS) {
       this.elapsed += frameMs;
       return;

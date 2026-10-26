@@ -1,25 +1,48 @@
-import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
+import { createAudioEngine, needsSoundGesture, type AudioState, type MusicLevel } from '../audio/engine';
+import { currentBuildLabel } from '../buildLabel';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
+import { mergeControls } from '../input/mergeControls';
 import { attachTouchControls } from '../input/touchControls';
-import type { CornerBox, HudRect } from '../render/hud';
+import { createCrashGuard } from '../platform/crashGuard';
+import { createFullscreen } from '../platform/fullscreen';
+import { createInstallPrompt } from '../platform/install';
+import { RingLog } from '../platform/log';
+import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
+import type { VisualScale } from '../render/visualScale';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
+import { createCrashCard } from '../ui/crashCard';
+import { listen } from '../ui/dom';
+import { SOUND_GESTURE_HINT } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
-import { createSafeAreaProbe } from '../ui/safeArea';
+import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
-import { commandForKey, START, TO_TITLE, type Command } from './commands';
-import { passesGameOverGuard } from './gameOverGuard';
+import { START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
+import { coversFor, createInputRouter, type Cover } from './inputRouting';
 import { clockSeed, runOverrides } from './seed';
-import { browserStorage, loadSettings, saveSettings } from './settings';
+import { browserStorage, loadSettings, type Settings } from './settings';
+import { createSettingsController } from './settingsController';
+import { createViewSync } from './viewSync';
+
+/**
+ * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
+ * release builds carry no trace of them. The long property name is deliberate: unlike a local name it survives
+ * minification, which lets `check:no-bridge` find it.
+ */
+export interface E2eHooks {
+  /** Runs at the start of every guarded frame. */
+  e2eBeforeFrame?: (() => void) | undefined;
+}
 
 export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
 
@@ -33,14 +56,24 @@ export interface App {
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
+  /** How much larger than their field size sprites are drawn on this screen. */
+  readonly visualScale: VisualScale;
   /** The quality level in force: its index in QUALITY_LEVELS and its settings. */
   readonly quality: { readonly index: number; readonly level: QualityLevel };
   /** Frame times of the current run, less its first 3 s. */
   readonly frameStats: FrameSummary;
   /** Whether sound is muted (saved across visits). */
   readonly muted: boolean;
+  /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
+  readonly settings: Settings;
+  /** The motion rules in force once reduced motion and the shake setting are combined. */
+  readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or tap creates the audio context. */
   readonly audioState: AudioState;
+  /** Whether the page is in full screen; false where the browser cannot. */
+  readonly fullscreen: boolean;
+  /** What the game has noticed: mode changes, long stalls and errors. Kept in memory only. */
+  readonly log: RingLog;
   /** Starts a run from the title or game-over screen; ignored in other modes. */
   start(): void;
   pause(): void;
@@ -56,48 +89,38 @@ const MUSIC_LEVEL: Readonly<Record<AppMode, MusicLevel>> = {
   paused: 'paused',
   gameOver: 'menu',
 };
-const TOAST_MUTED = 'Muted';
-const TOAST_SOUND_ON = 'Sound on';
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
 
-function listen(target: EventTarget, type: string, listener: (e: Event) => void): () => void {
-  target.addEventListener(type, listener);
-  return () => {
-    target.removeEventListener(type, listener);
-  };
-}
-
-export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
+export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
   const keyboard = attachKeyboard(window);
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pauseByPlayer);
-  const safeArea = createSafeAreaProbe(root);
+  const log = new RingLog();
+  const readPad = createPadReader(
+    () => navigator.getGamepads(),
+    (error) => {
+      log.add('error', 'gamepad unavailable', performance.now());
+      console.warn('Gamepad input is unavailable in this browser or frame, so play with the keyboard or touch instead.', error);
+    },
+  );
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
   const scaler = new QualityScaler();
-  const monitor = new FrameMonitor();
-  const coarsePointer = window.matchMedia('(pointer: coarse)');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const monitor = new FrameMonitor((frameMs) => {
+    // A hidden tab's frames are not stalls: the browser simply stopped drawing.
+    if (document.visibilityState === 'visible') log.add('stall', `${String(Math.round(frameMs))} ms frame`, performance.now());
+  });
   const storage = browserStorage();
-  const settings = loadSettings(storage);
-  const audio = createAudioEngine(settings);
+  const saved = loadSettings(storage);
+  const audio = createAudioEngine(saved);
   const toast = createToast(root);
+  const fullscreen = createFullscreen(document, document.documentElement, log);
+  const installPrompt = createInstallPrompt(window, log, syncView);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
-  const button = (command: Command) => (): void => {
-    applyCommand(command, performance.now());
-  };
-  const overlay = createOverlay(root, {
-    start: button(START),
-    selectLevel,
-    resume,
-    quit,
-    toTitle: button(TO_TITLE),
-    toggleMute,
-  });
 
   let mode: AppMode = 'title';
   let world: World | null = null;
@@ -107,10 +130,102 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
   let redrawPending = false;
   let gameOverAt = 0;
+  /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
+  let previousPad: PadSnapshot | null = null;
+  const padFire = createPadFireLatch();
   let lastFrameAt = performance.now();
   let frameId = 0;
-  /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
-  let pauseCorner: CornerBox | null = null;
+  /** The sound hint is given once a visit: a pad-only player needs it once, and a toast on every A would nag. */
+  let soundHintGiven = false;
+  const button = (command: Command) => (): void => {
+    router.applyCommand(command, performance.now());
+  };
+  const overlay = createOverlay(root, {
+    start: button(START),
+    selectLevel,
+    resume,
+    quit,
+    toTitle: button(TO_TITLE),
+    toggleMute: () => {
+      prefs.toggleMute();
+    },
+    toggleFullscreen: button(TOGGLE_FULLSCREEN),
+    openSettings: () => {
+      prefs.openSettings();
+    },
+    install: installPrompt.install,
+  });
+  // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
+  const prefs = createSettingsController(root, {
+    storage,
+    initial: saved,
+    audio,
+    toast,
+    touch,
+    hitStop,
+    effects: renderer.effects,
+    mode: () => mode,
+    covers,
+    syncView,
+    focusOpener: () => {
+      overlay.focusSettingsChip();
+    },
+  });
+  const rotatePrompt = createRotatePrompt(root);
+  const crashCard = createCrashCard(root, {
+    report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
+    toast,
+  });
+  const guard = createCrashGuard(log, stopAfterCrash);
+  const view = createViewSync(root, {
+    overlay,
+    settingsCard: prefs.card,
+    rotatePrompt,
+    touch,
+    renderer,
+    read: () => ({
+      mode,
+      practiceLevel,
+      score: world?.score ?? 0,
+      muted: audio.muted,
+      fullscreen: fullscreen.supported ? fullscreen.active : null,
+      installOffer: installPrompt.offer,
+      settings: prefs.settings,
+      settingsOpen: prefs.open,
+    }),
+    mode: () => mode,
+    tripped: () => guard.tripped,
+    onTurnUpright: pause,
+  });
+  const router = createInputRouter(window, {
+    keyboard,
+    startKeys,
+    run: {
+      start,
+      quit,
+      selectLevel,
+      pause: pauseByPlayer,
+      resume,
+      toggleMute: prefs.toggleMute,
+      toggleFullscreen: () => {
+        fullscreen.toggle();
+      },
+    },
+    mode: () => mode,
+    covers,
+    msSinceGameOver: (now) => now - gameOverAt,
+    menuControls: () => (prefs.open ? prefs.card.controls() : overlay.controls(mode)),
+    closeSettings: prefs.closeSettings,
+  });
+
+  /** What covers the cards right now, for the router's table. */
+  function covers(): Cover[] {
+    return coversFor({ settings: prefs.open, rotate: view.needsRotation(), crash: guard.tripped });
+  }
+
+  function syncView(): void {
+    view.sync();
+  }
 
   /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
   function applyQuality(): void {
@@ -118,27 +233,15 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     document.body.classList.toggle('lite', scaler.index >= LITE_FROM_INDEX);
   }
 
-  function syncView(): void {
-    overlay.update({ mode, practiceLevel, score: world?.score ?? 0, muted: audio.muted });
-    touch.show(mode === 'playing' && coarsePointer.matches);
-    syncHudBounds();
-  }
-
-  /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button (CA-024). */
-  function syncHudBounds(): void {
-    if (!coarsePointer.matches) pauseCorner = null;
-    else {
-      const button = touch.pauseRect();
-      if (button !== null) pauseCorner = { width: root.clientWidth - button.left, height: button.bottom };
-    }
-    renderer.setHudBounds({ insets: safeArea.read(), topRight: pauseCorner });
-  }
-
   function setMode(next: AppMode): void {
+    // After a crash the log and the report's mode stay as they were when the game stopped.
+    if (guard.tripped) return;
     mode = next;
+    log.add('mode', next, performance.now());
     audio.setMusicLevel(MUSIC_LEVEL[next]);
     redrawPending = true;
-    syncView();
+    view.armIdleCursor();
+    view.sync();
   }
 
   /** Applies the latest viewport size once per frame; the renderer re-bakes its sky on each resize. */
@@ -148,7 +251,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     resizePending = false;
     field = fieldForViewport(clientWidth, clientHeight);
     renderer.resize(clientWidth, clientHeight, field);
-    syncHudBounds();
+    view.syncHudBounds();
     world?.resize(field);
     redrawPending = true;
   }
@@ -166,6 +269,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       startLives: overrides.startLives ?? PLAYER.startLives,
     });
     startKeys.latch(keyboard.held);
+    padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
     renderer.reset();
@@ -192,6 +296,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     if (mode !== 'paused') return;
     audio.play('pause');
     loop.reset();
+    padFire.latch(previousPad);
     setMode('playing');
   }
 
@@ -208,49 +313,22 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     if (mode !== 'title') return;
     practiceLevel = level;
     audio.play('uiClick');
-    syncView();
+    view.sync();
   }
 
-  /** The M key and the sound chip. */
-  function toggleMute(): void {
-    audio.setMuted(!audio.muted);
-    toast.show(audio.muted ? TOAST_MUTED : TOAST_SOUND_ON);
-    syncView();
-    if (!saveSettings(storage, { ...settings, muted: audio.muted })) {
-      console.warn('Could not save the sound setting, so it will reset on reload. Allow site storage for this page to keep it.');
-    }
+  /** Pads grant no user activation, so the first A while sound waits for one says how to turn it on. */
+  function hintSoundGesture(edges: readonly PadEdge[]): void {
+    if (soundHintGiven || !edges.includes('confirm') || !needsSoundGesture(audio.state, audio.muted)) return;
+    soundHintGiven = true;
+    toast.show(SOUND_GESTURE_HINT);
   }
 
-  /** Runs a key or button command unless the game-over guard is still ignoring it. */
-  function applyCommand(command: Command, now: number): void {
-    if (!passesGameOverGuard(mode, command, now - gameOverAt)) return;
-    switch (command.kind) {
-      case 'start':
-        start();
-        break;
-      case 'toTitle':
-        quit();
-        break;
-      case 'selectLevel':
-        selectLevel(command.level);
-        break;
-      case 'togglePause':
-        if (mode === 'playing') pauseByPlayer();
-        else resume();
-        break;
-      case 'toggleMute':
-        toggleMute();
-        break;
-    }
-  }
-
-  function readControls(): Controls {
+  function readControls(pad: PadSnapshot | null): Controls {
     const keys = controlsFromKeys(startKeys.active(keyboard.held));
-    return { ...keys, fire: keys.fire || touch.fire, stick: touch.stick };
+    return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
   }
 
-  function stepWorld(run: World, frameSeconds: number, now: number): void {
-    const controls = readControls();
+  function stepWorld(run: World, controls: Controls, frameSeconds: number, now: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
       const events = run.step(dt, controls);
@@ -264,19 +342,38 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     }
   }
 
+  /** Stops the game for good and shows the recovery card. Silences audio without touching the saved sound setting. */
+  function stopAfterCrash(error: unknown): void {
+    cancelAnimationFrame(frameId);
+    touch.show(false);
+    prefs.card.hide();
+    rotatePrompt.show(false);
+    view.armIdleCursor();
+    crashCard.show();
+    audio.setMusicLevel('menu');
+    audio.setMuted(true);
+    renderer.dispose();
+    console.error('Cosmic Assault stopped after an error; use Try again on the card, or Copy report to share what happened.', error);
+  }
+
   function frame(): void {
     frameId = requestAnimationFrame(frame);
+    guard.run(guardedFrame);
+  }
+
+  function runFrame(): void {
     const now = performance.now();
     const frameMs = now - lastFrameAt;
     const frameSeconds = frameMs / 1000;
     lastFrameAt = now;
     audio.beginFrame();
     applyPendingResize();
-    for (const code of keyboard.drainPressed()) {
-      startKeys.release(code);
-      const command = commandForKey(mode, code);
-      if (command !== null) applyCommand(command, now);
-    }
+    const pad = readPad();
+    const edges = padEdges(previousPad, pad);
+    previousPad = pad;
+    router.routePad(edges, now);
+    hintSoundGesture(edges);
+    router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
     const settling = mode === 'gameOver' && renderer.hasActiveParticles();
@@ -291,7 +388,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       scaler.sample(frameMs);
       if (scaler.index !== levelBefore) applyQuality();
       const frozen = hitStop.frozen;
-      stepWorld(world, frameSeconds, now);
+      stepWorld(world, readControls(pad), frameSeconds, now);
       renderer.advance(visualSeconds, world, frozen);
     } else if (settling) {
       // The death burst plays out under the card; redrawing stops once the last particle is gone.
@@ -304,15 +401,23 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     }
   }
 
-  /** The one reduced-motion source: it turns off hit-stop, shake and flash together. */
-  const syncReducedMotion = (): void => {
-    hitStop.reducedMotion = reducedMotion.matches;
-    renderer.effects.reducedMotion = reducedMotion.matches;
-  };
-  syncReducedMotion();
+  /** The frame to run, chosen once: a release build has no hook to look for on each frame. */
+  const guardedFrame =
+    import.meta.env.MODE === 'e2e' && e2e !== undefined
+      ? (): void => {
+          e2e.e2eBeforeFrame?.();
+          runFrame();
+        }
+      : runFrame;
+
   applyQuality();
   const markResize = (): void => {
     resizePending = true;
+  };
+  /** Full screen changes the viewport and the chip's label. */
+  const onFullscreenChange = (): void => {
+    markResize();
+    view.sync();
   };
   const onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') pause();
@@ -321,11 +426,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
   const unlisteners = [
     listen(window, 'resize', markResize),
     listen(window, 'orientationchange', markResize),
-    listen(reducedMotion, 'change', syncReducedMotion),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
+    fullscreen.onChange(onFullscreenChange),
+    installPrompt.dispose,
+    guard.attachGlobal(window),
   ];
-  syncView();
+  view.sync();
   frameId = requestAnimationFrame(frame);
 
   return {
@@ -344,6 +451,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     get drawCount() {
       return renderer.drawCount;
     },
+    get visualScale() {
+      return renderer.visualScale;
+    },
     get quality() {
       return { index: scaler.index, level: scaler.level };
     },
@@ -353,9 +463,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
     get muted() {
       return audio.muted;
     },
+    get settings() {
+      return prefs.settings;
+    },
+    get motion() {
+      return { reducedMotion: renderer.effects.reducedMotion, shake: renderer.effects.shakeEnabled };
+    },
     get audioState() {
       return audio.state;
     },
+    get fullscreen() {
+      return fullscreen.active;
+    },
+    log,
     start,
     pause,
     resume,
@@ -365,10 +485,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement): App {
       for (const unlisten of unlisteners) unlisten();
       keyboard.dispose();
       touch.dispose();
+      router.dispose();
+      view.dispose();
       overlay.dispose();
+      prefs.dispose();
+      rotatePrompt.dispose();
       toast.dispose();
+      crashCard.dispose();
       audio.dispose();
-      safeArea.dispose();
       renderer.dispose();
       document.body.classList.remove('lite');
     },

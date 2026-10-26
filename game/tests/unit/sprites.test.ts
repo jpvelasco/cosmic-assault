@@ -175,6 +175,42 @@ describe('createSpriteBaker', () => {
     expect(baker.shot(DRIFT).halfW).toBeGreaterThanOrEqual(11);
   });
 
+  it('draws the ship, flame, rocks and shots larger at a visual scale, but not glows or the pixel density', () => {
+    const baker = createSpriteBaker();
+    baker.setScale(1, 1);
+    const a = rock(5, 1);
+    const plain = {
+      ship: baker.ship(DRIFT),
+      flame: baker.flame(DRIFT, 16),
+      rock: baker.asteroid(a, DRIFT),
+      shot: baker.shot(DRIFT),
+      glow: baker.glow('#5b8cff', 24),
+    };
+    baker.setScale(1, 1, { ship: 1.4, rock: 1.2, shot: 1.3, effect: 1.4 });
+    expect(plain.ship.canvas.width).toBe(0);
+    const near = (scaled: { halfW: number }, base: { halfW: number }, factor: number): void => {
+      expect(scaled.halfW / base.halfW).toBeCloseTo(factor, 1);
+    };
+    near(baker.ship(DRIFT), plain.ship, 1.4);
+    near(baker.flame(DRIFT, 16), plain.flame, 1.4);
+    near(baker.asteroid(a, DRIFT), plain.rock, 1.2);
+    near(baker.shot(DRIFT), plain.shot, 1.3);
+    near(baker.glow('#5b8cff', 24), plain.glow, 1);
+    // Bigger art, same pixel density: the canvas grows with the drawn size.
+    const ship = baker.ship(DRIFT);
+    expect(ship.canvas.width).toBe(Math.round(ship.halfW * 2));
+  });
+
+  it('keeps the cache when the visual scale is unchanged, and rebakes when it changes', () => {
+    const baker = createSpriteBaker();
+    baker.setScale(1, 1, { ship: 1.4, rock: 1.2, shot: 1.4, effect: 1.4 });
+    const ship = baker.ship(DRIFT);
+    baker.setScale(1, 1, { ship: 1.4, rock: 1.2, shot: 1.4, effect: 1.4 });
+    expect(baker.ship(DRIFT)).toBe(ship);
+    baker.setScale(1, 1, { ship: 1.2, rock: 1.1, shot: 1.2, effect: 1.2 });
+    expect(baker.ship(DRIFT)).not.toBe(ship);
+  });
+
   it('returns the cached sprite for the same key, including snapped glow and flame sizes', () => {
     const baker = createSpriteBaker();
     expect(baker.ship(DRIFT)).toBe(baker.ship(DRIFT));

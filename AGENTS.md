@@ -17,15 +17,33 @@
   carries the test bridge and the `?seed=`/`?lives=`/`?quality=` URL overrides,
   and checks that it does), `check:no-bridge` (fails if the release `dist/`
   contains the bridge or that URL parsing), and `record:parity` (records the
-  parity traces). Dev builds also honour the URL overrides; release builds never
-  parse them.
+  parity traces), and `icons` (re-renders the committed PNG icons in
+  `game/public/icons/` from `game/assets-src/icon.svg` with Playwright's
+  Chromium; run it after editing the SVG and commit the PNGs). Dev builds also
+  honour the URL overrides; release builds never parse them, and `check:no-bridge`
+  also fails if the e2e frame hook reaches `dist/`.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
   enforces it. Ship handling is pinned to recorded traces of the live game in
   `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
   without owner approval.
 - In `game/src/`, `app/` owns the mode machine, commands, hit-stop, frame
   monitor and settings; `render/` owns drawing; `audio/` owns sound; `input/`
-  and `ui/` own keyboard, touch and DOM overlays.
+  owns keyboard, touch and gamepad input and menu focus; `ui/` owns the DOM
+  cards (title, pause, game over, settings, crash, rotate prompt); `platform/`
+  owns full screen, the service worker registration, the install offer, the
+  crash guard and the local log; `sw/` is the service worker itself.
+  - Game key handling stands down while a form control has focus
+    (`input/keyEvent.ts`), so sliders and radios keep their keys. `F` requests
+    full screen synchronously in its keydown handler, because Safari and
+    Firefox refuse a deferred request.
+  - Gamepads use the standard mapping: the left stick steers like the touch
+    joystick, the D-pad turns and thrusts, A/RB/RT fire, Start pauses, and on
+    menus the D-pad moves focus, A confirms and B goes back.
+  - The crash guard wraps each frame. A crash shows a recovery card with
+    *Try again* and *Copy report*; the report comes from an in-memory ring log
+    and nothing is sent anywhere.
+  - Draw sizes scale up on small screens (`render/visualScale.ts`) while the
+    720-unit field and every hitbox stay identical on all devices.
   - `render/` draws from interpolated sim poses. Sprites are baked once into a
     bounded LRU cache (`spriteCache.ts`, `sprites.ts`); glows are baked or
     additive sprites. Never set `shadowBlur` (ESLint bans it) or a canvas
@@ -40,8 +58,10 @@
     created on the first user gesture, suspended while the tab is hidden, and
     builds no nodes while suspended or muted. `M` or the sound chip toggles mute.
   - Settings persist in `localStorage` under the single key
-    `cosmic-assault.v2.settings` (`app/settings.ts`). Loading sanitizes field by
-    field and never throws. New stored data must use the `cosmic-assault.v2.`
+    `cosmic-assault.v2.settings` (`app/settings.ts`): mute, music and effects
+    volume, screen shake (`auto`, `on` or `off`; `auto` follows
+    `prefers-reduced-motion`) and left-handed touch controls. Loading sanitizes
+    field by field and never throws. New stored data must use the `cosmic-assault.v2.`
     prefix, because the legacy site shares the origin.
 - There is no root npm package or workspace. Run npm commands from `game/` or
   `tests/`, whichever package you are changing. `ReadMe.md` is the README's
@@ -130,3 +150,10 @@ GitHub Pages is the only deployment, published by the `deploy` job in
 `.github/workflows/ci.yml`. Pages serves `website/` at the root and `game/dist`
 at `next/`. The job fails if the published root differs from `website/`.
 There are no other hosting paths.
+
+The `game/` build is an installable, offline-capable web app. `vite/precache.ts`
+emits `src/sw/worker.ts` as `sw.js` with the list of every built file. The worker
+registers from `./sw.js` with its default scope, so it controls only `/next/`
+and never the legacy root; it is never registered by the Vite dev server. Each
+deploy gets a new cache version, and older `cosmic-assault-next-*` caches are
+deleted when the new worker activates.

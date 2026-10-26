@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Cosmic Assault</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#1d0b44" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Cosmic Assault" />
     <style>
       /* The Drift palette (src/render/palette.ts; tests/unit/indexStyles.test.ts keeps them in step) and the glass look built on it. */
       :root {
@@ -37,6 +43,12 @@
         --drop: 0 6px 16px rgba(0, 0, 0, 0.35);
         --text-drop: 0 1px 2px color-mix(in srgb, var(--sky-1) 70%, transparent);
         --pop: cubic-bezier(0.2, 1.4, 0.4, 1);
+        /* The one stacking scale over the canvas, lowest first (tests/unit/indexStyles.test.ts keeps every z-index on it). */
+        --layer-card: 1;
+        --layer-touch: 2;
+        --layer-rotate: 3;
+        --layer-crash: 4;
+        --layer-toast: 5;
       }
       /*
        * Low quality levels (src/render/quality.ts) drop the backdrop blur for a more opaque fill. `--glass` is
@@ -73,6 +85,7 @@
       }
       .overlay {
         position: absolute;
+        z-index: var(--layer-card);
         inset: 0;
         box-sizing: border-box;
         display: grid;
@@ -126,6 +139,16 @@
       }
       .overlay--game-over {
         background: color-mix(in srgb, var(--space) 25%, transparent);
+      }
+      /* Above the touch layer, whatever else is showing: a phone held upright cannot play, so nothing behind is usable. */
+      .overlay--rotate {
+        z-index: var(--layer-rotate);
+        background: color-mix(in srgb, var(--space) 88%, transparent);
+      }
+      /* The recovery card sits over whatever screen crashed, so it hides that one almost fully. */
+      .overlay--crash {
+        z-index: var(--layer-crash);
+        background: color-mix(in srgb, var(--space) 93%, transparent);
       }
       .overlay p,
       .overlay h1,
@@ -190,16 +213,29 @@
         font-size: 0.75rem;
         opacity: 0.5;
       }
+      /* The copy-by-hand fallback, shown when the clipboard is unavailable. */
+      .crash-report {
+        box-sizing: border-box;
+        width: min(80vw, 420px);
+        height: 8em;
+        padding: 8px 10px;
+        resize: none;
+        user-select: text;
+        -webkit-user-select: text;
+        font: 0.7rem/1.35 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        color: inherit;
+        border: 1px solid var(--glass-stroke);
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--space) 70%, transparent);
+      }
       .chips {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
         gap: 6px;
       }
-      .sound-slot {
-        display: contents;
-      }
-      .overlay button {
+      .overlay button,
+      .overlay .segment {
         font: inherit;
         font-weight: 800;
         color: inherit;
@@ -212,21 +248,28 @@
           transform 160ms var(--pop),
           filter 160ms ease;
       }
-      .overlay button:focus-visible {
+      /* `nav-keys` is set while a pad or arrow key drives focus, which browsers do not treat as keyboard focus after a click. */
+      .overlay button:focus-visible,
+      .overlay .segment:has(input:focus-visible),
+      body.nav-keys .overlay button:focus,
+      body.nav-keys .overlay .segment:has(input:focus) {
         outline: 2px solid var(--accent-3);
         outline-offset: 3px;
       }
       @media (hover: hover) {
-        .overlay button:hover {
+        .overlay button:hover,
+        .overlay .segment:hover {
           filter: brightness(1.18);
         }
       }
-      .overlay button:active {
+      .overlay button:active,
+      .overlay .segment:active {
         transform: scale(0.95);
       }
       /* Primary actions and the chosen level wear the accent gradient. */
       .overlay .menu-button--primary,
-      .overlay .level-chip[aria-pressed='true'] {
+      .overlay .level-chip[aria-pressed='true'],
+      .overlay .segment:has(input:checked) {
         color: white;
         text-shadow: var(--text-drop);
         border-color: rgba(255, 255, 255, 0.45);
@@ -245,13 +288,24 @@
         min-width: 168px;
         padding: 10px 24px;
       }
-      .sound-toggle {
+      .chip {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         min-height: 40px;
-        padding: 0 16px 0 12px;
+        padding: 0 16px;
         font-size: 0.875rem;
+      }
+      .chip[hidden] {
+        display: none;
+      }
+      /* The iOS install steps: longer than a chip, and not a control, so a quiet line under the row. */
+      .install-hint {
+        font-size: 0.75rem;
+        opacity: 0.7;
+      }
+      .sound-toggle {
+        padding-left: 12px;
       }
       .sound-toggle::before {
         content: '';
@@ -268,9 +322,85 @@
         background: transparent;
         box-shadow: inset 0 0 0 1.5px currentColor;
       }
+      /* The settings card: a list of labelled controls that runs to two columns where the card is wide enough. */
+      .overlay--settings {
+        background: color-mix(in srgb, var(--space) 78%, transparent);
+      }
+      .overlay--settings .card {
+        box-sizing: border-box;
+        width: min(calc(100vw - 48px), 540px);
+        max-height: 100%;
+        overflow-y: auto;
+        justify-items: stretch;
+      }
+      .overlay--settings .heading {
+        text-align: center;
+      }
+      .settings-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+        gap: 12px 28px;
+        text-align: left;
+      }
+      .setting {
+        display: grid;
+        gap: 6px;
+        align-content: start;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+      .setting[hidden] {
+        display: none;
+      }
+      .setting__head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .setting input[type='range'] {
+        width: 100%;
+        min-height: 28px;
+        margin: 0;
+        accent-color: var(--accent-1);
+      }
+      .setting--check {
+        grid-auto-flow: column;
+        justify-content: start;
+        align-items: center;
+      }
+      .setting--check input {
+        width: 22px;
+        height: 22px;
+        margin: 0;
+        accent-color: var(--accent-2);
+      }
+      .segments {
+        display: flex;
+        gap: 6px;
+      }
+      /* A radio shown as a glass pill: the input covers it, invisible, so a tap lands on the radio itself. */
+      .segment {
+        position: relative;
+        flex: 1;
+        padding: 8px 0;
+        text-align: center;
+        cursor: pointer;
+      }
+      .segment input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+      /* Over every card, the crash card included: Copy report's only feedback is this toast. */
       .toast {
         position: absolute;
-        z-index: 1;
+        z-index: var(--layer-toast);
         top: max(12px, env(safe-area-inset-top));
         left: 50%;
         transform: translateX(-50%);
@@ -329,11 +459,57 @@
         color: var(--ink);
         letter-spacing: -1px;
       }
+      /* The cursor rests out of the way once a run has gone 2 s without pointer movement (src/app/viewSync.ts). */
+      body.cursor-idle,
+      body.cursor-idle #app,
+      body.cursor-idle #game {
+        cursor: none;
+      }
+      /* Short screens (a phone on its side): the same cards in less height. */
+      @media (max-height: 520px) {
+        .card {
+          gap: 6px;
+          padding: 10px 20px;
+        }
+        .title {
+          font-size: clamp(1.5rem, 8vmin, 2.25rem);
+        }
+        .heading {
+          font-size: 1.35rem;
+        }
+        .level-chip {
+          width: 34px;
+          height: 34px;
+        }
+        .menu-button {
+          min-width: 140px;
+          padding: 6px 20px;
+        }
+        .chip {
+          min-height: 34px;
+        }
+        .overlay--settings .card {
+          width: min(calc(100vw - 32px), 540px);
+        }
+        .settings-list {
+          gap: 6px 24px;
+        }
+        .setting {
+          gap: 2px;
+        }
+        .setting input[type='range'] {
+          min-height: 22px;
+        }
+        .segment {
+          padding: 4px 0;
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
         .card {
           animation: none;
         }
         .overlay button,
+        .overlay .segment,
         .toast {
           transition: none;
         }

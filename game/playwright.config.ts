@@ -25,16 +25,20 @@ export default defineConfig({
   use: {
     baseURL: E2E_URL,
   },
+  // Tags pick a project where a spec runs in several: @desktop and @phone run only there, and @release also runs
+  // against the release build. tests/unit/e2eProjects.test.ts checks that every spec keeps a test that runs.
   projects: [
     // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts', '**/offline.spec.ts', '**/install.spec.ts', '**/menuKeys.spec.ts'],
+      grepInvert: /@phone/,
       use: desktopChrome,
     },
     {
       name: 'mobile-landscape',
-      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts'],
+      grepInvert: /@desktop/,
       use: { ...devices['Pixel 5 landscape'] },
     },
     // Report-only frame times under a CPU slowdown. `npm run test:e2e` leaves this project out; run it with `npm run test:perf`.
@@ -44,10 +48,11 @@ export default defineConfig({
       retries: 0,
       use: desktopChrome,
     },
-    // The release build has no bridge; this only proves it boots cleanly without one.
+    // The release build has no bridge; these prove it boots cleanly without one and can be installed.
     {
       name: 'release-smoke',
-      testMatch: '**/release-smoke.spec.ts',
+      testMatch: ['**/release-smoke.spec.ts', '**/install.spec.ts'],
+      grep: /@release/,
       use: { ...desktopChrome, baseURL: RELEASE_URL },
     },
   ],

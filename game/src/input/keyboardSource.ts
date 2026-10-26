@@ -1,6 +1,5 @@
 import { GAME_KEY_CODES } from './keyboard';
-
-type KeyEventLike = Pick<KeyboardEvent, 'code' | 'repeat' | 'ctrlKey' | 'metaKey' | 'altKey' | 'preventDefault'>;
+import { hasShortcutModifier, isFormControlTarget, type KeyEventLike } from './keyEvent';
 
 /** The slice of `Window` the adapter needs, so tests can supply a fake. */
 export interface KeyboardTarget {
@@ -26,14 +25,14 @@ export function attachKeyboard(target: KeyboardTarget): KeyboardSource {
   let pressed: string[] = [];
 
   const onKeyDown = (e: KeyEventLike): void => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (hasShortcutModifier(e) || isFormControlTarget(e.target)) return;
     if (GAME_KEY_CODES.has(e.code)) e.preventDefault();
     held.add(e.code);
     if (!e.repeat) pressed.push(e.code);
   };
   const onKeyUp = (e: KeyEventLike): void => {
     if (MODIFIER_CODES.has(e.code)) held.clear();
-    if (GAME_KEY_CODES.has(e.code)) e.preventDefault();
+    if (GAME_KEY_CODES.has(e.code) && !isFormControlTarget(e.target)) e.preventDefault();
     held.delete(e.code);
   };
   const onBlur = (): void => {
