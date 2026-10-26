@@ -1,5 +1,6 @@
 import { showerSeconds } from './curves';
 import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
+import { poolFor } from './pickups';
 import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, RockKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
@@ -50,7 +51,7 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     duration,
     kinds: KIND_RAMPS,
     events: boss ? [] : showers(dimension, index, duration),
-    pickups: [],
+    pickups: poolFor(dimension),
     boss: boss ? PLACEHOLDER_BOSS : null,
     palette: 'drift',
   };

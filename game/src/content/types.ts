@@ -3,6 +3,12 @@ export type GalaxyIndex = 1 | 2 | 3 | 4 | 5 | 6;
 /** `'3-4'`: Dimension 3, galaxy 4. Galaxy 6 is the Dimension's boss. */
 export type GalaxyId = `${Dimension}-${GalaxyIndex}`;
 
+/** The pickups a kill can drop. M6 extends this. */
+export type PickupId = 'weaponCore' | 'doubleShot' | 'shield' | 'rapidFire' | 'spreadLaser';
+
+/** The ship's weapon tier: 0 fires one shot, 3 five. It indexes `WEAPON_SPREAD`. */
+export type WeaponTier = 0 | 1 | 2 | 3;
+
 /** The rocks a galaxy spawns. M5 adds foe kinds. */
 export type RockKind = 'large' | 'medium' | 'small';
 
@@ -39,8 +45,8 @@ export interface GalaxyDef {
   readonly duration: number;
   readonly kinds: Readonly<Record<RockKind, KindRamp>>;
   readonly events: readonly GalaxyEvent[];
-  /** Empty in M4. */
-  readonly pickups: readonly string[];
+  /** The pickups its kills can drop: every pickup from its Dimension or an earlier one. */
+  readonly pickups: readonly PickupId[];
   readonly boss: BossId | null;
   readonly palette: 'drift';
 }

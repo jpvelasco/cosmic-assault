@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kindProbability, rockSpeedMultiplier, sawtooth, spawnInterval, threatBudget } from '../../src/content/curves';
+import { dropChance, kindProbability, rockSpeedMultiplier, sawtooth, spawnInterval, threatBudget } from '../../src/content/curves';
 
 describe('spawnInterval', () => {
   it('shrinks from 2.4 s by 0.82 per tier', () => {
@@ -89,5 +89,23 @@ describe('non-finite input', () => {
     const ramp = { from: 0, base: 0.1, step: 0, max: 1, [field]: Number.POSITIVE_INFINITY };
     expect(() => kindProbability(ramp, 1)).toThrow(new RegExp(`ramp\\.${field} .*finite.*got Infinity`));
     expect(() => kindProbability(ramp, 1)).not.toThrow(/tier/);
+  });
+});
+
+describe('dropChance', () => {
+  it('starts at 6% and adds 1% per tier', () => {
+    expect(dropChance(0)).toBeCloseTo(0.06, 10);
+    expect(dropChance(2.5)).toBeCloseTo(0.085, 10);
+    expect(dropChance(5)).toBeCloseTo(0.11, 10);
+  });
+
+  it('is capped at 12% and never below 6%', () => {
+    expect(dropChance(6)).toBeCloseTo(0.12, 10);
+    expect(dropChance(100)).toBe(0.12);
+    expect(dropChance(-3)).toBe(0.06);
+  });
+
+  it('refuses a tier that is not a number', () => {
+    expect(() => dropChance(Number.NaN)).toThrow(RangeError);
   });
 });

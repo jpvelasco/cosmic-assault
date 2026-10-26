@@ -175,7 +175,7 @@ describe('createFlowController: events', () => {
   it('moves to game over on gameOver, posting the galaxy score and keeping the run, lost, for a Continue', () => {
     const { flow, store } = setup({ galaxy: '1-1', startLives: 1 });
     flow.command({ kind: 'start' });
-    flow.handle([{ type: 'gameOver', score: 321 }], { lives: 0 });
+    flow.handle([{ type: 'gameOver', score: 321 }], { lives: 0, weaponTier: 0 });
     expect(flow.state.screen).toBe('gameOver');
     expect(store.save.rankBoard).toEqual([{ score: 321, reached: 'D1 · G1', date: TODAY, continued: false }]);
     expect(store.save.rankRun).toMatchObject({ lives: 0, inGalaxy: false });
@@ -191,8 +191,31 @@ describe('createFlowController: events', () => {
   it('ignores the other events', () => {
     const { flow, screens } = setup({ galaxy: '1-1' });
     flow.command({ kind: 'start' });
-    flow.handle([{ type: 'shot', x: 0, y: 0 }, { type: 'warpOut' }], { lives: 3 });
+    flow.handle([{ type: 'shot', x: 0, y: 0 }, { type: 'warpOut' }], { lives: 3, weaponTier: 0 });
     expect(screens).toEqual(['playing']);
+  });
+});
+
+describe('createFlowController: the weapon tier', () => {
+  it('reports the tier the World ends a Rank galaxy on, and saves it for the next', () => {
+    const { flow, store } = setup({ galaxy: '1-1', startLives: 3 });
+    flow.command({ kind: 'start' });
+    flow.handle([{ type: 'galaxyCleared', score: 900, deaths: 0, stars: 3, bonus: 750 }], { lives: 3, weaponTier: 2 });
+    expect(store.save.rankRun).toMatchObject({ next: '1-2', weaponTier: 2 });
+  });
+
+  it('saves the tier a hit leaves, and a game over\'s', () => {
+    const { flow, store } = setup({ galaxy: '1-1', startLives: 3 });
+    flow.command({ kind: 'start' });
+    flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
+    expect(store.save.rankRun).toMatchObject({ lives: 2, weaponTier: 0, inGalaxy: true });
+  });
+
+  it('forfeits a run left mid-galaxy with a tier lost, from the tier its last hit saved', () => {
+    const armed = { ...startRank(TODAY), lives: 3, weaponTier: 2 as const, inGalaxy: true };
+    const tab = setup({ save: setRankRun(defaultSave(), armed) });
+    expect(forfeitAtLoad(tab)).toBe(true);
+    expect(tab.store.save.rankRun).toMatchObject({ lives: 2, weaponTier: 1, inGalaxy: false });
   });
 });
 
@@ -201,7 +224,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     const tab = setup();
     startRankRun(tab);
     tab.flow.dispatch({ kind: 'pause' });
-    tab.flow.dispatch({ kind: 'quit', livesLeft: 3 });
+    tab.flow.dispatch({ kind: 'quit', livesLeft: 3, weaponTier: 0 });
     expect(tab.flow.state.screen).toBe('title');
     expect(tab.store.save.rankRun).toMatchObject({ next: '1-1', score: 0, lives: 2, inGalaxy: false });
   });
@@ -210,9 +233,9 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     const storage = memoryStorage();
     const tab = setup({ storage });
     startRankRun(tab);
-    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
     expect(tab.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: true });
-    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 1 }], { lives: 1 });
+    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 1 }], { lives: 1, weaponTier: 0 });
     // The tab closes here: the next one forfeits from the 1 life left, which loses the run.
     const next = setup({ storage });
     forfeitAtLoad(next);
@@ -224,7 +247,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     const tab = setup();
     startRankRun(tab);
     const update = vi.spyOn(tab.store, 'update');
-    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 0 }], { lives: 0 });
+    tab.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 0 }], { lives: 0, weaponTier: 0 });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -234,7 +257,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     const flow = createFlowController({ store: tab.store, overrides: { galaxy: undefined, startLives: undefined }, today: () => TODAY, startRun: () => undefined, showScreen: () => undefined, notify: () => undefined, liveRun: (seq) => live.push(seq) });
     flow.command({ kind: 'start' });
     flow.command({ kind: 'chooseMode', mode: 'rank' });
-    flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
     expect(live.at(-1)).toBe(tab.store.save.rankSeq);
     expect(live.at(-1)).toBeGreaterThan(live.at(-2) ?? Number.POSITIVE_INFINITY);
   });
@@ -244,7 +267,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     tab.flow.command({ kind: 'start' });
     tab.flow.dispatch({ kind: 'pause' });
     const update = vi.spyOn(tab.store, 'update');
-    tab.flow.dispatch({ kind: 'quit', livesLeft: 3 });
+    tab.flow.dispatch({ kind: 'quit', livesLeft: 3, weaponTier: 0 });
     expect(tab.flow.state.screen).toBe('title');
     expect(update).not.toHaveBeenCalled();
   });
@@ -257,7 +280,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     forfeitAtLoad(next);
     expect(next.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
     forfeitAtLoad(next);
-    expect(next.store.save.rankRun).toMatchObject({ lives: 2 });
+    expect(next.store.save.rankRun).toMatchObject({ lives: 2, weaponTier: 0 });
     expect(next.flow.state.screen).toBe('title');
   });
 
@@ -268,7 +291,7 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
     const b = setup({ storage });
     const probed = b.store.save.rankSeq;
     // A's hit writes the next rankSeq; B's storage event for it is still in flight, so B's cached save reads the old one.
-    a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
     expect(b.store.save.rankSeq).toBe(probed);
     expect(b.flow.forfeitLeftRun(probed)).toBe(false);
     expect(b.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: true });
@@ -292,14 +315,14 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     // Tab B, finding no owner for A's galaxy (say A's answer was lost), forfeits it.
     const b = setup({ storage });
     forfeitAtLoad(b);
-    expect(b.store.save.rankRun).toMatchObject({ lives: 2 });
+    expect(b.store.save.rankRun).toMatchObject({ lives: 2, weaponTier: 0 });
     a.flow.dispatch({ kind: 'pause' });
-    a.flow.dispatch({ kind: 'quit', livesLeft: 3 });
+    a.flow.dispatch({ kind: 'quit', livesLeft: 3, weaponTier: 0 });
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');
     // A's own forfeit was not applied on top of B's: one life lost, not two.
-    expect(a.store.save.rankRun).toMatchObject({ lives: 2 });
-    expect(b.store.load().rankRun).toMatchObject({ lives: 2 });
+    expect(a.store.save.rankRun).toMatchObject({ lives: 2, weaponTier: 0 });
+    expect(b.store.load().rankRun).toMatchObject({ lives: 2, weaponTier: 0 });
   });
 
   it('keeps the clear itself even when the Rank part is dropped', () => {
@@ -319,7 +342,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const a = setup({ storage });
     startRankRun(a);
     forfeitAtLoad(setup({ storage }));
-    a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2 });
+    a.flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');
     expect(a.store.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
@@ -345,7 +368,7 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     const a = setup({ storage });
     startRankRun(a);
     a.flow.dispatch({ kind: 'pause' });
-    a.flow.dispatch({ kind: 'quit', livesLeft: 3 });
+    a.flow.dispatch({ kind: 'quit', livesLeft: 3, weaponTier: 0 });
     const b = setup({ storage });
     b.flow.command({ kind: 'resumeRank' });
     a.store.load();

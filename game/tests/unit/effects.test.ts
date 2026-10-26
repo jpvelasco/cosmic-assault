@@ -106,6 +106,17 @@ describe('burstFor', () => {
     expect(burstFor({ type: 'gameOver', score: 10 }, DRIFT)).toBeNull();
   });
 
+  it('has no burst for the pickup events, which the HUD and sprites show from state', () => {
+    const events: SimEvent[] = [
+      { type: 'pickupDropped', id: 1, kind: 'shield', x: 0, y: 0 },
+      { type: 'pickupCollected', id: 1, kind: 'shield' },
+      { type: 'pickupExpired', id: 1 },
+      { type: 'effectEnded', kind: 'shield' },
+      { type: 'shieldBroken' },
+    ];
+    for (const event of events) expect(burstFor(event, DRIFT)).toBeNull();
+  });
+
   it('writes into a spec it is given, so one spec serves every event', () => {
     const into = { shards: -1, sparks: -1, rings: -1, smoke: -1, shake: -1, flash: -1, flashColor: '' };
     expect(burstFor(SHIP_HIT, DRIFT, into)).toBe(into);

@@ -84,10 +84,15 @@ function soundOf(event: SimEvent): SfxName | null {
     case 'bossDown':
       return 'bossDown';
     // A meteor leaving is not an event to the player, and a shower ending needs no fanfare. The clear's fanfare is
-    // cued by its results card (`screenCue`).
+    // cued by its results card (`screenCue`). Pickups are silent until their sounds are made.
     case 'asteroidLeft':
     case 'showerEnd':
     case 'galaxyCleared':
+    case 'pickupDropped':
+    case 'pickupCollected':
+    case 'pickupExpired':
+    case 'effectEnded':
+    case 'shieldBroken':
       return null;
   }
 }

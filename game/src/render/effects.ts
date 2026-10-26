@@ -103,6 +103,11 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'bossWindup':
     case 'bossPhase':
     case 'bossDown':
+    case 'pickupDropped':
+    case 'pickupCollected':
+    case 'pickupExpired':
+    case 'effectEnded':
+    case 'shieldBroken':
       return null;
   }
 }
@@ -232,6 +237,11 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'bossWindup':
       case 'bossPhase':
       case 'bossDown':
+      case 'pickupDropped':
+      case 'pickupCollected':
+      case 'pickupExpired':
+      case 'effectEnded':
+      case 'shieldBroken':
         return null;
     }
   };

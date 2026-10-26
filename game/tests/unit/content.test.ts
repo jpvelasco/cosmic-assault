@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
-import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
+import { EFFECT_SECONDS, PICKUP_IDS, PICKUPS } from '../../src/content/pickups';
+import type { GalaxyDef, GalaxyId, PickupId, RockKind } from '../../src/content/types';
 import { showerSeconds } from '../../src/content/curves';
 import { lullStart } from '../../src/content/pacingRules';
 import { phaseAt } from '../../src/sim/galaxy/pacing';
@@ -93,8 +94,40 @@ describe('the galaxy table', () => {
     expect(galaxyById('1-5').events.map((e) => e.at)).toEqual([27, 51]);
   });
 
-  it('has no pickups yet', () => {
-    for (const g of GALAXIES) expect(g.pickups).toEqual([]);
+  it('pools pickups cumulatively: D1 drops core, double shot and shield; D2 adds rapid fire and spread laser; D3-5 inherit D2', () => {
+    const d1: PickupId[] = ['weaponCore', 'doubleShot', 'shield'];
+    const d2: PickupId[] = [...d1, 'rapidFire', 'spreadLaser'];
+    for (const g of GALAXIES) expect(g.pickups, g.id).toEqual(g.dimension === 1 ? d1 : d2);
+  });
+
+  it('never lists a pickup before its Dimension, or one that does not exist', () => {
+    for (const g of GALAXIES)
+      for (const id of g.pickups) {
+        expect(PICKUP_IDS, g.id).toContain(id);
+        expect(PICKUPS[id].from, `${g.id} ${id}`).toBeLessThanOrEqual(g.dimension);
+      }
+    expect(PICKUPS.rapidFire.from).toBe(2);
+    expect(PICKUPS.spreadLaser.from).toBe(2);
+  });
+
+  it('gives every pickup a distinct name, a "New: ..." callout that names it, a positive weight and a pool somewhere', () => {
+    expect(new Set(PICKUP_IDS).size).toBe(PICKUP_IDS.length);
+    for (const id of PICKUP_IDS) {
+      const { name, callout, weight } = PICKUPS[id];
+      expect(callout, id).toMatch(new RegExp(`^New: ${name} — .+`));
+      expect(weight, id).toBeGreaterThan(0);
+      expect(GALAXIES.some((g) => g.pickups.includes(id)), id).toBe(true);
+    }
+    expect(PICKUPS.doubleShot.callout).toBe('New: Double Shot — two shots at once');
+    expect(new Set(PICKUP_IDS.map((id) => PICKUPS[id].name)).size).toBe(PICKUP_IDS.length);
+  });
+
+  it('lasts 12 s for double shot, rapid fire and spread laser, and 15 s for the shield', () => {
+    expect(EFFECT_SECONDS).toEqual({ doubleShot: 12, rapidFire: 12, spreadLaser: 12, shield: 15 });
+  });
+
+  it('shares one pool per Dimension', () => {
+    for (const g of GALAXIES) expect(g.pickups).toBe(galaxyById(galaxyIdOf(g.dimension, 1)).pickups);
   });
 
   it('points every boss galaxy at a boss that exists, and no survival galaxy at one', () => {

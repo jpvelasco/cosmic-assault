@@ -1,4 +1,5 @@
-import type { GalaxyDef } from '../content/types';
+import type { TimedPickupId } from '../content/pickups';
+import type { GalaxyDef, WeaponTier } from '../content/types';
 import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
 import type { BossView } from './boss/bossRunner';
 import { circlesOverlap, SpatialHash } from './collision';
@@ -9,10 +10,11 @@ import type { Field } from './field';
 import { GalaxyRun } from './galaxy/galaxyRun';
 import type { Phase } from './galaxy/pacing';
 import type { ShowerState } from './galaxy/showers';
+import type { Pickup } from './pickups/pickups';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
 import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
-import { createShip, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { createShip, makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
 import { rescale } from './wrap';
 import { assertAsteroidPlacement, assertField, assertFinite, resolveOptions, type ShipPlacement, type WorldOptions } from './worldOptions';
 
@@ -37,6 +39,8 @@ export function hasEnded(status: WorldStatus): boolean {
 }
 
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
+const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = Object.freeze({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
+const NO_PICKUPS: readonly Pickup[] = Object.freeze([]);
 
 function assertDt(dt: number): void {
   if (!(dt > 0 && Number.isFinite(dt))) {
@@ -71,7 +75,8 @@ function resetFlags(flags: boolean[], length: number): void {
  * - 'shape': asteroid outlines (vertex count and radii) on every creation path, so
  *   outline changes never shift gameplay draws;
  * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams;
- * - 'boss': a boss fight's drift and attacks.
+ * - 'boss': a boss fight's drift and attacks;
+ * - 'pickups': whether a kill drops a pickup, and which.
  */
 export class World {
   private readonly level: number;
@@ -101,7 +106,7 @@ export class World {
   private deathsValue = 0;
 
   constructor(opts: WorldOptions) {
-    const { rules, lives } = resolveOptions(opts);
+    const { rules, lives, startTier } = resolveOptions(opts);
     this.level = rules.kind === 'practice' ? rules.level : MIN_PRACTICE_LEVEL;
     this.livesValue = lives;
     this.currentField = opts.field;
@@ -113,7 +118,7 @@ export class World {
     if (rules.kind === 'practice') {
       this.rules = new PracticeSpawner(rules.level, this.spawnRng, arena);
     } else {
-      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), createRng(deriveSeed(opts.seed, 'boss')), arena);
+      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), createRng(deriveSeed(opts.seed, 'boss')), arena, createRng(deriveSeed(opts.seed, 'pickups')), startTier);
     }
     if (opts.initialAsteroids === undefined) {
       this.rules.open?.();
@@ -210,6 +215,26 @@ export class World {
     return this.run?.multiplier ?? 1;
   }
 
+  /** The weapon tier, 0–3; always 0 in practice. */
+  get weaponTier(): WeaponTier {
+    return this.run?.loadout.tier ?? 0;
+  }
+
+  /** Seconds left on each timed effect, 0 for one that is off; a live view, and all 0 in practice. */
+  get effects(): Readonly<Record<TimedPickupId, number>> {
+    return this.run?.loadout.effects ?? NO_EFFECTS;
+  }
+
+  /** Whether the Shield is up. */
+  get shield(): boolean {
+    return this.run?.loadout.shielded === true;
+  }
+
+  /** The pickups on the field; a live view, and always empty in practice. */
+  get pickups(): readonly Readonly<Pickup>[] {
+    return this.run?.pickups ?? NO_PICKUPS;
+  }
+
   /** The meteor shower being telegraphed or falling, for the HUD warning; a live view. */
   get shower(): ShowerState | null {
     return this.run?.shower ?? null;
@@ -230,7 +255,7 @@ export class World {
     this.rememberPoses();
     this.elapsedValue += dt;
     this.rules.beginStep?.();
-    this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField));
+    this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField, this.run?.loadout.weapon));
     this.moveEntities(dt);
     this.prepareCollisions();
     const stillPlaying = this.collideShip();
@@ -292,6 +317,7 @@ export class World {
       elapsed: () => this.elapsedValue,
       score: () => this.scoreValue,
       deaths: () => this.deathsValue,
+      lives: () => this.livesValue,
       nextId: () => this.nextId(),
       award: (points) => {
         this.scoreValue += points;
@@ -381,6 +407,10 @@ export class World {
     } else if (this.run?.touchesBoss(ship.x, ship.y, PLAYER.radius) !== true) {
       return true;
     }
+    if (this.run?.absorbHit() === true) {
+      makeInvulnerable(ship);
+      return true;
+    }
     this.livesValue -= 1;
     this.deathsValue += 1;
     this.rules.shipLost?.();
@@ -410,6 +440,7 @@ export class World {
         const points = this.rules.scoreKill(ASTEROID.scores[a.size]);
         this.scoreValue += points;
         this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
+        this.rules.rockKilled?.(a);
       }
     }
     removeFlagged(projectiles, this.spentFlags);

@@ -4,11 +4,14 @@ import { END_SCREENS, MENU_SCREENS } from '../../src/app/flow';
 import type { AsteroidSize } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 
+/** The pickup events, which have no sound yet. */
+type PickupEvent = 'pickupDropped' | 'pickupCollected' | 'pickupExpired' | 'effectEnded' | 'shieldBroken';
+
 const destroyed = (size: AsteroidSize, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 0, y: 0, size, points });
 const nameOf = (event: SimEvent): string | null => sfxFor(event)?.name ?? null;
 
 /** One event of every type the galaxies and bosses added that makes a sound; the Record makes a new event type fail to compile here. */
-const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared'>, SimEvent>> = {
+const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | PickupEvent>, SimEvent>> = {
   galaxyStart: { type: 'galaxyStart', id: '1-1' },
   showerWarning: { type: 'showerWarning', angle: 0, at: 50 },
   showerStart: { type: 'showerStart' },
@@ -68,6 +71,17 @@ describe('sfxFor', () => {
     expect(nameOf({ type: 'showerStart' })).toBe('showerWhoosh');
     expect(sfxFor({ type: 'showerEnd' })).toBeNull();
     expect(sfxFor({ type: 'asteroidLeft', id: 4 })).toBeNull();
+  });
+
+  it('keeps the pickup events silent until their sounds are made', () => {
+    const events: SimEvent[] = [
+      { type: 'pickupDropped', id: 1, kind: 'shield', x: 0, y: 0 },
+      { type: 'pickupCollected', id: 1, kind: 'shield' },
+      { type: 'pickupExpired', id: 1 },
+      { type: 'effectEnded', kind: 'shield' },
+      { type: 'shieldBroken' },
+    ];
+    for (const event of events) expect(sfxFor(event)).toBeNull();
   });
 
   it('leaves the clear fanfare to the results card, not the sim event', () => {

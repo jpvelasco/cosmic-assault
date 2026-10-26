@@ -10,6 +10,11 @@ function shipState({ ship }: World): CosmicAssaultTestShip {
   return { x, y, vx, vy, angle, thrusting, invulnerable };
 }
 
+/** The timed effects running, kind to seconds left; none that are off. */
+function runningEffects({ effects }: World): CosmicAssaultTestState['effects'] {
+  return Object.fromEntries(Object.entries(effects).filter(([, seconds]) => seconds > 0));
+}
+
 /** A copy of `value` frozen all the way down, so a spec cannot change the game's state through it. */
 function frozenCopy<T>(value: T): T {
   const freeze = (v: unknown): unknown => {
@@ -35,6 +40,10 @@ function snapshot(app: App): CosmicAssaultTestState {
     ship: world === null ? null : shipState(world),
     asteroidCount: world?.asteroids.length ?? 0,
     projectileCount: world?.projectiles.length ?? 0,
+    pickups: world?.pickups.map(({ id, kind, x, y, expiresIn }) => ({ id, kind, x, y, expiresIn })) ?? [],
+    effects: world === null ? {} : runningEffects(world),
+    weaponTier: world?.weaponTier ?? 0,
+    shield: world?.shield ?? false,
     hudRects: app.hudRects.map(({ x, y, width, height }) => ({ x, y, width, height })),
     drawCount: app.drawCount,
     visualScale: app.visualScale,

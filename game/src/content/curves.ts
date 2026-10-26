@@ -40,3 +40,8 @@ export function showerSeconds(intensity: GalaxyEvent['intensity']): number {
 export function sawtooth(g: Pick<GalaxyDef, 'dimension' | 'index'>): number {
   return g.index === 1 && g.dimension > 1 ? 0.85 : 1;
 }
+
+/** The chance a kill drops a pickup at tier `t`. */
+export function dropChance(t: number): number {
+  return clamp(0.06 + 0.01 * finite(t, 'tier'), 0.06, 0.12);
+}

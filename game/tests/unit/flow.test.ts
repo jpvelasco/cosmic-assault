@@ -83,7 +83,7 @@ describe('transition: into a run', () => {
 
   it('counts every run it starts, so the app knows when to build a new World', () => {
     const first = run(at('galaxySelect', { mode: 'free' }), { kind: 'playGalaxy', id: '1-1' });
-    const again = run(first, { kind: 'die', score: 0 }, { kind: 'retry' });
+    const again = run(first, { kind: 'die', score: 0, weaponTier: 0 }, { kind: 'retry' });
     expect([first.runs, again.runs]).toEqual([1, 2]);
   });
 });
@@ -112,21 +112,21 @@ describe('transition: pause', () => {
 
   it('Quit leaves for the title, writing nothing in Free play', () => {
     const paused = freeOn('paused', '1-2');
-    const quit = transition(paused, { kind: 'quit', livesLeft: 3 });
+    const quit = transition(paused, { kind: 'quit', livesLeft: 3, weaponTier: 0 });
     expect(quit).toMatchObject({ screen: 'title', rankRun: null });
-    expect(saveChange(paused, { kind: 'quit', livesLeft: 3 }, quit, () => TODAY)).toBeNull();
+    expect(saveChange(paused, { kind: 'quit', livesLeft: 3, weaponTier: 0 }, quit, () => TODAY)).toBeNull();
   });
 });
 
 describe('transition: Free play results and game over', () => {
-  const cleared = transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null });
+  const cleared = transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 0, bestBefore: null });
 
   it('a clear shows the results with its report', () => {
     expect(cleared).toEqual(freeOn('results', '1-3', { result: { report: REPORT, total: REPORT.score, newBest: false } }));
   });
 
   it('marks the clear a new best only when it beats a best stored before it; a first clear is none', () => {
-    const clear = (bestBefore: number | null) => transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore }).result?.newBest;
+    const clear = (bestBefore: number | null) => transition(freeOn('playing', '1-3'), { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 0, bestBefore }).result?.newBest;
     expect(clear(null)).toBe(false);
     expect(clear(0)).toBe(true);
     expect(clear(REPORT.score - 1)).toBe(true);
@@ -147,19 +147,19 @@ describe('transition: Free play results and game over', () => {
   });
 
   it('a boss clear goes Next into the next Dimension', () => {
-    const boss = transition(freeOn('playing', '2-6'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null });
+    const boss = transition(freeOn('playing', '2-6'), { kind: 'clear', report: REPORT, livesLeft: 1, weaponTier: 0, bestBefore: null });
     expect(transition(boss, { kind: 'next' })).toMatchObject({ galaxy: '3-1', dimension: 3 });
   });
 
   it('after the last galaxy there is no Next, and Enter, the first button left, retries', () => {
-    const last = transition(freeOn('playing', '5-6'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null });
+    const last = transition(freeOn('playing', '5-6'), { kind: 'clear', report: REPORT, livesLeft: 1, weaponTier: 0, bestBefore: null });
     expect(freeNext(last)).toBeNull();
     expect(transition(last, { kind: 'next' })).toBe(last);
     expect(transition(last, { kind: 'confirm' })).toMatchObject({ screen: 'playing', galaxy: '5-6', runs: 2 });
   });
 
   it('game over offers Retry and Map, and Retry starts at once', () => {
-    const over = transition(freeOn('playing', '2-2'), { kind: 'die', score: 0 });
+    const over = transition(freeOn('playing', '2-2'), { kind: 'die', score: 0, weaponTier: 0 });
     expect(over).toEqual(freeOn('gameOver', '2-2'));
     expect(transition(over, { kind: 'retry' })).toEqual(freeOn('playing', '2-2', { runs: 2 }));
     expect(transition(over, { kind: 'confirm' })).toEqual(freeOn('playing', '2-2', { runs: 2 }));
@@ -171,7 +171,7 @@ describe('transition: Free play results and game over', () => {
 
 describe('transition: Rank results', () => {
   const playing = rankOn('playing', { ...RUN, score: 1000, lives: 2 });
-  const cleared = transition(playing, { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: null });
+  const cleared = transition(playing, { kind: 'clear', report: REPORT, livesLeft: 2, weaponTier: 0, bestBefore: null });
 
   it('a clear carries the score and lives into the next galaxy', () => {
     expect(cleared).toEqual(rankOn('results', { ...RUN, next: '1-2', score: 2200, lives: 2 }, { galaxy: '1-1', result: { report: REPORT, total: 2200, newBest: false } }));
@@ -194,7 +194,7 @@ describe('transition: Rank results', () => {
 
   it('5-★ completes the run', () => {
     const last = rankOn('playing', { ...RUN, next: '5-6', score: 90000, lives: 1 });
-    const done = transition(last, { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null });
+    const done = transition(last, { kind: 'clear', report: REPORT, livesLeft: 1, weaponTier: 0, bestBefore: null });
     expect(done).toMatchObject({ screen: 'rankComplete', galaxy: '5-6', rankRun: null, result: { report: REPORT, total: 91200, newBest: false } });
     for (const kind of ['confirm', 'title', 'back'] as const) expect(transition(done, { kind })).toMatchObject({ screen: 'title', mode: null });
     for (const kind of ['next', 'retry', 'map', 'continue'] as const) expect(transition(done, { kind })).toBe(done);
@@ -203,7 +203,7 @@ describe('transition: Rank results', () => {
 
 describe('transition: Rank game over', () => {
   const run1 = { ...RUN, next: '1-3' as const, score: 2500, lives: 1 };
-  const over = transition(rankOn('playing', run1), { kind: 'die', score: 400 });
+  const over = transition(rankOn('playing', run1), { kind: 'die', score: 400, weaponTier: 0 });
 
   it('offers Continue and Title', () => {
     expect(over).toEqual(rankOn('gameOver', run1));
@@ -231,16 +231,16 @@ describe('transition: ignored actions', () => {
     [at('galaxySelect', { mode: 'free' }), { kind: 'openDimension', dimension: 2 }],
     [freeOn('playing', '1-1'), { kind: 'start' }],
     [freeOn('playing', '1-1'), { kind: 'resume' }],
-    [freeOn('playing', '1-1'), { kind: 'quit', livesLeft: 3 }],
-    [freeOn('playing', '1-1'), { kind: 'hit', livesLeft: 2 }],
-    [rankOn('paused', RUN), { kind: 'hit', livesLeft: 2 }],
-    [rankOn('playing', RUN), { kind: 'hit', livesLeft: 0 }],
+    [freeOn('playing', '1-1'), { kind: 'quit', livesLeft: 3, weaponTier: 0 }],
+    [freeOn('playing', '1-1'), { kind: 'hit', livesLeft: 2, weaponTier: 0 }],
+    [rankOn('paused', RUN), { kind: 'hit', livesLeft: 2, weaponTier: 0 }],
+    [rankOn('playing', RUN), { kind: 'hit', livesLeft: 0, weaponTier: 0 }],
     [freeOn('paused', '1-1'), { kind: 'pause' }],
-    [freeOn('paused', '1-1'), { kind: 'die', score: 0 }],
-    [freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null }],
+    [freeOn('paused', '1-1'), { kind: 'die', score: 0, weaponTier: 0 }],
+    [freeOn('paused', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 0, bestBefore: null }],
     [at('confirmNewRank'), { kind: 'chooseFree' }],
     [at('map', { mode: 'free' }), { kind: 'askNewRank' }],
-    [freeOn('gameOver', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null }],
+    [freeOn('gameOver', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 1, weaponTier: 0, bestBefore: null }],
     [freeOn('results', '1-1'), { kind: 'pause' }],
   ])('%j ignores %j', (state, action) => {
     expect(transition(state, action)).toBe(state);
@@ -254,7 +254,7 @@ describe('saveChange', () => {
   it('records a Free play clear as progress only, leaving the Rank run alone', () => {
     const save = { ...defaultSave(), rankRun: RUN, rankSeq: 4 };
     const playing = freeOn('playing', '1-1');
-    const action: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 3, bestBefore: null };
+    const action: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 0, bestBefore: null };
     expect(rankPart(saveChange(playing, action, transition(playing, action), () => TODAY))).toBeNull();
     const after = saved(save, playing, action).save;
     expect(after).toMatchObject({ frontier: '1-2', galaxies: { '1-1': { bestScore: 1200, stars: 3 } }, rankRun: RUN, rankSeq: 4, rankBoard: [] });
@@ -262,8 +262,8 @@ describe('saveChange', () => {
 
   it('writes nothing for a Free play game over or quit, or for navigation', () => {
     const cases: [FlowState, FlowAction][] = [
-      [freeOn('playing', '1-1'), { kind: 'die', score: 50 }],
-      [freeOn('paused', '1-1'), { kind: 'quit', livesLeft: 3 }],
+      [freeOn('playing', '1-1'), { kind: 'die', score: 50, weaponTier: 0 }],
+      [freeOn('paused', '1-1'), { kind: 'quit', livesLeft: 3, weaponTier: 0 }],
       [INITIAL_FLOW, { kind: 'start' }],
       [at('modeSelect'), { kind: 'askNewRank' }],
       [at('galaxySelect', { mode: 'free' }), { kind: 'playGalaxy', id: '1-1' }],
@@ -284,7 +284,7 @@ describe('saveChange', () => {
 
   it('suspend and resume: a clear saves the run between galaxies at the next one, and Resume marks it in that galaxy', () => {
     let save: SaveData = saved(defaultSave(), at('modeSelect'), { kind: 'startRank', run: RUN }).save;
-    const cleared = saved(save, rankOn('playing', RUN), { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: null });
+    const cleared = saved(save, rankOn('playing', RUN), { kind: 'clear', report: REPORT, livesLeft: 2, weaponTier: 0, bestBefore: null });
     save = cleared.save;
     expect(save).toMatchObject({ frontier: '1-2', rankRun: { next: '1-2', score: 1200, lives: 2, inGalaxy: false }, rankSeq: 2 });
     // The player leaves from results (suspend): nothing more is written, and the title offers the saved run.
@@ -297,9 +297,44 @@ describe('saveChange', () => {
     expect(resumed.save).toMatchObject({ rankRun: { ...savedRun, inGalaxy: true }, rankSeq: 3 });
   });
 
+  it('a Rank clear carries the weapon tier the ship ended on into the next galaxy, up or down', () => {
+    const armed = { ...RUN, weaponTier: 1 as const };
+    const up = saved({ ...defaultSave(), rankRun: { ...armed, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', armed), { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 3, bestBefore: null });
+    expect(up.state.rankRun).toMatchObject({ next: '1-2', weaponTier: 3 });
+    expect(up.save.rankRun).toMatchObject({ next: '1-2', weaponTier: 3, inGalaxy: false });
+    const down = saved({ ...defaultSave(), rankRun: { ...armed, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', armed), { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 0, bestBefore: null });
+    expect(down.save.rankRun?.weaponTier).toBe(0);
+    // And the next galaxy starts from it.
+    expect(transition(up.state, { kind: 'next' }).rankRun?.weaponTier).toBe(3);
+  });
+
+  it('a Free play clear carries nothing: its tier is the galaxy\'s own', () => {
+    const cleared = saved(defaultSave(), freeOn('playing', '1-1'), { kind: 'clear', report: REPORT, livesLeft: 3, weaponTier: 3, bestBefore: null });
+    expect(cleared.state.rankRun).toBeNull();
+    expect(cleared.save.rankRun).toBeNull();
+  });
+
+  it('a hit in a Rank galaxy saves the tier it left, and Quit afterwards loses one more, never refunding the galaxy\'s pickups', () => {
+    const armed = { ...RUN, next: '1-3' as const, lives: 3, weaponTier: 2 as const };
+    let step = saved({ ...defaultSave(), rankRun: { ...armed, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', armed), { kind: 'hit', livesLeft: 2, weaponTier: 1 });
+    expect(step.save.rankRun).toMatchObject({ lives: 2, weaponTier: 1, inGalaxy: true });
+    step = saved(step.save, step.state, { kind: 'pause' });
+    // The galaxy's pickups took the ship to tier 3 after the hit; a forfeit keeps none of them.
+    step = saved(step.save, step.state, { kind: 'quit', livesLeft: 2, weaponTier: 3 });
+    expect(step.save.rankRun).toMatchObject({ lives: 1, weaponTier: 0, inGalaxy: false });
+  });
+
+  it('a Rank game over keeps the tier the fatal hit left, for the Continue', () => {
+    const armed = { ...RUN, next: '2-2' as const, score: 100, lives: 1, weaponTier: 3 as const };
+    const over = saved({ ...defaultSave(), rankRun: { ...armed, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', armed), { kind: 'die', score: 50, weaponTier: 2 });
+    expect(over.save.rankRun).toMatchObject({ lives: 0, weaponTier: 2 });
+    const again = saved(over.save, over.state, { kind: 'continue' });
+    expect(again.save.rankRun).toMatchObject({ lives: 3, weaponTier: 2, continued: true });
+  });
+
   it('Quit mid-galaxy in Rank forfeits it: one life gone, back at the score it carried in', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 2 };
-    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('paused', playing), { kind: 'quit', livesLeft: 2 });
+    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('paused', playing), { kind: 'quit', livesLeft: 2, weaponTier: 0 });
     expect(after.state).toMatchObject({ screen: 'title', rankRun: null });
     expect(after.save).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 6, rankBoard: [] });
   });
@@ -308,7 +343,7 @@ describe('saveChange', () => {
     // 2-3 in Rank: kills 1000, bonus 500 + 1000, times 1.1.
     const report: ClearReport = { score: Math.round((1000 + 1500) * 1.1), bonus: 1500, deaths: 0, stars: 3 };
     const playing = { ...RUN, next: '2-3' as const };
-    const action: FlowAction = { kind: 'clear', report, livesLeft: 3, bestBefore: 2400 };
+    const action: FlowAction = { kind: 'clear', report, livesLeft: 3, weaponTier: 0, bestBefore: 2400 };
     const after = saved(defaultSave(), rankOn('playing', playing), action);
     expect(after.save.galaxies['2-3']).toEqual({ bestScore: 2500, stars: 3 });
     // 2500 beats the 2400 saved; the multiplied 2750 is the run's, not the galaxy's.
@@ -318,29 +353,29 @@ describe('saveChange', () => {
 
   it('a hit in a Rank galaxy saves the lives left, still in the galaxy, so a closed tab forfeits from them', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 3 };
-    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 2 });
+    const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 2, weaponTier: 0 });
     expect(after.state).toEqual(rankOn('playing', { ...playing, lives: 2 }));
     expect(after.save).toMatchObject({ rankRun: { ...playing, lives: 2, inGalaxy: true }, rankSeq: 6 });
   });
 
   it('Quit after two deaths forfeits from the lives left: three lives down from the galaxy start, never a refund', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 5 };
-    let step = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 4 });
-    step = saved(step.save, step.state, { kind: 'hit', livesLeft: 3 });
+    let step = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 1 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 4, weaponTier: 0 });
+    step = saved(step.save, step.state, { kind: 'hit', livesLeft: 3, weaponTier: 0 });
     step = saved(step.save, step.state, { kind: 'pause' });
-    step = saved(step.save, step.state, { kind: 'quit', livesLeft: 3 });
+    step = saved(step.save, step.state, { kind: 'quit', livesLeft: 3, weaponTier: 0 });
     expect(step.save.rankRun).toMatchObject({ lives: 2, score: 2500, inGalaxy: false });
   });
 
   it('Quit forfeits from the ship lives even when no hit was reported, and from the run lives when it has more', () => {
     const playing = { ...RUN, next: '1-3' as const, lives: 3 };
-    expect(saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 2 }).save.rankRun).toMatchObject({ lives: 1 });
-    expect(saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 5 }).save.rankRun).toMatchObject({ lives: 2 });
+    expect(saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 2, weaponTier: 0 }).save.rankRun).toMatchObject({ lives: 1 });
+    expect(saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 5, weaponTier: 0 }).save.rankRun).toMatchObject({ lives: 2 });
   });
 
   it('Quit on the last life loses the run: its entry posted and Continue left for the title', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 1 };
-    const after = saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 1 }).save;
+    const after = saved(defaultSave(), rankOn('paused', playing), { kind: 'quit', livesLeft: 1, weaponTier: 0 }).save;
     expect(after.rankRun).toMatchObject({ lives: 0, score: 2500, inGalaxy: false });
     expect(after.rankBoard).toEqual([{ score: 2500, reached: 'D1 · G3', date: TODAY, continued: false }]);
   });
@@ -348,7 +383,7 @@ describe('saveChange', () => {
   it('a Rank game over posts the run total and keeps the run, with no lives, for a Continue', () => {
     const run1 = { ...RUN, next: '3-4' as const, score: 5000, lives: 1 };
     const save = { ...defaultSave(), rankRun: { ...run1, inGalaxy: true }, rankSeq: 3 };
-    const after = saved(save, rankOn('playing', run1), { kind: 'die', score: 640 });
+    const after = saved(save, rankOn('playing', run1), { kind: 'die', score: 640, weaponTier: 0 });
     expect(after.save).toMatchObject({ rankRun: { ...run1, lives: 0, inGalaxy: false }, rankSeq: 4 });
     expect(after.save.rankBoard).toEqual([{ score: 5640, reached: 'D3 · G4', date: TODAY, continued: false }]);
     // Title from the card writes nothing more: the title offers the Continue.
@@ -357,11 +392,11 @@ describe('saveChange', () => {
 
   it('Continue: the continued run is saved with the score reset and marked, and its later game over is marked too', () => {
     const run1 = { ...RUN, next: '1-3' as const, score: 2500, lives: 1 };
-    let step = saved({ ...defaultSave(), rankRun: run1, rankSeq: 1 }, rankOn('playing', run1), { kind: 'die', score: 100 });
+    let step = saved({ ...defaultSave(), rankRun: run1, rankSeq: 1 }, rankOn('playing', run1), { kind: 'die', score: 100, weaponTier: 0 });
     step = saved(step.save, step.state, { kind: 'continue' });
     expect(step.save).toMatchObject({ rankRun: { next: '1-3', score: 0, lives: 3, continued: true, inGalaxy: true }, rankSeq: 3 });
     expect(step.save.rankBoard).toEqual([{ score: 2600, reached: 'D1 · G3', date: TODAY, continued: false }]);
-    step = saved(step.save, step.state, { kind: 'die', score: 300 });
+    step = saved(step.save, step.state, { kind: 'die', score: 300, weaponTier: 0 });
     expect(step.save.rankBoard).toEqual([
       { score: 2600, reached: 'D1 · G3', date: TODAY, continued: false },
       { score: 300, reached: 'D1 · G3', date: TODAY, continued: true },
@@ -370,7 +405,7 @@ describe('saveChange', () => {
 
   it('completing 5-★ records the clear, posts the final score and ends the run', () => {
     const last = { ...RUN, next: '5-6' as const, score: 90000, lives: 1 };
-    const after = saved({ ...defaultSave(), frontier: '5-6', rankRun: last, rankSeq: 9 }, rankOn('playing', last), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null }).save;
+    const after = saved({ ...defaultSave(), frontier: '5-6', rankRun: last, rankSeq: 9 }, rankOn('playing', last), { kind: 'clear', report: REPORT, livesLeft: 1, weaponTier: 0, bestBefore: null }).save;
     // The galaxy keeps its best without D5's ×1.4: 1200 / 1.4, rounded.
     expect(after).toMatchObject({ rankRun: null, rankSeq: 10, galaxies: { '5-6': { bestScore: 857, stars: 3 } } });
     expect(after.rankBoard).toEqual([{ score: 91200, reached: 'D5 · ★', date: TODAY, continued: false }]);
@@ -380,7 +415,7 @@ describe('saveChange', () => {
 describe('applySaveChange (the stale-tab guard)', () => {
   const run1 = { ...RUN, next: '1-2' as const, score: 900, lives: 2 };
   const playing = rankOn('playing', run1);
-  const clear: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 2, bestBefore: null };
+  const clear: FlowAction = { kind: 'clear', report: REPORT, livesLeft: 2, weaponTier: 0, bestBefore: null };
   const change = saveChange(playing, clear, transition(playing, clear), () => TODAY);
   if (change === null) throw new Error('a Rank clear must write');
 

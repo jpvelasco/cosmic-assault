@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
-import { abandonRankRun, dimensionStars, forfeitRankRun, isUnlocked, loseRankRun, recordClear, setRankRun } from '../../src/meta/progress';
+import { abandonRankRun, dimensionStars, forfeitRankRun, isUnlocked, loseRankRun, recordClear, recordPickupSeen, setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, MAX_RANK_SEQ, type SaveData } from '../../src/meta/save';
 
@@ -121,27 +121,39 @@ describe('ending a Rank run', () => {
   const playing = { ...startRank('2026-10-20'), next: '2-4' as const, score: 3000, lives: 2, inGalaxy: true };
 
   it('loseRankRun posts the run total and keeps the run, with no lives, for a Continue', () => {
-    const after = loseRankRun({ ...defaultSave(), rankSeq: 4 }, playing, 250, TODAY);
+    const after = loseRankRun({ ...defaultSave(), rankSeq: 4 }, playing, 250, TODAY, 0);
     expect(after.rankBoard).toEqual([{ score: 3250, reached: 'D2 · G4', date: TODAY, continued: false }]);
     expect(after).toMatchObject({ rankRun: { ...playing, lives: 0, inGalaxy: false }, rankSeq: 5 });
   });
 
   it('forfeitRankRun costs a life and posts nothing while lives remain', () => {
-    const after = forfeitRankRun({ ...defaultSave(), rankSeq: 1 }, playing, 2, TODAY);
+    const after = forfeitRankRun({ ...defaultSave(), rankSeq: 1 }, playing, 2, TODAY, 0);
     expect(after).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 2, rankBoard: [] });
   });
 
   it('forfeitRankRun counts from the lives left in the galaxy, losing the run when that was the last', () => {
-    expect(forfeitRankRun(defaultSave(), { ...playing, lives: 3 }, 2, TODAY).rankRun).toMatchObject({ lives: 1, inGalaxy: false });
-    const lost = forfeitRankRun(defaultSave(), { ...playing, lives: 3 }, 1, TODAY);
+    expect(forfeitRankRun(defaultSave(), { ...playing, lives: 3 }, 2, TODAY, 0).rankRun).toMatchObject({ lives: 1, inGalaxy: false });
+    const lost = forfeitRankRun(defaultSave(), { ...playing, lives: 3 }, 1, TODAY, 0);
     expect(lost.rankRun).toMatchObject({ lives: 0, score: 3000 });
     expect(lost.rankBoard).toHaveLength(1);
   });
 
   it('forfeitRankRun on the last life loses the run at the score it carried into the galaxy', () => {
-    const after = forfeitRankRun(defaultSave(), { ...playing, lives: 1, continued: true }, 1, TODAY);
+    const after = forfeitRankRun(defaultSave(), { ...playing, lives: 1, continued: true }, 1, TODAY, 0);
     expect(after.rankRun).toMatchObject({ lives: 0, score: 3000 });
     expect(after.rankBoard).toEqual([{ score: 3000, reached: 'D2 · G4', date: TODAY, continued: true }]);
+  });
+
+  it('loseRankRun and forfeitRankRun keep the tier the death left in the run that waits for a Continue', () => {
+    const armed = { ...playing, weaponTier: 3 as const };
+    expect(loseRankRun(defaultSave(), armed, 0, TODAY, 2).rankRun?.weaponTier).toBe(2);
+    expect(loseRankRun(defaultSave(), armed, 0, TODAY, 3).rankRun?.weaponTier).toBe(3);
+    expect(forfeitRankRun(defaultSave(), { ...armed, lives: 1 }, 1, TODAY, 3).rankRun).toMatchObject({ lives: 0, weaponTier: 2 });
+  });
+
+  it('forfeitRankRun takes a tier with the life, and saves what is left', () => {
+    const armed = { ...playing, weaponTier: 2 as const };
+    expect(forfeitRankRun(defaultSave(), armed, 2, TODAY, 2).rankRun).toMatchObject({ lives: 1, weaponTier: 1 });
   });
 
   it('abandonRankRun posts a live run as it stands, and not a lost one, whose entry is already in', () => {
@@ -150,5 +162,23 @@ describe('ending a Rank run', () => {
     const lost = { ...defaultSave(), rankRun: { ...playing, lives: 0 } };
     expect(abandonRankRun(lost, TODAY)).toBe(lost);
     expect(abandonRankRun(defaultSave(), TODAY)).toEqual(defaultSave());
+  });
+});
+
+describe('recordPickupSeen', () => {
+  it('adds a kind, in the table\'s order', () => {
+    const one = recordPickupSeen(defaultSave(), 'shield');
+    expect(one.seenPickups).toEqual(['shield']);
+    expect(recordPickupSeen(one, 'weaponCore').seenPickups).toEqual(['weaponCore', 'shield']);
+  });
+
+  it('hands back the save it was given when the kind is already seen, so nothing is written', () => {
+    const seen = recordPickupSeen(defaultSave(), 'shield');
+    expect(recordPickupSeen(seen, 'shield')).toBe(seen);
+  });
+
+  it('leaves the rest of the save alone', () => {
+    const save = recordClear(defaultSave(), galaxyById('1-1'), 5, 1);
+    expect({ ...recordPickupSeen(save, 'doubleShot'), seenPickups: [] }).toEqual(save);
   });
 });

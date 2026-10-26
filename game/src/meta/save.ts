@@ -1,5 +1,6 @@
 import { furthest, GALAXIES, isGalaxyId } from '../content/galaxies';
-import type { GalaxyId } from '../content/types';
+import { isPickupId, PICKUP_IDS } from '../content/pickups';
+import type { GalaxyId, PickupId } from '../content/types';
 import { addEntry, mergeBoards, type RankEntry } from './rankBoard';
 import { compareRuns, RANK_MAX_LIVES, type RankRun } from './rankRun';
 
@@ -24,10 +25,12 @@ export interface SaveData {
   /** The classic game's high score, imported once; null when there was none. */
   readonly classicBest: number | null;
   readonly classicImported: boolean;
+  /** The pickups the player has collected, for the first-drop callouts; in `PICKUP_IDS` order. */
+  readonly seenPickups: readonly PickupId[];
 }
 
 export function defaultSave(): SaveData {
-  return { version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false };
+  return { version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false, seenPickups: [] };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -69,6 +72,12 @@ function sanitizeRankRun(raw: unknown): RankRun | null {
   return { next, score, lives, weaponTier: tier, continued, startedAt, inGalaxy };
 }
 
+/** The known pickup ids in `raw`, once each, in the table's order. */
+function sanitizeSeen(raw: unknown): readonly PickupId[] {
+  const listed = Array.isArray(raw) ? raw.filter(isPickupId) : [];
+  return PICKUP_IDS.filter((id) => listed.includes(id));
+}
+
 function sanitizeEntry(raw: unknown): RankEntry | null {
   const entry = asRecord(raw);
   if (entry === null) return null;
@@ -99,6 +108,7 @@ export function sanitizeSave(raw: unknown): SaveData {
     rankBoard: sanitizeBoard(saved['rankBoard']),
     classicBest: isCount(classicBest) ? classicBest : null,
     classicImported: classicImported === true,
+    seenPickups: sanitizeSeen(saved['seenPickups']),
   };
 }
 
@@ -147,5 +157,6 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     rankBoard: mergeBoards(a.rankBoard, b.rankBoard),
     classicBest: a.classicBest === null || b.classicBest === null ? (a.classicBest ?? b.classicBest) : Math.max(a.classicBest, b.classicBest),
     classicImported: a.classicImported || b.classicImported,
+    seenPickups: PICKUP_IDS.filter((id) => a.seenPickups.includes(id) || b.seenPickups.includes(id)),
   };
 }

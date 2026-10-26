@@ -1,12 +1,14 @@
 import { bossHp, BOSSES } from '../../content/bosses';
 import { rockSpeedMultiplier } from '../../content/curves';
 import { tierOf } from '../../content/galaxies';
-import type { BossId, GalaxyDef, RockKind } from '../../content/types';
+import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
 import { BossRunner, DYING_SECONDS, type BossBehaviour, type BossView } from '../boss/bossRunner';
 import { SENTINEL } from '../boss/sentinel';
 import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
+import { Loadout } from '../pickups/effects';
+import { PickupField, type Pickup } from '../pickups/pickups';
 import type { Rng } from '../rng';
 import type { Arena, Spawner } from '../rules';
 import { clearReport, Combo, type GalaxyMode } from '../scoring';
@@ -48,6 +50,13 @@ export class GalaxyRun implements Spawner {
   private bossRunner: BossRunner | null = null;
   private warpEndsAt: number | null = null;
   private mercyUntil = 0;
+  /** What the ship carries: its weapon tier and its timed effects. */
+  readonly loadout: Loadout;
+  private readonly pickupField: PickupField;
+  /** Hands a collected pickup to the loadout; made once so stepping allocates nothing. */
+  private readonly takePickup = (kind: PickupId): void => {
+    this.loadout.collect(kind);
+  };
   /** Refilled every step, so the director's input costs no allocation. */
   private readonly context = { elapsed: 0, onFieldCost: 0, mercy: 1 };
 
@@ -59,7 +68,12 @@ export class GalaxyRun implements Spawner {
     /** The 'boss' stream. */
     private readonly bossRng: Rng,
     private readonly arena: Arena,
+    /** The 'pickups' stream: whether a kill drops, and what. */
+    pickupRng: Rng,
+    startTier: WeaponTier = 0,
   ) {
+    this.loadout = new Loadout(startTier);
+    this.pickupField = new PickupField(galaxy.pickups, tierOf(galaxy), pickupRng);
     this.director = new GalaxyDirector(galaxy, rng, areaOf(arena.field()));
     this.showers = new Showers(galaxy.events, rng);
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
@@ -91,8 +105,14 @@ export class GalaxyRun implements Spawner {
     return this.bossRunner?.view ?? null;
   }
 
+  /** The pickups on the field; a live view. */
+  get pickups(): readonly Readonly<Pickup>[] {
+    return this.pickupField.list;
+  }
+
   resize(old: Field, field: Field): void {
     this.director.fieldArea = areaOf(field);
+    this.pickupField.resize(old, field);
     this.bossRunner?.resize(old, field);
   }
 
@@ -120,6 +140,9 @@ export class GalaxyRun implements Spawner {
     } else if (elapsed + TIME_EPSILON >= this.warpEndsAt) {
       this.finish();
     }
+    const { events, ship } = this.arena;
+    this.loadout.step(dt, events);
+    this.pickupField.step(dt, this.arena.field(), ship, this.takePickup, events);
   }
 
   /** The boss's HP has hit 0: it is dying, or down. */
@@ -157,6 +180,21 @@ export class GalaxyRun implements Spawner {
     this.combo.reset();
     this.announceCombo();
     this.mercyUntil = this.arena.elapsed() + MERCY_SECONDS;
+    // Rank punishes a death with a tier; Free play only resets the tier with the next galaxy.
+    this.loadout.die(this.arena.events, this.mode === 'rank');
+  }
+
+  /** A kill may drop a pickup, unless the rock was a pass-through one (a meteor or a shard). */
+  rockKilled(rock: Readonly<Asteroid>): void {
+    if (rock.transient !== true) this.pickupField.roll(rock.x, rock.y, this.arena.lives() === 1, this.arena.events);
+  }
+
+  /** The Shield takes a hit meant for the ship, if it has one; true means the hit is absorbed: no life is lost. */
+  absorbHit(): boolean {
+    if (!this.loadout.shielded) return false;
+    this.loadout.breakShield();
+    this.arena.events.push({ type: 'shieldBroken' });
+    return true;
   }
 
   /** Brings the boss in as the approach ends, and runs it. */

@@ -1,5 +1,5 @@
 import { galaxyById, nextGalaxyId } from '../content/galaxies';
-import type { Dimension, GalaxyId } from '../content/types';
+import type { Dimension, GalaxyId, WeaponTier } from '../content/types';
 import { abandonRankRun, endRankRun, forfeitRankRun, loseRankRun, rankEntry, recordClear, setRankRun } from '../meta/progress';
 import { afterClear, afterGameOver, afterHit, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
@@ -64,17 +64,18 @@ export type FlowAction =
   | { readonly kind: 'playGalaxy'; readonly id: GalaxyId }
   | { readonly kind: 'pause' }
   | { readonly kind: 'resume' }
-  /** Quit from the pause card, with the ship on `livesLeft`: in Rank the galaxy is forfeited from them. */
-  | { readonly kind: 'quit'; readonly livesLeft: number }
-  /** The ship was hit and plays on with `livesLeft`: in Rank the run keeps them, so leaving now forfeits from them. */
-  | { readonly kind: 'hit'; readonly livesLeft: number }
+  /** Quit from the pause card, with the ship on `livesLeft` and `weaponTier`: in Rank the galaxy is forfeited from them. */
+  | { readonly kind: 'quit'; readonly livesLeft: number; readonly weaponTier: WeaponTier }
+  /** The ship was hit and plays on with `livesLeft` and the `weaponTier` the hit left: in Rank the run keeps them, so leaving now forfeits from them. */
+  | { readonly kind: 'hit'; readonly livesLeft: number; readonly weaponTier: WeaponTier }
   /**
-   * The galaxy was cleared with `livesLeft` lives. `bestBefore` is its best score as saved before this clear: null when
-   * it had none, or when the run is a debug run, which keeps no record to beat.
+   * The galaxy was cleared with `livesLeft` lives and the ship on `weaponTier`, which a Rank run carries on.
+   * `bestBefore` is its best score as saved before this clear: null when it had none, or when the run is a debug
+   * run, which keeps no record to beat.
    */
-  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly bestBefore: number | null }
-  /** The last life went, with `score` won in this galaxy. */
-  | { readonly kind: 'die'; readonly score: number }
+  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly weaponTier: WeaponTier; readonly bestBefore: number | null }
+  /** The last life went, with `score` won in this galaxy and the ship left on `weaponTier`. */
+  | { readonly kind: 'die'; readonly score: number; readonly weaponTier: WeaponTier }
   /** Enter, or pad A, on an end screen: its first button. */
   | { readonly kind: 'confirm' }
   | { readonly kind: 'next' }
@@ -114,13 +115,13 @@ function toMap(state: FlowState): FlowState {
 const bestScoreOf = ({ galaxy, mode }: FlowState, report: ClearReport): number =>
   galaxy === null ? report.score : galaxyBestScore(report, dimensionOf(galaxy), mode ?? 'free');
 
-function cleared(state: FlowState, { report, livesLeft, bestBefore }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
+function cleared(state: FlowState, { report, livesLeft, weaponTier, bestBefore }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
   const { rankRun, galaxy } = state;
   if (galaxy === null) return state;
   const newBest = bestBefore !== null && bestScoreOf(state, report) > bestBefore;
   if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score, newBest } };
   const total = rankRun.score + report.score;
-  const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft);
+  const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft, weaponTier);
   const result = { report, total, newBest };
   return next === 'complete' ? { ...state, screen: 'rankComplete', rankRun: null, result } : { ...state, screen: 'results', rankRun: next, result };
 }
@@ -198,19 +199,22 @@ function runMove(state: FlowState, action: FlowAction): FlowState {
     case 'clear':
       return screen === 'playing' ? cleared(state, action) : state;
     case 'die':
-      return screen === 'playing' ? { ...state, screen: 'gameOver' } : state;
+      return screen === 'playing' ? { ...state, screen: 'gameOver', rankRun: lostAt(state.rankRun, action.weaponTier) } : state;
     case 'hit':
-      return hit(state, action.livesLeft);
+      return hit(state, action.livesLeft, action.weaponTier);
     default:
       return state;
   }
 }
 
-/** A Rank run in play keeps the lives the ship has left; the hit that takes the last one is the game over's to post. */
-function hit(state: FlowState, livesLeft: number): FlowState {
+/** The Rank run on its game over card: a Continue starts from the tier the fatal hit left. */
+const lostAt = (run: RankRun | null, weaponTier: WeaponTier): RankRun | null => (run === null ? null : afterHit(run, run.lives, weaponTier));
+
+/** A Rank run in play keeps the lives and tier the ship has left; the hit that takes the last life is the game over's to post. */
+function hit(state: FlowState, livesLeft: number, weaponTier: WeaponTier): FlowState {
   const { rankRun } = state;
   if (state.screen !== 'playing' || state.mode !== 'rank' || rankRun === null || livesLeft <= 0 || livesLeft >= rankRun.lives) return state;
-  return { ...state, rankRun: afterHit(rankRun, livesLeft) };
+  return { ...state, rankRun: afterHit(rankRun, livesLeft, weaponTier) };
 }
 
 /**
@@ -247,8 +251,8 @@ const rankOnly = (rank: Change): SaveChange => ({ record: null, rank });
  * What `action` (which took `before` to `after`) writes to the save, or null when it writes nothing. Clears are
  * recorded the moment they happen, and every Rank start, galaxy, end and Continue goes through `setRankRun`:
  * - each Rank galaxy saves the run marked as in it, so leaving it unfinished (Quit, a closed tab) forfeits a life;
- * - each hit in it saves the lives left, so that forfeit counts from them;
- * - a clear saves it between galaxies, at the next one; 5-★ posts the run and ends it;
+ * - each hit in it saves the lives and weapon tier left, so that forfeit counts from them;
+ * - a clear saves it between galaxies, at the next one, carrying the weapon tier; 5-★ posts the run and ends it;
  * - a game over posts the run total and keeps the run, with no lives, for a Continue.
  */
 /** `today` gives the local date; it is read only by a change that dates something (a board entry or forfeit). */
@@ -270,13 +274,13 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
       return { record, rank: next === null ? (save) => endRankRun(save, rankEntry(run, result.total, today()), null) : (save) => setRankRun(save, next) };
     }
     case 'die':
-      return run === null ? null : rankOnly((save) => loseRankRun(save, run, action.score, today()));
+      return run === null ? null : rankOnly((save) => loseRankRun(save, run, action.score, today(), action.weaponTier));
     case 'hit': {
       const next = after.rankRun;
       return next === null ? null : rankOnly((save) => setRankRun(save, next));
     }
     case 'quit':
-      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, action.livesLeft, today()));
+      return run === null ? null : rankOnly((save) => forfeitRankRun(save, run, action.livesLeft, today(), action.weaponTier));
     default:
       return null;
   }

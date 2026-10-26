@@ -34,7 +34,7 @@ export interface FlowController {
   readonly command: (command: FlowCommand) => void;
   dispatch(action: FlowAction): void;
   /** Feeds one step's events: a clear or a game over moves the flow and writes the save at once, as does a Rank hit. */
-  handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void;
+  handle(events: readonly SimEvent[], world: Pick<World, 'lives' | 'weaponTier'>): void;
   /**
    * Forfeits a saved run left mid-galaxy (a closed tab), once the caller knows no other tab is playing it at `probedSeq`, the
    * `rankSeq` it asked about; true if it took a life. A run another tab has moved on since is left alone.
@@ -62,7 +62,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
       // Re-checked on the save as stored now: a run another tab already forfeited loses no second life, and one it
       // wrote to since the probe (a hit, whose storage event may not have reached this tab yet) is still being played.
       forfeited = run?.inGalaxy === true && save.rankSeq === probedSeq;
-      return run !== null && forfeited ? forfeitRankRun(save, run, run.lives, deps.today()) : save;
+      return run !== null && forfeited ? forfeitRankRun(save, run, run.lives, deps.today(), run.weaponTier) : save;
     });
     knownSeq = store.save.rankSeq;
     return forfeited;
@@ -151,15 +151,15 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
    */
   const bestBefore = (): number | null => (state.galaxy === null || !store.writes ? null : (store.save.galaxies[state.galaxy]?.bestScore ?? null));
 
-  function handle(events: readonly SimEvent[], world: Pick<World, 'lives'>): void {
+  function handle(events: readonly SimEvent[], world: Pick<World, 'lives' | 'weaponTier'>): void {
     for (const event of events) {
       if (event.type === 'galaxyCleared') {
         const { score, bonus, deaths, stars } = event;
-        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, bestBefore: bestBefore() });
+        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, weaponTier: world.weaponTier, bestBefore: bestBefore() });
       } else if (event.type === 'gameOver') {
-        dispatch({ kind: 'die', score: event.score });
+        dispatch({ kind: 'die', score: event.score, weaponTier: world.weaponTier });
       } else if (event.type === 'shipHit') {
-        dispatch({ kind: 'hit', livesLeft: event.livesLeft });
+        dispatch({ kind: 'hit', livesLeft: event.livesLeft, weaponTier: world.weaponTier });
       }
     }
   }

@@ -438,7 +438,7 @@ describe('GalaxyRun.hitBoss', () => {
   /** Runs a 1-6 galaxy on a stub arena for `to` seconds; the arena's events are left empty. */
   function approach(to: number) {
     const arena = stubArena();
-    const run = new GalaxyRun(calm('1-6'), 'free', createRng(1), createRng(2), arena);
+    const run = new GalaxyRun(calm('1-6'), 'free', createRng(1), createRng(2), arena, createRng(3));
     for (let i = 0; i < Math.round(to / STEP_SECONDS); i++) {
       arena.events.length = 0;
       arena.tick();

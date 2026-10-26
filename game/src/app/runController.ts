@@ -1,4 +1,5 @@
 import { galaxyById } from '../content/galaxies';
+import { recordPickupSeen } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
 import { createTabPresence, type TabPresence } from '../platform/tabPresence';
@@ -11,6 +12,7 @@ import type { FlowCommand } from './commands';
 import { localDate } from './date';
 import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
 import { createFlowController } from './flowController';
+import { createPickupNotices } from './pickupNotices';
 import { createSaveStore, type StorageEvents } from './saveStore';
 import { clockSeed, isDebugRun, type RunOverrides } from './seed';
 
@@ -88,6 +90,15 @@ export function createRunController(deps: RunControllerDeps): RunController {
     ...(deps.events === undefined ? {} : { events: deps.events }),
   });
   store.importClassicOnce();
+  const notices = createPickupNotices({
+    seen: () => store.save.seenPickups,
+    markSeen: (kind) => {
+      store.update((save) => recordPickupSeen(save, kind));
+    },
+    notify: (text) => {
+      deps.notify(text);
+    },
+  });
   const presence = deps.presence ?? createTabPresence();
   let world: World | null = null;
   let rankLock: RankLock = 'free';
@@ -99,7 +110,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
   let recheckTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
-  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives. */
+  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives and weapon. */
   function startRun({ galaxy, mode, rankRun }: FlowState): void {
     const field = deps.field();
     if (field === null) {
@@ -112,9 +123,11 @@ export function createRunController(deps: RunControllerDeps): RunController {
       seed: overrides.seed ?? clockSeed(),
       field,
       rules: { kind: 'galaxy', galaxy: galaxyById(galaxy), mode },
-      // Free play always starts with the default lives; Rank carries its own.
+      // Free play always starts with the default lives and weapon; Rank carries its own.
       startLives: rankRun?.lives ?? PLAYER.startLives,
+      startTier: rankRun?.weaponTier ?? 0,
     });
+    notices.newRun();
     deps.onRunStarted();
   }
 
@@ -239,6 +252,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       if (world === null) return;
       const events = world.step(dt, controls);
       deps.onEvents(events, world);
+      notices.handle(events);
       flow.handle(events, world);
     },
     pause() {
@@ -248,7 +262,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       flow.dispatch({ kind: 'resume' });
     },
     quit() {
-      if (world !== null) flow.dispatch({ kind: 'quit', livesLeft: world.lives });
+      if (world !== null) flow.dispatch({ kind: 'quit', livesLeft: world.lives, weaponTier: world.weaponTier });
     },
     dispose() {
       if (disposed) return;

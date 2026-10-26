@@ -39,6 +39,8 @@ export interface Arena {
   elapsed(): number;
   score(): number;
   deaths(): number;
+  /** Lives the ship has left, this one included. */
+  lives(): number;
   nextId(): number;
   award(points: number): void;
   setStatus(status: 'warping' | 'cleared'): void;
@@ -56,6 +58,8 @@ export interface Spawner {
   scoreKill(base: number): number;
   /** The ship has just lost a life. */
   shipLost?(): void;
+  /** A shot has just broken `rock`, after the kill is scored. */
+  rockKilled?(rock: Readonly<Asteroid>): void;
 }
 
 /** Today's practice: a timed spawn, a minimum on the field, rock sizes and speeds by level. */
