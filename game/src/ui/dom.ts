@@ -52,3 +52,10 @@ export function showSoundState(soundChip: HTMLElement, muted: boolean): void {
   soundChip.textContent = `Sound: ${muted ? 'off' : 'on'}`;
   soundChip.classList.toggle('sound-toggle--muted', muted);
 }
+
+/** The buttons and inputs inside `panel` that can take focus right now: not disabled, hidden, covered (inert) or undrawn. */
+export function focusableControls(panel: HTMLElement): (HTMLButtonElement | HTMLInputElement)[] {
+  return [...panel.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input')].filter(
+    (el) => !el.disabled && el.closest('[hidden], [inert]') === null && el.getClientRects().length > 0,
+  );
+}

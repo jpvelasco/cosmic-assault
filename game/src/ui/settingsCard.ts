@@ -1,5 +1,5 @@
 import type { ScreenShake, Settings } from '../app/settings';
-import { button, cardPanel, chip, element, keepActivationKeysLocal, showSoundState } from './dom';
+import { button, cardPanel, chip, element, focusableControls, keepActivationKeysLocal, showSoundState } from './dom';
 
 export interface SettingsCardActions {
   /** A control moved: apply the change now (sent on every `input` event, so a slider is live while dragged). */
@@ -21,6 +21,8 @@ export interface SettingsCard {
   cover(covered: boolean): void;
   /** Brings every control in line with `settings`. The left-handed choice is offered only where `touchScreen` is true. */
   update(settings: Settings, touchScreen: boolean): void;
+  /** The controls that can take focus now, in document order; none while the card is hidden or covered. */
+  controls(): HTMLElement[];
   dispose(): void;
 }
 
@@ -167,6 +169,9 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
       leftHanded.checked = settings.leftHanded;
       leftHandedRow.hidden = !touchScreen;
       showSoundState(sound, settings.muted);
+    },
+    controls() {
+      return focusableControls(panel);
     },
     dispose() {
       document.removeEventListener('keydown', onKeyDown);

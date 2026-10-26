@@ -1,8 +1,11 @@
 import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
 import { currentBuildLabel } from '../buildLabel';
+import { createPadReader, controlsFromPad, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
+import { isFormControlTarget } from '../input/keyEvent';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
+import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
 import { attachFullscreenKey, createFullscreen } from '../platform/fullscreen';
@@ -18,12 +21,13 @@ import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { TOUCH_STYLE_QUERY } from '../ui/hints';
+import { focusedControl, moveFocus, nudgeSlider } from '../ui/menuNav';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createSettingsCard } from '../ui/settingsCard';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
-import { commandForKey, START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
+import { commandForKey, commandForPad, START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
 import { passesGameOverGuard } from './gameOverGuard';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
@@ -106,11 +110,18 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const keyboard = attachKeyboard(window);
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pauseByPlayer);
+  const log = new RingLog();
+  const readPad = createPadReader(
+    () => navigator.getGamepads(),
+    (error) => {
+      log.add('error', 'gamepad unavailable', performance.now());
+      console.warn('Gamepad input is unavailable in this browser or frame, so play with the keyboard or touch instead.', error);
+    },
+  );
   const safeArea = createSafeAreaProbe(root);
   const loop = createFixedStepLoop();
   const hitStop = new HitStop();
   const scaler = new QualityScaler();
-  const log = new RingLog();
   const monitor = new FrameMonitor((frameMs) => {
     // A hidden tab's frames are not stalls: the browser simply stopped drawing.
     if (document.visibilityState === 'visible') log.add('stall', `${String(Math.round(frameMs))} ms frame`, performance.now());
@@ -168,6 +179,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   /** The save warning is given once: a slider that is dragged again and again must not flood the console. */
   let warnedStorage = false;
   let gameOverAt = 0;
+  /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
+  let previousPad: PadSnapshot | null = null;
+  /** Like the key latch: a fire button held when the run starts (A, which also confirmed) stays quiet until it is let go. */
+  let padFireLatched = false;
   let lastFrameAt = performance.now();
   let frameId = 0;
   /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
@@ -268,6 +283,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       startLives: overrides.startLives ?? PLAYER.startLives,
     });
     startKeys.latch(keyboard.held);
+    padFireLatched = controlsFromPad(previousPad).fire;
     loop.reset();
     hitStop.clear();
     renderer.reset();
@@ -382,13 +398,60 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     }
   }
 
-  function readControls(): Controls {
+  /** Keys, touch and pad together: they OR for fire and thrust, the keys turn before the pad does, and touch steers before the pad. */
+  function readControls(pad: PadSnapshot | null): Controls {
     const keys = controlsFromKeys(startKeys.active(keyboard.held));
-    return { ...keys, fire: keys.fire || touch.fire, stick: touch.stick };
+    const padded = controlsFromPad(pad);
+    if (!padded.fire) padFireLatched = false;
+    return {
+      turn: keys.turn === 0 ? padded.turn : keys.turn,
+      thrust: keys.thrust || padded.thrust,
+      fire: keys.fire || touch.fire || (padded.fire && !padFireLatched),
+      stick: touch.stick ?? padded.stick,
+    };
   }
 
-  function stepWorld(run: World, frameSeconds: number, now: number): void {
-    const controls = readControls();
+  /** The controls that menu focus moves among: the settings card when it is open, else the card for the mode. */
+  function menuControls(): HTMLElement[] {
+    return settingsOpen ? settingsCard.controls() : overlay.controls(mode);
+  }
+
+  function navigateMenu(dir: FocusDirection): void {
+    const controls = menuControls();
+    const focused = focusedControl(controls);
+    if (focused !== null && (dir === 'left' || dir === 'right') && nudgeSlider(focused, dir)) return;
+    moveFocus(controls, dir);
+  }
+
+  /** Runs the command a pad button asks for in this mode, if any. */
+  function runPadCommand(button: 'confirm' | 'back' | 'pause', now: number): void {
+    const command = commandForPad(mode, button);
+    if (command !== null) applyCommand(command, now);
+  }
+
+  /** Acts on one pad press. Behind the settings card only its own controls and Back act, as with keys. */
+  function applyPadEdge(edge: PadEdge, now: number): void {
+    switch (edge) {
+      case 'confirm': {
+        const focused = focusedControl(menuControls());
+        if (focused !== null) focused.click();
+        else if (!settingsOpen) runPadCommand('confirm', now);
+        break;
+      }
+      case 'back':
+        if (settingsOpen) closeSettings();
+        else runPadCommand('back', now);
+        break;
+      case 'pause':
+        if (!settingsOpen) runPadCommand('pause', now);
+        break;
+      default:
+        // In play the D-pad and stick steer the ship, which `readControls` already reads.
+        if (mode !== 'playing') navigateMenu(edge);
+    }
+  }
+
+  function stepWorld(run: World, controls: Controls, frameSeconds: number, now: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
       const events = run.step(dt, controls);
@@ -428,8 +491,18 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     lastFrameAt = now;
     audio.beginFrame();
     applyPendingResize();
+    const pad = readPad();
+    const edges = padEdges(previousPad, pad);
+    previousPad = pad;
+    for (const edge of edges) applyPadEdge(edge, now);
     for (const code of keyboard.drainPressed()) {
       startKeys.release(code);
+      const direction = arrowDirection(code);
+      // Out of play the arrows move menu focus, unless a slider has focus and needs them itself.
+      if (direction !== null && mode !== 'playing') {
+        if (!isFormControlTarget(document.activeElement)) navigateMenu(direction);
+        continue;
+      }
       const command = commandForKey(mode, code);
       // Behind the settings card only M acts: Space, P and Esc must not start, resume or leave.
       if (command !== null && (!settingsOpen || command.kind === 'toggleMute')) applyCommand(command, now);
@@ -448,7 +521,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       scaler.sample(frameMs);
       if (scaler.index !== levelBefore) applyQuality();
       const frozen = hitStop.frozen;
-      stepWorld(world, frameSeconds, now);
+      stepWorld(world, readControls(pad), frameSeconds, now);
       renderer.advance(visualSeconds, world, frozen);
     } else if (settling) {
       // The death burst plays out under the card; redrawing stops once the last particle is gone.

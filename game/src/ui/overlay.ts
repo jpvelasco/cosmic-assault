@@ -1,7 +1,7 @@
 import type { AppMode } from '../app/game';
 import { currentBuildLabel } from '../buildLabel';
 import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
-import { button, cardPanel, chip, element, showSoundState } from './dom';
+import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
 import { hintCopy, type InputStyle } from './hints';
 
 export interface OverlayActions {
@@ -33,6 +33,8 @@ export interface Overlay {
   update(state: OverlayState): void;
   /** Puts keyboard focus on the Settings chip of the visible card, as the settings card closes. */
   focusSettingsChip(): void;
+  /** The controls of the card for `mode` that can take focus now, in document order; none while another card covers it. */
+  controls(mode: AppMode): HTMLElement[];
   dispose(): void;
 }
 
@@ -144,6 +146,10 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
     },
     focusSettingsChip() {
       settings.focus();
+    },
+    controls(mode) {
+      const panel = panels[mode];
+      return panel === undefined ? [] : focusableControls(panel);
     },
     dispose() {
       for (const panel of all) panel.remove();
