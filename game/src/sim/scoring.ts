@@ -93,3 +93,8 @@ export function galaxyPoints(report: Pick<ClearReport, 'score' | 'bonus'>, dimen
   const factor = mode === 'rank' ? dimensionMultiplier(dimension) : 1;
   return Math.round(report.score / factor) - report.bonus;
 }
+
+/** What a clear counts toward its galaxy's best: its kills and bonus, without Rank's multiplier, so both modes compare alike. */
+export function galaxyBestScore(report: Pick<ClearReport, 'score' | 'bonus'>, dimension: Dimension, mode: GalaxyMode): number {
+  return galaxyPoints(report, dimension, mode) + report.bonus;
+}

@@ -3,7 +3,7 @@ import type { Dimension, GalaxyId } from '../content/types';
 import { abandonRankRun, endRankRun, forfeitRankRun, loseRankRun, rankEntry, recordClear, setRankRun } from '../meta/progress';
 import { afterClear, afterGameOver, afterHit, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
-import type { ClearReport, GalaxyMode } from '../sim/scoring';
+import { galaxyBestScore, type ClearReport, type GalaxyMode } from '../sim/scoring';
 
 /**
  * The screen the app is on. Results, game over and Rank complete are the end screens of a run; confirmNewRank asks
@@ -45,7 +45,7 @@ export interface FlowState {
 export interface ClearResult {
   readonly report: ClearReport;
   readonly total: number;
-  /** The galaxy had a best saved before this clear, and the clear's score beat it. A first clear is no new best. */
+  /** The galaxy had a best saved before this clear, and the clear beat it (without Rank's multiplier). A first clear is no new best. */
   readonly newBest: boolean;
 }
 
@@ -110,10 +110,14 @@ function toMap(state: FlowState): FlowState {
   return { ...state, screen: 'map', mode: 'free', dimension: state.galaxy === null ? state.dimension : dimensionOf(state.galaxy) };
 }
 
+/** What the clear `report` of the galaxy in play counts toward that galaxy's best. */
+const bestScoreOf = ({ galaxy, mode }: FlowState, report: ClearReport): number =>
+  galaxy === null ? report.score : galaxyBestScore(report, dimensionOf(galaxy), mode ?? 'free');
+
 function cleared(state: FlowState, { report, livesLeft, bestBefore }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
   const { rankRun, galaxy } = state;
   if (galaxy === null) return state;
-  const newBest = bestBefore !== null && report.score > bestBefore;
+  const newBest = bestBefore !== null && bestScoreOf(state, report) > bestBefore;
   if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score, newBest } };
   const total = rankRun.score + report.score;
   const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft);
@@ -260,7 +264,7 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
     case 'clear': {
       const { galaxy, result } = after;
       if (galaxy === null || result === null) return null;
-      const record: Change = (save) => recordClear(save, galaxyById(galaxy), action.report.score, action.report.stars);
+      const record: Change = (save) => recordClear(save, galaxyById(galaxy), bestScoreOf(before, action.report), action.report.stars);
       if (run === null) return { record, rank: null };
       const next = after.rankRun;
       return { record, rank: next === null ? (save) => endRankRun(save, rankEntry(run, result.total, today()), null) : (save) => setRankRun(save, next) };

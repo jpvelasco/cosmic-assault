@@ -304,6 +304,18 @@ describe('saveChange', () => {
     expect(after.save).toMatchObject({ rankRun: { ...playing, lives: 1, inGalaxy: false }, rankSeq: 6, rankBoard: [] });
   });
 
+  it('a Rank clear records the galaxy best without the Dimension multiplier, as Free play scores it', () => {
+    // 2-3 in Rank: kills 1000, bonus 500 + 1000, times 1.1.
+    const report: ClearReport = { score: Math.round((1000 + 1500) * 1.1), bonus: 1500, deaths: 0, stars: 3 };
+    const playing = { ...RUN, next: '2-3' as const };
+    const action: FlowAction = { kind: 'clear', report, livesLeft: 3, bestBefore: 2400 };
+    const after = saved(defaultSave(), rankOn('playing', playing), action);
+    expect(after.save.galaxies['2-3']).toEqual({ bestScore: 2500, stars: 3 });
+    // 2500 beats the 2400 saved; the multiplied 2750 is the run's, not the galaxy's.
+    expect(after.state.result?.newBest).toBe(true);
+    expect(transition(rankOn('playing', playing), { ...action, bestBefore: 2500 }).result?.newBest).toBe(false);
+  });
+
   it('a hit in a Rank galaxy saves the lives left, still in the galaxy, so a closed tab forfeits from them', () => {
     const playing = { ...RUN, next: '1-3' as const, score: 2500, lives: 3 };
     const after = saved({ ...defaultSave(), rankRun: { ...playing, inGalaxy: true }, rankSeq: 5 }, rankOn('playing', playing), { kind: 'hit', livesLeft: 2 });
@@ -359,7 +371,8 @@ describe('saveChange', () => {
   it('completing 5-★ records the clear, posts the final score and ends the run', () => {
     const last = { ...RUN, next: '5-6' as const, score: 90000, lives: 1 };
     const after = saved({ ...defaultSave(), frontier: '5-6', rankRun: last, rankSeq: 9 }, rankOn('playing', last), { kind: 'clear', report: REPORT, livesLeft: 1, bestBefore: null }).save;
-    expect(after).toMatchObject({ rankRun: null, rankSeq: 10, galaxies: { '5-6': { bestScore: 1200, stars: 3 } } });
+    // The galaxy keeps its best without D5's ×1.4: 1200 / 1.4, rounded.
+    expect(after).toMatchObject({ rankRun: null, rankSeq: 10, galaxies: { '5-6': { bestScore: 857, stars: 3 } } });
     expect(after.rankBoard).toEqual([{ score: 91200, reached: 'D5 · ★', date: TODAY, continued: false }]);
   });
 });

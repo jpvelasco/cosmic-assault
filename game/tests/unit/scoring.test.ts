@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clearBonuses, clearReport, Combo, galaxyPoints, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
+import { clearBonuses, clearReport, Combo, galaxyBestScore, galaxyPoints, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
 
 describe('comboMultiplier', () => {
   it.each([
@@ -104,6 +104,17 @@ describe('galaxyPoints', () => {
         for (const score of [0, 1, 7, 1235, 98_765]) {
           for (const deaths of [0, 2]) expect(galaxyPoints(clearReport({ score, deaths, dimension, mode }), dimension, mode)).toBe(score);
         }
+      }
+    }
+  });
+});
+
+describe('galaxyBestScore', () => {
+  it('is the Free play score of the same clear, in either mode, so a Rank clear never sets a best Free play cannot reach', () => {
+    for (const dimension of [1, 2, 3, 4, 5] as const) {
+      for (const score of [0, 7, 1235, 98_765]) {
+        const free = clearReport({ score, deaths: 1, dimension, mode: 'free' });
+        for (const mode of ['free', 'rank'] as const) expect(galaxyBestScore(clearReport({ score, deaths: 1, dimension, mode }), dimension, mode)).toBe(free.score);
       }
     }
   });
