@@ -1,5 +1,5 @@
-import { lullStart } from '../sim/galaxy/pacing';
 import { showerSeconds } from './curves';
+import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
 import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, RockKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
@@ -17,7 +17,6 @@ const KIND_RAMPS: Readonly<Record<RockKind, KindRamp>> = {
   small: { from: 0.5, base: 0.1, step: 0.05, max: 0.4 },
 };
 
-const BOSS_APPROACH_SECONDS = 20;
 /** M5 replaces this per Dimension. */
 const PLACEHOLDER_BOSS: BossId = 'sentinel';
 

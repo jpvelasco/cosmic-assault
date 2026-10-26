@@ -3,7 +3,8 @@ import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
 import { showerSeconds } from '../../src/content/curves';
-import { lullStart, phaseAt } from '../../src/sim/galaxy/pacing';
+import { lullStart } from '../../src/content/pacingRules';
+import { phaseAt } from '../../src/sim/galaxy/pacing';
 import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
 
 const KINDS: readonly RockKind[] = ['large', 'medium', 'small'];

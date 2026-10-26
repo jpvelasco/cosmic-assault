@@ -1,11 +1,9 @@
+import { lullStart, OPENING_SECONDS, SURGE_SECONDS } from '../../content/pacingRules';
 import type { GalaxyDef } from '../../content/types';
 import { TIME_EPSILON } from '../math';
 
 export type Phase = 'opening' | 'build' | 'lull' | 'surge' | 'warp' | 'boss';
 
-const OPENING_SECONDS = 15;
-const LULL_SECONDS = 10;
-const SURGE_SECONDS = 20;
 const BUILD_FROM = 0.6;
 const BUILD_TO = 1;
 
@@ -16,9 +14,6 @@ const FIXED_SCALE: Readonly<Record<Exclude<Phase, 'build'>, number>> = {
   warp: 0,
   boss: 0.25,
 };
-
-/** When a survival galaxy's lull starts: it ends as the surge begins, 20 s before the duration. */
-export const lullStart = (galaxy: Pick<GalaxyDef, 'duration'>): number => galaxy.duration - SURGE_SECONDS - LULL_SECONDS;
 
 /** A boss galaxy is all opening for its approach, then `boss`; a survival galaxy runs opening, build, lull, surge, warp. */
 export function phaseAt(galaxy: GalaxyDef, elapsed: number): Phase {

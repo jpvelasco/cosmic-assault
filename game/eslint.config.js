@@ -55,6 +55,22 @@ export default defineConfig(
     },
   },
   {
+    files: ['src/content/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/sim/**', '**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**', '**/platform/**'],
+              message: 'content/ is plain data that sim/ builds on: move shared rules into content/ instead of importing sim/ or any DOM folder',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['src/sw/**/*.ts'],
     languageOptions: { globals: globals.serviceworker },
     rules: {
