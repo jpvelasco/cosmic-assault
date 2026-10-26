@@ -1,4 +1,5 @@
 import { mergeSaves, parseSave, SAVE_KEY, defaultSave, type SaveData } from '../meta/save';
+import { errorMessage, type RingLog } from '../platform/log';
 import { browserStorage } from './settings';
 
 /** The classic game's high score: a plain integer string. Read once and never deleted. */
@@ -16,6 +17,8 @@ export interface SaveStoreOptions {
   readonly events?: StorageEvents;
   /** False for debug runs: changes stay in memory and storage is never written. */
   readonly writes?: boolean;
+  /** Where a write-failure callback that throws is noted; such a throw never reaches `update`. */
+  readonly log?: RingLog;
 }
 
 export interface SaveStore {
@@ -25,7 +28,7 @@ export interface SaveStore {
   load(): SaveData;
   /** Re-reads storage, merges it with memory, applies `change`, writes, and returns the result. */
   update(change: (save: SaveData) => SaveData): SaveData;
-  /** Calls back with the merged save when another tab writes one; returns a function that stops listening. */
+  /** Calls back with the merged save when another tab writes one or clears storage; returns a function that stops listening. */
   onExternalChange(callback: (save: SaveData) => void): () => void;
   /** Calls back once per session, on the first save that could not be stored (no storage, full or blocked), so the app can warn; never in `writes: false` mode. A callback added after that failure is called at once. Returns a function that stops listening. */
   onWriteFailure(callback: () => void): () => void;
@@ -50,6 +53,14 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
   let memory = defaultSave();
   let writeFailed = false;
   const failureListeners = new Set<() => void>();
+  /** Calls a write-failure callback; one that throws is logged, so it cannot break the update that failed to write. */
+  const tellFailure = (callback: () => void): void => {
+    try {
+      callback();
+    } catch (error) {
+      options.log?.add('error', `save failure listener threw: ${errorMessage(error)}`, performance.now());
+    }
+  };
 
   /** What is stored, or null when storage could not be read: nothing may then be written over it. */
   const readStored = (): SaveData | null => {
@@ -85,15 +96,14 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
       if (!persisted && !writeFailed) {
         // The session carries on with the in-memory save; the app is told once.
         writeFailed = true;
-        failureListeners.forEach((callback) => {
-          callback();
-        });
+        failureListeners.forEach(tellFailure);
       }
       return memory;
     },
     onExternalChange(callback) {
       const listener = (event: { key: string | null }): void => {
-        if (event.key !== SAVE_KEY) return;
+        // A null key is another tab's localStorage.clear(): whatever is stored now is re-read and merged.
+        if (event.key !== SAVE_KEY && event.key !== null) return;
         callback(store.load());
       };
       events.addEventListener('storage', listener);
@@ -102,7 +112,7 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
       };
     },
     onWriteFailure(callback) {
-      if (writeFailed) callback();
+      if (writeFailed) tellFailure(callback);
       failureListeners.add(callback);
       return () => {
         failureListeners.delete(callback);

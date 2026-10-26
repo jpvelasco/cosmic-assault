@@ -4,6 +4,7 @@ import { createSaveStore, CLASSIC_HIGH_SCORE_KEY, type StorageEvents } from '../
 import { recordClear, setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
+import { RingLog } from '../../src/platform/log';
 
 class FakeStorage {
   readonly items = new Map<string, string>();
@@ -239,8 +240,26 @@ describe('onExternalChange', () => {
     store.onExternalChange(cb);
     win.fire('cosmic-assault.v2.settings');
     win.fire('something-else');
-    win.fire(null);
     expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('reloads and merges on a cleared storage (key null), keeping what memory had', () => {
+    const storage = new FakeStorage();
+    const win = new FakeWindow();
+    const store = createSaveStore({ storage, events: win });
+    store.update((s) => clear(s, '1-1', 100, 1));
+    const cb = vi.fn<(save: SaveData) => void>();
+    store.onExternalChange(cb);
+    // Another tab ran localStorage.clear(), then wrote a save of its own before this tab heard.
+    storage.items.clear();
+    storage.external(SAVE_KEY, clear(defaultSave(), '1-1', 900, 3));
+    const reads = storage.gets;
+    win.fire(null);
+    expect(storage.gets).toBe(reads + 1);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(store.save.frontier).toBe('1-2');
+    expect(store.save.galaxies['1-1']).toEqual({ bestScore: 900, stars: 3 });
+    expect(cb.mock.calls[0]?.[0]).toEqual(store.save);
   });
 
   it('does not let a corrupt external write damage memory', () => {
@@ -409,6 +428,32 @@ describe('onWriteFailure', () => {
     store.onWriteFailure(late);
     expect(late).toHaveBeenCalledTimes(1);
     expect(store.save.frontier).toBe('1-2');
+  });
+
+  it('a listener that throws cannot break update: the change is kept, other listeners still hear, and the log says so', () => {
+    const log = new RingLog();
+    const store = createSaveStore({ storage: failing(new FakeStorage()), events: new FakeWindow(), log });
+    const after = vi.fn();
+    store.onWriteFailure(() => {
+      throw new Error('toast exploded');
+    });
+    store.onWriteFailure(after);
+    expect(() => store.update((s) => clear(s, '1-1'))).not.toThrow();
+    expect(store.save.frontier).toBe('1-2');
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(log.entries()).toEqual([expect.objectContaining({ kind: 'error', message: expect.stringContaining('toast exploded') as string })]);
+  });
+
+  it('a listener added after the failure that throws is logged too, not thrown', () => {
+    const log = new RingLog();
+    const store = createSaveStore({ storage: null, events: new FakeWindow(), log });
+    store.update((s) => s);
+    expect(() =>
+      store.onWriteFailure(() => {
+        throw new Error('late boom');
+      }),
+    ).not.toThrow();
+    expect(log.entries()).toEqual([expect.objectContaining({ kind: 'error', message: expect.stringContaining('late boom') as string })]);
   });
 
   it('stops calling a callback after it unsubscribes', () => {

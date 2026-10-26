@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES, galaxyOrdinal } from '../../src/content/galaxies';
 import { createRng, type Rng } from '../../src/sim/rng';
-import { defaultSave, mergeSaves, parseSave, SAVE_KEY, sanitizeSave, type SaveData } from '../../src/meta/save';
+import { defaultSave, MAX_RANK_SEQ, mergeSaves, parseSave, SAVE_KEY, sanitizeSave, type SaveData } from '../../src/meta/save';
 import type { RankEntry } from '../../src/meta/rankBoard';
 import type { RankRun } from '../../src/meta/rankRun';
 
@@ -126,6 +126,13 @@ describe('sanitizeSave', () => {
   describe('rankSeq', () => {
     it.each([0, 1, 41])('keeps %j', (rankSeq) => {
       expect(sanitizeSave({ rankSeq }).rankSeq).toBe(rankSeq);
+    });
+
+    it('is capped at 2^31, so a doctored or runaway count stays a safe, comparable number', () => {
+      expect(MAX_RANK_SEQ).toBe(2 ** 31);
+      expect(sanitizeSave({ rankSeq: 2 ** 31 }).rankSeq).toBe(2 ** 31);
+      expect(sanitizeSave({ rankSeq: 2 ** 31 + 1 }).rankSeq).toBe(2 ** 31);
+      expect(sanitizeSave({ rankSeq: Number.MAX_SAFE_INTEGER }).rankSeq).toBe(2 ** 31);
     });
 
     it.each([-1, 1.5, '3', null, Number.POSITIVE_INFINITY, Number.NaN])('resets %j to 0', (rankSeq) => {
@@ -304,6 +311,12 @@ describe('mergeSaves', () => {
       const restarted = { ...b, rankSeq: 3, rankRun: run('1-1', 0) };
       for (const merged of both(ended, restarted)) expect(merged).toMatchObject({ rankSeq: 3, rankRun: restarted.rankRun });
       for (const merged of both(stale, restarted)) expect(merged.rankRun).toEqual(restarted.rankRun);
+    });
+
+    it('at the rankSeq cap both sides tie, so the run that got further wins', () => {
+      const behind = { ...a, rankSeq: MAX_RANK_SEQ, rankRun: run('1-2', 5) };
+      const ahead = { ...b, rankSeq: MAX_RANK_SEQ, rankRun: run('2-1', 0) };
+      for (const merged of both(behind, ahead)) expect(merged).toMatchObject({ rankSeq: MAX_RANK_SEQ, rankRun: ahead.rankRun });
     });
 
     it('a null run does not beat a run on the same rankSeq', () => {

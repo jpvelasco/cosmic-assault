@@ -4,6 +4,8 @@ import { addEntry, mergeBoards, type RankEntry } from './rankBoard';
 import { compareRuns, RANK_MAX_LIVES, type RankRun } from './rankRun';
 
 export const SAVE_KEY = 'cosmic-assault.v2';
+/** `rankSeq` stops here: a doctored or runaway count stays a safe integer, and saves at the cap tie, so the runs themselves decide a merge. */
+export const MAX_RANK_SEQ = 2 ** 31;
 
 export interface GalaxyProgress {
   readonly bestScore: number;
@@ -93,7 +95,7 @@ export function sanitizeSave(raw: unknown): SaveData {
     frontier: isGalaxyId(frontier) ? frontier : '1-1',
     galaxies: sanitizeGalaxies(saved['galaxies']),
     rankRun: sanitizeRankRun(saved['rankRun']),
-    rankSeq: isCount(saved['rankSeq']) ? saved['rankSeq'] : 0,
+    rankSeq: isCount(saved['rankSeq']) ? Math.min(saved['rankSeq'], MAX_RANK_SEQ) : 0,
     rankBoard: sanitizeBoard(saved['rankBoard']),
     classicBest: isCount(classicBest) ? classicBest : null,
     classicImported: classicImported === true,

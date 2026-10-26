@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById, GALAXIES } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
-import { afterClear, afterGameOver, startRank, type RankRun } from '../../src/meta/rankRun';
+import { afterClear, afterGameOver, compareRuns, startRank, type RankRun } from '../../src/meta/rankRun';
 
 const TODAY = '2026-10-26';
 
@@ -75,5 +75,32 @@ describe('afterGameOver (Continue)', () => {
 
   it('a second Continue stays continued', () => {
     expect(afterGameOver({ ...startRank(TODAY), continued: true }).continued).toBe(true);
+  });
+});
+
+describe('compareRuns', () => {
+  const base: RankRun = { next: '2-3', score: 1500, lives: 3, weaponTier: 1, continued: false, startedAt: TODAY };
+  /** `better` beats `worse` whichever is passed first. */
+  const expectAhead = (better: RankRun, worse: RankRun): void => {
+    expect(compareRuns(worse, better)).toBeGreaterThan(0);
+    expect(compareRuns(better, worse)).toBeLessThan(0);
+  };
+
+  it('ties only on identical runs', () => {
+    expect(compareRuns(base, { ...base })).toBe(0);
+  });
+
+  it('decides on the weapon tier once galaxy, score, Continue and lives tie', () => {
+    expectAhead({ ...base, weaponTier: 2 }, base);
+  });
+
+  it('decides on the start date, earlier first, once everything else ties', () => {
+    expectAhead(base, { ...base, startedAt: '2026-10-27' });
+  });
+
+  it('lets a higher level win over every lower one', () => {
+    // More lives beat a better weapon and an earlier start; a better weapon beats an earlier start.
+    expectAhead({ ...base, lives: 4, weaponTier: 0, startedAt: '2026-12-31' }, { ...base, startedAt: '2026-01-01', weaponTier: 3 });
+    expectAhead({ ...base, weaponTier: 2, startedAt: '2026-12-31' }, { ...base, startedAt: '2026-01-01' });
   });
 });

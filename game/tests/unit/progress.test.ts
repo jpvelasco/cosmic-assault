@@ -3,7 +3,7 @@ import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { dimensionStars, isUnlocked, recordClear, setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
-import { defaultSave, type SaveData } from '../../src/meta/save';
+import { defaultSave, MAX_RANK_SEQ, type SaveData } from '../../src/meta/save';
 
 const withFrontier = (frontier: GalaxyId): SaveData => ({ ...defaultSave(), frontier });
 
@@ -100,6 +100,11 @@ describe('setRankRun', () => {
     const continued = setRankRun(started, { ...run, continued: true });
     expect(continued).toMatchObject({ rankRun: { continued: true }, rankSeq: 2 });
     expect(setRankRun(continued, null)).toMatchObject({ rankRun: null, rankSeq: 3 });
+  });
+
+  it('stops counting at 2^31: the count stays at the cap and merges fall back to the runs themselves', () => {
+    expect(setRankRun({ ...defaultSave(), rankSeq: MAX_RANK_SEQ - 1 }, run).rankSeq).toBe(MAX_RANK_SEQ);
+    expect(setRankRun({ ...defaultSave(), rankSeq: MAX_RANK_SEQ }, null)).toMatchObject({ rankRun: null, rankSeq: MAX_RANK_SEQ });
   });
 
   it('leaves the rest of the save, and the save it was given, alone', () => {
