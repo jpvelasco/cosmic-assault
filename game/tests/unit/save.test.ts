@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { GALAXIES, galaxyOrdinal } from '../../src/content/galaxies';
+import { createRng, type Rng } from '../../src/sim/rng';
 import { defaultSave, mergeSaves, parseSave, SAVE_KEY, sanitizeSave, type SaveData } from '../../src/meta/save';
 import type { RankEntry } from '../../src/meta/rankBoard';
 import type { RankRun } from '../../src/meta/rankRun';
@@ -10,6 +12,7 @@ const GOOD: SaveData = {
   frontier: '2-3',
   galaxies: { '1-1': { bestScore: 700, stars: 2 }, '2-2': { bestScore: 1200, stars: 3 } },
   rankRun: RUN,
+  rankSeq: 3,
   rankBoard: [ENTRY],
   classicBest: 4400,
   classicImported: true,
@@ -18,7 +21,7 @@ const GOOD: SaveData = {
 describe('defaults', () => {
   it('start at 1-1 with nothing cleared', () => {
     expect(SAVE_KEY).toBe('cosmic-assault.v2');
-    expect(defaultSave()).toEqual({ version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankBoard: [], classicBest: null, classicImported: false });
+    expect(defaultSave()).toEqual({ version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false });
   });
 
   it('are a fresh copy each time', () => {
@@ -117,6 +120,20 @@ describe('sanitizeSave', () => {
 
     it('does not carry unknown fields', () => {
       expect(sanitizeSave({ rankRun: { ...RUN, cheat: true } }).rankRun).toEqual(RUN);
+    });
+  });
+
+  describe('rankSeq', () => {
+    it.each([0, 1, 41])('keeps %j', (rankSeq) => {
+      expect(sanitizeSave({ rankSeq }).rankSeq).toBe(rankSeq);
+    });
+
+    it.each([-1, 1.5, '3', null, Number.POSITIVE_INFINITY, Number.NaN])('resets %j to 0', (rankSeq) => {
+      expect(sanitizeSave({ ...GOOD, rankSeq }).rankSeq).toBe(0);
+    });
+
+    it('is 0 when missing, as in a save from before it existed', () => {
+      expect(sanitizeSave({ ...GOOD, rankSeq: undefined }).rankSeq).toBe(0);
     });
   });
 
@@ -226,6 +243,15 @@ describe('mergeSaves', () => {
     expect(mergeSaves(defaultSave(), defaultSave()).classicBest).toBeNull();
   });
 
+  it('orders full board ties by reached, then Continue, whichever side holds them', () => {
+    const tie = (reached: string, continued: boolean): RankEntry => ({ ...ENTRY, score: 500, reached, continued });
+    const x = { ...a, rankBoard: [tie('D3 · G1', false), tie('D2 · G1', true)] };
+    const y = { ...b, rankBoard: [tie('D2 · G1', false)] };
+    const merged = mergeSaves(x, y).rankBoard;
+    expect(merged.map((e) => `${e.reached}/${String(e.continued)}`)).toEqual(['D2 · G1/false', 'D2 · G1/true', 'D3 · G1/false']);
+    expect(mergeSaves(y, x).rankBoard).toEqual(merged);
+  });
+
   it('unions the board without duplicating an entry both sides hold, best ten kept', () => {
     const shared: RankEntry = { ...ENTRY, score: 500 };
     const only = (score: number): RankEntry => ({ ...ENTRY, score });
@@ -237,27 +263,53 @@ describe('mergeSaves', () => {
   });
 
   describe('rankRun', () => {
-    const run = (next: RankRun['next'], score: number): RankRun => ({ ...RUN, next, score });
+    const run = (next: RankRun['next'], score: number, extra: Partial<RankRun> = {}): RankRun => ({ ...RUN, next, score, ...extra });
+    const both = (x: SaveData, y: SaveData): [SaveData, SaveData] => [mergeSaves(x, y), mergeSaves(y, x)];
 
-    it('takes the one with the further next galaxy', () => {
+    it('on the same rankSeq takes the one with the further next galaxy', () => {
       const far = { ...a, rankRun: run('3-1', 10) };
       const near = { ...b, rankRun: run('2-5', 99999) };
-      expect(mergeSaves(far, near).rankRun).toEqual(far.rankRun);
-      expect(mergeSaves(near, far).rankRun).toEqual(far.rankRun);
+      for (const merged of both(far, near)) expect(merged.rankRun).toEqual(far.rankRun);
     });
 
     it('on the same galaxy takes the higher score', () => {
       const high = { ...a, rankRun: run('2-5', 800) };
       const low = { ...b, rankRun: run('2-5', 300) };
-      expect(mergeSaves(high, low).rankRun).toEqual(high.rankRun);
-      expect(mergeSaves(low, high).rankRun).toEqual(high.rankRun);
+      for (const merged of both(high, low)) expect(merged.rankRun).toEqual(high.rankRun);
+    });
+
+    it('on the same galaxy and score prefers the run that has not used Continue', () => {
+      const plain = { ...a, rankRun: run('2-5', 300, { continued: false }) };
+      const used = { ...b, rankRun: run('2-5', 300, { continued: true }) };
+      for (const merged of both(plain, used)) expect(merged.rankRun?.continued).toBe(false);
+    });
+
+    it('is commutative even when the runs differ only in lives, tier or start date', () => {
+      const x = { ...a, rankRun: run('2-5', 300, { lives: 2, weaponTier: 1, startedAt: '2026-01-01' }) };
+      const y = { ...b, rankRun: run('2-5', 300, { lives: 4, weaponTier: 0, startedAt: '2026-02-02' }) };
+      const [xy, yx] = both(x, y);
+      expect(xy).toEqual(yx);
     });
 
     it('takes the only run there is, and none when neither has one', () => {
       const has = { ...a, rankRun: run('2-5', 1) };
-      expect(mergeSaves(has, b).rankRun).toEqual(has.rankRun);
-      expect(mergeSaves(b, has).rankRun).toEqual(has.rankRun);
+      for (const merged of both(has, b)) expect(merged.rankRun).toEqual(has.rankRun);
       expect(mergeSaves(a, b).rankRun).toBeNull();
+    });
+
+    it('takes the run, even none, from the side with the higher rankSeq', () => {
+      const stale = { ...a, rankSeq: 1, rankRun: run('3-1', 90000) };
+      const ended = { ...b, rankSeq: 2, rankRun: null };
+      for (const merged of both(stale, ended)) expect(merged).toMatchObject({ rankSeq: 2, rankRun: null });
+      const restarted = { ...b, rankSeq: 3, rankRun: run('1-1', 0) };
+      for (const merged of both(ended, restarted)) expect(merged).toMatchObject({ rankSeq: 3, rankRun: restarted.rankRun });
+      for (const merged of both(stale, restarted)) expect(merged.rankRun).toEqual(restarted.rankRun);
+    });
+
+    it('a null run does not beat a run on the same rankSeq', () => {
+      const has = { ...a, rankSeq: 2, rankRun: run('1-2', 5) };
+      const none = { ...b, rankSeq: 2, rankRun: null };
+      for (const merged of both(has, none)) expect(merged.rankRun).toEqual(has.rankRun);
     });
   });
 
@@ -265,5 +317,64 @@ describe('mergeSaves', () => {
     const before = JSON.stringify([a, b]);
     mergeSaves(a, b);
     expect(JSON.stringify([a, b])).toBe(before);
+  });
+});
+
+describe('mergeSaves over seeded random pairs', () => {
+  const GALAXY_IDS = GALAXIES.map((g) => g.id);
+
+  function randomSave(rng: Rng): SaveData {
+    const galaxies: Record<string, { bestScore: number; stars: number }> = {};
+    for (const id of GALAXY_IDS) if (rng.chance(0.3)) galaxies[id] = { bestScore: rng.int(0, 5) * 100, stars: rng.int(0, 4) };
+    const board = Array.from({ length: rng.int(0, 14) }, () => ({
+      score: rng.int(0, 5) * 100,
+      reached: rng.pick(['D1 · G1', 'D1 · G2', 'D2 · ★']),
+      date: rng.pick(['2026-01-01', '2026-02-02']),
+      continued: rng.chance(0.5),
+    }));
+    const hasRun = rng.chance(0.7);
+    return sanitizeSave({
+      frontier: rng.pick(GALAXY_IDS),
+      galaxies,
+      rankSeq: rng.int(0, 3),
+      rankRun: hasRun
+        ? { next: rng.pick(GALAXY_IDS), score: rng.int(0, 4) * 100, lives: rng.int(1, 6), weaponTier: rng.int(0, 4), continued: rng.chance(0.5), startedAt: rng.pick(['2026-01-01', '2026-02-02']) }
+        : null,
+      rankBoard: board,
+      classicBest: rng.chance(0.5) ? rng.int(0, 5) * 1000 : null,
+      classicImported: rng.chance(0.5),
+    });
+  }
+
+  const rng = createRng(20261026);
+  const triples = Array.from({ length: 300 }, () => [randomSave(rng), randomSave(rng), randomSave(rng)] as const);
+
+  it('is commutative', () => {
+    for (const [a, b] of triples) expect(mergeSaves(a, b)).toEqual(mergeSaves(b, a));
+  });
+
+  it('is idempotent once merged', () => {
+    for (const [a, b] of triples) {
+      const m = mergeSaves(a, b);
+      expect(mergeSaves(m, m)).toEqual(m);
+      expect(mergeSaves(m, b)).toEqual(m);
+      expect(mergeSaves(m, a)).toEqual(m);
+    }
+  });
+
+  it('is associative', () => {
+    for (const [a, b, c] of triples) expect(mergeSaves(mergeSaves(a, b), c)).toEqual(mergeSaves(a, mergeSaves(b, c)));
+  });
+
+  it('never loses a frontier, a best, or a rankSeq from either side', () => {
+    for (const [a, b] of triples) {
+      const m = mergeSaves(a, b);
+      expect(galaxyOrdinal(m.frontier)).toBe(Math.max(galaxyOrdinal(a.frontier), galaxyOrdinal(b.frontier)));
+      expect(m.rankSeq).toBe(Math.max(a.rankSeq, b.rankSeq));
+      for (const id of GALAXY_IDS) {
+        expect(m.galaxies[id]?.bestScore ?? 0).toBe(Math.max(a.galaxies[id]?.bestScore ?? 0, b.galaxies[id]?.bestScore ?? 0));
+        expect(m.galaxies[id]?.stars ?? 0).toBe(Math.max(a.galaxies[id]?.stars ?? 0, b.galaxies[id]?.stars ?? 0));
+      }
+    }
   });
 });

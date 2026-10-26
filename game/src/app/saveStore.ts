@@ -27,6 +27,8 @@ export interface SaveStore {
   update(change: (save: SaveData) => SaveData): SaveData;
   /** Calls back with the merged save when another tab writes one; returns a function that stops listening. */
   onExternalChange(callback: (save: SaveData) => void): () => void;
+  /** Calls back once per session, on the first save that could not be stored (no storage, full or blocked), so the app can warn; never in `writes: false` mode. A callback added after that failure is called at once. Returns a function that stops listening. */
+  onWriteFailure(callback: () => void): () => void;
   /** Copies the classic game's high score into the save, the first time only. */
   importClassicOnce(): SaveData;
 }
@@ -46,12 +48,23 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
   const events: StorageEvents = options.events ?? window;
   const writes = options.writes ?? true;
   let memory = defaultSave();
+  let writeFailed = false;
+  const failureListeners = new Set<() => void>();
 
   const readStored = (): SaveData => {
     try {
       return parseSave(storage?.getItem(SAVE_KEY) ?? null);
     } catch {
       return defaultSave();
+    }
+  };
+  const tryWrite = (text: string): boolean => {
+    if (storage === null) return false;
+    try {
+      storage.setItem(SAVE_KEY, text);
+      return true;
+    } catch {
+      return false;
     }
   };
   const merged = (): SaveData => mergeSaves(memory, readStored());
@@ -66,12 +79,12 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
     },
     update(change) {
       memory = change(merged());
-      if (writes) {
-        try {
-          storage?.setItem(SAVE_KEY, JSON.stringify(memory));
-        } catch {
-          // Full or blocked storage: the session carries on with the in-memory save.
-        }
+      if (writes && !tryWrite(JSON.stringify(memory)) && !writeFailed) {
+        // The session carries on with the in-memory save; the app is told once.
+        writeFailed = true;
+        failureListeners.forEach((callback) => {
+          callback();
+        });
       }
       return memory;
     },
@@ -83,6 +96,13 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
       events.addEventListener('storage', listener);
       return () => {
         events.removeEventListener('storage', listener);
+      };
+    },
+    onWriteFailure(callback) {
+      if (writeFailed) callback();
+      failureListeners.add(callback);
+      return () => {
+        failureListeners.delete(callback);
       };
     },
     importClassicOnce() {

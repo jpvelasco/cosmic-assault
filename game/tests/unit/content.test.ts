@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
-import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
+import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
 import { showerSeconds } from '../../src/content/curves';
 import { lullStart } from '../../src/content/pacingRules';
@@ -152,6 +152,12 @@ describe('galaxy order', () => {
     expect(nextGalaxyId('1-6')).toBe('2-1');
     expect(nextGalaxyId('5-6')).toBeNull();
     expect(GALAXIES.map((g) => nextGalaxyId(g.id))).toEqual([...GALAXIES.slice(1).map((g) => g.id), null]);
+  });
+
+  it('furthest picks the later galaxy whichever way round', () => {
+    expect(furthest('1-6', '2-1')).toBe('2-1');
+    expect(furthest('2-1', '1-6')).toBe('2-1');
+    expect(furthest('3-3', '3-3')).toBe('3-3');
   });
 
   it('refuses ids outside the table', () => {

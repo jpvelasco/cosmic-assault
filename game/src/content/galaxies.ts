@@ -77,6 +77,11 @@ export function galaxyOrdinal(id: GalaxyId): number {
   return found;
 }
 
+/** The further of two galaxies in the run. */
+export function furthest(a: GalaxyId, b: GalaxyId): GalaxyId {
+  return galaxyOrdinal(b) > galaxyOrdinal(a) ? b : a;
+}
+
 /** The galaxy after `id` in the linear run; null after 5-6. */
 export function nextGalaxyId(id: GalaxyId): GalaxyId | null {
   return GALAXIES[galaxyOrdinal(id) + 1]?.id ?? null;

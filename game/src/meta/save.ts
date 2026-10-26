@@ -1,7 +1,7 @@
-import { galaxyOrdinal, GALAXIES, isGalaxyId } from '../content/galaxies';
+import { furthest, GALAXIES, isGalaxyId } from '../content/galaxies';
 import type { GalaxyId } from '../content/types';
-import { addEntry, type RankEntry } from './rankBoard';
-import { RANK_MAX_LIVES, type RankRun } from './rankRun';
+import { addEntry, mergeBoards, type RankEntry } from './rankBoard';
+import { compareRuns, RANK_MAX_LIVES, type RankRun } from './rankRun';
 
 export const SAVE_KEY = 'cosmic-assault.v2';
 
@@ -16,6 +16,8 @@ export interface SaveData {
   readonly frontier: GalaxyId;
   readonly galaxies: Readonly<Partial<Record<GalaxyId, GalaxyProgress>>>;
   readonly rankRun: RankRun | null;
+  /** Counts Rank starts, ends and Continues. The higher count's `rankRun` wins a merge, so a stale tab cannot revive a finished run. */
+  readonly rankSeq: number;
   readonly rankBoard: readonly RankEntry[];
   /** The classic game's high score, imported once; null when there was none. */
   readonly classicBest: number | null;
@@ -23,7 +25,7 @@ export interface SaveData {
 }
 
 export function defaultSave(): SaveData {
-  return { version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankBoard: [], classicBest: null, classicImported: false };
+  return { version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -91,6 +93,7 @@ export function sanitizeSave(raw: unknown): SaveData {
     frontier: isGalaxyId(frontier) ? frontier : '1-1',
     galaxies: sanitizeGalaxies(saved['galaxies']),
     rankRun: sanitizeRankRun(saved['rankRun']),
+    rankSeq: isCount(saved['rankSeq']) ? saved['rankSeq'] : 0,
     rankBoard: sanitizeBoard(saved['rankBoard']),
     classicBest: isCount(classicBest) ? classicBest : null,
     classicImported: classicImported === true,
@@ -107,11 +110,6 @@ export function parseSave(text: string | null): SaveData {
   }
 }
 
-/** The further of two galaxies in the run. */
-export function furthest(a: GalaxyId, b: GalaxyId): GalaxyId {
-  return galaxyOrdinal(b) > galaxyOrdinal(a) ? b : a;
-}
-
 function mergeProgress(a: GalaxyProgress | undefined, b: GalaxyProgress | undefined): GalaxyProgress | undefined {
   if (a === undefined || b === undefined) return a ?? b;
   return { bestScore: Math.max(a.bestScore, b.bestScore), stars: Math.max(a.stars, b.stars) as GalaxyProgress['stars'] };
@@ -126,32 +124,24 @@ function mergeGalaxies(a: SaveData['galaxies'], b: SaveData['galaxies']): SaveDa
   return out;
 }
 
-/** The run that got further: the later `next`, then the higher score. */
-function mergeRuns(a: RankRun | null, b: RankRun | null): RankRun | null {
-  if (a === null || b === null) return a ?? b;
-  const byGalaxy = galaxyOrdinal(b.next) - galaxyOrdinal(a.next);
-  return (byGalaxy || b.score - a.score) > 0 ? b : a;
-}
-
-function mergeBoards(a: readonly RankEntry[], b: readonly RankEntry[]): readonly RankEntry[] {
-  const seen = new Set<string>();
-  const fresh = [...a, ...b].filter((e) => {
-    const key = `${String(e.score)}|${e.reached}|${e.date}|${String(e.continued)}`;
-    return !seen.has(key) && seen.add(key);
-  });
-  return fresh.reduce<readonly RankEntry[]>(addEntry, []);
+/** The Rank run (or its absence) of the save with the higher `rankSeq`; on a tie, the run that got further. */
+function mergeRankRuns(a: SaveData, b: SaveData): RankRun | null {
+  if (a.rankSeq !== b.rankSeq) return a.rankSeq > b.rankSeq ? a.rankRun : b.rankRun;
+  if (a.rankRun === null || b.rankRun === null) return a.rankRun ?? b.rankRun;
+  return compareRuns(a.rankRun, b.rankRun) > 0 ? b.rankRun : a.rankRun;
 }
 
 /**
  * Two saves as one that loses nothing from either, so a tab with a stale copy cannot undo another's
- * progress: the furthest frontier, the best of each galaxy, both boards' entries and the further Rank run.
+ * progress: the furthest frontier, the best of each galaxy, both boards' entries and the newer Rank run.
  */
 export function mergeSaves(a: SaveData, b: SaveData): SaveData {
   return {
     version: 1,
     frontier: furthest(a.frontier, b.frontier),
     galaxies: mergeGalaxies(a.galaxies, b.galaxies),
-    rankRun: mergeRuns(a.rankRun, b.rankRun),
+    rankRun: mergeRankRuns(a, b),
+    rankSeq: Math.max(a.rankSeq, b.rankSeq),
     rankBoard: mergeBoards(a.rankBoard, b.rankBoard),
     classicBest: a.classicBest === null || b.classicBest === null ? (a.classicBest ?? b.classicBest) : Math.max(a.classicBest, b.classicBest),
     classicImported: a.classicImported || b.classicImported,

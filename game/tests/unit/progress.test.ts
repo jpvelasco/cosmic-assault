@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
-import { dimensionStars, isUnlocked, recordClear } from '../../src/meta/progress';
+import { dimensionStars, isUnlocked, recordClear, setRankRun } from '../../src/meta/progress';
+import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, type SaveData } from '../../src/meta/save';
 
 const withFrontier = (frontier: GalaxyId): SaveData => ({ ...defaultSave(), frontier });
@@ -87,5 +88,25 @@ describe('dimensionStars', () => {
   it('reaches 18 with every galaxy at 3 stars', () => {
     const galaxies = Object.fromEntries(GALAXIES.map((g) => [g.id, { bestScore: 1, stars: 3 }]));
     expect(dimensionStars({ ...defaultSave(), galaxies }, 4)).toBe(18);
+  });
+});
+
+describe('setRankRun', () => {
+  const run = startRank('2026-10-26');
+
+  it('sets the run and bumps rankSeq by one, whatever the change', () => {
+    const started = setRankRun(defaultSave(), run);
+    expect(started).toMatchObject({ rankRun: run, rankSeq: 1 });
+    const continued = setRankRun(started, { ...run, continued: true });
+    expect(continued).toMatchObject({ rankRun: { continued: true }, rankSeq: 2 });
+    expect(setRankRun(continued, null)).toMatchObject({ rankRun: null, rankSeq: 3 });
+  });
+
+  it('leaves the rest of the save, and the save it was given, alone', () => {
+    const save = recordClear(defaultSave(), galaxyById('1-1'), 5, 1);
+    const before = JSON.stringify(save);
+    const next = setRankRun(save, run);
+    expect(JSON.stringify(save)).toBe(before);
+    expect({ ...next, rankRun: null, rankSeq: 0 }).toEqual(save);
   });
 });

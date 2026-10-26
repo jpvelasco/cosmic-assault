@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import { createSaveStore, CLASSIC_HIGH_SCORE_KEY, type StorageEvents } from '../../src/app/saveStore';
-import { recordClear } from '../../src/meta/progress';
+import { recordClear, setRankRun } from '../../src/meta/progress';
+import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
 
 class FakeStorage {
@@ -74,6 +75,7 @@ describe('load', () => {
     expect(() => store.update((s) => clear(s, '1-1'))).not.toThrow();
     expect(store.save.frontier).toBe('1-2');
     expect(() => store.importClassicOnce()).not.toThrow();
+    expect(store.save.classicImported).toBe(false);
   });
 });
 
@@ -104,11 +106,13 @@ describe('update', () => {
     const store = createSaveStore({ storage, events: new FakeWindow() });
     storage.external(SAVE_KEY, { ...defaultSave(), rankBoard: [{ score: 10, reached: 'D1 · G1', date: '2026-10-25', continued: false }] });
     const seen: number[] = [];
-    store.update((s) => {
+    const next = store.update((s) => {
       seen.push(s.rankBoard.length);
-      return s;
+      return { ...s, rankBoard: [], classicBest: 77 };
     });
     expect(seen).toEqual([1]);
+    expect(next).toMatchObject({ rankBoard: [], classicBest: 77 });
+    expect(stored(storage)).toMatchObject({ rankBoard: [], classicBest: 77 });
   });
 
   it('survives a corrupt stored value by writing a clean save', () => {
@@ -241,5 +245,104 @@ describe('importClassicOnce', () => {
     const store = createSaveStore({ storage, events: new FakeWindow(), writes: false });
     expect(store.importClassicOnce().classicBest).toBe(100);
     expect(storage.items.has(SAVE_KEY)).toBe(false);
+  });
+});
+
+describe('two tabs and the Rank run', () => {
+  function twoTabs(): { storage: FakeStorage; a: ReturnType<typeof createSaveStore>; b: ReturnType<typeof createSaveStore>; winB: FakeWindow } {
+    const storage = new FakeStorage();
+    const winB = new FakeWindow();
+    return { storage, a: createSaveStore({ storage, events: new FakeWindow() }), b: createSaveStore({ storage, events: winB }), winB };
+  }
+
+  it('a stale tab does not bring back a run that another tab abandoned', () => {
+    const { a, b } = twoTabs();
+    a.update((s) => setRankRun(s, startRank('2026-10-26')));
+    b.load();
+    expect(b.save.rankRun).not.toBeNull();
+    a.update((s) => setRankRun(s, null));
+    expect(b.update((s) => s).rankRun).toBeNull();
+    expect(a.load().rankRun).toBeNull();
+  });
+
+  it('a stale tab adopts the end of a run through the storage event, and does not revive it', () => {
+    const { a, b, winB } = twoTabs();
+    a.update((s) => setRankRun(s, startRank('2026-10-26')));
+    b.load();
+    const adopted = vi.fn<(save: SaveData) => void>();
+    b.onExternalChange(adopted);
+    a.update((s) => setRankRun(s, null));
+    winB.fire(SAVE_KEY);
+    expect(adopted).toHaveBeenCalledWith(expect.objectContaining({ rankRun: null, rankSeq: 2 }));
+    b.update((s) => ({ ...s, classicBest: 5 }));
+    expect(a.load()).toMatchObject({ rankRun: null, classicBest: 5 });
+  });
+
+  it('a run restarted in one tab beats the stale older run in the other', () => {
+    const { a, b } = twoTabs();
+    a.update((s) => setRankRun(s, { ...startRank('2026-10-26'), next: '3-2', score: 9000 }));
+    b.load();
+    a.update((s) => setRankRun(setRankRun(s, null), startRank('2026-10-27')));
+    expect(b.load().rankRun).toMatchObject({ next: '1-1', score: 0, startedAt: '2026-10-27' });
+  });
+});
+
+describe('onWriteFailure', () => {
+  const failing = (storage: FakeStorage): { getItem: FakeStorage['getItem']; setItem: () => never } => ({
+    getItem: (key) => storage.getItem(key),
+    setItem: () => {
+      throw new Error('QuotaExceededError');
+    },
+  });
+
+  it('fires once, on the first failed write, however many follow', () => {
+    const store = createSaveStore({ storage: failing(new FakeStorage()), events: new FakeWindow() });
+    const cb = vi.fn();
+    store.onWriteFailure(cb);
+    store.update((s) => s);
+    store.update((s) => s);
+    store.importClassicOnce();
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire when writes succeed', () => {
+    const store = createSaveStore({ storage: new FakeStorage(), events: new FakeWindow() });
+    const cb = vi.fn();
+    store.onWriteFailure(cb);
+    store.update((s) => clear(s, '1-1'));
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('never fires with writes off, even on storage that would refuse', () => {
+    const store = createSaveStore({ storage: failing(new FakeStorage()), events: new FakeWindow(), writes: false });
+    const cb = vi.fn();
+    store.onWriteFailure(cb);
+    store.update((s) => s);
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('fires when there is no storage at all, since nothing is kept', () => {
+    const store = createSaveStore({ storage: null, events: new FakeWindow() });
+    const cb = vi.fn();
+    store.onWriteFailure(cb);
+    store.update((s) => s);
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells a callback registered after the failure straight away, and the change is still kept in memory', () => {
+    const store = createSaveStore({ storage: failing(new FakeStorage()), events: new FakeWindow() });
+    store.update((s) => clear(s, '1-1'));
+    const late = vi.fn();
+    store.onWriteFailure(late);
+    expect(late).toHaveBeenCalledTimes(1);
+    expect(store.save.frontier).toBe('1-2');
+  });
+
+  it('stops calling a callback after it unsubscribes', () => {
+    const store = createSaveStore({ storage: failing(new FakeStorage()), events: new FakeWindow() });
+    const cb = vi.fn();
+    store.onWriteFailure(cb)();
+    store.update((s) => s);
+    expect(cb).not.toHaveBeenCalled();
   });
 });

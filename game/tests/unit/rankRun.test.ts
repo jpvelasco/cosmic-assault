@@ -42,6 +42,11 @@ describe('afterClear', () => {
     expect(afterClear(at('3-6'), galaxyById('3-6'), 1, 5)).toMatchObject({ lives: 5 });
   });
 
+  it('refuses to clear a galaxy other than the run next, saying which was expected', () => {
+    expect(() => afterClear(at('2-3'), galaxyById('2-4'), 1, 3)).toThrow(RangeError);
+    expect(() => afterClear(at('2-3'), galaxyById('2-4'), 1, 3)).toThrow(/2-4.*2-3/);
+  });
+
   it('is complete after 5-★, not after earlier galaxies', () => {
     expect(afterClear(at('5-6'), galaxyById('5-6'), 99999, 3)).toBe('complete');
     expect(afterClear(at('5-5'), galaxyById('5-5'), 1, 3)).not.toBe('complete');
