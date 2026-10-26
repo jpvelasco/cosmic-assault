@@ -331,6 +331,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   /** Stops the game for good and shows the recovery card. Silences audio without touching the saved sound setting. */
   function stopAfterCrash(error: unknown): void {
     cancelAnimationFrame(frameId);
+    // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
+    run.dispose();
     touch.show(false);
     prefs.card.hide();
     rotatePrompt.show(false);

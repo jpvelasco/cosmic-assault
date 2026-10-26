@@ -83,4 +83,26 @@ describe('createTabPresence', () => {
     vi.advanceTimersByTime(PROBE_MS);
     await expect(probe).resolves.toBe(false);
   });
+
+  it('one answer settles every probe waiting on that run, however they overlap', async () => {
+    vi.useFakeTimers();
+    const open = bus();
+    const playing = createTabPresence(open());
+    const asking = createTabPresence(open());
+    // Both probes go out before the owner exists; the second one's answer must settle the first too.
+    const first = asking.probe(5);
+    vi.advanceTimersByTime(PROBE_MS / 2);
+    playing.own(5);
+    const second = asking.probe(5);
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    vi.advanceTimersByTime(PROBE_MS);
+    await expect(first).resolves.toBe(true);
+  });
+
+  it('dispose settles a pending probe as unanswered', async () => {
+    const asking = createTabPresence(bus()());
+    const pending = asking.probe(8);
+    asking.dispose();
+    await expect(pending).resolves.toBe(false);
+  });
 });

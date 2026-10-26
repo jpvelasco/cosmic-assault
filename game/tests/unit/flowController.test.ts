@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FlowState, Screen } from '../../src/app/flow';
-import { createFlowController, STALE_RUN_NOTICE, type FlowControllerDeps } from '../../src/app/flowController';
+import { createFlowController, STALE_NEW_RUN_NOTICE, STALE_RUN_NOTICE, type FlowControllerDeps } from '../../src/app/flowController';
 import { createSaveStore, type StorageEvents } from '../../src/app/saveStore';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
@@ -220,6 +220,21 @@ describe('createFlowController: another tab moved the Rank run on', () => {
     expect(a.notify).toHaveBeenCalledWith(STALE_RUN_NOTICE);
     expect(a.flow.state.screen).toBe('title');
     expect(a.store.save).toMatchObject({ frontier: '1-2', rankRun: { next: '1-1', lives: 2 } });
+  });
+
+  it('a confirmed new run dropped because another tab wrote meanwhile says to try again', () => {
+    const storage = memoryStorage(setRankRun(defaultSave(), { ...startRank(TODAY), next: '1-3' as const }));
+    const a = setup({ storage });
+    startRankRun(a);
+    expect(a.flow.state.screen).toBe('confirmNewRank');
+    // Another tab resumes the saved run while this one sits on the confirm card.
+    const b = setup({ storage });
+    b.flow.command({ kind: 'resumeRank' });
+    a.store.load();
+    a.flow.command({ kind: 'chooseMode', mode: 'rank' });
+    expect(a.notify).toHaveBeenCalledWith(STALE_NEW_RUN_NOTICE);
+    expect(a.flow.state.screen).toBe('title');
+    expect(a.store.save.rankRun).toMatchObject({ next: '1-3', inGalaxy: true });
   });
 
   it('from the title a tab sees the run as stored now, so it can resume the other tab run', () => {

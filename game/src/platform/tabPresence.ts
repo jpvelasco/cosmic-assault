@@ -40,28 +40,36 @@ export function browserChannel(): PresenceChannel | null {
  */
 export function createTabPresence(channel: PresenceChannel | null = browserChannel(), probeMs = PROBE_MS): TabPresence {
   const owned = new Set<number>();
-  const waiting = new Map<number, () => void>();
+  /** Every probe still waiting, by the run it asks about: one owner's answer settles them all. */
+  const waiting = new Map<number, Set<(answered: boolean) => void>>();
+  const settle = (runSeq: number, answered: boolean): void => {
+    const waiters = waiting.get(runSeq);
+    waiting.delete(runSeq);
+    waiters?.forEach((done) => {
+      done(answered);
+    });
+  };
   channel?.addEventListener('message', ({ data }) => {
     if (!isPresenceMessage(data)) return;
     if (data.kind === 'probe' && owned.has(data.runSeq)) channel.postMessage({ kind: 'owner', runSeq: data.runSeq });
-    if (data.kind === 'owner') waiting.get(data.runSeq)?.();
+    if (data.kind === 'owner') settle(data.runSeq, true);
   });
 
   return {
     probe(runSeq) {
       if (channel === null) return Promise.resolve(false);
       return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          waiters.delete(done);
+          resolve(false);
+        }, probeMs);
         const done = (answered: boolean): void => {
           clearTimeout(timer);
-          waiting.delete(runSeq);
           resolve(answered);
         };
-        const timer = setTimeout(() => {
-          done(false);
-        }, probeMs);
-        waiting.set(runSeq, () => {
-          done(true);
-        });
+        const waiters = waiting.get(runSeq) ?? new Set();
+        waiters.add(done);
+        waiting.set(runSeq, waiters);
         channel.postMessage({ kind: 'probe', runSeq });
       });
     },
@@ -71,8 +79,10 @@ export function createTabPresence(channel: PresenceChannel | null = browserChann
         owned.delete(runSeq);
       };
     },
+    /** Stops answering, and settles every pending probe as unanswered. */
     dispose() {
       owned.clear();
+      for (const runSeq of [...waiting.keys()]) settle(runSeq, false);
       channel?.close();
     },
   };

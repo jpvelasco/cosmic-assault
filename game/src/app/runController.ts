@@ -43,6 +43,9 @@ export interface RunControllerDeps {
  */
 export type RankLock = 'free' | 'checking' | 'elsewhere';
 
+/** While another tab plays the saved run, it is asked about again this often, in case that tab closed or crashed. */
+export const RECHECK_MS = 5000;
+
 /** The toast, once a session, when the save cannot be written. */
 export const SAVE_FAILED_NOTICE = "Progress can't be saved in this browser";
 
@@ -64,6 +67,7 @@ export interface RunController {
   resume(): void;
   /** Quits the paused run to the title; in Rank that forfeits the galaxy, at the cost of a life. */
   quit(): void;
+  /** Stops answering for this tab's Rank galaxy and cancels any check, so nothing is forfeited afterwards. Also on a crash. */
   dispose(): void;
 }
 
@@ -87,6 +91,10 @@ export function createRunController(deps: RunControllerDeps): RunController {
   /** The answer to probes for the Rank galaxy this tab plays; a no-op while it plays none. */
   let releaseOwnership = (): void => undefined;
   let ownedSeq: number | null = null;
+  /** Counts the checks of a run left mid-galaxy: only the newest acts on its probe's answer, and dispose bumps it too. */
+  let checks = 0;
+  let recheckTimer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
 
   /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives. */
   function startRun({ galaxy, mode, rankRun }: FlowState): void {
@@ -130,6 +138,8 @@ export function createRunController(deps: RunControllerDeps): RunController {
       releaseOwnership();
       ownedSeq = runSeq;
       releaseOwnership = runSeq === null ? () => undefined : presence.own(runSeq);
+      // This tab's own Rank start (or end) settles any check still waiting on the run it replaced.
+      checkLeftRun();
     },
   });
 
@@ -143,13 +153,17 @@ export function createRunController(deps: RunControllerDeps): RunController {
 
   /**
    * A run saved mid-galaxy is either another tab's live attempt or one left unfinished (a closed tab). Ask first: an
-   * owner's answer locks it here; silence (or no channel) forfeits it. Runs again whenever another tab writes the save.
+   * owner's answer locks it here, and it is asked again every `RECHECK_MS` in case that tab closed or crashed; silence
+   * (or no channel) forfeits it. Runs again whenever another tab writes the save, and when this tab starts or ends a
+   * Rank galaxy; a newer check overrides any still waiting.
    */
   function checkLeftRun(): void {
     void settleLeftRun();
   }
 
   async function settleLeftRun(): Promise<void> {
+    const check = ++checks;
+    clearTimeout(recheckTimer);
     const { rankRun, rankSeq } = store.save;
     if (rankRun?.inGalaxy !== true || ownedSeq !== null) {
       setLock('free');
@@ -157,10 +171,21 @@ export function createRunController(deps: RunControllerDeps): RunController {
     }
     setLock('checking');
     const owned = await presence.probe(rankSeq);
-    // A newer write has started its own check.
-    if (store.save.rankSeq !== rankSeq) return;
-    if (!owned) flow.forfeitLeftRun();
-    setLock(owned ? 'elsewhere' : 'free');
+    // A newer check, or dispose, has superseded this one.
+    if (check !== checks) return;
+    // The run changed while the probe waited: ask about the run as it is now.
+    if (store.save.rankSeq !== rankSeq) {
+      checkLeftRun();
+      return;
+    }
+    if (owned) {
+      recheckTimer = setTimeout(checkLeftRun, RECHECK_MS);
+      setLock('elsewhere');
+      return;
+    }
+    // The forfeit re-checks inGalaxy inside its update, so a run another tab already forfeited loses no second life.
+    flow.forfeitLeftRun();
+    setLock('free');
   }
   checkLeftRun();
   built = true;
@@ -216,6 +241,10 @@ export function createRunController(deps: RunControllerDeps): RunController {
       flow.dispatch({ kind: 'quit' });
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      checks++;
+      clearTimeout(recheckTimer);
       for (const unlisten of unlisteners) unlisten();
       releaseOwnership();
       presence.dispose();

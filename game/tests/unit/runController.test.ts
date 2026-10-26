@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Screen } from '../../src/app/flow';
-import { createRunController, type RunControllerDeps } from '../../src/app/runController';
+import { createRunController, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
 import { setRankRun } from '../../src/meta/progress';
@@ -15,7 +15,6 @@ import { memoryStorage } from '../helpers/memoryStorage';
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
-
 
 /** A presence where no other tab ever answers, unless `owner` is set: then one owns every run. */
 function fakePresence(owner = false): TabPresence {
@@ -131,6 +130,76 @@ describe('createRunController', () => {
       expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
       run.command({ kind: 'resumeRank' });
       expect(run.flow.screen).toBe('title');
+    });
+  });
+
+  describe('the Rank lock over time', () => {
+    const leftMidGalaxy = setRankRun(defaultSave(), { ...startRank('2026-10-26'), inGalaxy: true });
+
+    /** A presence whose probes wait until the test answers them, oldest first. */
+    function heldPresence() {
+      const pending: ((owned: boolean) => void)[] = [];
+      const presence: TabPresence = {
+        probe: () => new Promise<boolean>((resolve) => pending.push(resolve)),
+        own: () => () => undefined,
+        dispose: () => undefined,
+      };
+      const answer = async (owned: boolean): Promise<void> => {
+        pending.shift()?.(owned);
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+      return { presence, answer, waiting: () => pending.length };
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('asks again every 5 s while another tab plays the run, and forfeits it once that tab stops answering', async () => {
+      vi.useFakeTimers();
+      const held = heldPresence();
+      const { run } = setup({}, () => FIELD, leftMidGalaxy, held.presence);
+      await held.answer(true);
+      expect(run.rankLock).toBe('elsewhere');
+      expect(held.waiting()).toBe(0);
+      vi.advanceTimersByTime(RECHECK_MS);
+      expect(held.waiting()).toBe(1);
+      await held.answer(true);
+      expect(run.rankLock).toBe('elsewhere');
+      expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+      // The owner closed or crashed: the next probe goes unanswered.
+      vi.advanceTimersByTime(RECHECK_MS);
+      await held.answer(false);
+      expect(run.rankLock).toBe('free');
+      expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+      vi.advanceTimersByTime(RECHECK_MS * 2);
+      expect(held.waiting()).toBe(0);
+    });
+
+    it('a new Rank run started while the boot probe waits frees the lock, and the late answer forfeits nothing', async () => {
+      const held = heldPresence();
+      const { run } = setup({}, () => FIELD, leftMidGalaxy, held.presence);
+      expect(run.rankLock).toBe('checking');
+      run.command({ kind: 'start' });
+      run.command({ kind: 'chooseMode', mode: 'rank' });
+      run.command({ kind: 'chooseMode', mode: 'rank' });
+      expect(run.flow.screen).toBe('playing');
+      expect(run.rankLock).toBe('free');
+      await held.answer(false);
+      expect(run.save.rankRun).toMatchObject({ next: '1-1', lives: 3, inGalaxy: true });
+      expect(run.rankLock).toBe('free');
+    });
+
+    it('nothing is forfeited after dispose, even when the pending probe then goes unanswered', async () => {
+      const held = heldPresence();
+      const { run } = setup({}, () => FIELD, leftMidGalaxy, held.presence);
+      run.dispose();
+      await held.answer(false);
+      expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+      expect(() => {
+        run.dispose();
+      }).not.toThrow();
     });
   });
 

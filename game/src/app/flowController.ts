@@ -11,6 +11,8 @@ import type { RunOverrides } from './seed';
 
 /** The toast when another tab has moved this tab's Rank run on. */
 export const STALE_RUN_NOTICE = 'This run continued in another tab';
+/** The toast when a new Rank run is not started because another tab changed the saved one meanwhile. */
+export const STALE_NEW_RUN_NOTICE = 'Another tab changed your Rank run; try again';
 
 export interface FlowControllerDeps {
   readonly store: SaveStore;
@@ -83,7 +85,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     if (before.screen === 'title') knownSeq = store.save.rankSeq;
     const change = saveChange(before, action, after, () => deps.today());
     if (change !== null && !write(change)) {
-      deps.notify(STALE_RUN_NOTICE);
+      deps.notify(action.kind === 'startRank' ? STALE_NEW_RUN_NOTICE : STALE_RUN_NOTICE);
       show(before, toTitle(before));
       return;
     }
