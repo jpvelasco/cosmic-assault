@@ -90,8 +90,9 @@ function ramp(param: AudioParam, ctx: AudioContext, value: number, smoothing: nu
  * Nothing is built while the context is not running or while muted: a suspended clock never ends a
  * voice, so queued voices would pile up and then all sound at once.
  *
- * Graph: sfx gain ─────────────────┐
+ * Graph: (screen bus →) sfx gain ──┐
  *        music gain → 2.6 kHz lowpass ┴→ master gain → compressor (−14 dB, 4:1) → output
+ * The screen bus carries the open screen's own sound, the clear fanfare; a new screen fades it out.
  */
 export function createAudioEngine(initial: Settings, onFailure: (message: string) => void = console.warn): AudioEngine {
   let graph: Graph | null = null;
@@ -102,6 +103,8 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let sfxVolume = initial.sfxVolume;
   let musicLevel: MusicLevel = 'menu';
   let shotsThisFrame = 0;
+  /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
+  let screenBus: GainNode | null = null;
 
   /** The music bus gain for `level`: the saved volume scaled by the mode's level. */
   const musicGain = (level: MusicLevel): number => musicVolume * MUSIC_LEVELS[level];
@@ -233,6 +236,21 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     syncBusGains();
   }
 
+  /** Fades out the last screen's sound, so a fanfare never runs on into the next run, and starts `screen`'s own. */
+  function playScreenCue(screen: Screen): void {
+    if (graph === null) return;
+    const { ctx, bed, sfx } = graph;
+    guard(() => {
+      if (screenBus !== null) ramp(screenBus.gain, ctx, 0, MUTE_SMOOTHING);
+      screenBus = null;
+      const cue = screenCue(screen);
+      if (cue === null || !audible()) return;
+      screenBus = ctx.createGain();
+      screenBus.connect(sfx);
+      playSfx(bed, screenBus, cue.name, cue.delay);
+    });
+  }
+
   function play(name: SfxName, delay = 0): void {
     if (graph === null || !audible()) return;
     if (name === 'shoot' && ++shotsThisFrame > MAX_SHOTS_PER_FRAME) return;
@@ -280,8 +298,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     setMusicLevel,
     setScreen(screen) {
       setMusicLevel(musicFor(screen));
-      const cue = screenCue(screen);
-      if (cue !== null) play(cue.name, cue.delay);
+      playScreenCue(screen);
     },
     dispose() {
       disposed = true;

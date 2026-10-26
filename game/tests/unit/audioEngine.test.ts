@@ -403,6 +403,23 @@ describe('sound effects', () => {
     expect(Math.min(...fanfare)).toBeGreaterThan(2.3);
   });
 
+  it('plays the results fanfare through its own bus, and fades that bus out when the card is left', () => {
+    const e = engine();
+    press();
+    const before = nodesOf('gain').length;
+    e.setScreen('results');
+    const made = nodesOf('gain').slice(before);
+    const sfxBus = nodesOf('gain')[1];
+    const bus = made.find((node) => sfxBus !== undefined && node.outputs.has(sfxBus));
+    if (bus === undefined) throw new Error('the fanfare should play through a bus of its own on the effects bus');
+    // Every fanfare voice goes through that bus, none straight to the effects bus.
+    expect(made.filter((node) => node !== bus && sfxBus !== undefined && node.outputs.has(sfxBus))).toEqual([]);
+    const silenced = (): boolean => bus.gain.setTargetAtTime.mock.calls.some(([value]) => value === 0);
+    expect(silenced()).toBe(false);
+    e.setScreen('playing');
+    expect(silenced()).toBe(true);
+  });
+
   it('does not cap other sounds', () => {
     const e = engine();
     press();
