@@ -106,7 +106,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
     }
     if (galaxy === null || mode === null) {
-      throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow (mode select or ?galaxy=)');
+      throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow, from mode select or galaxy select');
     }
     world = new World({
       seed: overrides.seed ?? clockSeed(),
