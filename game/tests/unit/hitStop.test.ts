@@ -19,6 +19,7 @@ describe('hitStopFor', () => {
     expect(hitStopFor(destroyed(3))).toBe(0);
     expect(hitStopFor(SHOT)).toBe(0);
     expect(hitStopFor({ type: 'gameOver', score: 5 })).toBe(0);
+    expect(hitStopFor({ type: 'bossHit', x: 0, y: 0, hp: 5 })).toBe(0);
   });
 });
 

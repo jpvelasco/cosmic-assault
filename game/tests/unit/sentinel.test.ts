@@ -328,7 +328,9 @@ describe('the Sentinel in a boss galaxy', () => {
 
 /** The galaxy rules behind a world, for the tests that need to land a blow without aiming a ship. */
 function runOf(world: World): GalaxyRun {
-  return (world as unknown as { run: GalaxyRun }).run;
+  const run = (world as unknown as { run?: GalaxyRun }).run;
+  expect(run).toBeDefined();
+  return run as GalaxyRun;
 }
 
 describe('beating the Sentinel', () => {

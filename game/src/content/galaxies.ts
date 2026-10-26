@@ -64,6 +64,20 @@ export function galaxyById(id: GalaxyId): GalaxyDef {
   return found;
 }
 
+const ORDER: ReadonlyMap<GalaxyId, number> = new Map(GALAXIES.map((g, i) => [g.id, i]));
+
+/** Where a galaxy falls in the linear run from 1-1 (0) to 5-6 (29). */
+export function galaxyOrdinal(id: GalaxyId): number {
+  const found = ORDER.get(id);
+  if (found === undefined) throw new RangeError(`No galaxy "${id}": ids run from 1-1 to 5-6`);
+  return found;
+}
+
+/** The galaxy after `id` in the linear run; null after 5-6. */
+export function nextGalaxyId(id: GalaxyId): GalaxyId | null {
+  return GALAXIES[galaxyOrdinal(id) + 1]?.id ?? null;
+}
+
 /** `'2-★'` for a Dimension's boss galaxy, else the id. */
 export function galaxyLabel(id: GalaxyId): string {
   return id.endsWith('-6') ? `${id.slice(0, 1)}-★` : id;
