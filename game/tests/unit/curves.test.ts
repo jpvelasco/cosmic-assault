@@ -84,4 +84,10 @@ describe('non-finite input', () => {
   it('rejects a ramp with a non-finite field', () => {
     expect(() => kindProbability({ from: 0, base: Number.NaN, step: 0, max: 1 }, 1)).toThrow(RangeError);
   });
+
+  it.each(['from', 'base', 'step', 'max'] as const)('names the invalid ramp field %s and the allowed range', (field) => {
+    const ramp = { from: 0, base: 0.1, step: 0, max: 1, [field]: Number.POSITIVE_INFINITY };
+    expect(() => kindProbability(ramp, 1)).toThrow(new RegExp(`ramp\\.${field} .*finite.*got Infinity`));
+    expect(() => kindProbability(ramp, 1)).not.toThrow(/tier/);
+  });
 });

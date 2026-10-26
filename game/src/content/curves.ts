@@ -25,7 +25,9 @@ export function rockSpeedMultiplier(t: number): number {
 /** The chance of picking a kind at tier `t`, before the director weighs it against the others. */
 export function kindProbability(ramp: KindRamp, t: number): number {
   const { from, base, step, max } = ramp;
-  finite(base + from + step + max, 'ramp fields');
+  for (const [name, value] of Object.entries({ from, base, step, max })) {
+    if (!Number.isFinite(value)) throw new RangeError(`ramp.${name} must be a finite number, got ${String(value)}: set it to a finite number (from and step 0 or more, base and max from 0 to 1)`);
+  }
   return clamp(base + Math.max(0, finite(t, 'tier') - from) * step, 0, max);
 }
 
