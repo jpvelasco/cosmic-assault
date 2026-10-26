@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const SIM_PURITY_MESSAGE = 'sim/ must be deterministic and DOM-free: use the injected Rng and dt instead';
+const SIM_PURITY_MESSAGE = 'sim/, content/ and meta/ must be deterministic and DOM-free: use the injected Rng and dt instead';
 
 export default defineConfig(
   { ignores: ['dist', 'dist-e2e', 'playwright-report', 'test-results'] },
@@ -16,7 +16,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['src/sim/**/*.ts'],
+    files: ['src/sim/**/*.ts', 'src/content/**/*.ts', 'src/meta/**/*.ts'],
     rules: {
       'no-restricted-globals': [
         'error',
