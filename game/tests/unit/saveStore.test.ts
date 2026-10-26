@@ -142,6 +142,79 @@ describe('update', () => {
   });
 });
 
+describe('update after a failed read', () => {
+  const REAL = clear(clear(defaultSave(), '1-1', 900, 3), '1-2');
+
+  /** Reads fail while `unreadable` is set; writes always work. */
+  function flaky(storage: FakeStorage): { getItem: (key: string) => string | null; setItem: FakeStorage['setItem']; unreadable: boolean } {
+    const self = {
+      unreadable: true,
+      getItem: (key: string): string | null => {
+        if (self.unreadable) throw new Error('SecurityError');
+        return storage.getItem(key);
+      },
+      setItem: (key: string, value: string): void => {
+        storage.setItem(key, value);
+      },
+    };
+    return self;
+  }
+
+  it('leaves the stored save byte-identical, keeps the change in memory and reports it once', () => {
+    const backing = new FakeStorage();
+    backing.external(SAVE_KEY, REAL);
+    const before = backing.items.get(SAVE_KEY);
+    const store = createSaveStore({ storage: flaky(backing), events: new FakeWindow() });
+    const failed = vi.fn();
+    store.onWriteFailure(failed);
+    expect(store.update((s) => clear(s, '1-3')).frontier).toBe('1-4');
+    store.update((s) => s);
+    expect(backing.items.get(SAVE_KEY)).toBe(before);
+    expect(backing.sets).toBe(0);
+    expect(store.save.frontier).toBe('1-4');
+    expect(failed).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes again, merged with what was really stored, once reads work', () => {
+    const backing = new FakeStorage();
+    backing.external(SAVE_KEY, REAL);
+    const storage = flaky(backing);
+    const store = createSaveStore({ storage, events: new FakeWindow() });
+    store.load();
+    store.update((s) => clear(s, '1-3'));
+    storage.unreadable = false;
+    const next = store.update((s) => s);
+    expect(next.galaxies['1-1']).toEqual({ bestScore: 900, stars: 3 });
+    expect(next.frontier).toBe('1-4');
+    expect(stored(backing)).toEqual(next);
+  });
+
+  it('a first read that fails is fine: load keeps the defaults without throwing', () => {
+    const store = createSaveStore({ storage: flaky(new FakeStorage()), events: new FakeWindow() });
+    expect(store.load()).toEqual(defaultSave());
+  });
+
+  it('a read that finds nothing stored (null) still writes', () => {
+    const backing = new FakeStorage();
+    const store = createSaveStore({ storage: backing, events: new FakeWindow() });
+    const failed = vi.fn();
+    store.onWriteFailure(failed);
+    store.update((s) => clear(s, '1-1'));
+    expect(stored(backing).frontier).toBe('1-2');
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('an unreadable store with writes off stays silent and writes nothing', () => {
+    const backing = new FakeStorage();
+    const store = createSaveStore({ storage: flaky(backing), events: new FakeWindow(), writes: false });
+    const failed = vi.fn();
+    store.onWriteFailure(failed);
+    store.update((s) => s);
+    expect(backing.sets).toBe(0);
+    expect(failed).not.toHaveBeenCalled();
+  });
+});
+
 describe('onExternalChange', () => {
   it('adopts another tab save for the save key, merges it into memory, then calls back', () => {
     const storage = new FakeStorage();

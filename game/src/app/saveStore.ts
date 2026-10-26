@@ -51,11 +51,12 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
   let writeFailed = false;
   const failureListeners = new Set<() => void>();
 
-  const readStored = (): SaveData => {
+  /** What is stored, or null when storage could not be read: nothing may then be written over it. */
+  const readStored = (): SaveData | null => {
     try {
       return parseSave(storage?.getItem(SAVE_KEY) ?? null);
     } catch {
-      return defaultSave();
+      return null;
     }
   };
   const tryWrite = (text: string): boolean => {
@@ -67,19 +68,21 @@ export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
       return false;
     }
   };
-  const merged = (): SaveData => mergeSaves(memory, readStored());
+  const merged = (stored: SaveData | null): SaveData => (stored === null ? memory : mergeSaves(memory, stored));
 
   const store: SaveStore = {
     get save() {
       return memory;
     },
     load() {
-      memory = merged();
+      memory = merged(readStored());
       return memory;
     },
     update(change) {
-      memory = change(merged());
-      if (writes && !tryWrite(JSON.stringify(memory)) && !writeFailed) {
+      const stored = readStored();
+      memory = change(merged(stored));
+      const persisted = !writes || (stored !== null && tryWrite(JSON.stringify(memory)));
+      if (!persisted && !writeFailed) {
         // The session carries on with the in-memory save; the app is told once.
         writeFailed = true;
         failureListeners.forEach((callback) => {
