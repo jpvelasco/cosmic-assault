@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { E2E_SEEDS, seedFor } from '../../e2e/seeds';
 import { CLAIMS, findSeeds, unmetClaimMessage } from '../helpers/seedClaims';
-import { guardScript } from '../helpers/guardScript';
+import { guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 
 const { run: runFinder } = guardScript('find-seeds.mjs', 'find-seeds-');
 
@@ -48,7 +48,7 @@ describe('findSeeds', () => {
   });
 });
 
-describe('npm run find-seeds', () => {
+describe('npm run find-seeds', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('prints the seeds that keep a claim', () => {
     const { status, output } = runFinder('lanes-clear', '--count', '2');
     expect(status).toBe(0);
