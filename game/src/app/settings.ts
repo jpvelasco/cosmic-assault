@@ -1,4 +1,4 @@
-/** Whether screen shake follows the system's reduced-motion preference (`auto`), is wanted (`on`) or is turned off. */
+/** Screen shake: follows the system's reduced-motion preference (`auto`), or is switched on or off outright. */
 export type ScreenShake = 'auto' | 'on' | 'off';
 
 const SCREEN_SHAKES: readonly ScreenShake[] = ['auto', 'on', 'off'];
@@ -16,7 +16,13 @@ export interface Settings {
 
 export const SETTINGS_KEY = 'cosmic-assault.v2.settings';
 
-export const DEFAULT_SETTINGS: Settings = { muted: false, musicVolume: 0.6, sfxVolume: 0.8, screenShake: 'auto', leftHanded: false };
+export const DEFAULT_SETTINGS: Settings = Object.freeze({
+  muted: false,
+  musicVolume: 0.6,
+  sfxVolume: 0.8,
+  screenShake: 'auto',
+  leftHanded: false,
+});
 
 function isVolume(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -34,9 +40,9 @@ function oneOf<T>(options: readonly T[], value: unknown, fallback: T): T {
   return options.find((option) => option === value) ?? fallback;
 }
 
-/** Whether the screen may shake. Reduced motion always wins: `on` only means the player has not turned it off. */
+/** Whether the screen shakes. `auto` follows the system's reduced-motion preference; `on` and `off` are the player's explicit choice and override it. */
 export function shakeEnabled(setting: ScreenShake, reducedMotion: boolean): boolean {
-  return setting !== 'off' && !reducedMotion;
+  return setting === 'auto' ? !reducedMotion : setting === 'on';
 }
 
 /** `window.localStorage`, or null where the browser refuses access (privacy modes, sandboxed frames) or has none. */

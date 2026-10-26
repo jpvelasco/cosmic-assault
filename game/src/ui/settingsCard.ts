@@ -7,6 +7,8 @@ export interface SettingsCardActions {
   /** A control was let go or chosen (the `change` event): save. */
   readonly save: () => void;
   readonly toggleMute: () => void;
+  /** The effects slider was let go: play a sample so the player hears the level they chose. */
+  readonly previewSfx: () => void;
   /** Done or Esc. */
   readonly done: () => void;
 }
@@ -15,8 +17,8 @@ export interface SettingsCard {
   /** Shows the card and moves keyboard focus to the first control. */
   show(): void;
   hide(): void;
-  /** Brings every control in line with `settings`. */
-  update(settings: Settings): void;
+  /** Brings every control in line with `settings`. The left-handed choice is offered only where `touchScreen` is true. */
+  update(settings: Settings, touchScreen: boolean): void;
   dispose(): void;
 }
 
@@ -65,7 +67,7 @@ function volumeSlider(label: string, testId: string, onVolume: (volume: number) 
     control,
     set(volume) {
       control.value = String(Math.round(volume * 100));
-      showValue(control.value);
+      showValue(String(Math.round(volume * 100)));
     },
   };
 }
@@ -120,6 +122,7 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
   leftHanded.dataset['testid'] = 'settings-left-handed';
   const leftHandedRow = element('label', 'setting setting--check');
   leftHandedRow.append(leftHanded, element('span', 'label', 'Left-handed controls'));
+  effects.control.addEventListener('change', actions.previewSfx);
   const sound = chip('sound-toggle', actions.toggleMute, 'settings-sound');
 
   const heading = element('h2', 'heading', 'Settings');
@@ -152,11 +155,12 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
       panel.hidden = true;
       document.removeEventListener('keydown', onKeyDown);
     },
-    update(settings) {
+    update(settings, touchScreen) {
       music.set(settings.musicVolume);
       effects.set(settings.sfxVolume);
       shake.set(settings.screenShake);
       leftHanded.checked = settings.leftHanded;
+      leftHandedRow.hidden = !touchScreen;
       showSoundState(sound, settings.muted);
     },
     dispose() {

@@ -152,7 +152,7 @@ describe('createEffects', () => {
     expect(peak).toBeGreaterThan(5);
   });
 
-  it('zeroes shake and flash in reduced motion but still emits particles', () => {
+  it('zeroes the flash in reduced motion but still emits particles', () => {
     const pool = new ParticlePool(200);
     const fx = createEffects(pool, 1);
     const w = makeWorld();
@@ -160,7 +160,28 @@ describe('createEffects', () => {
     fx.handle([SHIP_HIT], w);
     fx.step(0.016, w);
     expect(pool.count).toBeGreaterThan(40);
-    expect([fx.shakeX, fx.shakeY, fx.flash]).toEqual([0, 0, 0]);
+    expect(fx.flash).toBe(0);
+  });
+
+  it('clears a running flash when reduced motion is switched on, leaving the shake to its own gate', () => {
+    const fx = createEffects(new ParticlePool(200), 1);
+    const w = makeWorld();
+    fx.handle([SHIP_HIT], w);
+    fx.step(0.016, w);
+    fx.reducedMotion = true;
+    expect(fx.reducedMotion).toBe(true);
+    expect(fx.flash).toBe(0);
+    expect(Math.abs(fx.shakeX) + Math.abs(fx.shakeY)).toBeGreaterThan(0);
+  });
+
+  it('shakes under reduced motion while the shake gate is on: an explicit choice', () => {
+    const fx = createEffects(new ParticlePool(200), 1);
+    fx.reducedMotion = true;
+    fx.shakeEnabled = true;
+    fx.handle([SHIP_HIT], makeWorld());
+    fx.step(0.016, makeWorld());
+    expect(Math.abs(fx.shakeX) + Math.abs(fx.shakeY)).toBeGreaterThan(0);
+    expect(fx.flash).toBe(0);
   });
 
   it('drops only the shake when the shake gate is off: flash and particles stay', () => {
@@ -189,25 +210,6 @@ describe('createEffects', () => {
     fx.handle([SHIP_HIT], w);
     fx.step(0.016, w);
     expect(Math.abs(fx.shakeX) + Math.abs(fx.shakeY)).toBeGreaterThan(0);
-  });
-
-  it('keeps reduced motion in charge when the shake gate is on', () => {
-    const fx = createEffects(new ParticlePool(200), 1);
-    fx.reducedMotion = true;
-    fx.shakeEnabled = true;
-    fx.handle([SHIP_HIT], makeWorld());
-    expect([fx.shakeX, fx.shakeY, fx.flash]).toEqual([0, 0, 0]);
-  });
-
-  it('clears running shake and flash when reduced motion is switched on', () => {
-    const pool = new ParticlePool(200);
-    const fx = createEffects(pool, 1);
-    const w = makeWorld();
-    fx.handle([SHIP_HIT], w);
-    fx.step(0.016, w);
-    fx.reducedMotion = true;
-    expect(fx.reducedMotion).toBe(true);
-    expect([fx.shakeX, fx.shakeY, fx.flash]).toEqual([0, 0, 0]);
   });
 
   it('emits no burst for game over', () => {

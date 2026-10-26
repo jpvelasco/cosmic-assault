@@ -73,7 +73,7 @@ describe('shakeEnabled', () => {
     ['auto', false, true],
     ['auto', true, false],
     ['on', false, true],
-    ['on', true, false],
+    ['on', true, true],
     ['off', false, false],
     ['off', true, false],
   ] as const)('%s with reduced motion %s is %s', (setting, reducedMotion, expected) => {

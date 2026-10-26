@@ -12,7 +12,7 @@ const done = (page: Page) => card(page).getByRole('button', { name: 'Done' });
 const settingsOf = async (page: Page) => (await gameState(page)).settings;
 const storedSettings = (page: Page) => page.evaluate((key) => localStorage.getItem(key), SETTINGS_KEY);
 
-test('opens from the title without starting a run, and Done returns to it with focus on the chip', async ({ page }) => {
+test('opens from the title without starting a run, and Done returns to it with focus on the chip', async ({ page, isMobile }) => {
   await openGame(page);
   await expect(card(page)).toBeHidden();
 
@@ -22,9 +22,11 @@ test('opens from the title without starting a run, and Done returns to it with f
   await nextFrames(page, 3);
   await expectMode(page, 'title');
   // Every control has a visible label.
-  for (const label of ['Music volume', 'Effects volume', 'Screen shake', 'Left-handed controls']) {
+  for (const label of ['Music volume', 'Effects volume', 'Screen shake']) {
     await expect(card(page).getByText(label, { exact: true })).toBeVisible();
   }
+  // Left-handed controls only mean something on a touch screen.
+  await expect(leftHanded(page)).toBeVisible({ visible: isMobile });
 
   await done(page).click();
   await expect(card(page)).toBeHidden();
@@ -180,7 +182,42 @@ test('saves when a control is let go, not on every move', async ({ page }) => {
   expect(await writes()).toBe(1);
 });
 
-test('left-handed is remembered and the checkbox follows it', async ({ page }) => {
+test('the effects slider plays the click sample when let go, not while dragged', async ({ page }) => {
+  await page.addInitScript(() => {
+    // The click is the only sine sweep that ends on exactly 880 Hz; each one is a ramp to that value.
+    const clicks: number[] = [];
+    Object.assign(window, { __clicks: clicks });
+    const original: unknown = Reflect.get(AudioParam.prototype, 'exponentialRampToValueAtTime');
+    AudioParam.prototype.exponentialRampToValueAtTime = function (value: number, endTime: number) {
+      if (value === 880) clicks.push(endTime);
+      return Reflect.apply(original as AudioParam['exponentialRampToValueAtTime'], this, [value, endTime]);
+    };
+  });
+  await openGame(page);
+  // A pointer press unlocks audio; the chip's click does not start a run.
+  await openChip(page).click();
+  await expect.poll(async () => (await gameState(page)).audioState).toBe('running');
+  const clicks = () => page.evaluate(() => (window as unknown as { __clicks: number[] }).__clicks.length);
+  const before = await clicks();
+
+  await effects(page).evaluate((el: HTMLInputElement) => {
+    for (const value of ['10', '15', '20']) {
+      el.value = value;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  await nextFrames(page, 2);
+  expect(await clicks()).toBe(before);
+
+  await effects(page).dispatchEvent('change');
+  await expect.poll(clicks).toBe(before + 1);
+  await music(page).dispatchEvent('change');
+  await nextFrames(page, 2);
+  expect(await clicks()).toBe(before + 1);
+});
+
+test('left-handed is remembered and the checkbox follows it', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'The choice is offered on touch screens only');
   await openGame(page);
   await openChip(page).click();
   await expect(leftHanded(page)).not.toBeChecked();
@@ -272,14 +309,15 @@ for (const [name, init] of [
 
     await music(page).fill('20');
     await shakeChoice(page, 'Off').check();
-    await leftHanded(page).check();
-    await expect.poll(() => settingsOf(page)).toMatchObject({ musicVolume: 0.2, screenShake: 'off', leftHanded: true });
+    await effects(page).fill('45');
+    await expect.poll(() => settingsOf(page)).toMatchObject({ musicVolume: 0.2, sfxVolume: 0.45, screenShake: 'off' });
     await expect(music(page)).toHaveValue('20');
     await expect(shakeChoice(page, 'Off')).toBeChecked();
 
     await done(page).click();
     await openChip(page).click();
     await expect(music(page)).toHaveValue('20');
+    await expect(effects(page)).toHaveValue('45');
     expect(warnings.some((text) => text.includes('Could not save your settings'))).toBe(true);
   });
 }

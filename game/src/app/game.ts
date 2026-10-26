@@ -130,7 +130,15 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     toggleFullscreen: button(TOGGLE_FULLSCREEN),
     openSettings,
   });
-  const settingsCard = createSettingsCard(root, { change: applySettings, save: persistSettings, toggleMute, done: closeSettings });
+  const settingsCard = createSettingsCard(root, {
+    change: applySettings,
+    save: persistSettings,
+    toggleMute,
+    previewSfx: () => {
+      audio.play('uiClick');
+    },
+    done: closeSettings,
+  });
 
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
@@ -147,6 +155,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let redrawPending = false;
   /** Whether the settings card is over the title or pause card; the run behind it, if any, stays as it was. */
   let settingsOpen = false;
+  /** The save warning is given once: a slider that is dragged again and again must not flood the console. */
+  let warnedStorage = false;
   let gameOverAt = 0;
   let lastFrameAt = performance.now();
   let frameId = 0;
@@ -170,7 +180,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       settingsOpen,
     });
-    settingsCard.update(settings);
+    settingsCard.update(settings, coarsePointer.matches);
     touch.show(mode === 'playing' && coarsePointer.matches);
     syncHudBounds();
   }
@@ -267,7 +277,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
 
   /** Writes the current settings to storage. A refusal is a warning, not an error: the changes still hold for this visit. */
   function persistSettings(): void {
-    if (!saveSettings(storage, settings)) {
+    if (!saveSettings(storage, settings) && !warnedStorage) {
+      warnedStorage = true;
       console.warn('Could not save your settings, so they will reset on reload. Allow site storage for this page to keep them.');
     }
   }

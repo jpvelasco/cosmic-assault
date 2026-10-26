@@ -28,9 +28,9 @@ export interface Effects {
   readonly shakeY: number;
   readonly flash: number;
   readonly flashColor: string;
-  /** While true, shake and flash stay 0; particles still emit. Turning it on clears them at once. */
+  /** While true, flash stays 0; particles still emit. Turning it on clears the flash at once. Shake has its own gate. */
   reducedMotion: boolean;
-  /** While false, shake stays 0 (the player's setting, see `shakeEnabled`); flash is unaffected. Turning it off clears shake at once. */
+  /** While false, shake stays 0; turning it off clears shake at once. The app sets it from `shakeEnabled(setting, reducedMotion)`. */
   shakeEnabled: boolean;
 }
 
@@ -184,9 +184,8 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   let trailBudget = 0;
 
   const kick = (spec: BurstSpec): void => {
-    if (reducedMotion) return;
     if (shakeEnabled) shake = Math.min(MAX_SHAKE, Math.max(shake, spec.shake));
-    if (spec.flash > 0 && spec.flash >= flash) {
+    if (!reducedMotion && spec.flash > 0 && spec.flash >= flash) {
       flash = spec.flash;
       flashColor = spec.flashColor;
     }
@@ -268,10 +267,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
     },
     set reducedMotion(value: boolean) {
       reducedMotion = value;
-      if (value) {
-        shake = 0;
-        flash = 0;
-      }
+      if (value) flash = 0;
     },
     get shakeEnabled() {
       return shakeEnabled;
