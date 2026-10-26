@@ -43,6 +43,12 @@
         --drop: 0 6px 16px rgba(0, 0, 0, 0.35);
         --text-drop: 0 1px 2px color-mix(in srgb, var(--sky-1) 70%, transparent);
         --pop: cubic-bezier(0.2, 1.4, 0.4, 1);
+        /* The one stacking scale over the canvas, lowest first (tests/unit/indexStyles.test.ts keeps every z-index on it). */
+        --layer-card: 1;
+        --layer-touch: 2;
+        --layer-rotate: 3;
+        --layer-crash: 4;
+        --layer-toast: 5;
       }
       /*
        * Low quality levels (src/render/quality.ts) drop the backdrop blur for a more opaque fill. `--glass` is
@@ -79,6 +85,7 @@
       }
       .overlay {
         position: absolute;
+        z-index: var(--layer-card);
         inset: 0;
         box-sizing: border-box;
         display: grid;
@@ -135,12 +142,12 @@
       }
       /* Above the touch layer, whatever else is showing: a phone held upright cannot play, so nothing behind is usable. */
       .overlay--rotate {
-        z-index: 1001;
+        z-index: var(--layer-rotate);
         background: color-mix(in srgb, var(--space) 88%, transparent);
       }
       /* The recovery card sits over whatever screen crashed, so it hides that one almost fully. */
       .overlay--crash {
-        z-index: 1002;
+        z-index: var(--layer-crash);
         background: color-mix(in srgb, var(--space) 93%, transparent);
       }
       .overlay p,
@@ -390,9 +397,10 @@
         opacity: 0;
         cursor: pointer;
       }
+      /* Over every card, the crash card included: Copy report's only feedback is this toast. */
       .toast {
         position: absolute;
-        z-index: 1;
+        z-index: var(--layer-toast);
         top: max(12px, env(safe-area-inset-top));
         left: 50%;
         transform: translateX(-50%);

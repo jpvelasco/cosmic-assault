@@ -102,7 +102,7 @@ const BASE_CSS = `position:absolute;bottom:${inset('bottom', STICK_EDGE_PX)};wid
 const HANDLE_CSS = `position:absolute;left:50%;top:50%;width:${String(HANDLE_SIZE_PX)}px;height:${String(HANDLE_SIZE_PX)}px;margin:-${String(HANDLE_SIZE_PX / 2)}px 0 0 -${String(HANDLE_SIZE_PX / 2)}px;border-radius:50%;pointer-events:none`;
 const FIRE_CSS = `position:absolute;bottom:${inset('bottom', FIRE_EDGE_PX)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
 const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('right', 16)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
-const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:1000';
+const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:var(--layer-touch)';
 
 /** Anchors `el` to one side of the screen, clearing the other. */
 function anchorTo(el: HTMLElement, side: 'left' | 'right', px: number): void {

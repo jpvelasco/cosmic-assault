@@ -29,7 +29,7 @@ export default defineConfig({
     // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts', '**/offline.spec.ts', '**/install.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts', '**/offline.spec.ts', '**/install.spec.ts', '**/menuKeys.spec.ts'],
       use: desktopChrome,
     },
     {

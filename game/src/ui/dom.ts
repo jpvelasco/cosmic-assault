@@ -24,34 +24,40 @@ export function button(className: string, text: string, onClick: () => void): HT
   return el;
 }
 
-/** A panel holding one glass card. */
+const onButton = (e: Event): boolean => e.target instanceof Element && e.target.closest('button') !== null;
+
+/**
+ * Enter and Space on a focused button inside `panel` do that button's action only, as a click does: they never reach
+ * the window's key handling, which would start, resume or leave a run. A mouse press on a button leaves no control of
+ * the card focused, neither that button nor one the keys or pad had reached, so after a click Space still starts a run.
+ */
+function keepActivationKeysLocal(panel: HTMLElement): void {
+  const stop = (e: KeyboardEvent): void => {
+    if ((e.code === 'Enter' || e.code === 'Space') && onButton(e)) e.stopPropagation();
+  };
+  panel.addEventListener('keydown', stop);
+  panel.addEventListener('keyup', stop);
+  panel.addEventListener('mousedown', (e) => {
+    if (!onButton(e)) return;
+    e.preventDefault();
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && panel.contains(focused)) focused.blur();
+  });
+}
+
+/** A panel holding one glass card, whose buttons keep Enter and Space to themselves. */
 export function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLElement } {
   const panel = element('section', `overlay overlay--${modifier}`);
   const card = element('div', 'card');
   panel.append(card);
+  keepActivationKeysLocal(panel);
   return { panel, card };
 }
 
-/**
- * Enter and Space on a focused chip act on that chip only: they never reach the window's key handling, which would
- * start a run. A click does not focus it, so after one Space still starts a run.
- */
-export function keepActivationKeysLocal(el: HTMLElement): void {
-  const stop = (e: KeyboardEvent): void => {
-    if (e.code === 'Enter' || e.code === 'Space') e.stopPropagation();
-  };
-  el.addEventListener('keydown', stop);
-  el.addEventListener('keyup', stop);
-  el.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-  });
-}
-
-/** A glass chip with the classes `chip` and `className` and a test id (the class unless given) that stays out of the game's key handling. */
+/** A glass chip with the classes `chip` and `className` and a test id (the class unless given). */
 export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
   const el = button(`chip ${className}`, '', onClick);
   el.dataset['testid'] = testId;
-  keepActivationKeysLocal(el);
   return el;
 }
 

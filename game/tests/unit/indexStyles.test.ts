@@ -31,3 +31,20 @@ describe('index.html palette properties', () => {
     expect(hexes.length).toBe(new Set(hexes).size);
   });
 });
+
+describe('index.html stacking layers', () => {
+  const layers = new Map([...styles.matchAll(/--layer-([a-z]+):\s*(\d+);/g)].map(([, name, z]) => [name, Number(z)]));
+
+  it('stacks the cards, touch layer, rotate prompt, crash card and toast in that order', () => {
+    const order = ['card', 'touch', 'rotate', 'crash', 'toast'].map((name) => layers.get(name));
+    expect(order.every((z) => z !== undefined)).toBe(true);
+    expect(order).toEqual([...order].sort((a = 0, b = 0) => a - b));
+    expect(new Set(order).size).toBe(order.length);
+  });
+
+  it('takes every z-index from the scale, so no layer can slip between them', () => {
+    const zIndexes = [...styles.matchAll(/z-index:\s*([^;]+);/g)].map(([, value]) => value);
+    expect(zIndexes.length).toBeGreaterThan(0);
+    for (const value of zIndexes) expect(value).toMatch(/^var\(--layer-[a-z]+\)$/);
+  });
+});

@@ -75,7 +75,18 @@ test('Copy report puts the log, with the error in it, on the clipboard', async (
   await crash(page);
   await page.getByRole('button', { name: 'Copy report' }).click();
 
-  await expect(page.getByRole('status')).toHaveText('Report copied');
+  const toast = page.getByRole('status');
+  await expect(toast).toHaveText('Report copied');
+  // Visible to the player, not just present: the toast is the topmost element at its own centre, above the card's
+  // backdrop. Hit testing skips `pointer-events: none`, so the probe lets the toast take hits for the one lookup.
+  const onTop = await toast.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    el.style.pointerEvents = 'auto';
+    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    el.style.pointerEvents = '';
+    return top === el;
+  });
+  expect(onTop, 'the toast is drawn above the crash card').toBe(true);
   const text = await page.evaluate(() => navigator.clipboard.readText());
   const report = JSON.parse(text) as { meta: Record<string, string>; entries: { kind: string; message: string }[] };
   expect(report.meta['build']).toMatch(/^preview · /);

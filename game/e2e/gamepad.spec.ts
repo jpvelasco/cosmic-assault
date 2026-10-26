@@ -159,15 +159,17 @@ test('Start starts a run from the title', async ({ page }) => {
 
 test('pad navigation shows the focus ring even after a mouse click, until the next pointer press', async ({ page }) => {
   const outline = (name: string) => page.getByRole('button', { name, exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle);
+  // A click picks the level without taking focus, so the pad starts from the first chip.
   await page.getByRole('button', { name: '3', exact: true }).click();
   await tap(page, DPAD_RIGHT);
-  const four = page.getByRole('button', { name: '4', exact: true });
-  await expect(four).toBeFocused();
-  expect(await outline('4')).toBe('solid');
+  await tap(page, DPAD_RIGHT);
+  const two = page.getByRole('button', { name: '2', exact: true });
+  await expect(two).toBeFocused();
+  expect(await outline('2')).toBe('solid');
 
   await page.getByRole('button', { name: '1', exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.body.classList.contains('nav-keys'))).toBe(false);
-  expect(await outline('4')).toBe('none');
+  expect(await outline('2')).toBe('none');
 });
 
 test('behind the settings card the pad can only reach the card, and Start does not begin a run', async ({ page }) => {
