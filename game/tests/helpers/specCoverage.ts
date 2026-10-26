@@ -21,3 +21,9 @@ export function unmatchedSpecs(specs: readonly string[], patterns: readonly Spec
   const matchers = patterns.map((pattern) => (typeof pattern === 'string' ? globToRegExp(pattern) : pattern));
   return specs.filter((spec) => !matchers.some((matcher) => matcher.test(spec)));
 }
+
+/** The projects (and `(config)`, for the top level) that set `testIgnore`, which could skip a spec that `testMatch` appears to cover. */
+export function projectsWithTestIgnore(config: PlaywrightTestConfig): string[] {
+  const projects = (config.projects ?? []).map((project) => ({ name: project.name ?? '(unnamed)', testIgnore: project.testIgnore }));
+  return [{ name: '(config)', testIgnore: config.testIgnore }, ...projects].filter((owner) => owner.testIgnore !== undefined).map((owner) => owner.name);
+}

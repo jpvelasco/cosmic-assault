@@ -1,9 +1,11 @@
 import { readdirSync } from 'node:fs';
+import type { PlaywrightTestConfig } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
 import config from '../../playwright.config';
-import { projectMatchers, unmatchedSpecs } from '../helpers/specCoverage';
+import { projectMatchers, projectsWithTestIgnore, unmatchedSpecs } from '../helpers/specCoverage';
 
-const specs = readdirSync(new URL('../../e2e/', import.meta.url)).filter((name) => name.endsWith('.spec.ts'));
+const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true });
+const specs = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.spec.ts')).map((entry) => entry.name);
 
 describe('unmatchedSpecs', () => {
   it('names a spec that no pattern matches', () => {
@@ -20,6 +22,13 @@ describe('unmatchedSpecs', () => {
   });
 });
 
+describe('projectsWithTestIgnore', () => {
+  it('names the projects that set testIgnore', () => {
+    const config: PlaywrightTestConfig = { testIgnore: 'z', projects: [{ name: 'a' }, { name: 'b', testIgnore: '**/x.spec.ts' }, { testIgnore: [] }] };
+    expect(projectsWithTestIgnore(config)).toEqual(['(config)', 'b', '(unnamed)']);
+  });
+});
+
 describe('playwright.config.ts', () => {
   it('finds the e2e specs and the projects that run them', () => {
     expect(specs.length).toBeGreaterThan(0);
@@ -28,5 +37,13 @@ describe('playwright.config.ts', () => {
 
   it('gives every e2e spec at least one project, so none is silently skipped', () => {
     expect(unmatchedSpecs(specs, projectMatchers(config))).toEqual([]);
+  });
+
+  it('has no project that ignores specs, so testMatch tells the whole story', () => {
+    expect(projectsWithTestIgnore(config)).toEqual([]);
+  });
+
+  it('keeps specs directly in e2e/, where the coverage check can see them', () => {
+    expect(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).toEqual([]);
   });
 });
