@@ -161,3 +161,19 @@ describe('Showers.stop', () => {
     expect(out).toEqual([]);
   });
 });
+
+describe('a schedule with gravity wells', () => {
+  it('takes only the meteor showers from it, in order', () => {
+    const events: GalaxyEvent[] = [{ at: 20, type: 'gravityWell', intensity: 2 }, { at: 50, type: 'meteorShower', intensity: 1 }, { at: 80, type: 'gravityWell', intensity: 1 }];
+    const { events: log } = trace(events, 1, 100);
+    expect(log.map((e) => e.type)).toEqual(['showerWarning', 'showerStart', 'showerEnd']);
+    expect(log[1]?.elapsed).toBeCloseTo(50, 1);
+  });
+
+  it('runs a Dimension 2 galaxy\'s showers on their own times, wells aside', () => {
+    const g = galaxyById('2-4');
+    const showerTimes = g.events.filter((e) => e.type === 'meteorShower').map((e) => e.at);
+    const { events: log } = trace(g.events, 1, g.duration);
+    expect(log.filter((e) => e.type === 'showerStart').map((e) => Math.round(e.elapsed))).toEqual(showerTimes);
+  });
+});

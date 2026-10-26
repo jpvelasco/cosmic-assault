@@ -9,8 +9,14 @@ export type PickupId = 'weaponCore' | 'doubleShot' | 'shield' | 'rapidFire' | 's
 /** The ship's weapon tier: 0 fires one shot, 3 five. It indexes `WEAPON_SPREAD`. */
 export type WeaponTier = 0 | 1 | 2 | 3;
 
-/** The rocks a galaxy spawns. M5 adds foe kinds. */
+/** The rocks a galaxy spawns. */
 export type RockKind = 'large' | 'medium' | 'small';
+
+/** The foes a galaxy spawns: a rock that breaks into fast fragments, and a seeking swarm. */
+export type FoeKind = 'splitter' | 'drone';
+
+/** Everything the director can spawn from its threat budget. */
+export type ThreatKind = RockKind | FoeKind;
 
 /** M5 widens this to one boss per Dimension. */
 export type BossId = 'sentinel';
@@ -32,7 +38,7 @@ export interface KindRamp {
 export interface GalaxyEvent {
   /** Seconds into the galaxy. */
   readonly at: number;
-  readonly type: 'meteorShower';
+  readonly type: 'meteorShower' | 'gravityWell';
   readonly intensity: 1 | 2 | 3;
 }
 
@@ -43,7 +49,7 @@ export interface GalaxyDef {
   readonly kind: 'survival' | 'boss';
   /** Seconds; for a boss galaxy, the length of the approach. */
   readonly duration: number;
-  readonly kinds: Readonly<Record<RockKind, KindRamp>>;
+  readonly kinds: Readonly<Record<ThreatKind, KindRamp>>;
   readonly events: readonly GalaxyEvent[];
   /** The pickups its kills can drop: every pickup from its Dimension or an earlier one. */
   readonly pickups: readonly PickupId[];

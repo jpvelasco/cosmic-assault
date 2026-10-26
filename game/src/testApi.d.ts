@@ -35,6 +35,10 @@ interface CosmicAssaultTestState {
   readonly projectileCount: number;
   /** The pickups on the field, with the seconds each has before it expires (it blinks under 2); empty outside a run. */
   readonly pickups: readonly { readonly id: number; readonly kind: import('./content/types').PickupId; readonly x: number; readonly y: number; readonly expiresIn: number }[];
+  /** The foes on the field; empty outside a galaxy run. */
+  readonly foes: readonly { readonly id: number; readonly kind: import('./content/types').FoeKind; readonly x: number; readonly y: number }[];
+  /** The gravity well being telegraphed or pulling (at most one), with the seconds until it starts or ends; empty when there is none. */
+  readonly wells: readonly { readonly id: number; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number }[];
   /** The timed effects running (doubleShot, rapidFire, spreadLaser, shield), each with its seconds left; one that is off is absent. */
   readonly effects: Readonly<Partial<Record<import('./content/pickups').TimedPickupId, number>>>;
   /** The weapon tier, 0–3; 0 outside a run. */

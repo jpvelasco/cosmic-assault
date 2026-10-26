@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, PICKUP_IDS, PICKUPS } from '../../src/content/pickups';
-import type { GalaxyDef, GalaxyId, PickupId, RockKind } from '../../src/content/types';
-import { showerSeconds } from '../../src/content/curves';
+import { FOES } from '../../src/content/foes';
+import { WELL_SECONDS, WELL_TELEGRAPH_SECONDS } from '../../src/content/hazards';
+import type { GalaxyDef, GalaxyId, PickupId, ThreatKind } from '../../src/content/types';
+import { eventSeconds, showerSeconds } from '../../src/content/curves';
 import { lullStart } from '../../src/content/pacingRules';
 import { phaseAt } from '../../src/sim/galaxy/pacing';
 import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
+import type { GalaxyEvent } from '../../src/content/types';
 
-const KINDS: readonly RockKind[] = ['large', 'medium', 'small'];
+const KINDS: readonly ThreatKind[] = ['large', 'medium', 'small', 'splitter', 'drone'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
 
 describe('the galaxy table', () => {
@@ -45,7 +48,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('sorts events by time and keeps showers apart', () => {
+  it('sorts events by time and keeps events apart', () => {
     for (const g of GALAXIES) {
       const times = g.events.map((e) => e.at);
       expect(times).toEqual([...times].sort((a, b) => a - b));
@@ -57,33 +60,53 @@ describe('the galaxy table', () => {
     for (const id of ['1-1', '1-2', '1-3'] as const) expect(galaxyById(id).events).toEqual([]);
     expect(galaxyById('1-4').events).toEqual([{ at: 50, type: 'meteorShower', intensity: 1 }]);
     for (const g of survival.filter((x) => x.dimension > 1 || x.index === 5)) {
-      expect(g.events.length, g.id).toBeGreaterThanOrEqual(1);
-      expect(g.events.length, g.id).toBeLessThanOrEqual(2);
-      for (const e of g.events) expect(e.intensity, g.id).toBe(Math.min(3, g.dimension));
+      const showers = g.events.filter((e) => e.type === 'meteorShower');
+      expect(showers.length, g.id).toBeGreaterThanOrEqual(1);
+      expect(showers.length, g.id).toBeLessThanOrEqual(2);
+      for (const e of showers) expect(e.intensity, g.id).toBe(Math.min(3, g.dimension));
     }
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events).toEqual([]);
   });
 
-  it('keeps the lull clear: every shower ends by the time the lull starts (ending exactly then is allowed)', () => {
+  it('keeps the lull clear: every shower and gravity well ends by the time the lull starts (ending exactly then is allowed)', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
         expect(['lull', 'warp'], `${g.id} at ${String(e.at)}`).not.toContain(phaseAt(g, e.at));
-        expect(e.at + showerSeconds(e.intensity), `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(lullStart(g));
+        expect(e.at + eventSeconds(e), `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(lullStart(g));
       }
   });
 
-  it('gives every shower its full warning: the next one is not telegraphed until the last has ended', () => {
+  it('gives every event its full warning: the next one is not telegraphed until the last has ended', () => {
+    const warning = (e: GalaxyEvent): number => (e.type === 'gravityWell' ? WELL_TELEGRAPH_SECONDS : SHOWER_WARNING_SECONDS);
     for (const g of GALAXIES)
       for (let i = 1; i < g.events.length; i++) {
         const [prev, next] = [g.events[i - 1], g.events[i]];
         if (prev === undefined || next === undefined) continue;
-        expect(next.at - SHOWER_WARNING_SECONDS, g.id).toBeGreaterThanOrEqual(prev.at + showerSeconds(prev.intensity));
+        expect(next.at - warning(next), g.id).toBeGreaterThanOrEqual(prev.at + eventSeconds(prev));
       }
   });
 
+  it('puts gravity wells in Ion Reach only, one a galaxy at most, 14 s long', () => {
+    const wells = GALAXIES.flatMap((g) => g.events.filter((e) => e.type === 'gravityWell').map((e) => ({ g, e })));
+    expect(wells.length).toBeGreaterThan(0);
+    for (const { g, e } of wells) {
+      expect(g.dimension, g.id).toBe(2);
+      expect(eventSeconds(e)).toBe(WELL_SECONDS);
+    }
+    for (const g of GALAXIES) expect(g.events.filter((e) => e.type === 'gravityWell').length, g.id).toBeLessThanOrEqual(1);
+    expect(galaxyById('2-4').events.map((e) => e.type)).toEqual(['meteorShower', 'gravityWell', 'meteorShower']);
+  });
+
+  it('keeps no more than two set-pieces of the same kind in a galaxy, and none in a boss galaxy', () => {
+    for (const g of GALAXIES) {
+      expect(g.events.filter((e) => e.type === 'meteorShower').length, g.id).toBeLessThanOrEqual(2);
+      if (g.kind === 'boss') expect(g.events, g.id).toEqual([]);
+    }
+  });
+
   it('puts a second shower at about 60% of the duration, or earlier, ending just as the lull starts', () => {
-    for (const g of survival.filter((x) => x.events.length === 2)) {
-      const second = g.events[1];
+    for (const g of survival.filter((x) => x.events.filter((e) => e.type === 'meteorShower').length === 2)) {
+      const second = g.events.filter((e) => e.type === 'meteorShower')[1];
       if (second === undefined) continue;
       const end = second.at + showerSeconds(second.intensity);
       if (Math.abs(second.at - g.duration * 0.6) > 0.5) {
@@ -139,7 +162,7 @@ describe('the galaxy table', () => {
     expect(BOSSES.sentinel.name).toBe('Sentinel');
   });
 
-  it('keeps every rock ramp a probability: 0 <= base <= max <= 1', () => {
+  it('keeps every ramp a probability: 0 <= base <= max <= 1', () => {
     for (const g of GALAXIES)
       for (const kind of KINDS) {
         const { base, max, step, from } = g.kinds[kind];
@@ -151,14 +174,40 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('shares one ramp table instead of repeating it per galaxy', () => {
-    const first = GALAXIES[0]?.kinds;
-    expect(first).toEqual({
+  it('shares three ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, and all five kinds', () => {
+    const rocks = {
       large: { from: 0, base: 0.6, step: 0, max: 0.6 },
       medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
       small: { from: 0.5, base: 0.1, step: 0.05, max: 0.4 },
-    });
-    for (const g of GALAXIES) expect(g.kinds).toBe(first);
+    };
+    const none = { from: 0, base: 0, step: 0, max: 0 };
+    const splitter = { from: 0.4, base: 0.15, step: 0.08, max: 0.35 };
+    const drone = { from: 1, base: 0.2, step: 0.08, max: 0.45 };
+    expect(galaxyById('1-1').kinds).toEqual({ ...rocks, splitter: none, drone: none });
+    expect(galaxyById('1-3').kinds).toEqual({ ...rocks, splitter, drone: none });
+    expect(galaxyById('2-1').kinds).toEqual({ ...rocks, splitter, drone });
+    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(3);
+  });
+
+  it('brings in splitters from 1-3 and drones from Ion Reach, and gives neither to a galaxy before that', () => {
+    for (const g of GALAXIES) {
+      const splitters = g.kinds.splitter.max > 0;
+      const drones = g.kinds.drone.max > 0;
+      expect(splitters, g.id).toBe((g.dimension === 1 && g.index >= 3) || g.dimension === 2);
+      expect(drones, g.id).toBe(g.dimension === 2);
+    }
+  });
+
+  it('never ramps a foe in before its Dimension', () => {
+    for (const g of GALAXIES)
+      for (const kind of ['splitter', 'drone'] as const) {
+        if (g.kinds[kind].max > 0) expect(g.dimension, `${g.id} ${kind}`).toBeGreaterThanOrEqual(FOES[kind].from);
+      }
+  });
+
+  it('prices splitters 3 and drones 1.5, 2 HP and 1 HP, and groups drones 3 to 5', () => {
+    expect(FOES.splitter).toMatchObject({ radius: 30, hp: 2, cost: 3, group: [1, 1] });
+    expect(FOES.drone).toMatchObject({ hp: 1, cost: 1.5, speed: 120, points: 100, group: [3, 5] });
   });
 
   it('uses the Drift palette throughout', () => {

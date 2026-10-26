@@ -20,6 +20,9 @@ export const GAME_OVER_GALAXY: GalaxyId = '5-5';
 /** The `?galaxy=` the perf spec plays: the busiest field early on, 15 to 20 rocks by 15 s with the ship firing. */
 export const PERF_GALAXY: GalaxyId = '5-5';
 
+/** The `?galaxy=` the Ion Reach spec plays: it has a gravity well from 46 s and the first Dimension with drones. */
+export const ION_REACH_GALAXY: GalaxyId = '2-4';
+
 const ENTRIES = [
   // The default `?seed=`: its first 2.5 s in 1-1 keep rocks out of the lanes the fire assertions shoot through.
   { seed: 3, claim: 'lanes-clear', galaxy: E2E_GALAXY },
@@ -33,6 +36,8 @@ const ENTRIES = [
   { seed: 27, claim: 'three-deaths', galaxy: GAME_OVER_GALAXY },
   // The Free play game-over spec: three lives gone about 17 s in.
   { seed: 30, claim: 'free-game-over', galaxy: GAME_OVER_GALAXY },
+  // The Ion Reach spec: the idle ship lives to the well's warning, with a foe on the field, and on into the pull.
+  { seed: 12, claim: 'ion-reach-hazards', galaxy: ION_REACH_GALAXY },
   // The perf spec measures frame time, not an outcome; this seed pins a busy field so every run spawns the same rocks.
   { seed: 7, claim: 'busy-field', galaxy: PERF_GALAXY },
 ] as const satisfies readonly { readonly seed: number; readonly claim: string; readonly galaxy: GalaxyId }[];
@@ -73,3 +78,9 @@ export const FREE_GAME_OVER_SECONDS = 40;
 
 /** Seconds of sim time that clear 1-1: its timer runs out and the warp starts. */
 export const CLEAR_1_1_SECONDS = 95;
+
+/** Sim seconds into `ION_REACH_GALAXY` by which its well is telegraphed: it starts at 46 s, with a 2 s warning from 44 s. */
+export const WELL_WARNING_SECONDS = 44.5;
+
+/** Sim seconds after `WELL_WARNING_SECONDS` by which that well is pulling (it starts at 46 s). */
+export const WELL_PULL_SECONDS = 2;

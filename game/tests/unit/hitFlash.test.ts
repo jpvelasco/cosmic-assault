@@ -105,3 +105,49 @@ describe('createHitFlash: the ship squash', () => {
     expect(flash.shipScale).toBe(SQUASH_SCALE);
   });
 });
+
+describe('createHitFlash: a foe', () => {
+  const spawned = (id: number, kind: 'splitter' | 'drone' = 'drone'): SimEvent => ({ type: 'foeSpawned', id, kind, x: 100, y: 100 });
+  const hurt = (id: number): SimEvent => ({ type: 'foeHit', id, x: 120, y: 90, hp: 1 });
+  const slain = (id: number, kind: 'splitter' | 'drone' = 'drone', points = 100): SimEvent => ({ type: 'foeDestroyed', id, kind, x: 130, y: 80, points });
+
+  it('flashes its kind where it was hit, for 60 ms, remembering the kind from its arrival', () => {
+    const flash = make();
+    flash.handle([spawned(4, 'splitter')]);
+    flash.handle([hurt(4)]);
+    expect(flash.foes).toEqual([{ kind: 'splitter', x: 120, y: 90, left: HIT_FLASH_SECONDS }]);
+    run(flash, 0.05);
+    expect(flash.foes).toHaveLength(1);
+    run(flash, 0.02);
+    expect(flash.foes).toHaveLength(0);
+  });
+
+  it('flashes a foe that was destroyed, by the kind the event carries, and forgets it', () => {
+    const flash = make();
+    flash.handle([spawned(4), slain(4)]);
+    expect(flash.foes).toMatchObject([{ kind: 'drone', x: 130, y: 80 }]);
+    // Its id is forgotten: a late hit on it has no kind to flash.
+    flash.handle([hurt(4)]);
+    expect(flash.foes).toHaveLength(1);
+  });
+
+  it('skips a foe the warp cleared or the ship rammed (0 points), a hit on one it never saw arrive, and the cap', () => {
+    const flash = make();
+    flash.handle([spawned(1), slain(1, 'drone', 0), hurt(2)]);
+    expect(flash.foes).toHaveLength(0);
+    for (let id = 10; id < 50; id++) flash.handle([spawned(id), slain(id)]);
+    expect(flash.foes).toHaveLength(24);
+  });
+
+  it('keeps foe and rock flashes apart, and drops both on reset', () => {
+    const flash = make();
+    flash.handle([destroyed(1), spawned(2), hurt(2)]);
+    expect(flash.rocks).toHaveLength(1);
+    expect(flash.foes).toHaveLength(1);
+    flash.reset();
+    expect(flash.rocks).toHaveLength(0);
+    expect(flash.foes).toHaveLength(0);
+    flash.handle([hurt(2)]);
+    expect(flash.foes).toHaveLength(0);
+  });
+});

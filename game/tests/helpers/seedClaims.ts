@@ -1,5 +1,5 @@
 import { devices } from '@playwright/test';
-import { CLEAR_1_1_SECONDS, E2E_SEEDS, entryFor, FREE_GAME_OVER_SECONDS, THREE_DEATHS_SECONDS, TO_BOSS_FIGHT_SECONDS, type ClaimId, type SeedEntry } from '../../e2e/seeds';
+import { CLEAR_1_1_SECONDS, E2E_SEEDS, entryFor, FREE_GAME_OVER_SECONDS, THREE_DEATHS_SECONDS, TO_BOSS_FIGHT_SECONDS, WELL_WARNING_SECONDS, type ClaimId, type SeedEntry } from '../../e2e/seeds';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { PROJECTILE, STEP_SECONDS } from '../../src/sim/config';
@@ -77,6 +77,24 @@ function reachesBossFight(seed: number, galaxy: GalaxyId, field: Field): boolean
   return world.status === 'playing';
 }
 
+/**
+ * An idle Free play ship is alive WELL_WARNING_SECONDS in with the galaxy's gravity well in its warning, and keeps a
+ * foe on the field and its life through the next FIGHT_SLACK_SECONDS (the spec plays a little in real time first); it is
+ * still alive WELL_PULL_SECONDS after the warning, with the well pulling.
+ */
+function seesIonReach(seed: number, galaxy: GalaxyId, field: Field): boolean {
+  const world = newWorld(seed, field, galaxy, 'free');
+  run(world, WELL_WARNING_SECONDS, () => world.status !== 'playing');
+  const stage = (): string | undefined => world.well?.stage;
+  if (stage() !== 'warning') return false;
+  let bareSteps = 0;
+  run(world, FIGHT_SLACK_SECONDS, () => {
+    if (world.foes.length === 0) bareSteps++;
+    return world.status !== 'playing';
+  });
+  return bareSteps === 0 && world.status === 'playing' && stage() === 'active';
+}
+
 /** An idle ship survives to the warp and clears the galaxy on the desktop field, in Rank and Free play. */
 function clearsGalaxy(seed: number, galaxy: GalaxyId): boolean {
   return (['rank', 'free'] as const).every((mode) => {
@@ -108,6 +126,10 @@ export const CLAIMS: Readonly<Record<ClaimId, Claim>> = {
   'boss-fight': {
     promise: (galaxy) => `keeps an idle ship alive through ${galaxy}'s approach and intro to the boss fight (fighting at ${String(TO_BOSS_FIGHT_SECONDS)} s, ship alive ${String(FIGHT_SLACK_SECONDS)} s later) on both e2e fields`,
     holds: (seed, galaxy) => FIELDS.every((field) => reachesBossFight(seed, galaxy, field)),
+  },
+  'ion-reach-hazards': {
+    promise: (galaxy) => `keeps an idle Free play ship alive ${String(WELL_WARNING_SECONDS)} s into ${galaxy}, with its gravity well telegraphed, with a foe on the field and the ship alive ${String(FIGHT_SLACK_SECONDS)} s on, the well pulling, on the desktop field`,
+    holds: (seed, galaxy) => seesIonReach(seed, galaxy, DESKTOP_FIELD),
   },
   'clears-1-1': {
     promise: (galaxy) => `lets an idle ship clear ${galaxy} on the desktop field, in Rank and Free play, within ${String(CLEAR_1_1_SECONDS)} s`,

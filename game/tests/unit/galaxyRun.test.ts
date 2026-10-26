@@ -9,6 +9,7 @@ import type { Field } from '../../src/sim/field';
 import { fieldBudget, SIZE_COST } from '../../src/sim/galaxy/director';
 import { EDGE_BEARINGS, showerCap } from '../../src/sim/galaxy/showers';
 import { World, type WorldOptions } from '../../src/sim/world';
+import { MUTED_KINDS } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
@@ -18,11 +19,10 @@ const WARP_SECONDS = 1.5;
 /** The most rocks seen at once in the seed-8 3-5 run below, recorded when meteors were made transient and capped. */
 const PINNED_3_5_PEAK = 40;
 
-const MUTE = { from: 0, base: 0, step: 0, max: 0 };
 /** A galaxy whose director never spawns; `events` keeps or drops its showers. */
 function calm(id: GalaxyId, keepShowers = false): GalaxyDef {
   const g = galaxyById(id);
-  return { ...g, kinds: { large: MUTE, medium: MUTE, small: MUTE }, events: keepShowers ? g.events : [] };
+  return { ...g, kinds: MUTED_KINDS, events: keepShowers ? g.events : [] };
 }
 
 type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: 'rank' | 'free' };

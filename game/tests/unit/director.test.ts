@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { rockSpeedMultiplier, sawtooth, threatBudget } from '../../src/content/curves';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
-import type { GalaxyDef, RockKind } from '../../src/content/types';
-import { fieldBudget, GalaxyDirector, ROCK_COST, type SpawnOrder } from '../../src/sim/galaxy/director';
+import type { GalaxyDef, ThreatKind } from '../../src/content/types';
+import { FOES, SPLITTER_FRAGMENTS } from '../../src/content/foes';
+import { fieldBudget, GalaxyDirector, SIZE_COST, THREAT_COST, type SpawnOrder } from '../../src/sim/galaxy/director';
 import { pressureScale } from '../../src/sim/galaxy/pacing';
 import { createRng } from '../../src/sim/rng';
+import { MUTED_KINDS } from '../helpers/mute';
 
 const AREA = 1280 * 720;
 const DT = 1 / 60;
@@ -37,7 +39,7 @@ function run(
     if (order !== null) {
       orders.push(order);
       times.push(elapsed);
-      cost += ROCK_COST[order.kind];
+      cost += order.count * THREAT_COST[order.kind];
       const budget = fieldBudget(galaxy, elapsed, mercy, area);
       opts.onSpawn?.(cost, budget);
       peakShare = Math.max(peakShare, cost / budget);
@@ -47,9 +49,15 @@ function run(
   return { orders, times, peakShare, cost };
 }
 
-describe('ROCK_COST', () => {
-  it('prices large 4, medium 2, small 1', () => {
-    expect(ROCK_COST).toEqual({ large: 4, medium: 2, small: 1 });
+describe('THREAT_COST', () => {
+  it('prices large 4, medium 2, small 1, splitter 3 and drone 1.5, the foes from content', () => {
+    expect(THREAT_COST).toEqual({ large: 4, medium: 2, small: 1, splitter: 3, drone: 1.5 });
+    expect(THREAT_COST.splitter).toBe(FOES.splitter.cost);
+    expect(THREAT_COST.drone).toBe(FOES.drone.cost);
+  });
+
+  it('prices a tiny fragment at half a small rock, so a splitter that breaks never adds cost', () => {
+    expect(SIZE_COST[3] * SPLITTER_FRAGMENTS).toBeLessThanOrEqual(THREAT_COST.splitter);
   });
 });
 
@@ -136,7 +144,7 @@ describe('GalaxyDirector kinds', () => {
     for (let seed = 1; seed <= 30; seed++) {
       for (const o of run(g51, seed, { start: 0, seconds: 14.9, decay: 1 }).orders) kinds.add(o.kind);
     }
-    const late = (Object.keys(g51.kinds) as RockKind[]).filter((kind) => g51.kinds[kind].from !== 0);
+    const late = (Object.keys(g51.kinds) as ThreatKind[]).filter((kind) => g51.kinds[kind].from !== 0);
     expect(late.length).toBeGreaterThan(0);
     for (const kind of late) expect(kinds.has(kind), kind).toBe(false);
     expect(kinds.size).toBeGreaterThan(0);
@@ -151,7 +159,7 @@ describe('GalaxyDirector kinds', () => {
   });
 
   it('weights kinds by kindProbability: large rocks (0.6) outnumber small (0.1, from tier 0.5) at tier 0', () => {
-    const counts = { large: 0, medium: 0, small: 0 };
+    const counts: Record<ThreatKind, number> = { large: 0, medium: 0, small: 0, splitter: 0, drone: 0 };
     for (let seed = 1; seed <= 40; seed++) {
       for (const o of run(galaxyById('1-1'), seed, { start: 20, seconds: 30, decay: 2 }).orders) counts[o.kind]++;
     }
@@ -159,8 +167,7 @@ describe('GalaxyDirector kinds', () => {
   });
 
   it('spawns nothing when every kind has weight 0', () => {
-    const none = { from: 0, base: 0, step: 0, max: 0 };
-    const mute: GalaxyDef = { ...g53, kinds: { large: none, medium: none, small: none } };
+    const mute: GalaxyDef = { ...g53, kinds: MUTED_KINDS };
     expect(run(mute, 1, { start: 40, seconds: 20 }).orders).toEqual([]);
   });
 
@@ -169,6 +176,81 @@ describe('GalaxyDirector kinds', () => {
     const late = run(galaxyById('5-5'), 1, { start: 20, seconds: 20, decay: 1 }).orders;
     expect(early[0]?.speedMultiplier).toBeCloseTo(1, 10);
     expect(late[0]?.speedMultiplier).toBeCloseTo(rockSpeedMultiplier(tierOf(galaxyById('5-5'))), 10);
+  });
+});
+
+describe('GalaxyDirector foes', () => {
+  const g13 = galaxyById('1-3');
+  const g21 = galaxyById('2-1');
+  const kindsOf = (orders: readonly SpawnOrder[]): Set<string> => new Set(orders.map((o) => o.kind));
+
+  it('brings in no splitter before 1-3 and no drone before Ion Reach', () => {
+    for (const id of ['1-1', '1-2'] as const) {
+      for (let seed = 1; seed <= 20; seed++) expect(kindsOf(run(galaxyById(id), seed, { start: 20, seconds: 40, decay: 1 }).orders).has('splitter')).toBe(false);
+    }
+    for (let seed = 1; seed <= 20; seed++) expect(kindsOf(run(galaxyById('1-5'), seed, { start: 20, seconds: 40, decay: 1 }).orders).has('drone')).toBe(false);
+  });
+
+  it('spawns splitters from 1-3 and drones in Ion Reach, once the opening is over', () => {
+    const split = new Set<string>();
+    const swarm = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) {
+      for (const o of run(g13, seed, { start: 20, seconds: 30, decay: 1 }).orders) split.add(o.kind);
+      for (const o of run(g21, seed, { start: 20, seconds: 30, decay: 1 }).orders) swarm.add(o.kind);
+    }
+    expect(split.has('splitter')).toBe(true);
+    expect(split.has('drone')).toBe(false);
+    expect([...swarm].sort()).toEqual(['drone', 'large', 'medium', 'small', 'splitter']);
+  });
+
+  it('holds foes back through the opening, as the new threats they are', () => {
+    const kinds = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) for (const o of run(g21, seed, { start: 0, seconds: 14.9, decay: 1 }).orders) kinds.add(o.kind);
+    expect(kinds.has('drone')).toBe(false);
+    expect(kinds.has('splitter')).toBe(false);
+  });
+
+  it('orders rocks and splitters one at a time, and drones in groups of 3 to 5', () => {
+    const counts = new Map<string, Set<number>>();
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const o of run(g21, seed, { start: 20, seconds: 40, decay: 1 }).orders) counts.set(o.kind, (counts.get(o.kind) ?? new Set()).add(o.count));
+    }
+    for (const kind of ['large', 'medium', 'small', 'splitter']) expect([...(counts.get(kind) ?? [])], kind).toEqual([1]);
+    expect([...(counts.get('drone') ?? [])].sort()).toEqual([3, 4, 5]);
+  });
+
+  it('counts a whole group against the budget: a drone group is refused when its full cost does not fit', () => {
+    const drones: GalaxyDef = { ...g21, kinds: { ...MUTED_KINDS, drone: { from: 0, base: 1, step: 0, max: 1 } } };
+    const budget = fieldBudget(drones, 40, 1, AREA);
+    // Room for one drone but not three.
+    const tight = budget - 2 * FOES.drone.cost;
+    const director = new GalaxyDirector(drones, createRng(1), AREA);
+    for (let i = 0; i < 600; i++) expect(director.step(DT, { elapsed: 40 + i * DT, onFieldCost: tight, mercy: 1 })).toBeNull();
+    const roomy = new GalaxyDirector(drones, createRng(1), AREA);
+    const orders = Array.from({ length: 600 }, (_, i) => roomy.step(DT, { elapsed: 40 + i * DT, onFieldCost: 0, mercy: 1 })).filter((o) => o !== null);
+    expect(orders.length).toBeGreaterThan(0);
+  });
+
+  it('keeps a mixed field of rocks and foes within budget across 10,000 steps, and presses against it', () => {
+    let spawns = 0;
+    const seen = new Set<string>();
+    const result = run(g21, 11, {
+      start: 20,
+      seconds: 10_000 * DT,
+      onSpawn: (cost, budget) => {
+        spawns++;
+        expect(cost).toBeLessThanOrEqual(budget + 1e-9);
+      },
+    });
+    for (const o of result.orders) seen.add(o.kind);
+    expect(spawns).toBeGreaterThan(20);
+    expect(seen.has('drone') || seen.has('splitter')).toBe(true);
+    expect(result.peakShare).toBeGreaterThan(0.8);
+  });
+
+  it('is deterministic with foes in the mix', () => {
+    const a = run(g21, 5, { start: 0, seconds: 100 }).orders;
+    expect(run(g21, 5, { start: 0, seconds: 100 }).orders).toEqual(a);
   });
 });
 

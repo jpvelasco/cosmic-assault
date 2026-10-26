@@ -49,6 +49,35 @@ function positions(seed: number, withThrust: boolean): number[][] {
   return out;
 }
 
+describe('burstFor: foes', () => {
+  const hurt: SimEvent = { type: 'foeHit', id: 1, x: 10, y: 20, hp: 1 };
+  const slain = (kind: 'splitter' | 'drone', points = 100): SimEvent => ({ type: 'foeDestroyed', id: 1, kind, x: 10, y: 20, points });
+
+  it('gives a foe hit the sparks of a boss hit, and a destroyed foe the burst of a rock of its weight', () => {
+    expect(burstFor(hurt, DRIFT)).toEqual(burstFor({ type: 'bossHit', x: 0, y: 0, hp: 3 }, DRIFT));
+    expect(burstFor(slain('splitter'), DRIFT)).toEqual(burstFor(DESTROYED(1), DRIFT));
+    expect(burstFor(slain('drone'), DRIFT)).toEqual(burstFor(DESTROYED(3), DRIFT));
+  });
+
+  it('gives a foe the warp cleared or the ship rammed the light puff of a cleared rock', () => {
+    expect(burstFor(slain('splitter', 0), DRIFT)).toEqual(burstFor(DESTROYED(0, 0), DRIFT));
+  });
+
+  it('keeps arriving foes and the well events silent', () => {
+    for (const event of [{ type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 }, { type: 'wellWarning', x: 0, y: 0, at: 30 }, { type: 'wellStart', id: 1 }, { type: 'wellEnd', id: 1 }] as const) {
+      expect(burstFor(event, DRIFT)).toBeNull();
+    }
+  });
+
+  it('emits particles where a foe was destroyed, from the effects\' own stream', () => {
+    const pool = new ParticlePool(400);
+    createEffects(pool, 3).handle([slain('splitter')], makeWorld());
+    const emitted = allParticles(pool);
+    expect(emitted.length).toBeGreaterThan(0);
+    expect(emitted.some((p) => Math.abs(p.x - 10) < 40 && Math.abs(p.y - 20) < 40)).toBe(true);
+  });
+});
+
 describe('burstFor', () => {
   it('matches the burst table for asteroid sizes', () => {
     const pick = (size: 0 | 1 | 2 | 3) => {

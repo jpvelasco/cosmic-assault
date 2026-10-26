@@ -1,3 +1,5 @@
+import { FOES } from '../content/foes';
+import type { FoeKind } from '../content/types';
 import { ASTEROID } from '../sim/config';
 import { isWarpClear, type SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
@@ -64,7 +66,10 @@ const ASTEROID_BURSTS: readonly [Counts, Counts, Counts, Counts] = [
 
 const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45 };
 const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
-const BOSS_HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A shot hurting a boss or a foe without killing it. */
+const HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one. */
+const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[3] };
 /** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
 const WARP_CLEAR_BURST: Counts = { shards: 2, sparks: 4, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
@@ -89,7 +94,10 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'shot':
       return writeBurst(into, SHOT_BURST, palette.shot);
     case 'bossHit':
-      return writeBurst(into, BOSS_HIT_BURST, palette.shot);
+    case 'foeHit':
+      return writeBurst(into, HIT_BURST, palette.shot);
+    case 'foeDestroyed':
+      return writeBurst(into, event.points === 0 ? WARP_CLEAR_BURST : FOE_BURSTS[event.kind], palette.ring);
     case 'gameOver':
     case 'asteroidLeft':
     case 'galaxyStart':
@@ -108,6 +116,10 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'pickupExpired':
     case 'effectEnded':
     case 'shieldBroken':
+    case 'foeSpawned':
+    case 'wellWarning':
+    case 'wellStart':
+    case 'wellEnd':
       return null;
   }
 }
@@ -223,7 +235,10 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'shot':
         return writeOrigin(origin, event.x, event.y, 0, null, world.ship.vx * 0.5, world.ship.vy * 0.5);
       case 'bossHit':
+      case 'foeHit':
         return writeOrigin(origin, event.x, event.y, 0, null);
+      case 'foeDestroyed':
+        return writeOrigin(origin, event.x, event.y, FOES[event.kind].radius, null);
       case 'gameOver':
       case 'asteroidLeft':
       case 'galaxyStart':
@@ -242,6 +257,10 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'pickupExpired':
       case 'effectEnded':
       case 'shieldBroken':
+      case 'foeSpawned':
+      case 'wellWarning':
+      case 'wellStart':
+      case 'wellEnd':
         return null;
     }
   };

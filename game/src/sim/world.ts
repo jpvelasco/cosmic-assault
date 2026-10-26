@@ -7,16 +7,19 @@ import { ASTEROID, PLAYER, PROJECTILE } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
 import type { Field } from './field';
-import { GalaxyRun } from './galaxy/galaxyRun';
+import { GalaxyRun, galaxyStreams } from './galaxy/galaxyRun';
 import type { Phase } from './galaxy/pacing';
 import type { ShowerState } from './galaxy/showers';
+import type { Foe } from './foes/foe';
+import type { WellState } from './hazards/gravityWell';
 import type { Pickup } from './pickups/pickups';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
 import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
-import { createShip, makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { removeFlagged, resetFlags } from './flagged';
 import { rescale } from './wrap';
-import { assertAsteroidPlacement, assertField, assertFinite, resolveOptions, type ShipPlacement, type WorldOptions } from './worldOptions';
+import { assertAsteroidPlacement, assertField, placeShip, resolveOptions, type WorldOptions } from './worldOptions';
 
 export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
 export {
@@ -41,6 +44,7 @@ export function hasEnded(status: WorldStatus): boolean {
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = Object.freeze({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
 const NO_PICKUPS: readonly Pickup[] = Object.freeze([]);
+const NO_FOES: readonly Foe[] = Object.freeze([]);
 
 function assertDt(dt: number): void {
   if (!(dt > 0 && Number.isFinite(dt))) {
@@ -48,22 +52,6 @@ function assertDt(dt: number): void {
       `World.step() needs a finite dt > 0 seconds (got ${String(dt)}); drive it from the fixed-step loop`,
     );
   }
-}
-
-/** Keeps the items whose index is not flagged, in order, without allocating. */
-function removeFlagged(items: unknown[], flagged: readonly boolean[]): void {
-  let kept = 0;
-  for (let i = 0; i < items.length; i++) {
-    if (flagged[i] !== true) {
-      items[kept++] = items[i];
-    }
-  }
-  items.length = kept;
-}
-
-function resetFlags(flags: boolean[], length: number): void {
-  flags.length = length;
-  flags.fill(false);
 }
 
 /**
@@ -76,7 +64,9 @@ function resetFlags(flags: boolean[], length: number): void {
  *   outline changes never shift gameplay draws;
  * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams;
  * - 'boss': a boss fight's drift and attacks;
- * - 'pickups': whether a kill drops a pickup, and which.
+ * - 'pickups': whether a kill drops a pickup, and which;
+ * - 'foes': where foes enter, how they head and where their fragments fly;
+ * - 'hazards': where gravity wells sit.
  */
 export class World {
   private readonly level: number;
@@ -113,12 +103,12 @@ export class World {
     this.spawnRng = createRng(deriveSeed(opts.seed, 'spawn'));
     this.splitRng = createRng(deriveSeed(opts.seed, 'split'));
     this.shapeRng = createRng(deriveSeed(opts.seed, 'shape'));
-    this.shipState = World.placeShip(opts.field, opts.initialShip);
+    this.shipState = placeShip(opts.field, opts.initialShip);
     const arena = this.createArena();
     if (rules.kind === 'practice') {
       this.rules = new PracticeSpawner(rules.level, this.spawnRng, arena);
     } else {
-      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), createRng(deriveSeed(opts.seed, 'boss')), arena, createRng(deriveSeed(opts.seed, 'pickups')), startTier);
+      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, galaxyStreams(opts.seed), arena, startTier);
     }
     if (opts.initialAsteroids === undefined) {
       this.rules.open?.();
@@ -235,6 +225,16 @@ export class World {
     return this.run?.pickups ?? NO_PICKUPS;
   }
 
+  /** The foes on the field; a live view, and always empty in practice. */
+  get foes(): readonly Readonly<Foe>[] {
+    return this.run?.foeList ?? NO_FOES;
+  }
+
+  /** The gravity well being telegraphed or pulling; null when there is none, and always in practice. */
+  get well(): Readonly<WellState> | null {
+    return this.run?.well ?? null;
+  }
+
   /** The meteor shower being telegraphed or falling, for the HUD warning; a live view. */
   get shower(): ShowerState | null {
     return this.run?.shower ?? null;
@@ -256,6 +256,7 @@ export class World {
     this.elapsedValue += dt;
     this.rules.beginStep?.();
     this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField, this.run?.loadout.weapon));
+    this.rules.moveOwn?.(dt, this.shipState);
     this.moveEntities(dt);
     this.prepareCollisions();
     const stillPlaying = this.collideShip();
@@ -289,17 +290,6 @@ export class World {
   /** Ends the run without emitting anything (used by "Quit"). */
   endRun(): void {
     this.statusValue = 'gameOver';
-  }
-
-  private static placeShip(field: Field, placement: ShipPlacement | undefined): Ship {
-    if (placement === undefined) {
-      return createShip(field.width / 2, field.height / 2);
-    }
-    assertFinite('WorldOptions.initialShip', { x: placement.x, y: placement.y, angle: placement.angle });
-    const ship = createShip(placement.x, placement.y);
-    ship.angle = placement.angle;
-    ship.pangle = placement.angle;
-    return ship;
   }
 
   private nextId(): number {
@@ -404,7 +394,7 @@ export class World {
     const index = this.lastOverlap(ship.x, ship.y, PLAYER.radius);
     if (index >= 0) {
       this.markBroken(index);
-    } else if (this.run?.touchesBoss(ship.x, ship.y, PLAYER.radius) !== true) {
+    } else if (this.run?.shipStruck(ship.x, ship.y, PLAYER.radius) !== true) {
       return true;
     }
     if (this.run?.absorbHit() === true) {
@@ -429,7 +419,7 @@ export class World {
     const projectiles = this.projectileList;
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i] as Projectile;
-      if (this.run?.hitBoss(p.x, p.y, PROJECTILE.radius) === true) {
+      if (this.run?.hitBoss(p.x, p.y, PROJECTILE.radius) === true || this.run?.hitFoe(p.x, p.y, PROJECTILE.radius) === true) {
         this.spentFlags[i] = true;
         continue;
       }

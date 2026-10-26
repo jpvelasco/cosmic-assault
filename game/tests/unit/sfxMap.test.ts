@@ -7,11 +7,15 @@ import type { SimEvent } from '../../src/sim/events';
 /** The pickup events, which have no sound yet. */
 type PickupEvent = 'pickupDropped' | 'pickupCollected' | 'pickupExpired' | 'effectEnded' | 'shieldBroken';
 
+/** The foe events, and the gravity well events, whose sounds are placeholders shared with the shower's. */
+type FoeEvent = 'foeSpawned' | 'foeHit' | 'foeDestroyed';
+type WellEvent = 'wellWarning' | 'wellStart' | 'wellEnd';
+
 const destroyed = (size: AsteroidSize, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 0, y: 0, size, points });
 const nameOf = (event: SimEvent): string | null => sfxFor(event)?.name ?? null;
 
 /** One event of every type the galaxies and bosses added that makes a sound; the Record makes a new event type fail to compile here. */
-const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | PickupEvent>, SimEvent>> = {
+const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | PickupEvent | FoeEvent | WellEvent>, SimEvent>> = {
   galaxyStart: { type: 'galaxyStart', id: '1-1' },
   showerWarning: { type: 'showerWarning', angle: 0, at: 50 },
   showerStart: { type: 'showerStart' },
@@ -60,6 +64,23 @@ describe('sfxFor', () => {
     expect(new Set(names).size).toBe(names.length);
     const older = (['shoot', 'boomLarge', 'boomMedium', 'boomSmall', 'boomTiny', 'shipHit', 'gameOver', 'uiClick', 'pause'] as const).filter((n) => names.includes(n));
     expect(older).toEqual([]);
+  });
+
+  it('maps a foe hit to a short boom, and a killed foe to the boom of a rock of its weight', () => {
+    expect(nameOf({ type: 'foeHit', id: 1, x: 0, y: 0, hp: 1 })).toBe('boomTiny');
+    expect(nameOf({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 100 })).toBe('boomMedium');
+    expect(nameOf({ type: 'foeDestroyed', id: 2, kind: 'drone', x: 0, y: 0, points: 100 })).toBe('boomSmall');
+  });
+
+  it('keeps a foe silent when it arrives, and when the warp or a collision with the ship destroys it (0 points)', () => {
+    expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 })).toBeNull();
+    expect(sfxFor({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 0 })).toBeNull();
+  });
+
+  it('borrows the shower sounds for a gravity well until it has its own, and keeps its end silent', () => {
+    expect(nameOf({ type: 'wellWarning', x: 0, y: 0, at: 30 })).toBe('showerSting');
+    expect(nameOf({ type: 'wellStart', id: 1 })).toBe('showerWhoosh');
+    expect(sfxFor({ type: 'wellEnd', id: 1 })).toBeNull();
   });
 
   it('chimes for a combo only as the multiplier rises, not when it breaks back to 1', () => {

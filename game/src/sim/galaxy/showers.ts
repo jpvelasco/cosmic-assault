@@ -46,15 +46,19 @@ interface Current {
  * capped in rate and in how many are on the field at once. Rocks held back by the cap are dropped, not queued.
  */
 export class Showers {
+  private readonly events: readonly GalaxyEvent[];
   private nextIndex = 0;
   private current: Current | null = null;
   /** Rocks earned by the rate but not yet dropped. */
   private owed = 0;
 
+  /** @param events the galaxy's events; the showers among them are taken, in order */
   constructor(
-    private readonly events: readonly GalaxyEvent[],
+    events: readonly GalaxyEvent[],
     private readonly rng: Rng,
-  ) {}
+  ) {
+    this.events = events.filter((event) => event.type === 'meteorShower');
+  }
 
   /** The warning or active shower, or null; a live view, mutated by `step`. */
   get state(): ShowerState | null {

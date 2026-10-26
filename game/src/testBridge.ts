@@ -15,6 +15,12 @@ function runningEffects({ effects }: World): CosmicAssaultTestState['effects'] {
   return Object.fromEntries(Object.entries(effects).filter(([, seconds]) => seconds > 0));
 }
 
+/** The gravity well being telegraphed or pulling, as a list of zero or one. */
+function wellsOf(world: World | null): CosmicAssaultTestState['wells'] {
+  const well = world?.well;
+  return well === null || well === undefined ? [] : [{ id: well.id, stage: well.stage, x: well.x, y: well.y, intensity: well.intensity, remaining: well.remaining }];
+}
+
 /** A copy of `value` frozen all the way down, so a spec cannot change the game's state through it. */
 function frozenCopy<T>(value: T): T {
   const freeze = (v: unknown): unknown => {
@@ -41,6 +47,8 @@ function snapshot(app: App): CosmicAssaultTestState {
     asteroidCount: world?.asteroids.length ?? 0,
     projectileCount: world?.projectiles.length ?? 0,
     pickups: world?.pickups.map(({ id, kind, x, y, expiresIn }) => ({ id, kind, x, y, expiresIn })) ?? [],
+    foes: world?.foes.map(({ id, kind, x, y }) => ({ id, kind, x, y })) ?? [],
+    wells: wellsOf(world),
     effects: world === null ? {} : runningEffects(world),
     weaponTier: world?.weaponTier ?? 0,
     shield: world?.shield ?? false,

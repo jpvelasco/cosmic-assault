@@ -52,6 +52,11 @@ export interface Spawner {
   open?(): void;
   /** Runs at the start of every step, once the clock has advanced and before anything moves or collides. */
   beginStep?(): void;
+  /**
+   * Runs right after the ship has moved, before rocks and shots do: the hazard path. A ruleset's external forces (a
+   * gravity well's pull) nudge velocities here, and the entities it owns move, so `stepShip` is never altered.
+   */
+  moveOwn?(dt: number, ship: Ship): void;
   /** Runs once a step, after collisions, while the ship still has lives. */
   step(dt: number): void;
   /** The points a kill worth `base` scores. */

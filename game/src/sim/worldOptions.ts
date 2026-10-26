@@ -3,6 +3,7 @@ import type { AsteroidSize } from './asteroid';
 import { MAX_WEAPON_TIER, PLAYER } from './config';
 import { isPositiveFiniteSize, type Field } from './field';
 import { MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
+import { createShip, type Ship } from './ship';
 
 export interface ShipPlacement {
   readonly x: number;
@@ -151,4 +152,16 @@ export function resolveOptions(opts: WorldOptions): { readonly rules: RulesOptio
   }
   assertStartLives(lives, rules.kind === 'galaxy' ? MAX_GALAXY_START_LIVES : PLAYER.startLives);
   return { rules, lives, startTier: resolveStartTier(opts, rules) };
+}
+
+/** The run's ship: at `placement`, or else at rest at the centre of `field`. */
+export function placeShip(field: Field, placement: ShipPlacement | undefined): Ship {
+  if (placement === undefined) {
+    return createShip(field.width / 2, field.height / 2);
+  }
+  assertFinite('WorldOptions.initialShip', { x: placement.x, y: placement.y, angle: placement.angle });
+  const ship = createShip(placement.x, placement.y);
+  ship.angle = placement.angle;
+  ship.pangle = placement.angle;
+  return ship;
 }

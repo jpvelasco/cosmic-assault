@@ -9,17 +9,17 @@ import type { Field } from '../../src/sim/field';
 import { PickupField } from '../../src/sim/pickups/pickups';
 import { createRng, deriveSeed } from '../../src/sim/rng';
 import { World, type WorldOptions } from '../../src/sim/world';
+import { MUTED_KINDS } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const FIRE: Controls = { ...NO_CONTROLS, fire: true };
 const STEPS = Math.round(1 / STEP_SECONDS);
-const MUTE = { from: 0, base: 0, step: 0, max: 0 };
 /** Faces +x along y = 360, so its shots run through the rocks a scenario puts there. */
 const SHOOTER = { x: 200, y: 360, angle: 0 };
 
 /** A galaxy whose director never spawns, so only the scenario's rocks exist. */
 function calm(id: GalaxyId): GalaxyDef {
-  return { ...galaxyById(id), kinds: { large: MUTE, medium: MUTE, small: MUTE }, events: [] };
+  return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
 }
 
 type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: 'rank' | 'free'; readonly galaxy?: GalaxyDef };
@@ -153,7 +153,7 @@ describe('a kill drops a pickup', () => {
   });
 
   it('holds at most 2 pickups on the field at a time', () => {
-    const w = galaxyWorld({ seed: 7, galaxy: { ...calm('1-1'), kinds: { large: MUTE, medium: MUTE, small: { from: 0, base: 1, step: 0, max: 1 } } }, mode: 'rank', startLives: 5 });
+    const w = galaxyWorld({ seed: 7, galaxy: { ...calm('1-1'), kinds: { ...MUTED_KINDS, small: { from: 0, base: 1, step: 0, max: 1 } } }, mode: 'rank', startLives: 5 });
     let most = 0;
     for (let i = 0; i < 60 * STEPS; i++) {
       w.step(STEP_SECONDS, FIRE);

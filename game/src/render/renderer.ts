@@ -6,6 +6,7 @@ import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
+import { createFoePass } from './foePass';
 import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
@@ -163,6 +164,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
+  const foePass = createFoePass(ctx, stamp, baker, palette);
+
   /** Writes the asteroid's interpolated pose into `pose` and returns its drawn glow's reach, which covers its body too. */
   function rockPose(a: Readonly<Asteroid>, alpha: number, field: Field, visual: VisualScale): number {
     interpolatePose(a.px, a.py, a.protation, a.x, a.y, a.rotation, alpha, field, pose);
@@ -258,9 +261,12 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawRockGlows(world, alpha, field, visual);
     particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
+    foePass.drawWell(world.well, quality.glow, field);
     drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
+    foePass.drawFoes(world.foes, alpha, field);
     drawRockFlashes(field);
+    foePass.drawFlashes(hitFlash.foes, field);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);

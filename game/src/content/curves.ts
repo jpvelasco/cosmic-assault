@@ -1,3 +1,4 @@
+import { WELL_SECONDS } from './hazards';
 import type { GalaxyDef, GalaxyEvent, KindRamp } from './types';
 
 function finite(value: number, name: string): number {
@@ -34,6 +35,11 @@ export function kindProbability(ramp: KindRamp, t: number): number {
 /** Seconds a meteor shower of `intensity` falls for, after its warning. */
 export function showerSeconds(intensity: GalaxyEvent['intensity']): number {
   return Math.min(12, 6 + 3 * intensity);
+}
+
+/** Seconds `event` lasts after its warning. */
+export function eventSeconds({ type, intensity }: Pick<GalaxyEvent, 'type' | 'intensity'>): number {
+  return type === 'gravityWell' ? WELL_SECONDS : showerSeconds(intensity);
 }
 
 /** Eases the first galaxy of each Dimension after the first, so a new Dimension starts gently. */

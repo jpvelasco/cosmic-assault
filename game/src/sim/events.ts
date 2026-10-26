@@ -1,5 +1,5 @@
 import type { TimedPickupId } from '../content/pickups';
-import type { AttackId, BossId, GalaxyId, PickupId } from '../content/types';
+import type { AttackId, BossId, FoeKind, GalaxyId, PickupId } from '../content/types';
 import type { AsteroidSize } from './asteroid';
 import type { Stars } from './scoring';
 
@@ -43,7 +43,17 @@ export type SimEvent =
   /** A timed effect ran out, or died with the ship. The Shield breaking is `shieldBroken` instead. */
   | { type: 'effectEnded'; kind: TimedPickupId }
   /** The Shield took a hit for the ship: no life lost, and the ship is invulnerable for a moment. */
-  | { type: 'shieldBroken' };
+  | { type: 'shieldBroken' }
+  /** A foe has entered, at (x, y). */
+  | { type: 'foeSpawned'; id: number; kind: FoeKind; x: number; y: number }
+  /** A shot hurt a foe at (x, y) and left it alive with `hp`. The killing blow is `foeDestroyed` instead. */
+  | { type: 'foeHit'; id: number; x: number; y: number; hp: number }
+  /** A foe is gone at (x, y): killed for `points`, or, for 0, rammed by the ship or cleared by the warp. */
+  | { type: 'foeDestroyed'; id: number; kind: FoeKind; x: number; y: number; points: number }
+  /** A gravity well will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
+  | { type: 'wellWarning'; x: number; y: number; at: number }
+  | { type: 'wellStart'; id: number }
+  | { type: 'wellEnd'; id: number };
 
 /** A rock the warp cleared: destroyed for 0 points, which no kill scores. Its feedback is the warp's, not a kill's. */
 export function isWarpClear(event: SimEvent): boolean {

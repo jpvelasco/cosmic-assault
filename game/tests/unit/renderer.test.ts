@@ -9,6 +9,8 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
+import type { Foe } from '../../src/sim/foes/foe';
+import type { WellState } from '../../src/sim/hazards/gravityWell';
 import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
@@ -84,6 +86,8 @@ interface Stub {
   elapsed: number;
   ship: { x: number; y: number; px: number; py: number; angle: number; pangle: number; vx: number; vy: number; thrusting: boolean; invulnerable: boolean };
   asteroids: Asteroid[];
+  foes: Foe[];
+  well: WellState | null;
 }
 
 /** A world-shaped stub holding exactly what the renderer reads. */
@@ -97,6 +101,8 @@ function stubWorld(): { stub: Stub; world: World } {
     elapsed: 0,
     ship: { x: 640, y: 360, px: 640, py: 360, angle: 0, pangle: 0, vx: 0, vy: 0, thrusting: false, invulnerable: false },
     asteroids: [rock],
+    foes: [],
+    well: null,
   };
   const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null }) as unknown as World;
   return { stub, world };
@@ -296,6 +302,105 @@ describe('createRenderer', () => {
       // The frame bakes the rock; its silhouette (made now, after the fact) was never drawn.
       const key = baker.whiteRock(5);
       expect(drawsOf(key === undefined ? null : baker.cached(key)?.canvas)).toHaveLength(0);
+    });
+
+    describe('foes', () => {
+      const drone = (): Foe => ({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      const spawned: SimEvent = { type: 'foeSpawned', id: 9, kind: 'drone', x: 400, y: 300 };
+      const hurt: SimEvent = { type: 'foeHit', id: 9, x: 400, y: 300, hp: 1 };
+      const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };
+
+      /** Draws the drone once so it has a sprite; returns the sprite its flash should show. */
+      function drawnDrone(): { world: World; stub: Stub; white: HTMLCanvasElement } {
+        const { stub, world } = stubWorld();
+        stub.foes.push(drone());
+        renderer.resize(1280, 720, FIELD);
+        renderer.handle([spawned], world);
+        drawFrame(world, 1);
+        const white = baker.white('foe|drone');
+        if (white === undefined) throw new Error('the drawn drone must have a white silhouette');
+        return { world, stub, white: white.canvas };
+      }
+
+      it('draws a foe where it is, from a baked sprite', () => {
+        const { world } = drawnDrone();
+        const sprite = baker.cached('foe|drone');
+        expect(drawsOf(sprite?.canvas)).toHaveLength(1);
+        expect(drawsOf(sprite?.canvas)[0]?.e).toBe(400);
+        drawFrame(world, 1);
+        expect(drawsOf(sprite?.canvas)).toHaveLength(1);
+      });
+
+      it.each([
+        ['hit', hurt],
+        ['destroyed', slain],
+      ])('flashes a foe white where it was %s, for 60 ms, fading', (_name, event) => {
+        const { world, stub, white } = drawnDrone();
+        renderer.handle([event], world);
+        stub.foes.length = 0;
+        drawFrame(world, 1);
+        expect(drawsOf(white).map((call) => call.e)).toEqual([400]);
+        const first = drawsOf(white)[0]?.alpha ?? 0;
+        advanceFrames(world, 2);
+        drawFrame(world, 1);
+        const later = drawsOf(white)[0]?.alpha ?? 0;
+        expect(later).toBeGreaterThan(0);
+        expect(later).toBeLessThan(first);
+        advanceFrames(world, 3);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+      });
+
+      it('shows no flash for a foe the warp cleared or the ship rammed (0 points)', () => {
+        const { world, white } = drawnDrone();
+        renderer.handle([{ ...slain, points: 0 }], world);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+      });
+
+      it('draws no flash, and nothing empty, when a rebake drops the silhouette mid-flash', () => {
+        const { world, white } = drawnDrone();
+        renderer.handle([hurt], world);
+        baker.setScale(2, 1);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+        expect(canvas.draws.every((call) => (call.image as HTMLCanvasElement).width > 0)).toBe(true);
+      });
+
+      it('drops a foe flash when a new run starts', () => {
+        const { world, white } = drawnDrone();
+        renderer.handle([hurt], world);
+        renderer.reset();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+      });
+    });
+
+    describe('a gravity well', () => {
+      const well = (stage: 'warning' | 'active'): WellState => ({ id: 2, stage, x: 600, y: 300, intensity: 2, remaining: 5 });
+      const ring = (): HTMLCanvasElement | undefined => baker.cached('well|ring')?.canvas;
+
+      it('is drawn as a ring while it is a warning, and as a ring with a glow once it pulls', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.well = well('warning');
+        drawFrame(world, 1);
+        const warning = drawsOf(ring());
+        expect(warning.map((call) => call.e)).toEqual([600]);
+        const glowDrawsWarning = canvas.draws.filter((call) => call.e === 600).length;
+        stub.well = well('active');
+        drawFrame(world, 1);
+        expect(drawsOf(ring())[0]?.alpha).toBeGreaterThan(warning[0]?.alpha ?? 1);
+        expect(canvas.draws.filter((call) => call.e === 600).length).toBeGreaterThan(glowDrawsWarning);
+      });
+
+      it('is not drawn when there is none', () => {
+        const { world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(baker.cached('well|ring')).toBeUndefined();
+      });
     });
 
     /** The x scale the ship hull is drawn with now. */

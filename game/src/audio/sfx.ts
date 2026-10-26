@@ -1,4 +1,5 @@
 import type { Screen } from '../app/flow';
+import type { FoeKind } from '../content/types';
 import { isWarpClear, type SimEvent } from '../sim/events';
 
 /** Every sound effect, in the order voices.ts defines them. */
@@ -45,6 +46,9 @@ const FANFARE: SfxCue = { name: 'cleared', delay: FANFARE_DELAY_SECONDS };
 /** Asteroid sizes 0 (large) to 3 (tiny) in order. */
 const BOOM_BY_SIZE = ['boomLarge', 'boomMedium', 'boomSmall', 'boomTiny'] as const satisfies readonly SfxName[];
 
+/** A killed foe booms like a rock of its weight: the splitter a medium one, a drone a small one. */
+const BOOM_BY_FOE = { splitter: 'boomMedium', drone: 'boomSmall' } as const satisfies Readonly<Record<FoeKind, SfxName>>;
+
 /** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
 export function isBossKill(events: readonly SimEvent[]): boolean {
   return events.some((event) => event.type === 'bossDown');
@@ -59,7 +63,11 @@ function soundOf(event: SimEvent): SfxName | null {
     case 'asteroidDestroyed':
       return isWarpClear(event) ? null : BOOM_BY_SIZE[event.size];
     case 'bossHit':
+    case 'foeHit':
       return 'boomTiny';
+    // Like the rocks a warp clears, a foe cleared or rammed (0 points) is heard as the warp or the hit on the ship.
+    case 'foeDestroyed':
+      return event.points === 0 ? null : BOOM_BY_FOE[event.kind];
     case 'shipHit':
       return 'shipHit';
     case 'gameOver':
@@ -69,6 +77,11 @@ function soundOf(event: SimEvent): SfxName | null {
     case 'showerWarning':
       return 'showerSting';
     case 'showerStart':
+      return 'showerWhoosh';
+    // Wells borrow the shower's sounds until they have their own.
+    case 'wellWarning':
+      return 'showerSting';
+    case 'wellStart':
       return 'showerWhoosh';
     case 'warpOut':
       return 'warp';
@@ -87,6 +100,8 @@ function soundOf(event: SimEvent): SfxName | null {
     // cued by its results card (`screenCue`). Pickups are silent until their sounds are made.
     case 'asteroidLeft':
     case 'showerEnd':
+    case 'wellEnd':
+    case 'foeSpawned':
     case 'galaxyCleared':
     case 'pickupDropped':
     case 'pickupCollected':
