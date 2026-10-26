@@ -124,13 +124,13 @@ export async function playFreeGalaxy(page: Page, id: GalaxyId): Promise<void> {
 const PAST_GUARD_TIMEOUT_MS = GAME_OVER_GUARD_MS * 10;
 
 /**
- * Clicks `testId` until the game reaches `screen`: an end card ignores input for GAME_OVER_GUARD_MS after it opens,
- * and a click it ignores changes nothing, so retrying needs no fixed wait. A click can land just as its own timeout
- * runs out, so each try first checks whether the last one already got there.
+ * Clicks (or, on a touch screen, taps) `testId` until the game reaches `screen`: an end card ignores input for
+ * GAME_OVER_GUARD_MS after it opens, and a click it ignores changes nothing, so retrying needs no fixed wait. A click
+ * can land just as its own timeout runs out, so each try first checks whether the last one already got there.
  */
-export async function clickPastGuard(page: Page, testId: string, screen: CosmicAssaultTestState['screen']): Promise<void> {
+export async function clickPastGuard(page: Page, testId: string, screen: CosmicAssaultTestState['screen'], press: 'click' | 'tap' = 'click'): Promise<void> {
   await expect(async () => {
-    if ((await gameState(page)).screen !== screen) await page.getByTestId(testId).click({ timeout: 1000 });
+    if ((await gameState(page)).screen !== screen) await page.getByTestId(testId)[press]({ timeout: 1000 });
     expect((await gameState(page)).screen).toBe(screen);
   }).toPass({ timeout: PAST_GUARD_TIMEOUT_MS });
 }

@@ -1,7 +1,9 @@
 import type { Page } from '@playwright/test';
 import type { RankEntry } from '../src/meta/rankBoard';
 import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
-import { expect, expectMode, openFreshGame, seedSave, test } from './fixtures';
+import { STEP_SECONDS } from '../src/sim/config';
+import { clickPastGuard, expect, expectMode, fastForward, openFreshGame, openGame, seedSave, test } from './fixtures';
+import { BOSS_GALAXY, TO_BOSS_FIGHT_SECONDS } from './seed';
 
 const openChip = (page: Page) => page.getByTestId('records-open');
 const card = (page: Page) => page.getByTestId('records');
@@ -92,4 +94,20 @@ test('a phone taps through every menu card and Records, and back to the title @p
     await page.getByTestId('back').tap();
     await expectMode(page, screen);
   }
+});
+
+test('a phone taps from a won galaxy\'s results card to the map, and back to the title @phone', async ({ page }) => {
+  await openGame(page, { galaxy: BOSS_GALAXY });
+  await page.getByTestId('play').tap();
+  await expectMode(page, 'playing');
+  await fastForward(page, TO_BOSS_FIGHT_SECONDS);
+  await page.evaluate(() => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(100));
+  await fastForward(page, STEP_SECONDS);
+  await expectMode(page, 'results');
+
+  await clickPastGuard(page, 'results-map', 'map', 'tap');
+  await page.getByTestId('back').tap();
+  await expectMode(page, 'modeSelect');
+  await page.getByTestId('back').tap();
+  await expectMode(page, 'title');
 });
