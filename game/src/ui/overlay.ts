@@ -2,6 +2,7 @@ import type { AppMode } from '../app/game';
 import { currentBuildLabel } from '../buildLabel';
 import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
 import { button, cardPanel, chip, element, showSoundState } from './dom';
+import { hintCopy, type InputStyle } from './hints';
 
 export interface OverlayActions {
   /** A tap on the title screen outside its buttons, or the game-over Restart button. */
@@ -24,6 +25,8 @@ export interface OverlayState {
   readonly fullscreen: boolean | null;
   /** While the settings card is over the screen, the cards beneath it ignore taps, keys and Tab. */
   readonly settingsOpen: boolean;
+  /** Decides whether the start and restart hints name keys or taps. */
+  readonly inputStyle: InputStyle;
 }
 
 export interface Overlay {
@@ -53,7 +56,7 @@ function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
   return chips;
 }
 
-function titlePanel(chips: readonly HTMLButtonElement[], chipRow: HTMLElement): HTMLElement {
+function titlePanel(chips: readonly HTMLButtonElement[], chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const label = element('p', 'label', 'Practice level');
   label.id = 'practice-level-label';
@@ -67,7 +70,7 @@ function titlePanel(chips: readonly HTMLButtonElement[], chipRow: HTMLElement): 
     element('h1', 'title', 'Cosmic Assault'),
     label,
     group,
-    element('p', 'hint', 'Press Space or tap to start'),
+    startHint,
     chipRow,
     build,
   );
@@ -86,12 +89,12 @@ function pausePanel(actions: OverlayActions, chipRow: HTMLElement): HTMLElement 
 }
 
 /** Only its buttons act, so taps that were aimed at the ship cannot skip the score. */
-function gameOverPanel(score: HTMLElement, actions: OverlayActions): HTMLElement {
+function gameOverPanel(score: HTMLElement, restartHint: HTMLElement, actions: OverlayActions): HTMLElement {
   const { panel, card } = cardPanel('game-over');
   card.append(
     element('h2', 'heading', 'Game over'),
     score,
-    element('p', 'hint', 'Press R to restart'),
+    restartHint,
     button('menu-button menu-button--primary', 'Restart', actions.start),
     button('menu-button', 'Title', actions.toTitle),
   );
@@ -110,15 +113,17 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<AppMode, HTMLElement>> = { title: titleRow, paused: pauseRow };
-  const title = titlePanel(chips, titleRow);
-  const gameOver = gameOverPanel(score, actions);
+  const startHint = element('p', 'hint');
+  const restartHint = element('p', 'hint');
+  const title = titlePanel(chips, titleRow, startHint);
+  const gameOver = gameOverPanel(score, restartHint, actions);
   onTapOutsideButtons(title, actions.start);
   const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions, pauseRow), gameOver };
   const all = Object.values(panels);
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, settingsOpen }) {
+    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, settingsOpen, inputStyle }) {
       for (const panel of all) {
         panel.hidden = panel !== panels[mode];
         panel.inert = settingsOpen;
@@ -133,6 +138,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
         chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
       }
       score.textContent = `Score ${String(points)}`;
+      const hints = hintCopy(inputStyle);
+      startHint.textContent = hints.start;
+      restartHint.textContent = hints.restart;
     },
     focusSettingsChip() {
       settings.focus();

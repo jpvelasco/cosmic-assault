@@ -26,6 +26,7 @@ function snapshot(app: App): CosmicAssaultTestState {
     frameStats: app.frameStats,
     muted: app.muted,
     settings: Object.freeze({ ...app.settings }),
+    motion: app.motion,
     audioState: app.audioState,
     logSize: app.log.size,
     fullscreen: app.fullscreen,

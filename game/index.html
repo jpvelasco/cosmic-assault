@@ -127,8 +127,14 @@
       .overlay--game-over {
         background: color-mix(in srgb, var(--space) 25%, transparent);
       }
+      /* Above the touch layer, whatever else is showing: a phone held upright cannot play, so nothing behind is usable. */
+      .overlay--rotate {
+        z-index: 1001;
+        background: color-mix(in srgb, var(--space) 88%, transparent);
+      }
       /* The recovery card sits over whatever screen crashed, so it hides that one almost fully. */
       .overlay--crash {
+        z-index: 1002;
         background: color-mix(in srgb, var(--space) 93%, transparent);
       }
       .overlay p,
@@ -432,6 +438,38 @@
         background: var(--glass);
         color: var(--ink);
         letter-spacing: -1px;
+      }
+      /* The cursor rests out of the way once a run has gone 2 s without pointer movement (src/app/game.ts). */
+      body.cursor-idle,
+      body.cursor-idle #app,
+      body.cursor-idle #game {
+        cursor: none;
+      }
+      /* Short screens (a phone on its side): the same cards in less height. */
+      @media (max-height: 520px) {
+        .card {
+          gap: 6px;
+          padding: 10px 20px;
+        }
+        .title {
+          font-size: clamp(1.5rem, 8vmin, 2.25rem);
+        }
+        .heading {
+          font-size: 1.35rem;
+        }
+        .level-chip {
+          width: 34px;
+          height: 34px;
+        }
+        .menu-button {
+          min-width: 140px;
+          padding: 6px 20px;
+        }
+        .sound-toggle,
+        .fullscreen-toggle,
+        .settings-open {
+          min-height: 34px;
+        }
       }
       @media (prefers-reduced-motion: reduce) {
         .card {

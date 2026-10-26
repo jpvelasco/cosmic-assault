@@ -17,7 +17,9 @@ import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
+import { inputStyleFor, TOUCH_STYLE_QUERY } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
+import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createSettingsCard } from '../ui/settingsCard';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
@@ -60,6 +62,8 @@ export interface App {
   readonly muted: boolean;
   /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
   readonly settings: Settings;
+  /** The motion rules in force once reduced motion and the shake setting are combined. */
+  readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or tap creates the audio context. */
   readonly audioState: AudioState;
   /** Whether the page is in full screen; false where the browser cannot. */
@@ -83,6 +87,9 @@ const MUSIC_LEVEL: Readonly<Record<AppMode, MusicLevel>> = {
 };
 const TOAST_MUTED = 'Muted';
 const TOAST_SOUND_ON = 'Sound on';
+
+/** How long the pointer must rest during play before the cursor is hidden. */
+const IDLE_CURSOR_MS = 2000;
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -109,6 +116,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     if (document.visibilityState === 'visible') log.add('stall', `${String(Math.round(frameMs))} ms frame`, performance.now());
   });
   const coarsePointer = window.matchMedia('(pointer: coarse)');
+  const touchStyle = window.matchMedia(TOUCH_STYLE_QUERY);
+  const portrait = window.matchMedia('(orientation: portrait)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const storage = browserStorage();
   let settings = loadSettings(storage);
@@ -140,6 +149,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     done: closeSettings,
   });
 
+  const rotatePrompt = createRotatePrompt(root);
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
     toast,
@@ -162,6 +172,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let frameId = 0;
   /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
   let pauseCorner: CornerBox | null = null;
+  let idleCursorTimer: number | undefined;
 
   /** Hands the scaler's level to the renderer and the page (`lite` marks the levels where CSS should drop backdrop blur). */
   function applyQuality(): void {
@@ -179,10 +190,34 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       settingsOpen,
+      inputStyle: inputStyleFor(touchStyle.matches),
     });
     settingsCard.update(settings, coarsePointer.matches);
+    rotatePrompt.show(needsRotation());
     touch.show(mode === 'playing' && coarsePointer.matches);
     syncHudBounds();
+  }
+
+  /** A phone held upright: the game needs the wide screen, so it asks for a turn instead of playing. */
+  function needsRotation(): boolean {
+    return touchStyle.matches && portrait.matches;
+  }
+
+  /** A screen or pointer change: a run that is playing when the phone turns upright pauses, and stays paused when it turns back. */
+  function onPlatformChange(): void {
+    if (needsRotation()) pause();
+    syncView();
+  }
+
+  /** Hides the cursor after it rests for `IDLE_CURSOR_MS` in play; any move, and leaving play or a crash, brings it back. */
+  function armIdleCursor(): void {
+    clearTimeout(idleCursorTimer);
+    idleCursorTimer = undefined;
+    document.body.classList.remove('cursor-idle');
+    if (mode !== 'playing' || guard.tripped) return;
+    idleCursorTimer = window.setTimeout(() => {
+      document.body.classList.add('cursor-idle');
+    }, IDLE_CURSOR_MS);
   }
 
   /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button (CA-024). */
@@ -202,6 +237,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     log.add('mode', next, performance.now());
     audio.setMusicLevel(MUSIC_LEVEL[next]);
     redrawPending = true;
+    armIdleCursor();
     syncView();
   }
 
@@ -367,6 +403,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     cancelAnimationFrame(frameId);
     touch.show(false);
     settingsCard.hide();
+    rotatePrompt.show(false);
+    armIdleCursor();
     crashCard.show();
     audio.setMusicLevel('menu');
     audio.setMuted(true);
@@ -452,6 +490,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(window, 'resize', markResize),
     listen(window, 'orientationchange', markResize),
     listen(reducedMotion, 'change', syncMotion),
+    listen(touchStyle, 'change', onPlatformChange),
+    listen(coarsePointer, 'change', onPlatformChange),
+    listen(portrait, 'change', onPlatformChange),
+    listen(window, 'pointermove', armIdleCursor),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
     fullscreen.onChange(onFullscreenChange),
@@ -492,6 +534,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get settings() {
       return settings;
     },
+    get motion() {
+      return { reducedMotion: renderer.effects.reducedMotion, shake: renderer.effects.shakeEnabled };
+    },
     get audioState() {
       return audio.state;
     },
@@ -510,12 +555,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       touch.dispose();
       overlay.dispose();
       settingsCard.dispose();
+      rotatePrompt.dispose();
       toast.dispose();
       crashCard.dispose();
       audio.dispose();
       safeArea.dispose();
       renderer.dispose();
-      document.body.classList.remove('lite');
+      clearTimeout(idleCursorTimer);
+      document.body.classList.remove('lite', 'cursor-idle');
     },
   };
 }

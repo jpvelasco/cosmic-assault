@@ -29,12 +29,12 @@ export default defineConfig({
     // These drive the e2e build, which carries the test bridge.
     {
       name: 'chromium-desktop',
-      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/keyboard.spec.ts', '**/gameOver.spec.ts', '**/redraw.spec.ts', '**/quality.spec.ts', '**/audio.spec.ts', '**/crash.spec.ts', '**/fullscreen.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts'],
       use: desktopChrome,
     },
     {
       name: 'mobile-landscape',
-      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts', '**/settings.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts'],
       use: { ...devices['Pixel 5 landscape'] },
     },
     // Report-only frame times under a CPU slowdown. `npm run test:e2e` leaves this project out; run it with `npm run test:perf`.

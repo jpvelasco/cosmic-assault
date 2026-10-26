@@ -112,6 +112,6 @@ test('Try again reloads to the title', async ({ page }) => {
 
   await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
   await expect(card(page)).toBeHidden();
-  await expect(page.getByText('Press Space or tap to start')).toBeVisible();
+  await expect(page.getByText('Press Space to start')).toBeVisible();
   expect((await gameState(page)).mode).toBe('title');
 });

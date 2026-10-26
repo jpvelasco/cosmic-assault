@@ -40,6 +40,8 @@ interface CosmicAssaultTestState {
   readonly muted: boolean;
   /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
   readonly settings: import('./app/settings').Settings;
+  /** The motion rules in force: reduced motion (the browser's setting) and whether shake is on once the shake setting is applied. */
+  readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or pointer press creates the audio context. */
   readonly audioState: 'none' | 'suspended' | 'running' | 'closed';
   /** Entries in the in-memory event and error log (at most 200). */

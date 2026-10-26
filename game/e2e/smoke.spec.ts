@@ -1,11 +1,11 @@
 import { BUILD_LABEL, expect, openGame, test } from './fixtures';
 
-test('e2e build boots to the title with the test bridge and no console errors', async ({ page }) => {
+test('e2e build boots to the title with the test bridge and no console errors', async ({ page, isMobile }) => {
   await openGame(page);
 
   await expect(page).toHaveTitle('Cosmic Assault');
   await expect(page.getByTestId('build-label')).toHaveText(BUILD_LABEL);
-  await expect(page.getByText('Press Space or tap to start')).toBeVisible();
+  await expect(page.getByText(isMobile ? 'Tap to start' : 'Press Space to start')).toBeVisible();
 });
 
 test('the page never rubber-bands or pulls to refresh', async ({ page }) => {
