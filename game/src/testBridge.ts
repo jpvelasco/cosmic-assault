@@ -25,6 +25,7 @@ function snapshot(app: App): CosmicAssaultTestState {
     quality: { index: app.quality.index, name: app.quality.level.name },
     frameStats: app.frameStats,
     muted: app.muted,
+    settings: app.settings,
     audioState: app.audioState,
     logSize: app.log.size,
     fullscreen: app.fullscreen,

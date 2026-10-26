@@ -163,6 +163,42 @@ describe('createEffects', () => {
     expect([fx.shakeX, fx.shakeY, fx.flash]).toEqual([0, 0, 0]);
   });
 
+  it('drops only the shake when the shake gate is off: flash and particles stay', () => {
+    const pool = new ParticlePool(200);
+    const fx = createEffects(pool, 1);
+    const w = makeWorld();
+    expect(fx.shakeEnabled).toBe(true);
+    fx.shakeEnabled = false;
+    fx.handle([SHIP_HIT], w);
+    expect(fx.shakeEnabled).toBe(false);
+    expect([fx.shakeX, fx.shakeY]).toEqual([0, 0]);
+    expect(fx.flash).toBeGreaterThan(0);
+    expect(pool.count).toBeGreaterThan(40);
+  });
+
+  it('clears a running shake at once when the shake gate is switched off, and shakes again when it is back on', () => {
+    const fx = createEffects(new ParticlePool(200), 1);
+    const w = makeWorld();
+    fx.handle([SHIP_HIT], w);
+    fx.step(0.016, w);
+    expect(Math.abs(fx.shakeX) + Math.abs(fx.shakeY)).toBeGreaterThan(0);
+    fx.shakeEnabled = false;
+    expect([fx.shakeX, fx.shakeY]).toEqual([0, 0]);
+    expect(fx.flash).toBeGreaterThan(0);
+    fx.shakeEnabled = true;
+    fx.handle([SHIP_HIT], w);
+    fx.step(0.016, w);
+    expect(Math.abs(fx.shakeX) + Math.abs(fx.shakeY)).toBeGreaterThan(0);
+  });
+
+  it('keeps reduced motion in charge when the shake gate is on', () => {
+    const fx = createEffects(new ParticlePool(200), 1);
+    fx.reducedMotion = true;
+    fx.shakeEnabled = true;
+    fx.handle([SHIP_HIT], makeWorld());
+    expect([fx.shakeX, fx.shakeY, fx.flash]).toEqual([0, 0, 0]);
+  });
+
   it('clears running shake and flash when reduced motion is switched on', () => {
     const pool = new ParticlePool(200);
     const fx = createEffects(pool, 1);

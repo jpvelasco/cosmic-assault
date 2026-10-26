@@ -38,6 +38,8 @@ interface CosmicAssaultTestState {
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
+  /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
+  readonly settings: import('./app/settings').Settings;
   /** 'none' until the first key press or pointer press creates the audio context. */
   readonly audioState: 'none' | 'suspended' | 'running' | 'closed';
   /** Entries in the in-memory event and error log (at most 200). */

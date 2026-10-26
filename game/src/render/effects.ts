@@ -30,6 +30,8 @@ export interface Effects {
   readonly flashColor: string;
   /** While true, shake and flash stay 0; particles still emit. Turning it on clears them at once. */
   reducedMotion: boolean;
+  /** While false, shake stays 0 (the player's setting, see `shakeEnabled`); flash is unaffected. Turning it off clears shake at once. */
+  shakeEnabled: boolean;
 }
 
 const HIT_TINT = '#ff5a5a';
@@ -178,11 +180,12 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   let flash = 0;
   let flashColor: string = palette.ring;
   let reducedMotion = false;
+  let shakeEnabled = true;
   let trailBudget = 0;
 
   const kick = (spec: BurstSpec): void => {
     if (reducedMotion) return;
-    shake = Math.min(MAX_SHAKE, Math.max(shake, spec.shake));
+    if (shakeEnabled) shake = Math.min(MAX_SHAKE, Math.max(shake, spec.shake));
     if (spec.flash > 0 && spec.flash >= flash) {
       flash = spec.flash;
       flashColor = spec.flashColor;
@@ -269,6 +272,13 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         shake = 0;
         flash = 0;
       }
+    },
+    get shakeEnabled() {
+      return shakeEnabled;
+    },
+    set shakeEnabled(value: boolean) {
+      shakeEnabled = value;
+      if (!value) shake = 0;
     },
   };
 }

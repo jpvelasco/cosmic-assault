@@ -77,6 +77,7 @@ interface FakeEvent {
   ctrlKey: boolean;
   metaKey: boolean;
   altKey: boolean;
+  target: EventTarget | null;
   prevented: boolean;
   preventDefault(): void;
 }
@@ -106,6 +107,7 @@ function ev(code: string, repeat = false, mods: Partial<Pick<FakeEvent, 'ctrlKey
     ctrlKey: false,
     metaKey: false,
     altKey: false,
+    target: null,
     ...mods,
     prevented: false,
     preventDefault() {
@@ -168,6 +170,35 @@ describe('attachKeyboard', () => {
     expect(chord.prevented).toBe(false);
     expect(kb.held.size).toBe(0);
     expect(kb.drainPressed()).toEqual([]);
+  });
+
+  it('stands down while a form control has focus: nothing recorded, nothing prevented', () => {
+    const target = fakeTarget();
+    const kb = attachKeyboard(target);
+    const slider = { tagName: 'INPUT' } as unknown as EventTarget;
+    const arrow = { ...ev('ArrowRight'), target: slider };
+    target.fire('keydown', arrow);
+    expect(arrow.prevented).toBe(false);
+    expect(kb.held.size).toBe(0);
+    expect(kb.drainPressed()).toEqual([]);
+    const release = { ...ev('ArrowRight'), target: slider };
+    target.fire('keyup', release);
+    expect(release.prevented).toBe(false);
+  });
+
+  it('still releases a held key when its keyup lands on a form control', () => {
+    const target = fakeTarget();
+    const kb = attachKeyboard(target);
+    target.fire('keydown', ev('ArrowLeft'));
+    target.fire('keyup', { ...ev('ArrowLeft'), target: { tagName: 'SELECT' } as unknown as EventTarget });
+    expect(kb.held.size).toBe(0);
+  });
+
+  it('keeps recording keys whose target is not a form control', () => {
+    const target = fakeTarget();
+    const kb = attachKeyboard(target);
+    target.fire('keydown', { ...ev('ArrowUp'), target: { tagName: 'BUTTON' } as unknown as EventTarget });
+    expect(kb.held).toEqual(new Set(['ArrowUp']));
   });
 
   it('releases a held key on keyup even if a modifier is down', () => {

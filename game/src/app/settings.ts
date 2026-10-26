@@ -1,14 +1,22 @@
+/** Whether screen shake follows the system's reduced-motion preference (`auto`), is wanted (`on`) or is turned off. */
+export type ScreenShake = 'auto' | 'on' | 'off';
+
+const SCREEN_SHAKES: readonly ScreenShake[] = ['auto', 'on', 'off'];
+
 export interface Settings {
   readonly muted: boolean;
   /** 0–1 */
   readonly musicVolume: number;
   /** 0–1 */
   readonly sfxVolume: number;
+  readonly screenShake: ScreenShake;
+  /** Swaps the touch joystick and FIRE button. */
+  readonly leftHanded: boolean;
 }
 
 export const SETTINGS_KEY = 'cosmic-assault.v2.settings';
 
-export const DEFAULT_SETTINGS: Settings = { muted: false, musicVolume: 0.6, sfxVolume: 0.8 };
+export const DEFAULT_SETTINGS: Settings = { muted: false, musicVolume: 0.6, sfxVolume: 0.8, screenShake: 'auto', leftHanded: false };
 
 function isVolume(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -16,6 +24,19 @@ function isVolume(value: unknown): value is number {
 
 function volume(value: unknown, fallback: number): number {
   return isVolume(value) ? value : fallback;
+}
+
+function flag(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function oneOf<T>(options: readonly T[], value: unknown, fallback: T): T {
+  return options.find((option) => option === value) ?? fallback;
+}
+
+/** Whether the screen may shake. Reduced motion always wins: `on` only means the player has not turned it off. */
+export function shakeEnabled(setting: ScreenShake, reducedMotion: boolean): boolean {
+  return setting !== 'off' && !reducedMotion;
 }
 
 /** `window.localStorage`, or null where the browser refuses access (privacy modes, sandboxed frames) or has none. */
@@ -43,9 +64,11 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> | null): Settings
   if (typeof parsed !== 'object' || parsed === null) return DEFAULT_SETTINGS;
   const saved = parsed as Record<string, unknown>;
   return {
-    muted: typeof saved['muted'] === 'boolean' ? saved['muted'] : DEFAULT_SETTINGS.muted,
+    muted: flag(saved['muted'], DEFAULT_SETTINGS.muted),
     musicVolume: volume(saved['musicVolume'], DEFAULT_SETTINGS.musicVolume),
     sfxVolume: volume(saved['sfxVolume'], DEFAULT_SETTINGS.sfxVolume),
+    screenShake: oneOf(SCREEN_SHAKES, saved['screenShake'], DEFAULT_SETTINGS.screenShake),
+    leftHanded: flag(saved['leftHanded'], DEFAULT_SETTINGS.leftHanded),
   };
 }
 

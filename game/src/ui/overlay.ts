@@ -1,7 +1,7 @@
 import type { AppMode } from '../app/game';
 import { currentBuildLabel } from '../buildLabel';
 import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
-import { button, cardPanel, element } from './dom';
+import { button, cardPanel, chip, element, showSoundState } from './dom';
 
 export interface OverlayActions {
   /** A tap on the title screen outside its buttons, or the game-over Restart button. */
@@ -12,6 +12,7 @@ export interface OverlayActions {
   readonly toTitle: () => void;
   readonly toggleMute: () => void;
   readonly toggleFullscreen: () => void;
+  readonly openSettings: () => void;
 }
 
 export interface OverlayState {
@@ -21,10 +22,14 @@ export interface OverlayState {
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
   readonly fullscreen: boolean | null;
+  /** While the settings card is over the screen, the cards beneath it ignore taps, keys and Tab. */
+  readonly settingsOpen: boolean;
 }
 
 export interface Overlay {
   update(state: OverlayState): void;
+  /** Puts keyboard focus on the Settings chip of the visible card, as the settings card closes. */
+  focusSettingsChip(): void;
   dispose(): void;
 }
 
@@ -34,29 +39,6 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
     if (e.target instanceof Element && e.target.closest('button') !== null) return;
     onTap();
   });
-}
-
-/**
- * Enter and Space on a focused chip act on that chip only: they never reach the window's key handling, which would
- * start a run. A click does not focus it, so after one Space still starts a run.
- */
-function keepActivationKeysLocal(el: HTMLElement): void {
-  const stop = (e: KeyboardEvent): void => {
-    if (e.code === 'Enter' || e.code === 'Space') e.stopPropagation();
-  };
-  el.addEventListener('keydown', stop);
-  el.addEventListener('keyup', stop);
-  el.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-  });
-}
-
-/** A glass chip whose class and test id are `name`; it stays out of the game's key handling. */
-function settingChip(name: string, onClick: () => void): HTMLButtonElement {
-  const chip = button(name, '', onClick);
-  chip.dataset['testid'] = name;
-  keepActivationKeysLocal(chip);
-  return chip;
 }
 
 function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
@@ -120,9 +102,11 @@ function gameOverPanel(score: HTMLElement, actions: OverlayActions): HTMLElement
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
   const chips = levelChips(actions.selectLevel);
   const score = element('p', 'score');
-  // One pair of chips serves the title and pause cards; `update` moves it into the visible card's row.
-  const sound = settingChip('sound-toggle', actions.toggleMute);
-  const fullscreen = settingChip('fullscreen-toggle', actions.toggleFullscreen);
+  // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
+  const sound = chip('sound-toggle', actions.toggleMute);
+  const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
+  const settings = chip('settings-open', actions.openSettings);
+  settings.textContent = 'Settings';
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<AppMode, HTMLElement>> = { title: titleRow, paused: pauseRow };
@@ -134,19 +118,24 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   root.append(...all);
 
   return {
-    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState }) {
-      for (const panel of all) panel.hidden = panel !== panels[mode];
+    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, settingsOpen }) {
+      for (const panel of all) {
+        panel.hidden = panel !== panels[mode];
+        panel.inert = settingsOpen;
+      }
       const row = chipRows[mode];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle.
-      if (row !== undefined && sound.parentElement !== row) row.append(sound, fullscreen);
-      sound.textContent = `Sound: ${muted ? 'off' : 'on'}`;
-      sound.classList.toggle('sound-toggle--muted', muted);
+      if (row !== undefined && sound.parentElement !== row) row.append(sound, fullscreen, settings);
+      showSoundState(sound, muted);
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
       for (const [i, chip] of chips.entries()) {
         chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
       }
       score.textContent = `Score ${String(points)}`;
+    },
+    focusSettingsChip() {
+      settings.focus();
     },
     dispose() {
       for (const panel of all) panel.remove();

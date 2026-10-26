@@ -163,14 +163,17 @@ describe('createFullscreen', () => {
 });
 
 describe('attachFullscreenKey', () => {
-  type Key = { code: string; repeat?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean };
+  type Key = { code: string; repeat?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; target?: unknown };
 
   function setup() {
     const win = new EventTarget();
     const toggle = vi.fn();
     const detach = attachFullscreenKey(win as never, { toggle });
-    const press = (key: Key): void => {
-      win.dispatchEvent(Object.assign(new Event('keydown'), { repeat: false, ctrlKey: false, metaKey: false, altKey: false }, key));
+    const press = ({ target, ...key }: Key): void => {
+      const event = Object.assign(new Event('keydown'), { repeat: false, ctrlKey: false, metaKey: false, altKey: false }, key);
+      // `target` is a getter on Event; a key typed into a form control reaches the window with that control as its target.
+      if (target !== undefined) Object.defineProperty(event, 'target', { value: target });
+      win.dispatchEvent(event);
     };
     return { toggle, detach, press };
   }
@@ -190,6 +193,12 @@ describe('attachFullscreenKey', () => {
   ])('ignores %s', (_name, key) => {
     const { toggle, press } = setup();
     press(key);
+    expect(toggle).not.toHaveBeenCalled();
+  });
+
+  it('stands down while a form control has focus', () => {
+    const { toggle, press } = setup();
+    press({ code: 'KeyF', target: { tagName: 'INPUT' } });
     expect(toggle).not.toHaveBeenCalled();
   });
 

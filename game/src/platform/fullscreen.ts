@@ -1,4 +1,4 @@
-import { hasShortcutModifier, type KeyEventLike } from '../input/keyboardSource';
+import { hasShortcutModifier, isFormControlTarget, type KeyEventLike } from '../input/keyEvent';
 import type { RingLog } from './log';
 
 export interface FullscreenControl {
@@ -52,7 +52,7 @@ const FULLSCREEN_KEY = 'KeyF';
 
 /**
  * Toggles full screen on F from inside the keydown handler itself: Safari and Firefox refuse a request made
- * later, such as from the next animation frame. Ignores auto-repeat and Ctrl/Cmd/Alt combinations.
+ * later, such as from the next animation frame. Ignores auto-repeat, Ctrl/Cmd/Alt combinations and keys typed into a form control.
  * Returns the function that detaches the listener.
  */
 export function attachFullscreenKey(
@@ -63,7 +63,7 @@ export function attachFullscreenKey(
   fullscreen: Pick<FullscreenControl, 'toggle'>,
 ): () => void {
   const onKeyDown = (e: KeyEventLike): void => {
-    if (e.code === FULLSCREEN_KEY && !e.repeat && !hasShortcutModifier(e)) fullscreen.toggle();
+    if (e.code === FULLSCREEN_KEY && !e.repeat && !hasShortcutModifier(e) && !isFormControlTarget(e.target)) fullscreen.toggle();
   };
   target.addEventListener('keydown', onKeyDown);
   return () => {

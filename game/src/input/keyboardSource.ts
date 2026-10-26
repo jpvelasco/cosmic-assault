@@ -1,6 +1,5 @@
 import { GAME_KEY_CODES } from './keyboard';
-
-export type KeyEventLike = Pick<KeyboardEvent, 'code' | 'repeat' | 'ctrlKey' | 'metaKey' | 'altKey' | 'preventDefault'>;
+import { hasShortcutModifier, isFormControlTarget, type KeyEventLike } from './keyEvent';
 
 /** The slice of `Window` the adapter needs, so tests can supply a fake. */
 export interface KeyboardTarget {
@@ -21,24 +20,19 @@ export interface KeyboardSource {
 /** Releasing these can swallow the keyups of keys pressed while they were down (macOS Cmd). */
 const MODIFIER_CODES: ReadonlySet<string> = new Set(['MetaLeft', 'MetaRight', 'ControlLeft', 'ControlRight']);
 
-/** Whether a shortcut modifier is down; browser shortcuts like Ctrl+F are never game keys. */
-export function hasShortcutModifier(e: Pick<KeyEventLike, 'ctrlKey' | 'metaKey' | 'altKey'>): boolean {
-  return e.ctrlKey || e.metaKey || e.altKey;
-}
-
 export function attachKeyboard(target: KeyboardTarget): KeyboardSource {
   const held = new Set<string>();
   let pressed: string[] = [];
 
   const onKeyDown = (e: KeyEventLike): void => {
-    if (hasShortcutModifier(e)) return;
+    if (hasShortcutModifier(e) || isFormControlTarget(e.target)) return;
     if (GAME_KEY_CODES.has(e.code)) e.preventDefault();
     held.add(e.code);
     if (!e.repeat) pressed.push(e.code);
   };
   const onKeyUp = (e: KeyEventLike): void => {
     if (MODIFIER_CODES.has(e.code)) held.clear();
-    if (GAME_KEY_CODES.has(e.code)) e.preventDefault();
+    if (GAME_KEY_CODES.has(e.code) && !isFormControlTarget(e.target)) e.preventDefault();
     held.delete(e.code);
   };
   const onBlur = (): void => {

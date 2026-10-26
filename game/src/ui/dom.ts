@@ -23,3 +23,32 @@ export function cardPanel(modifier: string): { panel: HTMLElement; card: HTMLEle
   panel.append(card);
   return { panel, card };
 }
+
+/**
+ * Enter and Space on a focused chip act on that chip only: they never reach the window's key handling, which would
+ * start a run. A click does not focus it, so after one Space still starts a run.
+ */
+export function keepActivationKeysLocal(el: HTMLElement): void {
+  const stop = (e: KeyboardEvent): void => {
+    if (e.code === 'Enter' || e.code === 'Space') e.stopPropagation();
+  };
+  el.addEventListener('keydown', stop);
+  el.addEventListener('keyup', stop);
+  el.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+  });
+}
+
+/** A glass chip with the class `className` and a test id (the class unless given) that stays out of the game's key handling. */
+export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
+  const el = button(className, '', onClick);
+  el.dataset['testid'] = testId;
+  keepActivationKeysLocal(el);
+  return el;
+}
+
+/** Labels a sound chip with the state it will switch away from. */
+export function showSoundState(soundChip: HTMLElement, muted: boolean): void {
+  soundChip.textContent = `Sound: ${muted ? 'off' : 'on'}`;
+  soundChip.classList.toggle('sound-toggle--muted', muted);
+}

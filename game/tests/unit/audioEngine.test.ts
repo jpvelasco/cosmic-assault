@@ -329,7 +329,7 @@ describe('node graph', () => {
   });
 
   it('applies the volumes to the buses and creates one shared noise buffer', () => {
-    engine({ muted: false, musicVolume: 0.5, sfxVolume: 0.25 });
+    engine({ ...DEFAULT_SETTINGS, musicVolume: 0.5, sfxVolume: 0.25 });
     press();
     const [master, sfx, music] = nodesOf('gain') as [FakeNode, FakeNode, FakeNode];
     expect(master.gain.value).toBe(1);
@@ -449,6 +449,28 @@ describe('music', () => {
     expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.5, 0, expect.any(Number));
     e.setMusicLevel('menu');
     expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.5 * 0.45, 0, expect.any(Number));
+  });
+
+  it('ramps both buses to new volumes, the music one scaled by the current level', () => {
+    const e = engine();
+    press();
+    const [, sfx, music] = nodesOf('gain') as [FakeNode, FakeNode, FakeNode];
+    e.setMusicLevel('play');
+    e.setVolumes(0.2, 0.9);
+    expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.2, 0, expect.any(Number));
+    expect(sfx.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.9, 0, expect.any(Number));
+    e.setMusicLevel('paused');
+    expect(music.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.2 * 0.3, 0, expect.any(Number));
+    expect(sfx.gain.setTargetAtTime).toHaveBeenLastCalledWith(0.9, 0, expect.any(Number));
+  });
+
+  it('builds the buses with volumes set before the context exists', () => {
+    const e = engine();
+    e.setVolumes(0.2, 0.9);
+    press();
+    const [, sfx, music] = nodesOf('gain') as [FakeNode, FakeNode, FakeNode];
+    expect(sfx.gain.value).toBe(0.9);
+    expect(music.gain.value).toBeCloseTo(0.2 * 0.45, 10);
   });
 
   it('remembers a level set before the context exists', () => {

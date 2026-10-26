@@ -215,7 +215,8 @@
         justify-content: center;
         gap: 6px;
       }
-      .overlay button {
+      .overlay button,
+      .overlay .segment {
         font: inherit;
         font-weight: 800;
         color: inherit;
@@ -228,21 +229,25 @@
           transform 160ms var(--pop),
           filter 160ms ease;
       }
-      .overlay button:focus-visible {
+      .overlay button:focus-visible,
+      .overlay .segment:has(input:focus-visible) {
         outline: 2px solid var(--accent-3);
         outline-offset: 3px;
       }
       @media (hover: hover) {
-        .overlay button:hover {
+        .overlay button:hover,
+        .overlay .segment:hover {
           filter: brightness(1.18);
         }
       }
-      .overlay button:active {
+      .overlay button:active,
+      .overlay .segment:active {
         transform: scale(0.95);
       }
       /* Primary actions and the chosen level wear the accent gradient. */
       .overlay .menu-button--primary,
-      .overlay .level-chip[aria-pressed='true'] {
+      .overlay .level-chip[aria-pressed='true'],
+      .overlay .segment:has(input:checked) {
         color: white;
         text-shadow: var(--text-drop);
         border-color: rgba(255, 255, 255, 0.45);
@@ -262,7 +267,8 @@
         padding: 10px 24px;
       }
       .sound-toggle,
-      .fullscreen-toggle {
+      .fullscreen-toggle,
+      .settings-open {
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -290,6 +296,78 @@
       .sound-toggle--muted::before {
         background: transparent;
         box-shadow: inset 0 0 0 1.5px currentColor;
+      }
+      /* The settings card: a list of labelled controls that runs to two columns where the card is wide enough. */
+      .overlay--settings {
+        background: color-mix(in srgb, var(--space) 78%, transparent);
+      }
+      .overlay--settings .card {
+        box-sizing: border-box;
+        width: min(calc(100vw - 48px), 540px);
+        max-height: 100%;
+        overflow-y: auto;
+        justify-items: stretch;
+      }
+      .overlay--settings .heading {
+        text-align: center;
+      }
+      .settings-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+        gap: 12px 28px;
+        text-align: left;
+      }
+      .setting {
+        display: grid;
+        gap: 6px;
+        align-content: start;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+      .setting__head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .setting input[type='range'] {
+        width: 100%;
+        min-height: 28px;
+        margin: 0;
+        accent-color: var(--accent-1);
+      }
+      .setting--check {
+        grid-auto-flow: column;
+        justify-content: start;
+        align-items: center;
+      }
+      .setting--check input {
+        width: 22px;
+        height: 22px;
+        margin: 0;
+        accent-color: var(--accent-2);
+      }
+      .segments {
+        display: flex;
+        gap: 6px;
+      }
+      /* A radio shown as a glass pill: the input covers it, invisible, so a tap lands on the radio itself. */
+      .segment {
+        position: relative;
+        flex: 1;
+        padding: 8px 0;
+        text-align: center;
+        cursor: pointer;
+      }
+      .segment input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
       }
       .toast {
         position: absolute;
@@ -357,6 +435,7 @@
           animation: none;
         }
         .overlay button,
+        .overlay .segment,
         .toast {
           transition: none;
         }

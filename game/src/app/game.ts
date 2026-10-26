@@ -18,6 +18,7 @@ import { createFixedStepLoop } from '../sim/loop';
 import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { createOverlay } from '../ui/overlay';
+import { createSettingsCard } from '../ui/settingsCard';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import { createToast } from '../ui/toast';
 import { commandForKey, START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
@@ -25,7 +26,7 @@ import { passesGameOverGuard } from './gameOverGuard';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { clockSeed, runOverrides } from './seed';
-import { browserStorage, loadSettings, saveSettings } from './settings';
+import { browserStorage, loadSettings, saveSettings, shakeEnabled, type Settings } from './settings';
 
 /**
  * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
@@ -57,6 +58,8 @@ export interface App {
   readonly frameStats: FrameSummary;
   /** Whether sound is muted (saved across visits). */
   readonly muted: boolean;
+  /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
+  readonly settings: Settings;
   /** 'none' until the first key press or tap creates the audio context. */
   readonly audioState: AudioState;
   /** Whether the page is in full screen; false where the browser cannot. */
@@ -108,7 +111,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const storage = browserStorage();
-  const settings = loadSettings(storage);
+  let settings = loadSettings(storage);
   const audio = createAudioEngine(settings);
   const toast = createToast(root);
   const fullscreen = createFullscreen(document, document.documentElement, log);
@@ -125,7 +128,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     toTitle: button(TO_TITLE),
     toggleMute,
     toggleFullscreen: button(TOGGLE_FULLSCREEN),
+    openSettings,
   });
+  const settingsCard = createSettingsCard(root, { change: applySettings, save: persistSettings, toggleMute, done: closeSettings });
 
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
@@ -140,6 +145,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let resizePending = true;
   /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
   let redrawPending = false;
+  /** Whether the settings card is over the title or pause card; the run behind it, if any, stays as it was. */
+  let settingsOpen = false;
   let gameOverAt = 0;
   let lastFrameAt = performance.now();
   let frameId = 0;
@@ -161,7 +168,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       score: world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
+      settingsOpen,
     });
+    settingsCard.update(settings);
     touch.show(mode === 'playing' && coarsePointer.matches);
     syncHudBounds();
   }
@@ -256,14 +265,44 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     syncView();
   }
 
+  /** Writes the current settings to storage. A refusal is a warning, not an error: the changes still hold for this visit. */
+  function persistSettings(): void {
+    if (!saveSettings(storage, settings)) {
+      console.warn('Could not save your settings, so they will reset on reload. Allow site storage for this page to keep them.');
+    }
+  }
+
+  /** Puts the settings into effect: volumes, the shake gate and the touch layout. Saving is separate (`persistSettings`). */
+  function applySettings(patch: Partial<Settings>): void {
+    settings = { ...settings, ...patch };
+    audio.setVolumes(settings.musicVolume, settings.sfxVolume);
+    syncMotion();
+    touch.setLeftHanded(settings.leftHanded);
+  }
+
   /** The M key and the sound chip. */
   function toggleMute(): void {
     audio.setMuted(!audio.muted);
     toast.show(audio.muted ? TOAST_MUTED : TOAST_SOUND_ON);
+    settings = { ...settings, muted: audio.muted };
     syncView();
-    if (!saveSettings(storage, { ...settings, muted: audio.muted })) {
-      console.warn('Could not save the sound setting, so it will reset on reload. Allow site storage for this page to keep it.');
-    }
+    persistSettings();
+  }
+
+  function openSettings(): void {
+    if (settingsOpen || (mode !== 'title' && mode !== 'paused')) return;
+    settingsOpen = true;
+    syncView();
+    settingsCard.show();
+  }
+
+  /** Done and Esc: back to the card that opened it, with focus on the chip that did. */
+  function closeSettings(): void {
+    if (!settingsOpen) return;
+    settingsOpen = false;
+    settingsCard.hide();
+    syncView();
+    overlay.focusSettingsChip();
   }
 
   /** Runs a key or button command unless the game-over guard is still ignoring it. */
@@ -316,6 +355,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   function stopAfterCrash(error: unknown): void {
     cancelAnimationFrame(frameId);
     touch.show(false);
+    settingsCard.hide();
     crashCard.show();
     audio.setMusicLevel('menu');
     audio.setMuted(true);
@@ -338,7 +378,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     for (const code of keyboard.drainPressed()) {
       startKeys.release(code);
       const command = commandForKey(mode, code);
-      if (command !== null) applyCommand(command, now);
+      // Behind the settings card only M acts: Space, P and Esc must not start, resume or leave.
+      if (command !== null && (!settingsOpen || command.kind === 'toggleMute')) applyCommand(command, now);
     }
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
@@ -376,12 +417,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
         }
       : runFrame;
 
-  /** The one reduced-motion source: it turns off hit-stop, shake and flash together. */
-  const syncReducedMotion = (): void => {
+  /** The one motion source: reduced motion turns off hit-stop, flash and shake; the shake setting can also turn off shake alone. */
+  function syncMotion(): void {
     hitStop.reducedMotion = reducedMotion.matches;
     renderer.effects.reducedMotion = reducedMotion.matches;
-  };
-  syncReducedMotion();
+    renderer.effects.shakeEnabled = shakeEnabled(settings.screenShake, reducedMotion.matches);
+  }
+  applySettings({});
   applyQuality();
   const markResize = (): void => {
     resizePending = true;
@@ -398,7 +440,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const unlisteners = [
     listen(window, 'resize', markResize),
     listen(window, 'orientationchange', markResize),
-    listen(reducedMotion, 'change', syncReducedMotion),
+    listen(reducedMotion, 'change', syncMotion),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
     fullscreen.onChange(onFullscreenChange),
@@ -436,6 +478,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get muted() {
       return audio.muted;
     },
+    get settings() {
+      return settings;
+    },
     get audioState() {
       return audio.state;
     },
@@ -453,6 +498,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       keyboard.dispose();
       touch.dispose();
       overlay.dispose();
+      settingsCard.dispose();
       toast.dispose();
       crashCard.dispose();
       audio.dispose();

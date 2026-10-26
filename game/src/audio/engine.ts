@@ -19,6 +19,8 @@ export interface AudioEngine {
   handle(events: readonly SimEvent[]): void;
   play(name: SfxName): void;
   setMuted(muted: boolean): void;
+  /** Sets the music and effects volumes (0–1); they take hold at once, even mid-sound. */
+  setVolumes(music: number, sfx: number): void;
   setMusicLevel(level: MusicLevel): void;
   dispose(): void;
 }
@@ -84,11 +86,13 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let broken = false;
   let disposed = false;
   let muted = initial.muted;
+  let musicVolume = initial.musicVolume;
+  let sfxVolume = initial.sfxVolume;
   let musicLevel: MusicLevel = 'menu';
   let shotsThisFrame = 0;
 
   /** The music bus gain for `level`: the saved volume scaled by the mode's level. */
-  const musicGain = (level: MusicLevel): number => initial.musicVolume * MUSIC_LEVELS[level];
+  const musicGain = (level: MusicLevel): number => musicVolume * MUSIC_LEVELS[level];
 
   /** Runs WebAudio work; a failure disables sound for good (once, with a warning) instead of throwing into the game. */
   function guard(work: () => void): void {
@@ -129,7 +133,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     const lowpass = ctx.createBiquadFilter();
     const compressor = ctx.createDynamicsCompressor();
     master.gain.value = muted ? 0 : 1;
-    sfx.gain.value = initial.sfxVolume;
+    sfx.gain.value = sfxVolume;
     music.gain.value = musicGain(musicLevel);
     lowpass.type = 'lowpass';
     lowpass.frequency.value = MUSIC_LOWPASS_HZ;
@@ -190,6 +194,16 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     });
   }
 
+  /** Moves both bus gains to the current volumes and music level. */
+  function syncBusGains(): void {
+    if (graph === null) return;
+    const { ctx, music, sfx } = graph;
+    guard(() => {
+      ramp(music.gain, ctx, musicGain(musicLevel), LEVEL_SMOOTHING);
+      ramp(sfx.gain, ctx, sfxVolume, LEVEL_SMOOTHING);
+    });
+  }
+
   function onVisibilityChange(): void {
     const current = graph;
     if (current === null) return;
@@ -240,13 +254,14 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
         if (!next && document.visibilityState === 'visible') resumeContext(ctx);
       });
     },
+    setVolumes(music, sfx) {
+      musicVolume = music;
+      sfxVolume = sfx;
+      syncBusGains();
+    },
     setMusicLevel(level) {
       musicLevel = level;
-      if (graph === null) return;
-      const { ctx, music } = graph;
-      guard(() => {
-        ramp(music.gain, ctx, musicGain(level), LEVEL_SMOOTHING);
-      });
+      syncBusGains();
     },
     dispose() {
       disposed = true;
