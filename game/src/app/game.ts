@@ -366,8 +366,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   /** Done and Esc: back to the card that opened it, with focus on the chip that did. */
+  /** A settings card under the rotate prompt is covered and stays put, however closing is asked (Esc, Back, Done). */
   function closeSettings(): void {
-    if (!settingsOpen) return;
+    if (!settingsOpen || needsRotation()) return;
     settingsOpen = false;
     settingsCard.hide();
     syncView();
@@ -443,10 +444,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
         break;
       }
       case 'back':
-        // A card under the rotate prompt is covered and stays put, however Back is asked.
-        if (settingsOpen) {
-          if (!needsRotation()) closeSettings();
-        } else runPadCommand('back', now);
+        if (settingsOpen) closeSettings();
+        else runPadCommand('back', now);
         break;
       case 'pause':
         if (!settingsOpen) runPadCommand('pause', now);
