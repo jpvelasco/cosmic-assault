@@ -1,19 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { galaxyById, GALAXIES, nextGalaxyId } from '../../src/content/galaxies';
+import { galaxyById, GALAXIES } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { afterClear, afterGameOver, startRank, type RankRun } from '../../src/meta/rankRun';
 
 const TODAY = '2026-10-26';
-
-describe('nextGalaxyId', () => {
-  it('walks the table in order, crossing a Dimension after its boss, and ends after 5-6', () => {
-    expect(nextGalaxyId('1-1')).toBe('1-2');
-    expect(nextGalaxyId('1-6')).toBe('2-1');
-    expect(nextGalaxyId('4-6')).toBe('5-1');
-    expect(nextGalaxyId('5-6')).toBeNull();
-    expect(GALAXIES.map((g) => nextGalaxyId(g.id))).toEqual([...GALAXIES.slice(1).map((g) => g.id), null]);
-  });
-});
 
 describe('startRank', () => {
   it('starts at 1-1 with no score, 3 lives, base weapon and no Continue used', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
-import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, tierOf } from '../../src/content/galaxies';
+import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, RockKind } from '../../src/content/types';
 import { showerSeconds } from '../../src/content/curves';
 import { lullStart } from '../../src/content/pacingRules';
@@ -142,6 +142,25 @@ describe('galaxyById', () => {
   it('throws, naming the id and the valid range, for one that does not exist', () => {
     expect(() => galaxyById('9-9' as GalaxyId)).toThrow(RangeError);
     expect(() => galaxyById('9-9' as GalaxyId)).toThrow(/9-9.*1-1.*5-6/);
+  });
+});
+
+describe('galaxy order', () => {
+  it('numbers galaxies 0 to 29 and walks to the next, crossing a Dimension after its boss', () => {
+    expect(GALAXIES.map((g) => galaxyOrdinal(g.id))).toEqual(Array.from({ length: 30 }, (_, n) => n));
+    expect(nextGalaxyId('1-1')).toBe('1-2');
+    expect(nextGalaxyId('1-6')).toBe('2-1');
+    expect(nextGalaxyId('5-6')).toBeNull();
+    expect(GALAXIES.map((g) => nextGalaxyId(g.id))).toEqual([...GALAXIES.slice(1).map((g) => g.id), null]);
+  });
+
+  it('refuses ids outside the table', () => {
+    expect(() => galaxyOrdinal('6-1' as GalaxyId)).toThrow(RangeError);
+  });
+
+  it('isGalaxyId accepts exactly the 30 ids', () => {
+    expect(GALAXIES.every((g) => isGalaxyId(g.id))).toBe(true);
+    for (const bad of ['6-1', '1-7', '0-1', '1-1 ', '', 11, null, undefined, {}]) expect(isGalaxyId(bad)).toBe(false);
   });
 });
 

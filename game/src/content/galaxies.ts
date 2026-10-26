@@ -66,6 +66,10 @@ export function galaxyById(id: GalaxyId): GalaxyDef {
 
 const ORDER: ReadonlyMap<GalaxyId, number> = new Map(GALAXIES.map((g, i) => [g.id, i]));
 
+export function isGalaxyId(value: unknown): value is GalaxyId {
+  return ORDER.has(value as GalaxyId);
+}
+
 /** Where a galaxy falls in the linear run from 1-1 (0) to 5-6 (29). */
 export function galaxyOrdinal(id: GalaxyId): number {
   const found = ORDER.get(id);
