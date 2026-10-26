@@ -127,6 +127,68 @@ describe('showerWarningAngle', () => {
   });
 });
 
+/** A Canvas 2D stand-in that keeps every point a path is drawn through, for the shower chevrons; text is 10 px per character. */
+function pathContext(): { ctx: CanvasRenderingContext2D; points: { x: number; y: number }[] } {
+  const points: { x: number; y: number }[] = [];
+  const keep = (x: number, y: number) => points.push({ x, y });
+  const ctx = new Proxy(
+    {},
+    {
+      get: (_target, name) => {
+        if (name === 'moveTo' || name === 'lineTo') return keep;
+        if (name === 'measureText') return (text: string) => ({ width: text.length * 10 });
+        if (name === 'createLinearGradient') return () => ({ addColorStop: () => undefined });
+        return () => undefined;
+      },
+      set: () => true,
+    },
+  ) as CanvasRenderingContext2D;
+  return { ctx, points };
+}
+
+describe('createHud shower chevrons', () => {
+  /** The chevron points drawn for a shower warned from bearing `angle` on an 844×390 phone with `bounds`. */
+  function chevrons(angle: number, bounds: HudBounds): { x: number; y: number }[] {
+    const hud = createHud(DRIFT);
+    const { ctx, points } = pathContext();
+    hud.resize(844, 390);
+    hud.setBounds(bounds);
+    const shower: ShowerState = { stage: 'warning', edge: 0, angle, remaining: 2 };
+    // A frame with no shower counts the pills' points; the warned frame draws those again, then the chevrons.
+    hud.draw(ctx, galaxyWorld(), 0);
+    const pills = points.length;
+    hud.draw(ctx, galaxyWorld({ shower }), 0);
+    return points.slice(2 * pills);
+  }
+  const insets = { insets: { top: 30, right: 47, left: 44 }, topRight: { width: 76, height: 76 } };
+
+  it('draws them inside the left and right safe areas, moved in by exactly the inset', () => {
+    for (const [angle, side] of [[Math.PI, 'left'], [0, 'right']] as const) {
+      const bare = chevrons(angle, NONE);
+      const inset = chevrons(angle, insets);
+      expect(bare.length).toBeGreaterThan(0);
+      const sign = side === 'left' ? 1 : -1;
+      const shift = insets.insets[side];
+      inset.forEach((p, i) => {
+        expect(p.x).toBeCloseTo((bare[i]?.x ?? Number.NaN) + sign * shift, 9);
+        expect(p.y).toBeCloseTo(bare[i]?.y ?? Number.NaN, 9);
+      });
+      if (side === 'left') expect(Math.min(...inset.map((p) => p.x))).toBeGreaterThan(shift);
+      else expect(Math.max(...inset.map((p) => p.x))).toBeLessThan(844 - shift);
+    }
+  });
+
+  it('draws them below the top inset for a shower from the top, and ignores it for one from the bottom', () => {
+    const top = chevrons(-Math.PI / 2, insets);
+    const bareTop = chevrons(-Math.PI / 2, NONE);
+    top.forEach((p, i) => {
+      expect(p.y).toBeCloseTo((bareTop[i]?.y ?? Number.NaN) + 30, 9);
+    });
+    expect(Math.min(...top.map((p) => p.y))).toBeGreaterThan(30);
+    expect(chevrons(Math.PI / 2, insets)).toEqual(chevrons(Math.PI / 2, NONE));
+  });
+});
+
 describe('createHud', () => {
   it('lays out score, lives and practice pills inside the safe area', () => {
     const hud = createHud(DRIFT);
