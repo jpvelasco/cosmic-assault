@@ -54,10 +54,10 @@ export const WEAPON_SPREAD: readonly (readonly number[])[] = [
 
 export const MAX_WEAPON_TIER = 3;
 
-/** How shots combine: a volley never holds more than `maxShots`. */
+/** How shots combine. A volley never exceeds `maxShots`: the widest tier fires 5, Double Shot adds 1 and Spread Laser 2. */
 export const VOLLEY = {
-  maxShots: 7,
-  /** Double Shot fires each shot twice, this far to either side of the nose. */
+  maxShots: 8,
+  /** Double Shot turns the centre shot into a pair, this far to either side of the nose axis. */
   parallelOffset: 6,
   /** Spread Laser adds a shot at each of `+angle` and `-angle`. */
   spreadLaserAngle: 0.22,

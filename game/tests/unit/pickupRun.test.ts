@@ -284,9 +284,8 @@ describe('the weapon', () => {
     expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore']))).toBe(5);
   });
 
-  it('caps a volley at 7 shots however the effects combine', () => {
-    // Tier 3 + Double Shot + Spread Laser: the tier's outer shots give way, the two pairs stay.
-    expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'doubleShot', 'spreadLaser']))).toBe(4);
+  it('grows with every effect, to 8 shots at most', () => {
+    expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'doubleShot', 'spreadLaser']))).toBe(8);
     expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'doubleShot']))).toBe(6);
     expect(volleyAt(equipped(['weaponCore', 'weaponCore', 'weaponCore', 'spreadLaser']))).toBe(7);
   });

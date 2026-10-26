@@ -20,7 +20,7 @@ describe('weaponFor', () => {
     expect(weapon.fireIntervalScale).toBe(1);
   });
 
-  it('doubles every shot into a parallel pair 6 units either side of the nose axis (Double Shot)', () => {
+  it('turns the centre shot into a parallel pair 6 units either side of the nose axis (Double Shot)', () => {
     const weapon = weaponFor(0, { ...NONE, doubleShot: true });
     expect(weapon.barrels).toEqual([
       { angle: 0, lateral: -VOLLEY.parallelOffset },
@@ -28,6 +28,22 @@ describe('weaponFor', () => {
     ]);
     expect(VOLLEY.parallelOffset).toBe(6);
     expect(weapon.fireIntervalScale).toBe(1);
+  });
+
+  it('pairs only the centre shot of a wider tier, leaving the rest of its fan alone', () => {
+    const { barrels } = weaponFor(3, { ...NONE, doubleShot: true });
+    expect(barrels).toHaveLength(6);
+    expect(barrels.filter((b) => b.lateral !== 0)).toEqual([
+      { angle: 0, lateral: -6 },
+      { angle: 0, lateral: 6 },
+    ]);
+    expect(angles(barrels.filter((b) => b.lateral === 0))).toEqual([-0.18, 0.18, -0.3, 0.3]);
+  });
+
+  it('pairs the innermost angles of a tier with no centre shot (tier 1), keeping the volley symmetric', () => {
+    const { barrels } = weaponFor(1, { ...NONE, doubleShot: true });
+    expect(barrels).toHaveLength(4);
+    expect(barrels.every((b) => Math.abs(b.angle) === 0.12 && Math.abs(b.lateral) === 6)).toBe(true);
   });
 
   it('adds a shot at +0.22 and -0.22 rad to the centre shot (Spread Laser)', () => {
@@ -42,68 +58,45 @@ describe('weaponFor', () => {
     expect(angles(weapon.barrels)).toEqual(WEAPON_SPREAD[2]);
   });
 
-  it('composes in order: tier spread, then x2 parallel, then the Spread Laser pair (which is not doubled)', () => {
+  it('composes in order: tier spread, then the Double Shot pair, then the Spread Laser pair (which is not paired)', () => {
     const weapon = weaponFor(1, { ...NONE, doubleShot: true, spreadLaser: true });
-    expect(weapon.barrels).toHaveLength(2 * 2 + 2);
-    const pair = weapon.barrels.filter((b) => Math.abs(b.angle) === VOLLEY.spreadLaserAngle);
-    expect(pair).toEqual([
+    expect(weapon.barrels).toHaveLength(4 + 2);
+    expect(weapon.barrels.filter((b) => Math.abs(b.angle) === VOLLEY.spreadLaserAngle)).toEqual([
       { angle: -VOLLEY.spreadLaserAngle, lateral: 0 },
       { angle: VOLLEY.spreadLaserAngle, lateral: 0 },
     ]);
     expect(weapon.barrels.filter((b) => Math.abs(b.lateral) === 6)).toHaveLength(4);
   });
 
-  it('never fires more than 7 shots in a volley, for every combination of tier and effects', () => {
-    for (const tier of TIERS)
-      for (const doubleShot of [false, true])
-        for (const spreadLaser of [false, true])
-          expect(weaponFor(tier, { doubleShot, spreadLaser, rapidFire: false }).barrels.length, `${String(tier)} ${String(doubleShot)} ${String(spreadLaser)}`).toBeLessThanOrEqual(VOLLEY.maxShots);
-    expect(VOLLEY.maxShots).toBe(7);
-  });
-
-  it('keeps a volley of exactly 7 whole: tier 3 with Spread Laser is 5 + 2', () => {
+  it('never trims: the largest volley, tier 3 with Double Shot and Spread Laser, is 5 + 1 + 2 = 8, and 8 is the ceiling', () => {
+    expect(VOLLEY.maxShots).toBe(8);
+    const { barrels } = weaponFor(3, { ...NONE, doubleShot: true, spreadLaser: true });
+    expect(barrels).toHaveLength(8);
     expect(weaponFor(3, { ...NONE, spreadLaser: true }).barrels).toHaveLength(7);
   });
 
-  it('trims the tier\'s outermost shots first above 7: tier 3 + Double Shot (10) loses its +-0.3 shots', () => {
-    const barrels = weaponFor(3, { ...NONE, doubleShot: true }).barrels;
-    expect(barrels).toHaveLength(6);
-    expect(Math.max(...barrels.map((b) => Math.abs(b.angle)))).toBe(0.18);
+  it('keeps every effect on top of the one before: no pickup ever weakens the volley', () => {
+    // Collecting Double Shot while Spread Laser runs at tier 3 takes the volley from 7 to 8, not down.
+    expect(weaponFor(3, { ...NONE, spreadLaser: true }).barrels.length).toBeLessThan(weaponFor(3, { ...NONE, spreadLaser: true, doubleShot: true }).barrels.length);
   });
 
-  it('keeps Double Shot\'s pair on the centre shot and the Spread Laser pair whatever the tier: tier 3 + both is 4 shots', () => {
-    const { barrels } = weaponFor(3, { ...NONE, doubleShot: true, spreadLaser: true });
-    expect(sortedBy(barrels)).toEqual(
-      sortedBy([
-        { angle: 0, lateral: -VOLLEY.parallelOffset },
-        { angle: 0, lateral: VOLLEY.parallelOffset },
-        { angle: -VOLLEY.spreadLaserAngle, lateral: 0 },
-        { angle: VOLLEY.spreadLaserAngle, lateral: 0 },
-      ]),
-    );
-  });
-
-  it('keeps the inner pair of a tier with no centre shot: tier 1 never loses it', () => {
-    const { barrels } = weaponFor(1, { ...NONE, doubleShot: true, spreadLaser: true });
-    expect(barrels).toHaveLength(6);
-    expect(barrels.filter((b) => Math.abs(b.angle) === 0.12)).toHaveLength(4);
-  });
-
-  it('makes every active volley effect count: removing any one of them changes the weapon, at every tier', () => {
+  it('holds three invariants for every tier and every combination of timed kinds: at most 8 shots, each active kind changes the weapon, and adding a kind never loses a shot', () => {
     const KINDS = ['doubleShot', 'rapidFire', 'spreadLaser'] as const;
+    const flagsOf = (mask: number): TimedFlags => ({ doubleShot: (mask & 1) !== 0, rapidFire: (mask & 2) !== 0, spreadLaser: (mask & 4) !== 0 });
     for (const tier of TIERS)
-      for (let mask = 1; mask < 8; mask++) {
-        const flags: TimedFlags = { doubleShot: (mask & 1) !== 0, rapidFire: (mask & 2) !== 0, spreadLaser: (mask & 4) !== 0 };
+      for (let mask = 0; mask < 8; mask++) {
+        const flags = flagsOf(mask);
         const full = weaponFor(tier, flags);
-        expect(full.barrels.length, `tier ${String(tier)} ${String(mask)}`).toBeLessThanOrEqual(VOLLEY.maxShots);
-        for (const kind of KINDS.filter((k) => flags[k])) {
-          const without = weaponFor(tier, { ...flags, [kind]: false });
-          expect(without, `tier ${String(tier)} without ${kind} of ${String(mask)}`).not.toEqual(full);
+        const where = `tier ${String(tier)} mask ${String(mask)}`;
+        expect(full.barrels.length, where).toBeLessThanOrEqual(VOLLEY.maxShots);
+        for (const kind of KINDS) {
+          if (flags[kind]) expect(weaponFor(tier, { ...flags, [kind]: false }), `${where} without ${kind}`).not.toEqual(full);
+          else expect(weaponFor(tier, { ...flags, [kind]: true }).barrels.length, `${where} adding ${kind}`).toBeGreaterThanOrEqual(full.barrels.length);
         }
       }
   });
 
-  it('keeps a capped volley mirror-symmetric, so it never leans', () => {
+  it('keeps every volley mirror-symmetric, so it never leans', () => {
     for (const tier of TIERS)
       for (const doubleShot of [false, true])
         for (const spreadLaser of [false, true]) {
