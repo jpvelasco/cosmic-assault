@@ -65,6 +65,11 @@ interface CosmicAssaultTestApi {
    * handling as a frame; stops early once the run leaves play (a clear at warp start, or a game over).
    */
   fastForward(seconds: number): void;
+  /**
+   * Takes `damage` hit points off the boss, as that many shots would; the blow that empties it kills it, and the
+   * warp-out follows within the 2 s it takes to die. Throws unless a boss is fighting (not in its intro, dying or down).
+   */
+  damageBoss(damage: number): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }

@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
+import type { GalaxyId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
 import { E2E_GALAXY, E2E_SEED, GAME_OVER_GALAXY, GAME_OVER_SEED } from './seed';
 
@@ -85,6 +86,37 @@ export async function seedSave(page: Page, save: SaveData): Promise<void> {
   await page.addInitScript(([key, value]) => {
     localStorage.setItem(key, value);
   }, [SAVE_KEY, JSON.stringify(save)] as const);
+}
+
+/** The save as `localStorage` holds it, parsed; empty before anything is written. */
+export async function storedSave(page: Page): Promise<Partial<SaveData>> {
+  const text = await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
+  return text === null ? {} : (JSON.parse(text) as Partial<SaveData>);
+}
+
+/** Title → Free play → Dimension `dimension`, as a player taps it; the galaxy select is showing on return. */
+export async function openGalaxySelect(page: Page, dimension: number): Promise<void> {
+  await page.getByTestId('play').click();
+  await page.getByTestId('mode-free').click();
+  await page.getByTestId(`dimension-${String(dimension)}`).click();
+}
+
+/** Title → Free play → the galaxy's Dimension → the galaxy; the run is in play on return. */
+export async function playFreeGalaxy(page: Page, id: GalaxyId): Promise<void> {
+  await openGalaxySelect(page, Number(id.slice(0, 1)));
+  await page.getByTestId(`galaxy-${id}`).click();
+  await expectMode(page, 'playing');
+}
+
+/**
+ * Clicks `testId` until the game reaches `screen`: an end card ignores input for GAME_OVER_GUARD_MS after it opens,
+ * and a click it ignores changes nothing, so retrying needs no fixed wait.
+ */
+export async function clickPastGuard(page: Page, testId: string, screen: CosmicAssaultTestState['screen']): Promise<void> {
+  await expect(async () => {
+    await page.getByTestId(testId).click({ timeout: 1000 });
+    expect((await gameState(page)).screen).toBe(screen);
+  }).toPass();
 }
 
 /** Makes the time-based run seed `seed` for every navigation of `page`, without a debug switch, so the run still saves. */

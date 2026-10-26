@@ -1,8 +1,9 @@
 import type { Page } from '@playwright/test';
 import { STALE_RUN_NOTICE } from '../src/app/flowController';
-import { startRank, type RankRun } from '../src/meta/rankRun';
+import { RANK_START_LIVES, startRank, type RankRun } from '../src/meta/rankRun';
 import { SAVE_KEY } from '../src/meta/save';
-import { expect, expectMode, gameState, openFreshGame, test, waitForBridge } from './fixtures';
+import { clickPastGuard, expect, expectMode, fastForward, gameState, openFreshGame, pinClockSeed, storedSave, test, waitForBridge } from './fixtures';
+import { CLEAR_1_1_SECONDS, GAME_OVER_GALAXY, GAME_OVER_SEED, SURVIVES_1_1 } from './seed';
 
 /** Plays a new Rank run from the title. */
 async function startRankRun(page: Page): Promise<void> {
@@ -98,11 +99,6 @@ test('a new Rank run over a saved one asks first, and posts the run it ends', as
   expect(save.rankBoard).toEqual([expect.objectContaining({ score: 2200, reached: 'D1 · G3', continued: false })]);
 });
 
-/** The save as stored, read in `page`. */
-async function stored(page: Page): Promise<{ rankRun?: Partial<RankRun> }> {
-  return JSON.parse((await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY)) ?? '{}') as { rankRun?: Partial<RankRun> };
-}
-
 test('a second tab leaves the first tab live attempt alone, and offers Resume once it ends', async ({ page, context }) => {
   await openFreshGame(page);
   await startRankRun(page);
@@ -112,12 +108,12 @@ test('a second tab leaves the first tab live attempt alone, and offers Resume on
   // The playing tab answers the probe: no forfeit, and this tab says where the run is.
   await expect(other.getByTestId('rank-elsewhere')).toHaveText('This run is playing in another tab');
   await expect(other.getByTestId('resume-rank')).toBeDisabled();
-  expect((await stored(other)).rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+  expect((await storedSave(other)).rankRun).toMatchObject({ lives: 3, inGalaxy: true });
 
   await page.bringToFront();
   await quitRun(page);
   await expect(page.getByText(STALE_RUN_NOTICE)).toBeHidden();
-  expect((await stored(page)).rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+  expect((await storedSave(page)).rankRun).toMatchObject({ lives: 2, inGalaxy: false });
   // The first tab's own Quit ends the galaxy, so the second tab may resume it now.
   await expect(other.getByTestId('resume-rank')).toBeEnabled();
   await expect(other.getByTestId('rank-elsewhere')).toBeHidden();
@@ -138,5 +134,68 @@ test('a tab whose Rank run another tab replaced does not write over it, and says
   await quitRun(page);
   await expect(page.getByText(STALE_RUN_NOTICE)).toBeVisible();
   // The first tab's forfeit was dropped: the stored run is the second tab's new one, untouched.
-  expect((await stored(page)).rankRun).toMatchObject({ next: '1-1', lives: 3, inGalaxy: true });
+  expect((await storedSave(page)).rankRun).toMatchObject({ next: '1-1', lives: 3, inGalaxy: true });
+});
+
+test('a Rank clear is saved at once, and Resume Rank after a reload plays on with the same score and lives', async ({ page }) => {
+  await pinClockSeed(page, SURVIVES_1_1);
+  await openFreshGame(page);
+  await startRankRun(page);
+  await fastForward(page, CLEAR_1_1_SECONDS);
+
+  const { screen, galaxy, rankRun, save } = await gameState(page);
+  expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: '1-1' });
+  // The run waits between galaxies at the next one, with the clear's score; the save has it before any other input.
+  expect(rankRun).toMatchObject({ next: '1-2', inGalaxy: false });
+  const carried = rankRun;
+  expect(carried?.score).toBeGreaterThan(0);
+  expect(await storedSave(page)).toMatchObject({ frontier: '1-2', rankRun: { next: '1-2', score: carried?.score, lives: carried?.lives, inGalaxy: false } });
+  expect(save.rankSeq).toBeGreaterThan(0);
+
+  // Leaving the results card for the title keeps the win, and the title offers the run.
+  await clickPastGuard(page, 'rank-title', 'title');
+  await page.reload();
+  await waitForBridge(page);
+  const resume = page.getByTestId('resume-rank');
+  await expect(resume).toHaveText('Resume Rank');
+  await expect(resume).toBeEnabled();
+  expect((await gameState(page)).save.rankRun).toEqual(carried);
+
+  await resume.click();
+  await expectMode(page, 'playing');
+  const resumed = await gameState(page);
+  expect(resumed.galaxy).toBe('1-2');
+  expect(resumed.lives).toBe(carried?.lives);
+  expect(resumed.rankRun).toMatchObject({ next: '1-2', score: carried?.score, lives: carried?.lives, inGalaxy: true });
+});
+
+test('a game over offers Continue, which resets the score and marks the run, and the board then shows it', async ({ page }) => {
+  // One life left at the game-over galaxy: seed GAME_OVER_SEED's idle ship loses it a few seconds in.
+  await pinClockSeed(page, GAME_OVER_SEED);
+  await seedRun(page, { ...startRank('2026-10-26'), next: GAME_OVER_GALAXY, score: 1500, lives: 1 });
+  await openFreshGame(page);
+  await page.getByTestId('resume-rank').click();
+  await expectMode(page, 'playing');
+  await fastForward(page, 60);
+  await expectMode(page, 'gameOver');
+
+  // The run is lost with its total on the board, waiting for a Continue.
+  const lost = await storedSave(page);
+  expect(lost.rankRun).toMatchObject({ next: GAME_OVER_GALAXY, lives: 0, continued: false, inGalaxy: false });
+  expect(lost.rankBoard).toEqual([expect.objectContaining({ continued: false })]);
+  const firstEntry = lost.rankBoard?.[0];
+  expect(firstEntry?.score).toBeGreaterThanOrEqual(1500);
+
+  await clickPastGuard(page, 'rank-continue', 'playing');
+  const { lives, score, rankRun } = await gameState(page);
+  expect({ lives, score }).toEqual({ lives: RANK_START_LIVES, score: 0 });
+  expect(rankRun).toMatchObject({ next: GAME_OVER_GALAXY, score: 0, lives: RANK_START_LIVES, continued: true, inGalaxy: true });
+  expect((await storedSave(page)).rankRun).toMatchObject({ score: 0, continued: true });
+
+  // Lose the continued run too: its entry carries the continued flag, beside the first one.
+  await fastForward(page, 120);
+  await expectMode(page, 'gameOver');
+  const { rankBoard } = await storedSave(page);
+  expect(rankBoard).toHaveLength(2);
+  expect(rankBoard).toEqual(expect.arrayContaining([firstEntry, expect.objectContaining({ continued: true })]));
 });

@@ -39,3 +39,9 @@ export const PERF_SEED = 7;
 
 /** The `?galaxy=` the perf spec plays: the busiest field early on, 15 to 20 rocks by 15 s with the ship firing. */
 export const PERF_GALAXY: GalaxyId = '5-5';
+
+/** The clock seed whose idle ship survives 1-1 to its warp on the desktop field (tests/unit/runController.test.ts plays it). */
+export const SURVIVES_1_1 = 2;
+
+/** Seconds of sim time that clear 1-1: its timer runs out and the warp starts. */
+export const CLEAR_1_1_SECONDS = 95;

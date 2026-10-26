@@ -56,6 +56,9 @@ export function exposeTestBridge(app: App, hooks: E2eHooks): void {
     fastForward(seconds) {
       hooks.e2eFastForward?.(seconds);
     },
+    damageBoss(damage) {
+      hooks.e2eDamageBoss?.(damage);
+    },
     crash() {
       hooks.e2eBeforeFrame = () => {
         hooks.e2eBeforeFrame = undefined;

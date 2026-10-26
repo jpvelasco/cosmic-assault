@@ -9,6 +9,7 @@ const MARKS = [
   { text: '__E2E_QUERY__', what: 'the e2e ?seed=, ?lives=, ?quality= and ?galaxy= parsing', owner: 'src/app/seed.ts' },
   { text: 'e2eBeforeFrame', what: 'the e2e frame hook', owner: 'src/app/game.ts' },
   { text: 'e2eFastForward', what: 'the e2e fast-forward hook', owner: 'src/app/game.ts' },
+  { text: 'e2eDamageBoss', what: 'the e2e boss-damage hook', owner: 'src/app/game.ts' },
 ];
 
 const e2e = process.argv[2] === '--e2e';
@@ -39,4 +40,4 @@ if (problems.length > 0) {
   for (const problem of problems) console.error(problem);
   process.exit(1);
 }
-console.log(`e2e bridge, query parsing, frame hook and fast-forward ${e2e ? 'present' : 'absent'}`);
+console.log(`e2e bridge, query parsing and the frame, fast-forward and boss-damage hooks ${e2e ? 'present' : 'absent'}`);

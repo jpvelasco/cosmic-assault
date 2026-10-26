@@ -45,6 +45,8 @@ export interface E2eHooks {
   e2eBeforeFrame?: (() => void) | undefined;
   /** Set by `createApp`: steps the run in play by fixed steps for `seconds`, or until it leaves play. */
   e2eFastForward?: ((seconds: number) => void) | undefined;
+  /** Set by `createApp`: takes `damage` hit points off a boss that is fighting; throws if none is. */
+  e2eDamageBoss?: ((damage: number) => void) | undefined;
 }
 
 export interface App {
@@ -398,6 +400,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     e2e.e2eFastForward = (seconds) => {
       const controls = readControls(previousPad);
       for (let t = 0; t < seconds && mode === 'playing'; t += STEP_SECONDS) run.step(STEP_SECONDS, controls);
+      redrawPending = true;
+    };
+    /** One shot's hit on the boss, through the galaxy rules (private on World, reached by name here); false if it is not fighting. */
+    const strikeBoss = (): boolean => {
+      const { world } = run;
+      const boss = world?.boss;
+      if (world === null || boss?.state !== 'fighting') return false;
+      return world['run']?.hitBoss(boss.x, boss.y, 1) === true;
+    };
+    e2e.e2eDamageBoss = (damage) => {
+      let struck = 0;
+      while (struck < damage && strikeBoss()) struck++;
+      if (struck === 0) throw new Error('No boss is fighting: fast-forward through the approach and the 2 s intro, and pass a damage of at least 1');
       redrawPending = true;
     };
   }
