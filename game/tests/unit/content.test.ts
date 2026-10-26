@@ -207,8 +207,12 @@ describe('the galaxy table', () => {
     expect(FOES.drone).toMatchObject({ hp: 1, cost: 1.5, speed: 120, points: 100, group: [3, 5] });
   });
 
-  it('uses the Drift palette throughout', () => {
-    for (const g of GALAXIES) expect(g.palette).toBe('drift');
+  it('gives each Dimension one palette and one music theme, Ion Reach its own and the rest the Drift\'s until M6', () => {
+    for (const g of GALAXIES) {
+      const own = g.dimension === 2 ? 'ionReach' : 'drift';
+      expect(g.palette, g.id).toBe(own);
+      expect(g.theme, g.id).toBe(own);
+    }
   });
 });
 

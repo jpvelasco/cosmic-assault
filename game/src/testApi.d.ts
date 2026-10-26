@@ -57,6 +57,10 @@ interface CosmicAssaultTestState {
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
+  /** The colour look in force: the last run's galaxy's palette ('drift' before any run). */
+  readonly palette: import('./content/types').PaletteId;
+  /** The music theme chosen (it changes at the next bar line): a galaxy's, its boss variant from the boss intro, the last Dimension's on a menu. */
+  readonly musicTheme: import('./audio/themes').ThemeId;
   /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
   readonly settings: import('./app/settings').Settings;
   /** The motion rules in force: reduced motion (the browser's setting) and whether shake is on once the shake setting is applied. */

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudioEngine, needsSoundGesture, type AudioEngine } from '../../src/audio/engine';
 import { SFX_NAMES } from '../../src/audio/sfx';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/app/settings';
+import type { GalaxyId } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 
 class FakeParam {
@@ -480,7 +481,8 @@ describe('sound effects', () => {
       expect(voice.stop).toHaveBeenCalledTimes(1);
       voice.onended?.();
     }
-    const fixed = new Set([...nodesOf('gain').slice(0, 3), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
+    // The master, sfx and music gains, and the music bus's lane for its theme.
+    const fixed = new Set([...nodesOf('gain').slice(0, 4), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
     const connected = c.nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0);
     expect(connected).toEqual([]);
   });
@@ -510,7 +512,8 @@ describe('the gravity well hum', () => {
     expect(looping()).toEqual([]);
     for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
     for (const voice of [...nodesOf('oscillator'), ...nodesOf('bufferSource')]) voice.onended?.();
-    const fixed = new Set([...nodesOf('gain').slice(0, 3), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
+    // The master, sfx and music gains, and the music bus's lane for its theme.
+    const fixed = new Set([...nodesOf('gain').slice(0, 4), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
     expect(ctx().nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0)).toEqual([]);
   });
 
@@ -892,5 +895,173 @@ describe('unavailable audio', () => {
       e.setMuted(true);
       e.setMuted(false);
     }).not.toThrow();
+  });
+});
+
+describe('music themes', () => {
+  const start = (id: GalaxyId): SimEvent => ({ type: 'galaxyStart', id });
+  const INTRO: SimEvent = { type: 'bossIntro', id: 'sentinel' };
+  /** A Drift bar at 96 bpm lasts 2.5 s, and the music starts 0.1 s after the first gesture. */
+  const BAR = 2.5;
+  const FIRST_BEAT = 0.1;
+
+  /** The buses of the themes now sounding: the gain nodes feeding the music bus. */
+  const lanes = (): FakeNode[] => {
+    const music = nodesOf('gain')[2] as FakeNode;
+    return nodesOf('gain').filter((n) => n.outputs.has(music));
+  };
+  const reaches = (from: FakeNode, to: FakeNode): boolean => from === to || [...from.outputs].some((n) => reaches(n, to));
+  /** Start times of the music voices that sound on `lane`. */
+  const startsOn = (lane: FakeNode): number[] => voiceNodes().filter((v) => reaches(v, lane)).map((v) => v.start.mock.calls[0]?.[0] as number);
+  const setAt = (lane: FakeNode, value: number): number | undefined =>
+    (lane.gain.setValueAtTime.mock.calls as [number, number][]).find(([v]) => v === value)?.[1];
+
+  describe('which theme is chosen', () => {
+    it('starts on the Drift, before the audio context exists too', () => {
+      const e = engine();
+      expect(e.theme).toBe('drift');
+      e.handle([SHOT]);
+      expect(e.theme).toBe('drift');
+      expect(contexts).toHaveLength(0);
+    });
+
+    it.each([
+      ['1-1', 'drift'],
+      ['2-1', 'ionReach'],
+      ['2-5', 'ionReach'],
+      ['3-2', 'drift'],
+    ] as const)('takes galaxy %s\'s theme, %s, as it starts', (id, theme) => {
+      const e = engine();
+      e.handle([start(id)]);
+      expect(e.theme).toBe(theme);
+    });
+
+    it('turns to the Dimension\'s boss variant at the boss intro, and back to its theme at the next galaxy', () => {
+      const e = engine();
+      e.handle([start('2-6')]);
+      expect(e.theme).toBe('ionReach');
+      e.handle([INTRO]);
+      expect(e.theme).toBe('ionReachBoss');
+      e.handle([start('2-6')]);
+      expect(e.theme).toBe('ionReach');
+      e.handle([start('1-6'), INTRO]);
+      expect(e.theme).toBe('driftBoss');
+    });
+
+    it('keeps the boss variant through a pause, and plays the last-played Dimension\'s plain theme on every menu', () => {
+      const e = engine();
+      e.handle([start('2-6'), INTRO]);
+      e.setScreen('playing');
+      e.setScreen('paused');
+      expect(e.theme).toBe('ionReachBoss');
+      e.setScreen('playing');
+      expect(e.theme).toBe('ionReachBoss');
+      e.setScreen('results');
+      expect(e.theme).toBe('ionReach');
+      e.setScreen('title');
+      expect(e.theme).toBe('ionReach');
+    });
+  });
+
+  describe('changing theme while it plays', () => {
+    function playing(): AudioEngine {
+      const e = engine();
+      press();
+      runClock(1);
+      return e;
+    }
+
+    /** Runs the clock until the change happens, up to 10 s; returns the old bus and the new one while both are connected. */
+    function untilChange(): [FakeNode, FakeNode] {
+      for (let i = 0; i < 400 && lanes().length < 2; i++) runClock(0.025);
+      const both = lanes();
+      expect(both).toHaveLength(2);
+      return both as [FakeNode, FakeNode];
+    }
+
+    it('waits for the next bar line, then fades the old theme out and the new one in', () => {
+      const e = playing();
+      const [old] = lanes() as [FakeNode];
+      expect(lanes()).toHaveLength(1);
+      e.handle([start('2-1')]);
+      expect(lanes()).toHaveLength(1);
+      const [, fresh] = untilChange();
+      const at = setAt(fresh, 0) as number;
+      expect((at - FIRST_BEAT) / BAR).toBeCloseTo(Math.round((at - FIRST_BEAT) / BAR), 9);
+      expect(at).toBeGreaterThan(1);
+      expect(setAt(old, 1)).toBe(at);
+      expect(old.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, expect.any(Number));
+      expect(fresh.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, expect.any(Number));
+      expect(startsOn(old).every((t) => t < at)).toBe(true);
+      expect(startsOn(fresh).length).toBeGreaterThan(0);
+      expect(startsOn(fresh).every((t) => t >= at)).toBe(true);
+    });
+
+    it('drops the faded-out bus once it is silent, and not before', () => {
+      const e = playing();
+      const [old] = lanes() as [FakeNode];
+      e.handle([start('2-1')]);
+      for (let i = 0; i < 400 && lanes().length < 2; i++) runClock(0.025);
+      expect(lanes()).toHaveLength(2);
+      expect(old.outputs.size).toBe(1);
+      runClock(0.3);
+      expect(old.outputs.size).toBe(1);
+      runClock(0.5);
+      expect(old.outputs.size).toBe(0);
+      expect(lanes()).toHaveLength(1);
+    });
+
+    it('makes one change for requests made before the bar line, to the last one asked', () => {
+      const e = playing();
+      e.handle([start('2-6')]);
+      e.handle([INTRO]);
+      untilChange();
+      expect(e.theme).toBe('ionReachBoss');
+      runClock(0.3);
+      expect(lanes()).toHaveLength(2);
+    });
+
+    it('makes none if the theme asked for is back to the one playing before the bar line', () => {
+      const e = playing();
+      e.handle([start('2-1')]);
+      e.handle([start('1-1')]);
+      let most = 0;
+      for (let i = 0; i < 240; i++) {
+        runClock(0.025);
+        most = Math.max(most, lanes().length);
+      }
+      expect(most).toBe(1);
+      expect(e.theme).toBe('drift');
+    });
+
+    it('waits through a mute and changes at the first bar line after the unmute, never replaying the muted stretch', () => {
+      const e = playing();
+      e.setMuted(true);
+      e.handle([start('2-1')]);
+      runClock(10);
+      expect(lanes()).toHaveLength(1);
+      const unmutedAt = ctx().currentTime;
+      e.setMuted(false);
+      const [, fresh] = untilChange();
+      expect(setAt(fresh, 0)).toBeGreaterThanOrEqual(unmutedAt);
+      for (const t of startsOn(fresh)) expect(t).toBeGreaterThanOrEqual(unmutedAt - 0.001);
+    });
+
+    it('starts on the theme chosen before the first gesture', () => {
+      const e = engine();
+      e.handle([start('2-1')]);
+      press();
+      runClock(1);
+      expect(lanes()).toHaveLength(1);
+      expect(e.theme).toBe('ionReach');
+    });
+
+    it('stops every bus with the player', () => {
+      const e = playing();
+      e.handle([start('2-1')]);
+      runClock(6);
+      e.dispose();
+      expect(lanes()).toEqual([]);
+    });
   });
 });

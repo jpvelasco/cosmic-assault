@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DRIFT } from '../../src/render/palette';
+import { foeKeys } from '../../src/render/foePass';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import {
   craterLayout,
   createSpriteBaker,
@@ -222,6 +223,20 @@ describe('createSpriteBaker', () => {
     expect(baker.asteroid(rock(4), DRIFT)).not.toBe(baker.asteroid(a, DRIFT));
   });
 
+  it('keys every sprite by palette, so a new palette bakes its own and the old ones are never looked up again', () => {
+    const baker = createSpriteBaker();
+    baker.setScale(1, 1);
+    expect(baker.ship(ION_REACH)).not.toBe(baker.ship(DRIFT));
+    expect(baker.shot(ION_REACH)).not.toBe(baker.shot(DRIFT));
+    expect(baker.flame(ION_REACH, 16)).not.toBe(baker.flame(DRIFT, 16));
+    expect(baker.ship(ION_REACH)).toBe(baker.ship(ION_REACH));
+  });
+
+  it('keys the foe sprites by palette too', () => {
+    const keys = [...Object.values(foeKeys(DRIFT)), ...Object.values(foeKeys(ION_REACH))];
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it('frees and rebakes everything when the scale or dpr changes, and keeps the cache otherwise', () => {
     const baker = createSpriteBaker();
     baker.setScale(1, 2);
@@ -283,7 +298,7 @@ describe('createSpriteBaker', () => {
     const baker = createSpriteBaker();
     const a = rock(7);
     const drift = baker.asteroid(a, DRIFT);
-    const other = baker.asteroid(a, { ...DRIFT, id: 'other' });
+    const other = baker.asteroid(a, ION_REACH);
     expect(other).not.toBe(drift);
     expect(baker.asteroid(a, DRIFT)).toBe(drift);
   });

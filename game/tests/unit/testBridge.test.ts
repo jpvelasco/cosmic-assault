@@ -11,7 +11,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function bridgeFor(world: World | null) {
+function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }) {
   const fakeWindow: { __COSMIC_ASSAULT_TEST_API__?: CosmicAssaultTestApi } = {};
   vi.stubGlobal('window', fakeWindow);
   const app = {
@@ -23,6 +23,7 @@ function bridgeFor(world: World | null) {
     quality: { index: 0, level: { name: 'high' } },
     frameStats: { count: 0, p50: 0, p95: 0, longFrames: 0 },
     muted: false,
+    ...look,
     settings: {},
     motion: { reducedMotion: false, shake: true },
     audioState: 'none',
@@ -34,6 +35,15 @@ function bridgeFor(world: World | null) {
   if (api === undefined) throw new Error('the bridge must be set');
   return api;
 }
+
+describe('the test bridge look and music', () => {
+  it('reports the palette and the music theme in force, beside the version-3 fields', () => {
+    const api = bridgeFor(null);
+    expect(api.version).toBe(3);
+    expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
+    expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
+  });
+});
 
 describe('the test bridge pickup state', () => {
   it('is empty and at tier 0 outside a run', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { burstFor, createEffects } from '../../src/render/effects';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool, type Particle } from '../../src/render/particles';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { PICKUP_COLORS } from '../../src/render/pickupArt';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -178,6 +178,19 @@ describe('burstFor', () => {
 });
 
 describe('createEffects', () => {
+  it('bursts in the new palette once setPalette changes it, keeping its settings', () => {
+    const pool = new ParticlePool(200);
+    const fx = createEffects(pool, 1);
+    fx.reducedMotion = true;
+    fx.setPalette(ION_REACH);
+    expect(fx.reducedMotion).toBe(true);
+    expect(fx.flashColor).toBe(ION_REACH.ring);
+    fx.handle([DESTROYED(0)], makeWorld());
+    const all = allParticles(pool);
+    expect(new Set(all.filter((p) => p.kind === 'spark').map((p) => p.color))).toEqual(new Set([ION_REACH.spark]));
+    expect(all.filter((p) => p.kind === 'ring').every((p) => p.color === ION_REACH.ring)).toBe(true);
+  });
+
   it('emits the table counts for an asteroid kill, with palette colours', () => {
     const pool = new ParticlePool(200);
     const fx = createEffects(pool, 1);

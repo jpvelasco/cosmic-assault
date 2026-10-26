@@ -45,6 +45,8 @@ const GLASS_PILLS: readonly HudPill[] = ['score', 'lives', 'galaxy', 'boss'];
 export interface Hud {
   resize(cssWidth: number, cssHeight: number): void;
   setBounds(bounds: HudBounds): void;
+  /** Recolours the bars, labels and arrows from the next draw. */
+  setPalette(palette: Palette): void;
   /**
    * Draws the pills, showing `score` (in Rank, the run's total) and, while a shower is telegraphed, arrows at its edge.
    * `still` holds the arrows steady and the expiring pickup badges dim rather than blinking, for reduced motion. The
@@ -111,7 +113,8 @@ interface Measured {
 
 const measured = (): Measured => ({ text: '', width: 0 });
 
-export function createHud(palette: Palette): Hud {
+export function createHud(initial: Palette): Hud {
+  let palette = initial;
   const boxes: Readonly<Record<HudPill, HudRect>> = {
     score: box(),
     lives: box(),
@@ -346,6 +349,11 @@ export function createHud(palette: Palette): Hud {
       shownMultiplier = 1;
       shownBoss = null;
       for (const text of [scoreText, caption, level, comboText, bossName]) text.text = '\u0000';
+      dirty = true;
+    },
+    setPalette(next) {
+      palette = next;
+      // The bar gradients are made on layout.
       dirty = true;
     },
     setBounds(next) {

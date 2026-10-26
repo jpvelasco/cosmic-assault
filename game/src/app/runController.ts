@@ -3,6 +3,7 @@ import { recordPickupSeen } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
 import { createTabPresence, type TabPresence } from '../platform/tabPresence';
+import type { GalaxyDef } from '../content/types';
 import { PLAYER } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
@@ -28,8 +29,8 @@ export interface RunControllerDeps {
   field(): Field | null;
   /** The flow is on a new screen; on a menu screen the run is already dropped. */
   showScreen(screen: Screen): void;
-  /** A new World is in place: reset the input latches, the loop and the renderer for it. */
-  onRunStarted(): void;
+  /** A new World is in place, playing `galaxy`: reset the input latches, the loop and the renderer for it, in its palette. */
+  onRunStarted(galaxy: GalaxyDef): void;
   /** Tells the player something in a toast, up for `ms` (the toast's default when omitted). */
   notify(text: string, ms?: number): void;
   /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
@@ -120,16 +121,17 @@ export function createRunController(deps: RunControllerDeps): RunController {
     if (galaxy === null || mode === null) {
       throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow, from mode select or galaxy select');
     }
+    const def = galaxyById(galaxy);
     world = new World({
       seed: overrides.seed ?? clockSeed(),
       field,
-      rules: { kind: 'galaxy', galaxy: galaxyById(galaxy), mode },
+      rules: { kind: 'galaxy', galaxy: def, mode },
       // Free play always starts with the default lives and weapon; Rank carries its own.
       startLives: rankRun?.lives ?? PLAYER.startLives,
       startTier: rankRun?.weaponTier ?? 0,
     });
     notices.newRun();
-    deps.onRunStarted();
+    deps.onRunStarted(def);
   }
 
   /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */

@@ -1,8 +1,11 @@
 import type { Screen } from '../app/flow';
 import type { Settings } from '../app/settings';
+import { galaxyById } from '../content/galaxies';
+import type { MusicThemeId } from '../content/types';
 import type { SimEvent } from '../sim/events';
 import { createMusicPlayer, type MusicPlayer } from './music';
 import { humFor, isBossKill, PER_FRAME_CAPS, screenCue, sfxFor, type SfxName } from './sfx';
+import { bossThemeOf, THEMES, type ThemeId } from './themes';
 import { playSfx, startWellHum, type Loop, type VoiceBed } from './voices';
 
 /** What the test bridge reports: no context yet, or the context's own state. */
@@ -22,12 +25,14 @@ export function needsSoundGesture(state: AudioState, muted: boolean): boolean {
 export interface AudioEngine {
   readonly state: AudioState;
   readonly muted: boolean;
+  /** The music theme chosen: it starts at the next bar line, and a menu plays the last Dimension's. The Drift before any galaxy. */
+  readonly theme: ThemeId;
   /** Starts a new frame, which resets the per-frame caps on shots and drone swarms. */
   beginFrame(): void;
   /**
    * Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss), and
    * starts or stops the gravity well's hum. The hum plays only in play: pause silences it until play resumes, and any
-   * other screen, a mute or dispose stops it.
+   * other screen, a mute or dispose stops it. A galaxy's start picks its theme, and a boss's intro its boss variant.
    */
   handle(events: readonly SimEvent[]): void;
   /** Plays `name`, `delay` seconds from now on the audio clock. */
@@ -114,6 +119,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let hum: Loop | null = null;
   /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
   let screenBus: GainNode | null = null;
+  /** The theme of the last galaxy started, and whether its boss has appeared; together they choose the music. */
+  let galaxyTheme: MusicThemeId = 'drift';
+  let bossFight = false;
+  let theme: ThemeId = 'drift';
 
   /** The music bus gain for `level`: the saved volume scaled by the mode's level. */
   const musicGain = (level: MusicLevel): number => musicVolume * MUSIC_LEVELS[level];
@@ -172,7 +181,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       syncHum();
     };
     const bed: VoiceBed = { ctx, noise: createNoise(ctx) };
-    return { ctx, bed, master, sfx, music, player: createMusicPlayer(bed, music, guard, audible) };
+    return { ctx, bed, master, sfx, music, player: createMusicPlayer(bed, music, guard, audible, THEMES[theme]) };
   }
 
   /** Whether sound should be made right now: the context is running and the player has not muted. */
@@ -282,6 +291,28 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     });
   }
 
+  /** Moves the music to the theme the galaxy and boss fight now call for; it changes at the next bar line. */
+  function syncTheme(): void {
+    const next = bossFight ? bossThemeOf(galaxyTheme) : galaxyTheme;
+    if (next === theme) return;
+    theme = next;
+    const current = graph;
+    if (current === null) return;
+    guard(() => {
+      current.player.setTheme(THEMES[next]);
+    });
+  }
+
+  /** A galaxy starting picks its theme and a boss appearing its boss variant; other events leave the music alone. */
+  function followTheme(event: SimEvent): void {
+    if (event.type === 'galaxyStart') {
+      galaxyTheme = galaxyById(event.id).theme;
+      bossFight = false;
+    } else if (event.type === 'bossIntro') {
+      bossFight = true;
+    }
+  }
+
   function play(name: SfxName, delay = 0): void {
     if (graph === null || !audible()) return;
     const cap = PER_FRAME_CAPS[name];
@@ -305,6 +336,9 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     get muted() {
       return muted;
     },
+    get theme() {
+      return theme;
+    },
     beginFrame() {
       for (const name of CAPPED_SOUNDS) startedThisFrame[name] = 0;
     },
@@ -314,8 +348,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
         const cue = sfxFor(event, bossKill);
         if (cue !== null) play(cue.name, cue.delay);
         humWanted = humFor(event) ?? humWanted;
+        followTheme(event);
       }
       syncHum();
+      syncTheme();
     },
     play,
     setMuted(next) {
@@ -337,9 +373,14 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     setMusicLevel,
     setScreen(screen) {
       inPlay = screen === 'playing';
-      // Pause keeps the well in mind for the resume; any other screen leaves the run, and the well with it.
-      if (!inPlay && screen !== 'paused') humWanted = false;
+      // Pause keeps the well and the boss fight in mind for the resume; any other screen leaves the run, and both with it
+      // (the menus play the plain theme of the last Dimension).
+      if (!inPlay && screen !== 'paused') {
+        humWanted = false;
+        bossFight = false;
+      }
       syncHum();
+      syncTheme();
       setMusicLevel(musicFor(screen));
       playScreenCue(screen);
     },

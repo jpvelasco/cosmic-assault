@@ -5,8 +5,8 @@ import { createRng } from '../sim/rng';
 export interface StarLayers {
   /** Advances parallax and ambient drift by `dt` seconds for the ship's current velocity. */
   step(dt: number, shipVx: number, shipVy: number): void;
-  /** Draws the twinkling stars in field units; `time` is in seconds. */
-  draw(ctx: CanvasRenderingContext2D, time: number): void;
+  /** Draws the twinkling stars in field units, in `color`; `time` is in seconds. */
+  draw(ctx: CanvasRenderingContext2D, time: number, color: string): void;
   /** Reseeds the layers for a field of a new size so stars fill it and keep their on-screen density; the same size keeps them. */
   resize(field: Field): void;
   /** Sets `scale` times the usual star count: each layer keeps its stars where they are, dropping or adding some. */
@@ -27,7 +27,6 @@ export const PARALLAX_FACTOR = 0.04;
 /** Slow sideways drift in field units per second for the nearest layer; scaled by depth. */
 export const AMBIENT_DRIFT_X = -12;
 
-const STAR_COLOR = '#fff4ff';
 const TWINKLE_RATE = 2.5;
 /** Stars per layer on the mockup's 480x300 panel: far, mid, near. */
 const LAYERS = [
@@ -93,8 +92,8 @@ export function createStarLayers(seed: number, initialScale: number): StarLayers
     step(dt, shipVx, shipVy) {
       if (field !== null) stepStars(stars, dt, shipVx, shipVy, field);
     },
-    draw(ctx, time) {
-      ctx.fillStyle = STAR_COLOR;
+    draw(ctx, time, color) {
+      ctx.fillStyle = color;
       for (const star of stars) {
         ctx.globalAlpha = (0.4 + 0.6 * star.z) * (0.6 + 0.4 * Math.sin(time * TWINKLE_RATE + star.phase));
         ctx.beginPath();

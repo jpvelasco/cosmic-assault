@@ -58,6 +58,8 @@ function snapshot(app: App): CosmicAssaultTestState {
     quality: { index: app.quality.index, name: app.quality.level.name },
     frameStats: app.frameStats,
     muted: app.muted,
+    palette: app.palette,
+    musicTheme: app.musicTheme,
     settings: Object.freeze({ ...app.settings }),
     motion: app.motion,
     audioState: app.audioState,

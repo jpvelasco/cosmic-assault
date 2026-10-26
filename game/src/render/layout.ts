@@ -34,6 +34,12 @@ export interface Backdrop {
   /** Null until the first `schedule`. */
   readonly bakes: Bakes | null;
   schedule(layout: Layout): void;
+  /**
+   * Bakes the sky for a new palette at once, from the latest layout (a resize still waiting out its delay is baked
+   * now, not later). Nothing happens for the palette already in force, and before the first layout the palette is
+   * just kept for it.
+   */
+  setPalette(palette: Palette): void;
   /** True once after each deferred re-bake, so a still frame (paused, game over) is redrawn with it. Reading clears it. */
   consumeRebaked(): boolean;
   /** Cancels a pending re-bake and frees the bakes; `bakes` is null after. */
@@ -70,7 +76,9 @@ function freeBakes({ sky, vignette }: Bakes): void {
   }
 }
 
-export function createBackdrop(baker: SpriteBaker, palette: Palette, skySeed: number): Backdrop {
+export function createBackdrop(baker: SpriteBaker, initial: Palette, skySeed: number): Backdrop {
+  let palette = initial;
+  let latest: Layout | null = null;
   let bakes: Bakes | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let rebaked = false;
@@ -87,6 +95,7 @@ export function createBackdrop(baker: SpriteBaker, palette: Palette, skySeed: nu
       return bakes;
     },
     schedule(layout) {
+      latest = layout;
       clearTimeout(timer);
       if (bakes === null) {
         bake(layout);
@@ -96,6 +105,14 @@ export function createBackdrop(baker: SpriteBaker, palette: Palette, skySeed: nu
         bake(layout);
         rebaked = true;
       }, REBAKE_DELAY_MS);
+    },
+    setPalette(next) {
+      if (next.id === palette.id) return;
+      palette = next;
+      if (latest === null) return;
+      clearTimeout(timer);
+      bake(latest);
+      rebaked = true;
     },
     consumeRebaked() {
       const was = rebaked;

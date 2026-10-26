@@ -1,7 +1,7 @@
 import { showerSeconds } from './curves';
 import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
 import { poolFor } from './pickups';
-import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, ThreatKind } from './types';
+import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, MusicThemeId, PaletteId, ThreatKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   1: 'The Drift',
@@ -9,6 +9,15 @@ export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   3: 'Crimson Nebula',
   4: 'Void Rift',
   5: 'Singularity',
+};
+
+/** How each Dimension looks and sounds. The Dimensions after Ion Reach keep the Drift's until M6 gives them their own. */
+const LOOKS: Readonly<Record<Dimension, { readonly palette: PaletteId; readonly theme: MusicThemeId }>> = {
+  1: { palette: 'drift', theme: 'drift' },
+  2: { palette: 'ionReach', theme: 'ionReach' },
+  3: { palette: 'drift', theme: 'drift' },
+  4: { palette: 'drift', theme: 'drift' },
+  5: { palette: 'drift', theme: 'drift' },
 };
 
 type Ramps = Readonly<Record<ThreatKind, KindRamp>>;
@@ -83,7 +92,7 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     events: boss ? [] : [...showers(dimension, index, duration), ...wells(dimension, index)].sort((a, b) => a.at - b.at),
     pickups: poolFor(dimension),
     boss: boss ? PLACEHOLDER_BOSS : null,
-    palette: 'drift',
+    ...LOOKS[dimension],
   };
 }
 

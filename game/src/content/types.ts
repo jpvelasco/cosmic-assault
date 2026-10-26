@@ -3,6 +3,12 @@ export type GalaxyIndex = 1 | 2 | 3 | 4 | 5 | 6;
 /** `'3-4'`: Dimension 3, galaxy 4. Galaxy 6 is the Dimension's boss. */
 export type GalaxyId = `${Dimension}-${GalaxyIndex}`;
 
+/** The colour looks a galaxy can wear; M6 adds one per remaining Dimension. */
+export type PaletteId = 'drift' | 'ionReach';
+
+/** The music themes a galaxy can play, each with a heavier boss variant (see `audio/themes.ts`); M6 adds one per remaining Dimension. */
+export type MusicThemeId = 'drift' | 'ionReach';
+
 /** The pickups a kill can drop. M6 extends this. */
 export type PickupId = 'weaponCore' | 'doubleShot' | 'shield' | 'rapidFire' | 'spreadLaser';
 
@@ -54,5 +60,7 @@ export interface GalaxyDef {
   /** The pickups its kills can drop: every pickup from its Dimension or an earlier one. */
   readonly pickups: readonly PickupId[];
   readonly boss: BossId | null;
-  readonly palette: 'drift';
+  /** The look it is drawn in, and the theme it plays: one per Dimension. */
+  readonly palette: PaletteId;
+  readonly theme: MusicThemeId;
 }

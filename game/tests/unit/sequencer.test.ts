@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOOKAHEAD_SECONDS, scheduleWindow, type NoteEvent, type Pattern } from '../../src/audio/sequencer';
+import { BEATS_PER_BAR, LOOKAHEAD_SECONDS, scheduleWindow, stepTimeline, type NoteEvent, type Pattern, type Timeline } from '../../src/audio/sequencer';
 
 /** Two-beat pattern, so a loop boundary comes every 2 beats (1 s at 120 bpm). */
 const PATTERN: Pattern = {
@@ -92,5 +92,111 @@ describe('scheduleWindow', () => {
   it('returns nothing and keeps the beat when time has not advanced', () => {
     const out = scheduleWindow(PATTERN, BPM, 3, START + 1.4, START); // toBeat 2.8 < from
     expect(out).toEqual({ events: [], nextBeat: 3 });
+  });
+});
+
+describe('stepTimeline', () => {
+  /** One bar of two notes, at 120 bpm (0.5 s a beat): a bar is 2 s, so bar lines fall at START + 2n. */
+  const bar = (voice: 'bass' | 'arp', midi: number): Pattern => ({
+    lengthBeats: BEATS_PER_BAR,
+    notes: [
+      { beat: 0, voice, midi, duration: 1, velocity: 0.8 },
+      { beat: 2.5, voice, midi: midi + 7, duration: 0.5, velocity: 0.5 },
+    ],
+  });
+  const OLD = { pattern: bar('bass', 40), bpm: 120 };
+  /** Faster, so its seconds per beat differ from the old theme's: 0.4 s a beat. */
+  const NEW = { pattern: bar('arp', 60), bpm: 150 };
+  const first = (): Timeline => ({ ...OLD, startTime: START, nextBeat: 0 });
+
+  /** Runs the 25 ms timer from audio time `from` to `until` (seconds after START), asking for NEW from `switchAt`. */
+  function run(switchAt: number, until: number, from = 0): { events: NoteEvent[]; line: Timeline; switchedAt: number[] } {
+    let line = first();
+    const events: NoteEvent[] = [];
+    const switchedAt: number[] = [];
+    for (let now = from; now <= until; now += 0.025) {
+      const out = stepTimeline(line, now >= switchAt && line.pattern !== NEW.pattern ? NEW : null, START + now + LOOKAHEAD_SECONDS);
+      events.push(...out.events);
+      line = out.line;
+      if (out.switchedAt !== null) switchedAt.push(out.switchedAt);
+    }
+    return { events, line, switchedAt };
+  }
+
+  it('plays the old theme on, untouched, while nothing is requested', () => {
+    let line = first();
+    const times: number[] = [];
+    for (let now = 0; now <= 4.2; now += 0.025) {
+      const out = stepTimeline(line, null, START + now + LOOKAHEAD_SECONDS);
+      expect(out.switchedAt).toBeNull();
+      times.push(...out.events.map((e) => e.time));
+      line = out.line;
+    }
+    expect(times).toEqual([10, 11.25, 12, 13.25, 14]);
+  });
+
+  it('puts the switch on the next bar line, with the old theme before it and the new one from it', () => {
+    // Asked 0.7 s into the first bar: its notes finish, and the new theme starts at the bar line 2 s in.
+    const { events, switchedAt } = run(0.7, 5);
+    expect(switchedAt).toEqual([START + 2]);
+    expect(events.map((e) => [e.voice, Math.round(e.time * 1e6) / 1e6])).toEqual([
+      ['bass', 10],
+      ['bass', 11.25],
+      ['arp', 12],
+      ['arp', 13],
+      ['arp', 13.6],
+      ['arp', 14.6],
+    ]);
+  });
+
+  it('never lets an old note start at or after the switch, or a new one before it', () => {
+    for (const askedAt of [0.1, 0.9, 1.4, 2.0, 2.3, 3.1, 3.9]) {
+      const { events, switchedAt } = run(askedAt, 8);
+      const [at] = switchedAt;
+      expect(switchedAt).toHaveLength(1);
+      const bars = ((at as number) - START) / (BEATS_PER_BAR * 0.5);
+      expect(bars).toBeCloseTo(Math.round(bars), 9);
+      for (const e of events) expect(e.voice === 'bass' ? e.time < (at as number) : e.time >= (at as number), `asked at ${String(askedAt)}`).toBe(true);
+    }
+  });
+
+  it('counts the new theme\'s beats from the switch, at its own tempo', () => {
+    const { line, switchedAt } = run(0.5, 6);
+    expect(line.pattern).toBe(NEW.pattern);
+    expect(line.bpm).toBe(150);
+    expect(line.startTime).toBe(switchedAt[0]);
+  });
+
+  it('switches at once when asked exactly on a bar line that has not been scheduled', () => {
+    const out = stepTimeline(first(), NEW, START + 0.1);
+    expect(out.switchedAt).toBe(START);
+    expect(out.events.map((e) => e.voice)).toEqual(['arp']);
+    expect(out.events[0]?.time).toBe(START);
+  });
+
+  it('switches once however long it waits, and then plays the new theme on without switching again', () => {
+    const { switchedAt, events } = run(0.3, 12);
+    expect(switchedAt).toHaveLength(1);
+    expect(events.filter((e) => e.voice === 'arp').length).toBeGreaterThan(4);
+  });
+
+  it('after a stall switches at the first bar line past now, never replaying old notes', () => {
+    // 60 s late: the next bar line after now is 62 s in (they fall every 2 s), and nothing from before now plays.
+    let line = first();
+    const events: NoteEvent[] = [];
+    const switches: number[] = [];
+    for (let now = 60.3; now <= 62.5; now += 0.025) {
+      const out = stepTimeline(line, NEW, START + now + LOOKAHEAD_SECONDS);
+      events.push(...out.events);
+      line = out.line;
+      if (out.switchedAt !== null) switches.push(out.switchedAt);
+    }
+    expect(switches).toEqual([START + 62]);
+    for (const e of events) expect(e.time).toBeGreaterThanOrEqual(START + 60.3);
+    expect(events.map((e) => e.voice)).toEqual(['bass', 'arp']);
+  });
+
+  it('is deterministic', () => {
+    expect(run(0.7, 5)).toEqual(run(0.7, 5));
   });
 });

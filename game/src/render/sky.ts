@@ -6,7 +6,6 @@ import type { Palette } from './palette';
 
 const DUST_COUNT = 320;
 const DUST_MAX_ALPHA = 0.3;
-const DUST_COLOR = '#fff0ff';
 const SKY_STOP_POSITIONS = [0, 0.55, 1] as const;
 /** The mockup's vignette: clear inside 0.35 × height, darkening to this alpha at 0.62 × width. */
 const VIGNETTE_ALPHA = 0.4;
@@ -52,7 +51,7 @@ export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, s
   }
 
   const rng = createRng(seed);
-  ctx.fillStyle = DUST_COLOR;
+  ctx.fillStyle = palette.star;
   for (let i = 0; i < DUST_COUNT; i++) {
     ctx.globalAlpha = rng.range(0, DUST_MAX_ALPHA);
     ctx.fillRect(rng.range(0, field.width), rng.range(0, field.height), 1, 1);

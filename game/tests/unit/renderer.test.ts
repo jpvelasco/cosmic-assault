@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REBAKE_DELAY_MS } from '../../src/render/layout';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { ParticlePool } from '../../src/render/particles';
 import { QUALITY_LEVELS } from '../../src/render/quality';
 import { blinkHidden, createRenderer, type Renderer } from '../../src/render/renderer';
@@ -10,6 +10,7 @@ import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
 import type { TimedPickupId } from '../../src/content/pickups';
+import { galaxyById } from '../../src/content/galaxies';
 import { foeKeys } from '../../src/render/foePass';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
 import type { Foe } from '../../src/sim/foes/foe';
@@ -36,6 +37,8 @@ interface FakeCanvas {
   height: number;
   readonly style: Record<string, string>;
   readonly draws: DrawCall[];
+  /** The colour of every gradient stop added so far. */
+  readonly stops: string[];
   /** Arcs begun so far; the stars are the only thing drawn as arcs in the stub scene. */
   arcs: number;
   getContext(kind: string): unknown;
@@ -49,8 +52,8 @@ function fakeCanvas(): FakeCanvas {
   let f = 0;
   let alpha = 1;
   let smoothing = true;
-  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, arcs: 0, getContext: () => ctx };
-  const gradient = { addColorStop: () => undefined };
+  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, getContext: () => ctx };
+  const gradient = { addColorStop: (_at: number, color: string) => fake.stops.push(color) };
   const ctx = new Proxy(
     {},
     {
@@ -237,6 +240,85 @@ describe('createRenderer', () => {
     expect(shipDrawn()).toBe(true);
     stub.status = 'gameOver';
     expect(shipDrawn()).toBe(false);
+  });
+
+  describe('setPalette', () => {
+    const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };
+
+    it('starts in the Drift and reports the palette in force', () => {
+      expect(renderer.palette).toBe('drift');
+      renderer.setPalette('ionReach');
+      expect(renderer.palette).toBe('ionReach');
+    });
+
+    it('re-bakes the sky once, at once, and draws every sprite kind from the new palette', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { stub, world } = stubWorld();
+      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      stub.pickups.push({ id: 3, kind: 'rapidFire', x: 700, y: 300, px: 700, py: 300, vx: 0, vy: 0, expiresIn: 9 });
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.setPalette('ionReach');
+      expect(setScale).toHaveBeenCalledTimes(1);
+      expect(renderer.consumeRedrawRequest()).toBe(true);
+      drawFrame(world, 1);
+      const drawn = (sprite: { readonly canvas: HTMLCanvasElement } | undefined): number => drawsOf(sprite?.canvas).length;
+      expect(drawsOf(baker.ship(ION_REACH).canvas)).toHaveLength(1);
+      expect(drawsOf(baker.ship(DRIFT).canvas)).toHaveLength(0);
+      expect(drawsOf(baker.asteroid(stub.asteroids[0] as Asteroid, ION_REACH).canvas)).toHaveLength(1);
+      expect(drawsOf(baker.asteroid(stub.asteroids[0] as Asteroid, DRIFT).canvas)).toHaveLength(0);
+      expect(drawn(baker.cached(foeKeys(ION_REACH).drone))).toBe(1);
+      expect(drawn(baker.cached(foeKeys(DRIFT).drone))).toBe(0);
+      expect(drawn(baker.cached('pickup|ionReach|rapidFire'))).toBe(1);
+      expect(baker.cached('pickup|drift|rapidFire')).toBeUndefined();
+    });
+
+    it('draws the HUD bars in the new palette', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      Object.assign(world, { galaxy: galaxyById('2-4'), timeLeft: 40 });
+      renderer.setPalette('ionReach');
+      canvas.stops.length = 0;
+      drawFrame(world, 1);
+      expect(canvas.stops).toContain(ION_REACH.accent[2]);
+      expect(canvas.stops).not.toContain(DRIFT.accent[2]);
+    });
+
+    it('re-bakes nothing for the palette already in force', () => {
+      renderer.resize(1280, 720, FIELD);
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.setPalette('drift');
+      expect(setScale).not.toHaveBeenCalled();
+      expect(renderer.consumeRedrawRequest()).toBe(false);
+    });
+
+    it('colours bursts and the HUD in the new palette, and keeps the effects object the settings hold', () => {
+      const { effects } = renderer;
+      effects.reducedMotion = true;
+      renderer.setPalette('ionReach');
+      expect(renderer.effects).toBe(effects);
+      expect(effects.reducedMotion).toBe(true);
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      renderer.handle([slain], world);
+      expect(particles.count).toBeGreaterThan(0);
+      let ringColors = 0;
+      particles.forEach((p) => {
+        if (p.kind === 'ring') {
+          expect(p.color).toBe(ION_REACH.ring);
+          ringColors++;
+        }
+      });
+      expect(ringColors).toBeGreaterThan(0);
+    });
+
+    it('waits for the first resize when it comes before one, and then bakes in the new palette', () => {
+      renderer.setPalette('ionReach');
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.resize(1280, 720, FIELD);
+      expect(setScale).toHaveBeenCalledTimes(1);
+      drawFrame(stubWorld().world, 1);
+      expect(canvas.draws.some((call) => call.image === baker.ship(ION_REACH).canvas)).toBe(true);
+    });
   });
 
   describe('hit-object juice', () => {

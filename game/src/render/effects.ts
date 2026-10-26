@@ -31,6 +31,8 @@ export interface Effects {
   readonly shakeY: number;
   readonly flash: number;
   readonly flashColor: string;
+  /** Bursts from now on take their colours from `palette`; bursts already flying keep theirs. */
+  setPalette(palette: Palette): void;
   /** While true, flash stays 0; particles still emit. Turning it on clears the flash at once. Shake has its own gate. */
   reducedMotion: boolean;
   /** While false, shake stays 0; turning it off clears shake at once. The app sets it from `shakeEnabled(setting, reducedMotion)`. */
@@ -136,7 +138,7 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
 interface Emitter {
   readonly pool: ParticlePool;
   readonly rng: Rng;
-  readonly palette: Palette;
+  palette: Palette;
 }
 
 interface Origin {
@@ -221,7 +223,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   let time = 0;
   let shake = 0;
   let flash = 0;
-  let flashColor: string = palette.ring;
+  let flashColor: string = emitter.palette.ring;
   let reducedMotion = false;
   let shakeEnabled = true;
   let trailBudget = 0;
@@ -307,12 +309,16 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   return {
     handle(events, world) {
       for (const event of events) {
-        const burst = burstFor(event, palette, spec);
+        const burst = burstFor(event, emitter.palette, spec);
         const at = originFor(event, world);
         if (burst === null || at === null) continue;
         emitBurst(emitter, burst, at);
         kick(burst);
       }
+    },
+    setPalette(next) {
+      emitter.palette = next;
+      flashColor = next.ring;
     },
     step(dt, world, frozen = false) {
       time += dt;

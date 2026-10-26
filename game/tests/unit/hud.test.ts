@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHud, HUD_PILLS, hudScale, rightPillEdge, type HudBounds, type HudRect } from '../../src/render/hud';
 import { showerWarningAngle, timerFraction } from '../../src/render/hudGalaxy';
 import { pillFraction } from '../../src/render/hudPickups';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { galaxyById } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, type TimedPickupId } from '../../src/content/pickups';
 import type { GalaxyId } from '../../src/content/types';
@@ -464,5 +464,54 @@ describe('createHud', () => {
       expect(pillFraction('rapidFire', 0)).toBe(0);
       expect(pillFraction('spreadLaser', 99)).toBe(1);
     });
+  });
+});
+
+describe('setPalette', () => {
+  /** A context that keeps the colour stops of each gradient it makes, and the text colour of each label. */
+  function recordingContext(): { ctx: CanvasRenderingContext2D; stops: string[]; labels: string[] } {
+    const stops: string[] = [];
+    const labels: string[] = [];
+    let fill = '';
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_target, name) => {
+          switch (name) {
+            case 'measureText':
+              return (text: string) => ({ width: text.length * 10 });
+            case 'fillText':
+              return (text: string) => text === 'SCORE' && labels.push(fill);
+            case 'createLinearGradient':
+              return () => ({ addColorStop: (_at: number, color: string) => stops.push(color) });
+            default:
+              return () => undefined;
+          }
+        },
+        set: (_target, name, value) => {
+          if (name === 'fillStyle') fill = value as string;
+          return true;
+        },
+      },
+    ) as CanvasRenderingContext2D;
+    return { ctx, stops, labels };
+  }
+
+  it('recolours the bars, the combo and the labels on the next draw, and only then', () => {
+    const hud = createHud(DRIFT);
+    hud.resize(1280, 720);
+    const { ctx, stops, labels } = recordingContext();
+    const w = galaxyWorld({ multiplier: 3, boss: {} });
+    hud.draw(ctx, w, 0);
+    expect(stops).toEqual(expect.arrayContaining([DRIFT.accent[0], DRIFT.accent[1], DRIFT.ring, DRIFT.shot]));
+    expect(labels).toEqual([DRIFT.hud]);
+
+    stops.length = 0;
+    hud.setPalette(ION_REACH);
+    expect(stops).toEqual([]);
+    hud.draw(ctx, w, 0);
+    expect(stops).toEqual(expect.arrayContaining([ION_REACH.accent[0], ION_REACH.accent[1], ION_REACH.ring, ION_REACH.shot]));
+    expect(stops).not.toContain(DRIFT.accent[0]);
+    expect(labels).toEqual([DRIFT.hud, ION_REACH.hud]);
   });
 });

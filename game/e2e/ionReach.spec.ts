@@ -22,4 +22,20 @@ test.describe(`Ion Reach ${ION_REACH_GALAXY}`, () => {
     const active = await gameState(page);
     expect(active.wells[0]).toMatchObject({ id: warning.wells[0]?.id, stage: 'active', x: warning.wells[0]?.x, y: warning.wells[0]?.y });
   });
+
+  test('a run puts the bridge palette and music theme to its Dimension\'s: Ion Reach in 2-1, the Drift in 1-1', async ({ page }) => {
+    await openGame(page, { galaxy: '2-1' });
+    expect(await gameState(page)).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
+    await page.keyboard.press('Space');
+    await expectMode(page, 'playing');
+    expect((await gameState(page)).palette).toBe('ionReach');
+    // The theme follows the galaxy's first step, where the galaxy starts.
+    await fastForward(page, 0.1);
+    expect((await gameState(page)).musicTheme).toBe('ionReach');
+
+    await openGame(page, { galaxy: '1-1' });
+    await page.keyboard.press('Space');
+    await expectMode(page, 'playing');
+    expect(await gameState(page)).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
+  });
 });

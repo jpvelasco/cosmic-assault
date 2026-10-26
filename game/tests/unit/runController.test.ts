@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Screen } from '../../src/app/flow';
+import { galaxyById } from '../../src/content/galaxies';
 import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
@@ -62,6 +63,7 @@ describe('createRunController', () => {
     expect(run.world?.galaxy?.id).toBe('2-3');
     expect(run.world?.lives).toBe(3);
     expect(onRunStarted).toHaveBeenCalledTimes(1);
+    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'));
   });
 
   it('gives a Rank run its lives', () => {
