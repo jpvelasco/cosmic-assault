@@ -66,14 +66,22 @@ export function createResultsCard(act: Act): ResultsCard {
   receipt.append(points.el, clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
   card.append(galaxy, heading, stars.el, score, newBest, receipt, hint, row);
 
-  /** The clear's bonuses and, in Rank, the Dimension's multiplier and the run total; no lines after a game over. */
-  function setLines({ screen, result, galaxy: id, mode }: FlowState): void {
-    receipt.hidden = screen === 'gameOver' || result === null || id === null;
-    if (screen === 'gameOver' || result === null || id === null) return;
+  /**
+   * The clear's bonuses and, in Rank, the Dimension's multiplier and the run total. After a game over only a Rank run
+   * has a line: its total, the score it carried in plus this galaxy's `score`, as the board posted it.
+   */
+  function setLines({ screen, result, galaxy: id, mode, rankRun }: FlowState, score: number): void {
+    const rank = mode === 'rank';
+    if (screen === 'gameOver' || result === null || id === null) {
+      for (const part of [points, clearBonus, noDeathBonus, rankFactor]) part.set('', '');
+      runTotal.set('Run total', rank && screen === 'gameOver' && rankRun !== null ? String(rankRun.score + score) : '');
+      receipt.hidden = runTotal.el.hidden;
+      return;
+    }
+    receipt.hidden = false;
     const { dimension } = galaxyById(id);
     const { clear, noDeath } = clearBonuses(dimension, result.report.deaths);
     const factor = dimensionMultiplier(dimension);
-    const rank = mode === 'rank';
     // What the score is made of: the kills, the bonuses, then in Rank the Dimension's multiplier over both.
     points.set('Galaxy score', String(galaxyPoints(result.report, dimension, mode ?? 'free')));
     clearBonus.set('Clear bonus', `+${String(clear)}`);
@@ -93,7 +101,7 @@ export function createResultsCard(act: Act): ResultsCard {
       stars.set(won ? result.report.stars : 0);
       score.textContent = `Score ${String(value)}`;
       newBest.hidden = !won || !result.newBest;
-      setLines(flow);
+      setLines(flow, value);
       hint.textContent = screen === 'gameOver' ? restartHint : '';
       hint.hidden = hint.textContent === '';
       let first = true;

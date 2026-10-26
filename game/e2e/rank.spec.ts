@@ -219,6 +219,8 @@ test('a game over offers Continue, which resets the score and marks the run, and
   expect(lost.rankBoard).toEqual([expect.objectContaining({ continued: false })]);
   const firstEntry = lost.rankBoard?.[0];
   expect(firstEntry?.score).toBeGreaterThanOrEqual(1500);
+  // The card shows the run total the board posted, not just this galaxy's score.
+  await expect(page.locator('.end-line--total')).toHaveText(`Run total${String(firstEntry?.score)}`);
 
   await clickPastGuard(page, 'rank-continue', 'playing');
   const { lives, score, rankRun } = await gameState(page);
