@@ -12,8 +12,9 @@ export interface CardToggleDeps {
   focusOpener(): void;
 }
 
-/** Whether a cover card is up, and the one way it opens and closes. */
-export interface CardToggle {
+/** A cover card, whether it is up, and the one way it opens and closes. */
+export interface CardToggle<C> {
+  readonly card: C;
   readonly open: boolean;
   /** Shows the card over a screen that offers it; the run behind it, if any, stays as it was. */
   readonly show: () => void;
@@ -21,9 +22,10 @@ export interface CardToggle {
   readonly close: () => void;
 }
 
-export function createCardToggle(card: Pick<CoverCard, 'show' | 'hide'>, deps: CardToggleDeps): CardToggle {
+export function createCardToggle<C extends Pick<CoverCard, 'show' | 'hide'>>(card: C, deps: CardToggleDeps): CardToggle<C> {
   let open = false;
   return {
+    card,
     get open() {
       return open;
     },
