@@ -117,6 +117,12 @@ const GALAXY_START_NOTES = [72, 76, 79] as const;
 const CLEARED_NOTES = [72, 76, 79, 84] as const;
 /** The shower warning's two-tone alarm, twice: A5, E5. */
 const STING_NOTES = [81, 76, 81, 76] as const;
+/** A pickup dropping: a bright rising pair, G5 to D6. */
+const DROP_NOTES = [79, 86] as const;
+/** A pickup collected: a quick sparkle up the major chord, C6 E6 G6 C7. */
+const COLLECT_NOTES = [84, 88, 91, 96] as const;
+/** A timed effect running out: a soft falling pair, E6 to B5. */
+const EFFECT_END_NOTES = [88, 83] as const;
 
 export function midiToHz(midi: number): number {
   return 440 * 2 ** ((midi - 69) / 12);
@@ -218,7 +224,118 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
     boom(bed, out, t, { duration: 1.4, noiseFrom: 2000, noiseTo: 60, noisePeak: 0.6, thudFrom: 120, thudTo: 25, thudPeak: 0.7 });
     tone(bed, out, { type: 'sawtooth', from: 400, to: 40, start: t, duration: 1, peak: 0.16 });
   },
+  pickupDrop: (bed, out, t) => {
+    phrase(bed, out, t, DROP_NOTES, { type: 'sine', step: 0.07, duration: 0.09, lastDuration: 0.22, peak: 0.13 });
+  },
+  pickupCollect: (bed, out, t) => {
+    phrase(bed, out, t, COLLECT_NOTES, { type: 'triangle', step: 0.045, duration: 0.08, lastDuration: 0.3, peak: 0.14 });
+    tone(bed, out, { type: 'sine', from: 2093, start: t + 0.14, duration: 0.25, peak: 0.04 });
+  },
+  // A soft bloop falling away: a pickup left uncollected.
+  pickupExpire: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 700, to: 230, start: t, duration: 0.28, peak: 0.09, attack: 0.01 });
+  },
+  effectEnd: (bed, out, t) => {
+    phrase(bed, out, t, EFFECT_END_NOTES, { type: 'triangle', step: 0.08, duration: 0.1, lastDuration: 0.22, peak: 0.08, lastBend: 0.94 });
+  },
+  // Glass shattering: a bright band of noise over a metallic ping dropping away, and a soft thud under them.
+  shieldBreak: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'highpass', from: 5000, to: 1800, q: 0.9, start: t, duration: 0.4, peak: 0.22 });
+    tone(bed, out, { type: 'triangle', from: 1900, to: 520, start: t, duration: 0.32, peak: 0.12 });
+    tone(bed, out, { type: 'sine', from: 180, to: 70, start: t, duration: 0.25, peak: 0.25 });
+  },
+  // A swarm arriving: two detuned buzzes beating against each other as they rise.
+  droneSwarm: (bed, out, t) => {
+    for (const detune of [-18, 18]) {
+      tone(bed, out, { type: 'sawtooth', from: 150, to: 210, start: t, duration: 0.55, peak: 0.035, attack: 0.12, detune });
+    }
+  },
+  // A rock cracking without breaking: a sharp click of noise over a short knock.
+  foeCrack: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'bandpass', from: 2600, to: 900, q: 1.4, start: t, duration: 0.09, peak: 0.25 });
+    tone(bed, out, { type: 'triangle', from: 320, to: 160, start: t, duration: 0.1, peak: 0.16 });
+  },
+  // A rock breaking in three: a medium boom with a crack on top.
+  splitterBreak: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomMedium);
+    noiseBurst(bed, out, { filter: 'highpass', from: 3600, to: 1500, start: t, duration: 0.14, peak: 0.16 });
+  },
+  // A drone going down: a small boom and an electric zap falling away.
+  droneDown: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomSmall);
+    tone(bed, out, { type: 'square', from: 1100, to: 140, start: t, duration: 0.2, peak: 0.06 });
+  },
+  // A well forming: two deep falling throbs.
+  wellWarn: (bed, out, t) => {
+    for (const start of [t, t + 0.42]) tone(bed, out, { type: 'sine', from: 230, to: 95, start, duration: 0.36, peak: 0.2, attack: 0.04 });
+  },
+  // The well opening: a deep sweep down into a low rumble, under which its hum takes over.
+  wellOpen: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 180, to: 46, start: t, duration: 1, peak: 0.24, attack: 0.05 });
+    noiseBurst(bed, out, { filter: 'lowpass', from: 600, to: 80, start: t, duration: 0.9, peak: 0.16 });
+  },
+  // The well letting go: a short rise, released.
+  wellClose: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 50, to: 170, start: t, duration: 0.5, peak: 0.16, attack: 0.05 });
+  },
 };
+
+/** A sound that plays until it is stopped. */
+export interface Loop {
+  /** Fades it out at once and stops it; its nodes disconnect themselves when they end. */
+  stop(): void;
+}
+
+const HUM_PEAK = 0.09;
+const HUM_FADE_IN = 0.8;
+/** The time constant of its fade out, and when its oscillators stop after it starts. */
+const HUM_RELEASE = 0.08;
+const HUM_STOP_AFTER = 0.5;
+/** Hz: a low fundamental and its fifth, with a slow swell in the level. */
+const HUM_HZ = 49;
+const HUM_FIFTH_HZ = 73.5;
+const HUM_SWELL_HZ = 0.6;
+const HUM_SWELL_DEPTH = 0.4;
+
+/**
+ * The gravity well's hum: a low sine and a detuned triangle a fifth above, swelling slowly, looped until `stop`. It
+ * fades in from silence and out to it, so it never clicks.
+ */
+export function startWellHum({ ctx }: VoiceBed, out: AudioNode): Loop {
+  const t = ctx.currentTime;
+  const level = ctx.createGain();
+  level.gain.setValueAtTime(SILENCE, t);
+  level.gain.linearRampToValueAtTime(HUM_PEAK, t + HUM_FADE_IN);
+  const swellDepth = ctx.createGain();
+  swellDepth.gain.value = HUM_PEAK * HUM_SWELL_DEPTH;
+  const oscillator = (type: OscillatorType, hz: number, detune = 0): OscillatorNode => {
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = hz;
+    osc.detune.value = detune;
+    osc.start(t);
+    return osc;
+  };
+  const low = oscillator('sine', HUM_HZ);
+  const fifth = oscillator('triangle', HUM_FIFTH_HZ, 7);
+  const swell = oscillator('sine', HUM_SWELL_HZ);
+  const voices = [low, fifth, swell];
+  low.connect(level);
+  fifth.connect(level);
+  swell.connect(swellDepth).connect(level.gain);
+  level.connect(out);
+  low.onended = () => {
+    for (const node of [...voices, swellDepth, level]) node.disconnect();
+  };
+  return {
+    stop() {
+      const now = ctx.currentTime;
+      level.gain.cancelScheduledValues(now);
+      level.gain.setTargetAtTime(0, now, HUM_RELEASE);
+      for (const osc of voices) osc.stop(now + HUM_STOP_AFTER);
+    },
+  };
+}
 
 /** Starts sound effect `name` on `out`, `delay` seconds from now on the audio clock. */
 export function playSfx(bed: VoiceBed, out: AudioNode, name: SfxName, delay = 0): void {

@@ -1,10 +1,12 @@
 export interface Toast {
-  /** Shows `text` in a pill for a moment, replacing any toast already up. */
-  readonly show: (text: string) => void;
+  /** Shows `text` in a pill for `ms` (a moment by default), replacing any toast already up. */
+  readonly show: (text: string, ms?: number) => void;
   dispose(): void;
 }
 
 export const TOAST_MS = 1200;
+/** A first-drop callout says what a pickup does, so it stays up long enough to read. */
+export const CALLOUT_MS = 2600;
 
 /**
  * A short status pill over every screen. The live region stays in the accessibility tree
@@ -24,11 +26,11 @@ export function createToast(root: HTMLElement): Toast {
   };
 
   return {
-    show(text) {
+    show(text, ms = TOAST_MS) {
       if (timer !== null) clearTimeout(timer);
       el.textContent = text;
       el.classList.add('toast--shown');
-      timer = setTimeout(clear, TOAST_MS);
+      timer = setTimeout(clear, ms);
     },
     dispose() {
       if (timer !== null) clearTimeout(timer);

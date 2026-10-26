@@ -2,8 +2,8 @@ import type { Screen } from '../app/flow';
 import type { Settings } from '../app/settings';
 import type { SimEvent } from '../sim/events';
 import { createMusicPlayer, type MusicPlayer } from './music';
-import { isBossKill, screenCue, sfxFor, type SfxName } from './sfx';
-import { playSfx, type VoiceBed } from './voices';
+import { humFor, isBossKill, PER_FRAME_CAPS, screenCue, sfxFor, type SfxName } from './sfx';
+import { playSfx, startWellHum, type Loop, type VoiceBed } from './voices';
 
 /** What the test bridge reports: no context yet, or the context's own state. */
 export type AudioState = 'none' | 'suspended' | 'running' | 'closed';
@@ -22,9 +22,13 @@ export function needsSoundGesture(state: AudioState, muted: boolean): boolean {
 export interface AudioEngine {
   readonly state: AudioState;
   readonly muted: boolean;
-  /** Starts a new frame, which resets the shot cap. */
+  /** Starts a new frame, which resets the per-frame caps on shots and drone swarms. */
   beginFrame(): void;
-  /** Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss). */
+  /**
+   * Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss), and
+   * starts or stops the gravity well's hum. The hum plays only in play: pause silences it until play resumes, and any
+   * other screen, a mute or dispose stops it.
+   */
   handle(events: readonly SimEvent[]): void;
   /** Plays `name`, `delay` seconds from now on the audio clock. */
   play(name: SfxName, delay?: number): void;
@@ -38,8 +42,6 @@ export interface AudioEngine {
 }
 
 const MUSIC_LEVELS: Readonly<Record<MusicLevel, number>> = { play: 1, paused: 0.3, menu: 0.45 };
-/** Shots per frame beyond this are dropped: held fire plus a hit-stop catch-up would otherwise stack blips. */
-const MAX_SHOTS_PER_FRAME = 3;
 const MUSIC_LOWPASS_HZ = 2600;
 /** Seconds of settling for gain changes (mute, music level): fast enough to feel instant, slow enough not to click. */
 const MUTE_SMOOTHING = 0.015;
@@ -102,7 +104,12 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let musicVolume = initial.musicVolume;
   let sfxVolume = initial.sfxVolume;
   let musicLevel: MusicLevel = 'menu';
-  let shotsThisFrame = 0;
+  /** How many times each capped sound has started this frame. */
+  const startedThisFrame: Partial<Record<SfxName, number>> = {};
+  /** Whether a well is pulling, as the events last told; and whether the screen is play, where the hum is heard. */
+  let humWanted = false;
+  let inPlay = false;
+  let hum: Loop | null = null;
   /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
   let screenBus: GainNode | null = null;
 
@@ -160,6 +167,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     // A call or Siri (`interrupted`) or the system can stop the context long after it first ran.
     ctx.onstatechange = () => {
       syncGestureListeners(ctx);
+      syncHum();
     };
     const bed: VoiceBed = { ctx, noise: createNoise(ctx) };
     return { ctx, bed, master, sfx, music, player: createMusicPlayer(bed, music, guard, audible) };
@@ -168,6 +176,26 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   /** Whether sound should be made right now: the context is running and the player has not muted. */
   function audible(): boolean {
     return !muted && graph?.ctx.state === 'running';
+  }
+
+  /** Starts the hum when a well pulls in play and sound is audible, and stops it as soon as any of those ends. */
+  function syncHum(): void {
+    const current = graph;
+    if (humWanted && inPlay && current !== null && audible()) {
+      if (hum === null) {
+        guard(() => {
+          hum = startWellHum(current.bed, current.sfx);
+        });
+      }
+      return;
+    }
+    const running = hum;
+    hum = null;
+    if (running !== null) {
+      guard(() => {
+        running.stop();
+      });
+    }
   }
 
   const gestureEvents = ['pointerdown', 'pointerup', 'touchend', 'keydown'] as const;
@@ -202,6 +230,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
         if (typeof AudioContext === 'undefined') throw new Error('this browser has no AudioContext');
         graph = buildGraph();
         graph.player.start();
+        syncHum();
       }
       const { ctx } = graph;
       if (ctx.state === 'running') removeGestureListeners();
@@ -253,7 +282,12 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
 
   function play(name: SfxName, delay = 0): void {
     if (graph === null || !audible()) return;
-    if (name === 'shoot' && ++shotsThisFrame > MAX_SHOTS_PER_FRAME) return;
+    const cap = PER_FRAME_CAPS[name];
+    if (cap !== undefined) {
+      const started = (startedThisFrame[name] ?? 0) + 1;
+      startedThisFrame[name] = started;
+      if (started > cap) return;
+    }
     const { bed, sfx } = graph;
     guard(() => {
       playSfx(bed, sfx, name, delay);
@@ -270,14 +304,16 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       return muted;
     },
     beginFrame() {
-      shotsThisFrame = 0;
+      for (const name of Object.keys(startedThisFrame) as SfxName[]) startedThisFrame[name] = 0;
     },
     handle(events) {
       const bossKill = isBossKill(events);
       for (const event of events) {
         const cue = sfxFor(event, bossKill);
         if (cue !== null) play(cue.name, cue.delay);
+        humWanted = humFor(event) ?? humWanted;
       }
+      syncHum();
     },
     play,
     setMuted(next) {
@@ -289,6 +325,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
         // The page is visible when the player presses M; a context suspended while muted wakes here.
         if (!next && document.visibilityState === 'visible') resumeContext(ctx);
       });
+      syncHum();
     },
     setVolumes(music, sfx) {
       musicVolume = music;
@@ -297,6 +334,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     },
     setMusicLevel,
     setScreen(screen) {
+      inPlay = screen === 'playing';
+      // Pause keeps the well in mind for the resume; any other screen leaves the run, and the well with it.
+      if (!inPlay && screen !== 'paused') humWanted = false;
+      syncHum();
       setMusicLevel(musicFor(screen));
       playScreenCue(screen);
     },
@@ -304,6 +345,8 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       disposed = true;
       removeGestureListeners();
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      humWanted = false;
+      syncHum();
       const current = graph;
       graph = null;
       if (current === null) return;

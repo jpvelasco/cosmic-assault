@@ -8,6 +8,7 @@ import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
 import { hasEnded, World } from '../sim/world';
+import { CALLOUT_MS } from '../ui/toast';
 import type { FlowCommand } from './commands';
 import { localDate } from './date';
 import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
@@ -29,8 +30,8 @@ export interface RunControllerDeps {
   showScreen(screen: Screen): void;
   /** A new World is in place: reset the input latches, the loop and the renderer for it. */
   onRunStarted(): void;
-  /** Tells the player something in a toast. */
-  notify(text: string): void;
+  /** Tells the player something in a toast, up for `ms` (the toast's default when omitted). */
+  notify(text: string, ms?: number): void;
   /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
   onEvents(events: readonly SimEvent[], world: World): void;
   /** Something the cards show changed outside a screen change: another tab's save, or the Rank lock. */
@@ -96,7 +97,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       store.update((save) => recordPickupSeen(save, kind));
     },
     notify: (text) => {
-      deps.notify(text);
+      deps.notify(text, CALLOUT_MS);
     },
   });
   const presence = deps.presence ?? createTabPresence();

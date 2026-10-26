@@ -6,6 +6,7 @@ import { mix, rgba } from './color';
 import type { FieldPen } from './fieldPen';
 import { HIT_FLASH_SECONDS } from './hitFlash';
 import type { Palette } from './palette';
+import { easeOut } from './scene';
 import type { SpriteBaker } from './sprites';
 
 /** How long the glow flashes white after a hit. The core itself shows white for its first HIT_FLASH_SECONDS. */
@@ -56,8 +57,6 @@ const EYE_SIZE = 0.3;
 const STUDS = 8;
 /** Room around the core's rim for its stroke. */
 const RIM_PAD = 2;
-
-const easeOut = (t: number): number => 1 - (1 - t) ** 3;
 
 /** A radial gradient lit from (x, y) out to radius `r1` around the origin. */
 function radial(ctx: CanvasRenderingContext2D, x: number, y: number, r0: number, r1: number, stops: readonly (readonly [number, string])[]): CanvasGradient {

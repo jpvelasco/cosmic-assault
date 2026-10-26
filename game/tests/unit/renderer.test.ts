@@ -9,8 +9,12 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
+import type { TimedPickupId } from '../../src/content/pickups';
+import { foeKeys } from '../../src/render/foePass';
+import { CRACK_SECONDS } from '../../src/render/pickupPass';
 import type { Foe } from '../../src/sim/foes/foe';
 import type { WellState } from '../../src/sim/hazards/gravityWell';
+import type { Pickup } from '../../src/sim/pickups/pickups';
 import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
@@ -88,6 +92,8 @@ interface Stub {
   asteroids: Asteroid[];
   foes: Foe[];
   well: WellState | null;
+  pickups: Pickup[];
+  effects: Record<TimedPickupId, number>;
 }
 
 /** A world-shaped stub holding exactly what the renderer reads. */
@@ -103,6 +109,8 @@ function stubWorld(): { stub: Stub; world: World } {
     asteroids: [rock],
     foes: [],
     well: null,
+    pickups: [],
+    effects: { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 },
   };
   const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null }) as unknown as World;
   return { stub, world };
@@ -305,6 +313,7 @@ describe('createRenderer', () => {
     });
 
     describe('foes', () => {
+      const KEYS = foeKeys(DRIFT);
       const drone = (): Foe => ({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
       const spawned: SimEvent = { type: 'foeSpawned', id: 9, kind: 'drone', x: 400, y: 300 };
       const hurt: SimEvent = { type: 'foeHit', id: 9, x: 400, y: 300, hp: 1 };
@@ -317,23 +326,48 @@ describe('createRenderer', () => {
         renderer.resize(1280, 720, FIELD);
         renderer.handle([spawned], world);
         drawFrame(world, 1);
-        const white = baker.white('foe|drone');
+        const white = baker.white(KEYS.drone);
         if (white === undefined) throw new Error('the drawn drone must have a white silhouette');
         return { world, stub, white: white.canvas };
       }
 
       it('draws a foe where it is, from a baked sprite', () => {
         const { world } = drawnDrone();
-        const sprite = baker.cached('foe|drone');
+        const sprite = baker.cached(KEYS.drone);
         expect(drawsOf(sprite?.canvas)).toHaveLength(1);
         expect(drawsOf(sprite?.canvas)[0]?.e).toBe(400);
         drawFrame(world, 1);
         expect(drawsOf(sprite?.canvas)).toHaveLength(1);
       });
 
+      it('turns a drone to its heading, with its engine glow behind it', () => {
+        const { world, stub } = drawnDrone();
+        stub.foes[0] = { ...drone(), rotation: Math.PI / 2, protation: Math.PI / 2 };
+        drawFrame(world, 1);
+        const body = drawsOf(baker.cached(KEYS.drone)?.canvas)[0];
+        // Turned a quarter: the transform's x scale is cos(π/2) = 0.
+        expect(body?.a).toBeCloseTo(0, 9);
+        const engine = canvas.draws.find((call) => call.f !== 300 && Math.abs(call.e - 400) < 1e-9);
+        expect(engine?.f).toBeLessThan(300);
+      });
+
+      it('shows a splitter one hit from breaking with its seams cracked open', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        const splitter: Foe = { ...drone(), kind: 'splitter', radius: 30, hp: 2 };
+        stub.foes.push(splitter);
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached(KEYS.splitter)?.canvas)).toHaveLength(1);
+        expect(baker.cached(KEYS.crackedSplitter)).toBeUndefined();
+        splitter.hp = 1;
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached(KEYS.crackedSplitter)?.canvas)).toHaveLength(1);
+        expect(drawsOf(baker.cached(KEYS.splitter)?.canvas)).toHaveLength(0);
+      });
+
       it('skips a foe that is spent (HP 0) but not yet swept', () => {
         const { world, stub } = drawnDrone();
-        const sprite = baker.cached('foe|drone');
+        const sprite = baker.cached(KEYS.drone);
         stub.foes[0] = { ...drone(), hp: 0 };
         drawFrame(world, 1);
         expect(drawsOf(sprite?.canvas)).toHaveLength(0);
@@ -386,28 +420,134 @@ describe('createRenderer', () => {
     });
 
     describe('a gravity well', () => {
-      const well = (stage: 'warning' | 'active'): WellState => ({ id: 2, stage, x: 600, y: 300, intensity: 2, remaining: 5 });
-      const ring = (): HTMLCanvasElement | undefined => baker.cached('well|ring')?.canvas;
+      const well = (stage: 'warning' | 'active', remaining = 5): WellState => ({ id: 2, stage, x: 600, y: 300, intensity: 2, remaining });
+      const sprite = (name: string): HTMLCanvasElement | undefined => baker.cached(`well|drift|${name}`)?.canvas;
+      const ARCS = ['arc0', 'arc1', 'arc2'] as const;
 
-      it('is drawn as a ring while it is a warning, and as a ring with a glow once it pulls', () => {
+      it('is a faint outline alone while it is a warning, pulsing and closing in as it comes due', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
-        stub.well = well('warning');
+        stub.well = well('warning', 2);
         drawFrame(world, 1);
-        const warning = drawsOf(ring());
-        expect(warning.map((call) => call.e)).toEqual([600]);
-        const glowDrawsWarning = canvas.draws.filter((call) => call.e === 600).length;
+        const early = drawsOf(sprite('outline'));
+        expect(early.map((call) => call.e)).toEqual([600]);
+        expect(early[0]?.alpha).toBeLessThan(0.7);
+        for (const name of [...ARCS, 'horizon']) expect(sprite(name)).toBeUndefined();
+        stub.well = well('warning', 0.2);
+        stub.elapsed = 0.3;
+        drawFrame(world, 1);
+        const late = drawsOf(sprite('outline'))[0];
+        expect(late?.a).toBeLessThan(early[0]?.a ?? 0);
+        expect(late?.alpha).not.toBe(early[0]?.alpha);
+      });
+
+      it('swirls once it pulls: a glow, three arcs that turn with time, and the dark lens over them', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
         stub.well = well('active');
         drawFrame(world, 1);
-        expect(drawsOf(ring())[0]?.alpha).toBeGreaterThan(warning[0]?.alpha ?? 1);
-        expect(canvas.draws.filter((call) => call.e === 600).length).toBeGreaterThan(glowDrawsWarning);
+        expect(sprite('outline')).toBeUndefined();
+        const order = canvas.draws.filter((call) => call.e !== 0 && call.e !== 640).map((call) => call.image);
+        const arcs = ARCS.map(sprite);
+        for (const arc of arcs) expect(drawsOf(arc)).toHaveLength(1);
+        expect(order.indexOf(sprite('horizon'))).toBeGreaterThan(Math.max(...arcs.map((arc) => order.indexOf(arc))));
+        const before = drawsOf(arcs[0])[0]?.a;
+        stub.elapsed = 0.5;
+        drawFrame(world, 1);
+        expect(drawsOf(arcs[0])[0]?.a).not.toBeCloseTo(before ?? 0, 3);
+      });
+
+      it('swirls up as it starts and fades out as it ends', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        const arcAlpha = (remaining: number): number => {
+          stub.well = well('active', remaining);
+          drawFrame(world, 1);
+          return drawsOf(sprite('arc1'))[0]?.alpha ?? Number.NaN;
+        };
+        expect(arcAlpha(14)).toBe(0);
+        expect(arcAlpha(13.8)).toBeGreaterThan(0);
+        expect(arcAlpha(13.8)).toBeLessThan(1);
+        expect(arcAlpha(7)).toBe(1);
+        expect(arcAlpha(0.4)).toBeCloseTo(0.5, 9);
       });
 
       it('is not drawn when there is none', () => {
         const { world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
         drawFrame(world, 1);
-        expect(baker.cached('well|ring')).toBeUndefined();
+        for (const name of [...ARCS, 'horizon', 'outline']) expect(sprite(name)).toBeUndefined();
+      });
+    });
+
+    describe('pickups and the Shield', () => {
+      const capsule = (kind: string): HTMLCanvasElement | undefined => baker.cached(`pickup|drift|${kind}`)?.canvas;
+      const ring = (): HTMLCanvasElement | undefined => baker.cached('shield|drift|ring')?.canvas;
+      const crack = (): HTMLCanvasElement | undefined => baker.cached('shield|drift|crack')?.canvas;
+      const pickup = (id: number, kind: Pickup['kind'], expiresIn: number): Pickup => ({ id, kind, x: 200 + id * 100, y: 400, px: 200 + id * 100, py: 400, vx: 0, vy: 0, expiresIn });
+
+      it('draws each pickup as the capsule of its kind where it is, whole until its last 2 s, then blinking', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.pickups.push(pickup(1, 'shield', 6), pickup(2, 'rapidFire', 1.9));
+        drawFrame(world, 1);
+        expect(drawsOf(capsule('shield')).map((call) => [call.e, call.alpha])).toEqual([[300, 1]]);
+        const blinking = drawsOf(capsule('rapidFire'))[0];
+        expect(blinking?.e).toBe(400);
+        expect(blinking?.alpha).toBeLessThan(1);
+        (stub.pickups[1] as Pickup).expiresIn = 1.8;
+        drawFrame(world, 1);
+        expect(drawsOf(capsule('rapidFire'))[0]?.alpha).toBe(1);
+      });
+
+      it('rings the ship while the Shield is up, blinking through its last 2 s, and not otherwise', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(ring()).toBeUndefined();
+        stub.effects.shield = 10;
+        drawFrame(world, 1);
+        expect(drawsOf(ring()).map((call) => call.e)).toEqual([640]);
+        const steady = drawsOf(ring())[0]?.alpha ?? 0;
+        stub.effects.shield = 1.9;
+        drawFrame(world, 1);
+        expect(drawsOf(ring())[0]?.alpha).toBeLessThan(steady);
+        // Even while an invulnerable ship blinks out.
+        stub.ship.invulnerable = true;
+        stub.elapsed = 0.06;
+        drawFrame(world, 1);
+        expect(drawsOf(baker.ship(DRIFT).canvas)).toHaveLength(0);
+        expect(drawsOf(ring())).toHaveLength(1);
+      });
+
+      it('cracks the ring apart when the Shield breaks, growing and fading, gone after the crack', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        renderer.handle([{ type: 'shieldBroken' }], world);
+        drawFrame(world, 1);
+        const first = drawsOf(crack())[0];
+        expect(first?.e).toBe(640);
+        expect(first?.alpha).toBe(1);
+        renderer.advance(CRACK_SECONDS / 2, world, false);
+        drawFrame(world, 1);
+        const later = drawsOf(crack())[0];
+        expect(later?.alpha).toBeCloseTo(0.5, 9);
+        expect(later?.a).toBeGreaterThan(first?.a ?? 0);
+        renderer.advance(CRACK_SECONDS / 2, world, false);
+        drawFrame(world, 1);
+        expect(drawsOf(crack())).toHaveLength(0);
+        expect(stub.effects.shield).toBe(0);
+        expect(drawsOf(ring())).toHaveLength(0);
+      });
+
+      it('drops a crack in progress when a new run starts', () => {
+        const { world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        renderer.handle([{ type: 'shieldBroken' }], world);
+        renderer.reset();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(crack()).toBeUndefined();
       });
     });
 

@@ -12,6 +12,7 @@ import { RingLog } from '../../src/platform/log';
 import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
 import { memoryStorage } from '../helpers/memoryStorage';
 import { seedFor } from '../../e2e/seeds';
+import { CALLOUT_MS, TOAST_MS } from '../../src/ui/toast';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
@@ -27,7 +28,7 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
   const refresh = vi.fn();
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
-  const notify = vi.fn<(text: string) => void>();
+  const notify = vi.fn<(text: string, ms?: number) => void>();
   const run = createRunController({
     storage,
     overrides: { ...NONE, ...overrides },
@@ -126,7 +127,9 @@ describe('createRunController', () => {
       const { run, notify } = setup({ galaxy: '1-1', seed: 5, startLives: 5 });
       run.command({ kind: 'start' });
       for (let i = 0; i < 20 * 120 && !notify.mock.calls.some(([text]) => text.startsWith('New:')); i++) run.step(STEP_SECONDS, SPIN_AND_FIRE);
-      expect(notify).toHaveBeenCalledWith('New: Shield — absorbs one hit');
+      // A callout stays up longer than a status toast, so there is time to read what the pickup does.
+      expect(notify).toHaveBeenCalledWith('New: Shield — absorbs one hit', CALLOUT_MS);
+      expect(CALLOUT_MS).toBeGreaterThan(TOAST_MS);
       expect(run.save.seenPickups).toEqual([]);
     });
 
@@ -146,7 +149,7 @@ describe('createRunController', () => {
       run.quit();
       run.command({ kind: 'start' });
       for (let i = 0; i < 20 * 120; i++) run.step(STEP_SECONDS, SPIN_AND_FIRE);
-      expect(notify).not.toHaveBeenCalledWith('New: Shield — absorbs one hit');
+      expect(notify).not.toHaveBeenCalledWith('New: Shield — absorbs one hit', CALLOUT_MS);
     });
 
     it('writes the kind to the saved game outside debug runs', () => {

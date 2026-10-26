@@ -75,7 +75,7 @@ export interface Crater {
   readonly r: number;
 }
 
-interface Point {
+export interface Point {
   readonly x: number;
   readonly y: number;
 }
@@ -184,20 +184,23 @@ export function shapeFingerprint(a: Readonly<Asteroid>): string {
   return (hash >>> 0).toString(16);
 }
 
-function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
+/** Begins a closed path through `points`. */
+export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
   ctx.beginPath();
   for (const p of points) ctx.lineTo(p.x, p.y);
   ctx.closePath();
 }
 
-function paintGlow(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, radius: number, alpha = 1): void {
+/** A soft radial glow of `color` around (x, y), for bakes; `alpha` scales every stop. */
+export function paintGlow(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, radius: number, alpha = 1): void {
   const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
   for (const [offset, stopAlpha] of GLOW_STOPS) gradient.addColorStop(offset, rgba(color, stopAlpha * alpha));
   ctx.fillStyle = gradient;
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
 
-function addStops(gradient: CanvasGradient, colors: readonly string[], offsets: readonly number[]): CanvasGradient {
+/** Adds `colors` to `gradient` at `offsets` (1 for any missing). */
+export function addStops(gradient: CanvasGradient, colors: readonly string[], offsets: readonly number[]): CanvasGradient {
   colors.forEach((color, i) => {
     gradient.addColorStop(offsets[i] ?? 1, color);
   });

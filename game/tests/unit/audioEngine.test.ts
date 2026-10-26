@@ -10,6 +10,7 @@ class FakeParam {
   readonly linearRampToValueAtTime = vi.fn();
   readonly exponentialRampToValueAtTime = vi.fn();
   readonly setTargetAtTime = vi.fn();
+  readonly cancelScheduledValues = vi.fn();
 }
 
 class FakeNode {
@@ -420,6 +421,21 @@ describe('sound effects', () => {
     expect(silenced()).toBe(true);
   });
 
+  it('plays one swarm buzz for a whole drone group arriving in a frame', () => {
+    const e = engine();
+    press();
+    const drone: SimEvent = { type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 };
+    const before = nodesOf('oscillator').length;
+    e.handle([drone]);
+    const one = nodesOf('oscillator').length - before;
+    expect(one).toBeGreaterThan(0);
+    e.handle([drone, drone, drone]);
+    expect(nodesOf('oscillator').length - before).toBe(one);
+    e.beginFrame();
+    e.handle([drone, drone]);
+    expect(nodesOf('oscillator').length - before).toBe(2 * one);
+  });
+
   it('does not cap other sounds', () => {
     const e = engine();
     press();
@@ -467,6 +483,104 @@ describe('sound effects', () => {
     const fixed = new Set([...nodesOf('gain').slice(0, 3), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
     const connected = c.nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0);
     expect(connected).toEqual([]);
+  });
+});
+
+describe('the gravity well hum', () => {
+  const START: SimEvent = { type: 'wellStart', id: 1 };
+  const END: SimEvent = { type: 'wellEnd', id: 1 };
+  /** The hum's oscillators: the only ones in these tests started with no stop scheduled. */
+  const looping = (): FakeNode[] => nodesOf('oscillator').filter((n) => n.stop.mock.calls.length === 0);
+  const playingEngine = (): AudioEngine => {
+    const e = engine();
+    press();
+    e.setScreen('playing');
+    return e;
+  };
+
+  it('loops a low voice from the moment a well pulls until it lets go, then stops and unhooks every node of it', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const hum = looping();
+    expect(hum.length).toBeGreaterThan(0);
+    expect(Math.min(...hum.map((n) => n.frequency.value))).toBeLessThan(80);
+    e.handle([{ type: 'shot', x: 0, y: 0 }]);
+    expect(looping()).toEqual(hum);
+    e.handle([END]);
+    expect(looping()).toEqual([]);
+    for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
+    for (const voice of [...nodesOf('oscillator'), ...nodesOf('bufferSource')]) voice.onended?.();
+    const fixed = new Set([...nodesOf('gain').slice(0, 3), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
+    expect(ctx().nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0)).toEqual([]);
+  });
+
+  it('starts it once, however many starts a frame brings', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const hum = looping();
+    e.handle([START]);
+    expect(looping()).toEqual(hum);
+  });
+
+  it('stops it on pause and brings it back on resume, while the well still pulls', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    e.setScreen('paused');
+    expect(looping()).toEqual([]);
+    e.setScreen('playing');
+    expect(looping().length).toBeGreaterThan(0);
+  });
+
+  it('stops it for good when the run is left for a menu or ends, so the next run starts quiet', () => {
+    for (const screen of ['title', 'gameOver', 'results'] as const) {
+      const e = playingEngine();
+      e.handle([START]);
+      e.setScreen('paused');
+      e.setScreen(screen);
+      e.setScreen('playing');
+      expect(looping(), screen).toEqual([]);
+      contexts = [];
+    }
+  });
+
+  it.each([
+    ['the warp', { type: 'warpOut' }],
+    ['game over', { type: 'gameOver', score: 0 }],
+  ] as const)('stops it when %s ends the galaxy with the well still pulling', (_name, event) => {
+    const e = playingEngine();
+    e.handle([START]);
+    e.handle([event]);
+    expect(looping()).toEqual([]);
+  });
+
+  it('stops it on mute, as after a crash, and brings it back on unmute', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    e.setMuted(true);
+    expect(looping()).toEqual([]);
+    e.setMuted(false);
+    expect(looping().length).toBeGreaterThan(0);
+  });
+
+  it('stops it on dispose', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const hum = looping();
+    e.dispose();
+    for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('builds no hum before the context runs, and starts it once it does', () => {
+    FakeContext.startState = 'suspended';
+    FakeContext.resumeSucceeds = false;
+    const e = engine();
+    press();
+    e.setScreen('playing');
+    e.handle([START]);
+    expect(nodesOf('oscillator')).toEqual([]);
+    ctx().state = 'running';
+    ctx().onstatechange?.();
+    expect(looping().length).toBeGreaterThan(0);
   });
 });
 

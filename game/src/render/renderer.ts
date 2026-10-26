@@ -7,6 +7,7 @@ import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
 import { createFoePass } from './foePass';
+import { createHazardPass } from './hazardPass';
 import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
@@ -14,6 +15,8 @@ import { createBossPass } from './bossPass';
 import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layout';
 import { DRIFT } from './palette';
 import { createParticlePass } from './particlePass';
+import { createPickupPass } from './pickupPass';
+import type { SceneLook } from './scene';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
 import { createSpriteBaker, type Sprite, type SpriteBaker } from './sprites';
@@ -106,6 +109,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const hud = createHud(palette);
   const bossPass = createBossPass(ctx, pen, baker, palette);
   const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0 };
+  const scene: { -readonly [K in keyof SceneLook]: SceneLook[K] } = { glow: 1, still: false, time: 0, visual: UNIT_VISUAL };
   const copies = new Float64Array(6);
   const pose = { x: 0, y: 0, angle: 0 };
   let layout: Layout | null = null;
@@ -165,6 +169,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   }
 
   const foePass = createFoePass(ctx, stamp, baker, palette);
+  const hazardPass = createHazardPass(ctx, stamp, baker, palette);
+  const pickupPass = createPickupPass(ctx, stamp, baker, palette);
 
   /** Writes the asteroid's interpolated pose into `pose` and returns its drawn glow's reach, which covers its body too. */
   function rockPose(a: Readonly<Asteroid>, alpha: number, field: Field, visual: VisualScale): number {
@@ -214,9 +220,11 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const { ship } = world;
     // A lost last life leaves only its burst.
     if (world.status === 'gameOver') return;
-    if (ship.invulnerable && blinkHidden(world.elapsed)) return;
     interpolatePose(ship.px, ship.py, ship.pangle, ship.x, ship.y, ship.angle, alpha, field, pose);
     const { x, y } = pose;
+    // The Shield's ring (and its crack, as the hit that broke it starts the blink) shows through the blink.
+    pickupPass.drawShield(world.effects.shield, x, y, field, scene);
+    if (ship.invulnerable && blinkHidden(world.elapsed)) return;
     // The squash scales the hull and its flame, not the glow: the pen's turn (cos, sin) carries a scale too.
     const squash = effects.reducedMotion ? 1 : hitFlash.shipScale;
     const cos = Math.cos(pose.angle) * squash;
@@ -257,16 +265,21 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   /** Steps 3–8: the shaken scene. */
   function drawScene(world: World, alpha: number, { field, k, fieldX, fieldY, visual }: Layout): void {
     pen.aim(k, fieldX + k * effects.shakeX, fieldY + k * effects.shakeY);
+    scene.glow = quality.glow;
+    scene.still = effects.reducedMotion;
+    scene.time = world.elapsed;
+    scene.visual = visual;
     ctx.globalCompositeOperation = 'lighter';
     drawRockGlows(world, alpha, field, visual);
     particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
-    foePass.drawWell(world.well, quality.glow, field);
+    hazardPass.drawWell(world.well, field, scene);
     drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
-    foePass.drawFoes(world.foes, alpha, field);
+    foePass.drawFoes(world.foes, alpha, field, scene);
     drawRockFlashes(field);
     foePass.drawFlashes(hitFlash.foes, field);
+    pickupPass.drawPickups(world.pickups, alpha, field, scene);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
@@ -316,6 +329,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   function stepBursts(dt: number, world: World, frozen: boolean): void {
     effects.step(dt, world, frozen);
     hitFlash.step(dt);
+    pickupPass.advance(dt);
     particles.step(dt);
     bossPass.advance(dt, world.boss);
   }
@@ -325,6 +339,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     particles.clear();
     bossPass.reset();
     hitFlash.reset();
+    pickupPass.reset();
   }
 
   return {
@@ -335,6 +350,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     handle(events, world) {
       effects.handle(events, world);
       bossPass.handle(events);
+      pickupPass.handle(events);
       // Before the forget below: a flash needs the rock's sprite, which `forget` frees.
       hitFlash.handle(events);
       for (const event of events) if (event.type === 'asteroidDestroyed' || event.type === 'asteroidLeft') baker.forget(event.id);

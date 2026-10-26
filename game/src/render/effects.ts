@@ -1,12 +1,13 @@
 import { FOES } from '../content/foes';
 import type { FoeKind } from '../content/types';
-import { ASTEROID } from '../sim/config';
+import { ASTEROID, PICKUP } from '../sim/config';
 import { isWarpClear, type SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { createRng, type Rng } from '../sim/rng';
 import type { World } from '../sim/world';
 import { DRIFT, type Palette } from './palette';
 import { DEFAULT_PARTICLE_CAPACITY, type EmitOptions, type ParticlePool } from './particles';
+import { PICKUP_COLORS, SHIELD_RING_RADIUS } from './pickupArt';
 
 export interface BurstSpec {
   readonly shards: number;
@@ -70,6 +71,11 @@ const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0,
 const HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one (the sounds in sfx.ts match). */
 const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2] };
+/** A pickup dropping or being collected: a ring and a spray of sparks in its colour, no shake. */
+const PICKUP_DROP_BURST: Counts = { shards: 0, sparks: 8, rings: 1, smoke: 0, shake: 0, flash: 0 };
+const PICKUP_TAKE_BURST: Counts = { shards: 0, sparks: 12, rings: 1, smoke: 0, shake: 0, flash: 0 };
+/** The Shield taking a hit for the ship: it shatters, with a little shake but none of a lost life's weight. */
+const SHIELD_BREAK_BURST: Counts = { shards: 10, sparks: 14, rings: 1, smoke: 0, shake: 3, flash: 0 };
 /** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
 const WARP_CLEAR_BURST: Counts = { shards: 2, sparks: 4, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
@@ -98,6 +104,12 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
       return writeBurst(into, HIT_BURST, palette.shot);
     case 'foeDestroyed':
       return writeBurst(into, event.points === 0 ? WARP_CLEAR_BURST : FOE_BURSTS[event.kind], palette.ring);
+    case 'pickupDropped':
+      return writeBurst(into, PICKUP_DROP_BURST, palette.ring);
+    case 'pickupCollected':
+      return writeBurst(into, PICKUP_TAKE_BURST, palette.ring);
+    case 'shieldBroken':
+      return writeBurst(into, SHIELD_BREAK_BURST, palette.ring);
     case 'gameOver':
     case 'asteroidLeft':
     case 'galaxyStart':
@@ -111,11 +123,8 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'bossWindup':
     case 'bossPhase':
     case 'bossDown':
-    case 'pickupDropped':
-    case 'pickupCollected':
     case 'pickupExpired':
     case 'effectEnded':
-    case 'shieldBroken':
     case 'foeSpawned':
     case 'wellWarning':
     case 'wellStart':
@@ -239,6 +248,12 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         return writeOrigin(origin, event.x, event.y, 0, null);
       case 'foeDestroyed':
         return writeOrigin(origin, event.x, event.y, FOES[event.kind].radius, null);
+      case 'pickupDropped':
+        return writeOrigin(origin, event.x, event.y, PICKUP.radius, PICKUP_COLORS[event.kind]);
+      case 'pickupCollected':
+        return writeOrigin(origin, world.ship.x, world.ship.y, PICKUP.radius, PICKUP_COLORS[event.kind]);
+      case 'shieldBroken':
+        return writeOrigin(origin, world.ship.x, world.ship.y, SHIELD_RING_RADIUS, PICKUP_COLORS.shield);
       case 'gameOver':
       case 'asteroidLeft':
       case 'galaxyStart':
@@ -252,11 +267,8 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'bossWindup':
       case 'bossPhase':
       case 'bossDown':
-      case 'pickupDropped':
-      case 'pickupCollected':
       case 'pickupExpired':
       case 'effectEnded':
-      case 'shieldBroken':
       case 'foeSpawned':
       case 'wellWarning':
       case 'wellStart':

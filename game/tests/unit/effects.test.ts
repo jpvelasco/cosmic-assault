@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { burstFor, createEffects } from '../../src/render/effects';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool, type Particle } from '../../src/render/particles';
 import { DRIFT } from '../../src/render/palette';
+import { PICKUP_COLORS } from '../../src/render/pickupArt';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -135,15 +136,37 @@ describe('burstFor', () => {
     expect(burstFor({ type: 'gameOver', score: 10 }, DRIFT)).toBeNull();
   });
 
-  it('has no burst for the pickup events, which the HUD and sprites show from state', () => {
-    const events: SimEvent[] = [
-      { type: 'pickupDropped', id: 1, kind: 'shield', x: 0, y: 0 },
-      { type: 'pickupCollected', id: 1, kind: 'shield' },
-      { type: 'pickupExpired', id: 1 },
-      { type: 'effectEnded', kind: 'shield' },
-      { type: 'shieldBroken' },
-    ];
-    for (const event of events) expect(burstFor(event, DRIFT)).toBeNull();
+  it('pops a ring and sparks where a pickup drops, and as one is collected; a lapsed pickup or effect is quiet', () => {
+    const drop = burstFor({ type: 'pickupDropped', id: 1, kind: 'shield', x: 0, y: 0 }, DRIFT);
+    const take = burstFor({ type: 'pickupCollected', id: 1, kind: 'shield' }, DRIFT);
+    for (const burst of [drop, take]) {
+      expect(burst?.rings).toBeGreaterThan(0);
+      expect(burst?.sparks).toBeGreaterThan(0);
+      expect(burst?.shake).toBe(0);
+    }
+    expect(burstFor({ type: 'pickupExpired', id: 1 }, DRIFT)).toBeNull();
+    expect(burstFor({ type: 'effectEnded', kind: 'shield' }, DRIFT)).toBeNull();
+  });
+
+  it('shatters the Shield into shards with a little shake when it breaks', () => {
+    const burst = burstFor({ type: 'shieldBroken' }, DRIFT);
+    expect(burst?.shards).toBeGreaterThan(0);
+    expect(burst?.shake).toBeGreaterThan(0);
+  });
+
+  it('tints a pickup burst in its kind\'s colour, at the drop and at the ship that collects it', () => {
+    const pool = new ParticlePool(200);
+    const fx = createEffects(pool, 2);
+    const w = makeWorld();
+    fx.handle([{ type: 'pickupDropped', id: 1, kind: 'rapidFire', x: 100, y: 120 }], w);
+    const dropped = allParticles(pool);
+    expect(new Set(dropped.map((p) => p.color))).toEqual(new Set([PICKUP_COLORS.rapidFire]));
+    expect(dropped.find((p) => p.kind === 'ring')).toMatchObject({ x: 100, y: 120 });
+    pool.clear();
+    fx.handle([{ type: 'pickupCollected', id: 1, kind: 'doubleShot' }, { type: 'shieldBroken' }], w);
+    const at = allParticles(pool).filter((p) => p.kind === 'ring');
+    expect(at.map((p) => p.color).sort()).toEqual([PICKUP_COLORS.doubleShot, PICKUP_COLORS.shield].sort());
+    for (const ring of at) expect(ring).toMatchObject({ x: w.ship.x, y: w.ship.y });
   });
 
   it('writes into a spec it is given, so one spec serves every event', () => {
