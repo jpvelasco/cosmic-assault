@@ -1,10 +1,11 @@
 import { createAudioEngine, type AudioState, type MusicLevel } from '../audio/engine';
 import { currentBuildLabel } from '../buildLabel';
-import { createPadReader, controlsFromPad, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadButton, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
 import { isFormControlTarget } from '../input/keyEvent';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
+import { mergeControls } from '../input/mergeControls';
 import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
@@ -95,6 +96,9 @@ const TOAST_SOUND_ON = 'Sound on';
 /** How long the pointer must rest during play before the cursor is hidden. */
 const IDLE_CURSOR_MS = 2000;
 
+/** Set on `body` while a pad or arrow key drives menu focus; the stylesheet shows the focus ring for it. */
+const NAV_KEYS_CLASS = 'nav-keys';
+
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
 
@@ -181,8 +185,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let gameOverAt = 0;
   /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
   let previousPad: PadSnapshot | null = null;
-  /** Like the key latch: a fire button held when the run starts (A, which also confirmed) stays quiet until it is let go. */
-  let padFireLatched = false;
+  const padFire = createPadFireLatch();
   let lastFrameAt = performance.now();
   let frameId = 0;
   /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
@@ -283,7 +286,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       startLives: overrides.startLives ?? PLAYER.startLives,
     });
     startKeys.latch(keyboard.held);
-    padFireLatched = controlsFromPad(previousPad).fire;
+    padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
     renderer.reset();
@@ -310,6 +313,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     if (mode !== 'paused') return;
     audio.play('pause');
     loop.reset();
+    padFire.latch(previousPad);
     setMode('playing');
   }
 
@@ -398,17 +402,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     }
   }
 
-  /** Keys, touch and pad together: they OR for fire and thrust, the keys turn before the pad does, and touch steers before the pad. */
   function readControls(pad: PadSnapshot | null): Controls {
     const keys = controlsFromKeys(startKeys.active(keyboard.held));
-    const padded = controlsFromPad(pad);
-    if (!padded.fire) padFireLatched = false;
-    return {
-      turn: keys.turn === 0 ? padded.turn : keys.turn,
-      thrust: keys.thrust || padded.thrust,
-      fire: keys.fire || touch.fire || (padded.fire && !padFireLatched),
-      stick: touch.stick ?? padded.stick,
-    };
+    return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
   }
 
   /** The controls that menu focus moves among: the settings card when it is open, else the card for the mode. */
@@ -416,7 +412,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     return settingsOpen ? settingsCard.controls() : overlay.controls(mode);
   }
 
+  /** Pad and arrow navigation moves focus without a keyboard event, so the page asks for the ring itself until the next pointer press. */
+  function showNavFocus(): void {
+    document.body.classList.add(NAV_KEYS_CLASS);
+  }
+
   function navigateMenu(dir: FocusDirection): void {
+    showNavFocus();
     const controls = menuControls();
     const focused = focusedControl(controls);
     if (focused !== null && (dir === 'left' || dir === 'right') && nudgeSlider(focused, dir)) return;
@@ -424,7 +426,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   }
 
   /** Runs the command a pad button asks for in this mode, if any. */
-  function runPadCommand(button: 'confirm' | 'back' | 'pause', now: number): void {
+  function runPadCommand(button: PadButton, now: number): void {
     const command = commandForPad(mode, button);
     if (command !== null) applyCommand(command, now);
   }
@@ -434,13 +436,17 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     switch (edge) {
       case 'confirm': {
         const focused = focusedControl(menuControls());
-        if (focused !== null) focused.click();
-        else if (!settingsOpen) runPadCommand('confirm', now);
+        if (focused !== null) {
+          showNavFocus();
+          focused.click();
+        } else if (!settingsOpen) runPadCommand('confirm', now);
         break;
       }
       case 'back':
-        if (settingsOpen) closeSettings();
-        else runPadCommand('back', now);
+        // A card under the rotate prompt is covered and stays put, however Back is asked.
+        if (settingsOpen) {
+          if (!needsRotation()) closeSettings();
+        } else runPadCommand('back', now);
         break;
       case 'pause':
         if (!settingsOpen) runPadCommand('pause', now);
@@ -559,6 +565,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     markResize();
     syncView();
   };
+  const hideNavFocus = (): void => {
+    document.body.classList.remove(NAV_KEYS_CLASS);
+  };
   const onVisibilityChange = (): void => {
     if (document.visibilityState === 'hidden') pause();
   };
@@ -571,6 +580,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     listen(coarsePointer, 'change', onPlatformChange),
     listen(portrait, 'change', onPlatformChange),
     listen(window, 'pointermove', armIdleCursor),
+    listen(window, 'pointerdown', hideNavFocus),
     listen(window, 'blur', pause),
     listen(document, 'visibilitychange', onVisibilityChange),
     fullscreen.onChange(onFullscreenChange),
@@ -639,7 +649,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       safeArea.dispose();
       renderer.dispose();
       clearTimeout(idleCursorTimer);
-      document.body.classList.remove('lite', 'cursor-idle');
+      document.body.classList.remove('lite', 'cursor-idle', NAV_KEYS_CLASS);
     },
   };
 }

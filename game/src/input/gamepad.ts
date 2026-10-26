@@ -7,7 +7,11 @@ export interface PadSnapshot {
   readonly pressed: readonly boolean[];
 }
 
-export type PadEdge = 'confirm' | 'back' | 'pause' | FocusDirection;
+/** The pad buttons that stand for a menu command rather than a direction. */
+export type PadButton = 'confirm' | 'back' | 'pause';
+export type PadEdge = PadButton | FocusDirection;
+
+const NO_EDGES: readonly PadEdge[] = [];
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -93,10 +97,34 @@ function heldEdges(pad: PadSnapshot | null): ReadonlySet<PadEdge> {
 }
 
 /** What `next` presses that `prev` did not, once each. A pad that has just appeared counts as untouched before. */
-export function padEdges(prev: PadSnapshot | null, next: PadSnapshot | null): PadEdge[] {
-  if (next === null) return [];
+export function padEdges(prev: PadSnapshot | null, next: PadSnapshot | null): readonly PadEdge[] {
+  if (next === null) return NO_EDGES;
   const before = heldEdges(prev);
   return [...heldEdges(next)].filter((edge) => !before.has(edge));
+}
+
+/**
+ * Keeps a fire button that was already down when a run started or resumed (A, which also confirmed) quiet until it is
+ * let go, as the key latch does for keys.
+ */
+export interface PadFireLatch {
+  /** Silences the fire button if `pad` is holding it now. */
+  latch(pad: PadSnapshot | null): void;
+  /** Passes `controls` through, with fire cleared while latched; a released button clears the latch. */
+  apply(controls: Controls): Controls;
+}
+
+export function createPadFireLatch(): PadFireLatch {
+  let latched = false;
+  return {
+    latch(pad) {
+      latched = controlsFromPad(pad).fire;
+    },
+    apply(controls) {
+      if (!controls.fire) latched = false;
+      return latched ? { ...controls, fire: false } : controls;
+    },
+  };
 }
 
 /**

@@ -1,4 +1,5 @@
 import { GAME_KEY_CODES } from '../input/keyboard';
+import type { PadButton } from '../input/gamepad';
 import { arrowDirection } from '../input/menuFocus';
 import { isPracticeLevel } from '../sim/world';
 import type { AppMode } from './game';
@@ -52,7 +53,7 @@ export function commandForKey(mode: AppMode, code: string): Command | null {
  * What a pad button asks for in `mode` when no menu button is focused. Back does what Esc does, except in play, where
  * a stray B must not pause; Start starts from the title and game over, and pauses or resumes otherwise.
  */
-export function commandForPad(mode: AppMode, button: 'confirm' | 'back' | 'pause'): Command | null {
+export function commandForPad(mode: AppMode, button: PadButton): Command | null {
   const idle = mode === 'title' || mode === 'gameOver';
   switch (button) {
     case 'confirm':

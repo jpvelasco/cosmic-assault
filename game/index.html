@@ -235,8 +235,11 @@
           transform 160ms var(--pop),
           filter 160ms ease;
       }
+      /* `nav-keys` is set while a pad or arrow key drives focus, which browsers do not treat as keyboard focus after a click. */
       .overlay button:focus-visible,
-      .overlay .segment:has(input:focus-visible) {
+      .overlay .segment:has(input:focus-visible),
+      body.nav-keys .overlay button:focus,
+      body.nav-keys .overlay .segment:has(input:focus) {
         outline: 2px solid var(--accent-3);
         outline-offset: 3px;
       }

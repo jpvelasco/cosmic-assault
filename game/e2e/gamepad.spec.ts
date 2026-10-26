@@ -26,6 +26,8 @@ test.beforeEach(async ({ page }) => {
     };
     const pad = { id: 'fake', index: 0, mapping: 'standard', connected: true, axes: fake.axes, buttons: fake.buttons };
     (window as unknown as { __fakePad: FakePad }).__fakePad = fake;
+    // No full screen chip, so the title's chip row is always Sound then Settings.
+    Object.defineProperty(Document.prototype, 'fullscreenEnabled', { value: false, configurable: true });
     navigator.getGamepads = () => (fake.connected ? [pad as unknown as Gamepad, null, null, null] : [null, null, null, null]);
   });
   await openGame(page);
@@ -123,18 +125,14 @@ test('on the title the arrow keys move focus instead of starting, and A presses 
   await expectMode(page, 'title');
 });
 
-test('the D-pad walks down from the level chips to the settings chip, and A opens it', async ({ page }) => {
+test('the D-pad walks from the level chips down to the sound chip and across to settings, and A opens it', async ({ page }) => {
   await tap(page, DPAD_DOWN);
   await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
 
   await tap(page, DPAD_DOWN);
   await expect(page.getByTestId('sound-toggle')).toBeFocused();
-  // The chips row holds the sound, full screen (where the browser has it) and settings chips, left to right.
-  const settingsChip = page.getByTestId('settings-open');
-  for (let step = 0; step < 2 && !(await settingsChip.evaluate((el) => el === document.activeElement)); step++) {
-    await tap(page, DPAD_RIGHT);
-  }
-  await expect(settingsChip).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('settings-open')).toBeFocused();
   await tap(page, A);
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
 });
@@ -151,5 +149,50 @@ test('in settings the D-pad adjusts a slider and B closes the card', async ({ pa
 
   await tap(page, B);
   await expect(page.getByRole('dialog', { name: 'Settings' })).toBeHidden();
+  await expectMode(page, 'title');
+});
+
+test('Start starts a run from the title', async ({ page }) => {
+  await tap(page, START);
+  await expectMode(page, 'playing');
+});
+
+test('pad navigation shows the focus ring even after a mouse click, until the next pointer press', async ({ page }) => {
+  const outline = (name: string) => page.getByRole('button', { name, exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle);
+  await page.getByRole('button', { name: '3', exact: true }).click();
+  await tap(page, DPAD_RIGHT);
+  const four = page.getByRole('button', { name: '4', exact: true });
+  await expect(four).toBeFocused();
+  expect(await outline('4')).toBe('solid');
+
+  await page.getByRole('button', { name: '1', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.body.classList.contains('nav-keys'))).toBe(false);
+  expect(await outline('4')).toBe('none');
+});
+
+test('behind the settings card the pad can only reach the card, and Start does not begin a run', async ({ page }) => {
+  await page.getByTestId('settings-open').click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog).toBeVisible();
+
+  for (const button of [DPAD_DOWN, DPAD_DOWN, DPAD_DOWN, DPAD_DOWN, DPAD_DOWN, DPAD_DOWN]) {
+    await tap(page, button);
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  }
+  await tap(page, START);
+  await nextFrames(page, 3);
+  await expectMode(page, 'title');
+});
+
+test('the rotate prompt covers every card: the pad focuses nothing and cannot start a run', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'The rotate prompt only shows on a phone.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByTestId('rotate-prompt')).toBeVisible();
+
+  await tap(page, DPAD_DOWN);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await tap(page, A);
+  await tap(page, START);
+  await nextFrames(page, 3);
   await expectMode(page, 'title');
 });

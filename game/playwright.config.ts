@@ -34,7 +34,7 @@ export default defineConfig({
     },
     {
       name: 'mobile-landscape',
-      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts'],
+      testMatch: ['**/smoke.spec.ts', '**/touch.spec.ts', '**/hud.spec.ts', '**/settings.spec.ts', '**/platform.spec.ts', '**/gamepad.spec.ts'],
       use: { ...devices['Pixel 5 landscape'] },
     },
     // Report-only frame times under a CPU slowdown. `npm run test:e2e` leaves this project out; run it with `npm run test:perf`.

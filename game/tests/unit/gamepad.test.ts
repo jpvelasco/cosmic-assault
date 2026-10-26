@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { controlsFromPad, createPadReader, padEdges, pickPad, snapshotPad, type PadSnapshot } from '../../src/input/gamepad';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, pickPad, snapshotPad, type PadSnapshot } from '../../src/input/gamepad';
 import { NO_CONTROLS } from '../../src/sim/controls';
 
 const BUTTONS = 17;
@@ -194,5 +194,36 @@ describe('createPadReader', () => {
     expect(read()).toBeNull();
     expect(getPads).toHaveBeenCalledTimes(1);
     expect(onUnavailable).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createPadFireLatch', () => {
+  const firing = { ...NO_CONTROLS, fire: true };
+
+  it('passes controls through when nothing is latched', () => {
+    const latch = createPadFireLatch();
+    expect(latch.apply(firing)).toBe(firing);
+  });
+
+  it('silences a fire button held at the latch until it is released', () => {
+    const latch = createPadFireLatch();
+    latch.latch(pad([0]));
+    expect(latch.apply(firing).fire).toBe(false);
+    expect(latch.apply(NO_CONTROLS).fire).toBe(false);
+    expect(latch.apply(firing).fire).toBe(true);
+  });
+
+  it('keeps the other controls while latched', () => {
+    const latch = createPadFireLatch();
+    latch.latch(pad([7]));
+    expect(latch.apply({ ...firing, turn: 1, thrust: true })).toEqual({ turn: 1, thrust: true, fire: false, stick: null });
+  });
+
+  it('latches nothing when the pad is not firing or is gone', () => {
+    const latch = createPadFireLatch();
+    latch.latch(pad([12]));
+    expect(latch.apply(firing).fire).toBe(true);
+    latch.latch(null);
+    expect(latch.apply(firing).fire).toBe(true);
   });
 });
