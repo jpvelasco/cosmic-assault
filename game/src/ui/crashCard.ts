@@ -1,5 +1,5 @@
 import type { Toast } from './toast';
-import { button, cardPanel, element } from './dom';
+import { button, cardPanel, element, PRIMARY_BUTTON } from './dom';
 
 export interface CrashCardActions {
   /** The text Copy report puts on the clipboard. */
@@ -35,7 +35,7 @@ export function createCrashCard(root: HTMLElement, { report, toast }: CrashCardA
   card.setAttribute('role', 'alertdialog');
   card.setAttribute('aria-modal', 'true');
   card.setAttribute('aria-label', CRASH_TITLE);
-  const tryAgain = button('menu-button menu-button--primary', 'Try again', () => {
+  const tryAgain = button(PRIMARY_BUTTON, 'Try again', () => {
     location.reload();
   });
   const copyButton = button('menu-button', 'Copy report', () => void copy());

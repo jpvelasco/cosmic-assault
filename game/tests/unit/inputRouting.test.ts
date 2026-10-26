@@ -3,44 +3,46 @@ import type { Command } from '../../src/app/commands';
 import { GAME_OVER_GUARD_MS } from '../../src/app/gameOverGuard';
 import { actsUnder, commandActs, coversFor, inputForCommand, type Cover, type RoutedInput } from '../../src/app/inputRouting';
 
-const NO_COVER = coversFor({ settings: false, rotate: false, crash: false });
+const UNCOVERED = { settings: false, records: false, rotate: false, crash: false };
+const NO_COVER = coversFor(UNCOVERED);
 
 describe('coversFor', () => {
   it('is none when nothing covers the cards', () => {
     expect(NO_COVER).toEqual(['none']);
   });
 
-  it('lists every card that is up, settings under the rotate prompt included', () => {
-    expect(coversFor({ settings: true, rotate: false, crash: false })).toEqual(['settings']);
-    expect(coversFor({ settings: true, rotate: true, crash: false })).toEqual(['settings', 'rotate']);
-    expect(coversFor({ settings: false, rotate: true, crash: true })).toEqual(['rotate', 'crash']);
+  it('lists every card that is up, settings or records under the rotate prompt included', () => {
+    expect(coversFor({ ...UNCOVERED, settings: true })).toEqual(['settings']);
+    expect(coversFor({ ...UNCOVERED, settings: true, rotate: true })).toEqual(['settings', 'rotate']);
+    expect(coversFor({ ...UNCOVERED, records: true, rotate: true })).toEqual(['records', 'rotate']);
+    expect(coversFor({ ...UNCOVERED, rotate: true, crash: true })).toEqual(['rotate', 'crash']);
   });
 });
 
 describe('actsUnder', () => {
   // The review's matrix, row by row: which inputs act under which cover.
-  it.each<[RoutedInput, none: boolean, settings: boolean, rotate: boolean, crash: boolean]>([
-    ['start', true, false, false, false],
-    ['resume', true, false, false, false],
-    ['pause', true, false, true, false],
-    ['selectLevel', true, false, true, false],
-    ['toTitle', true, false, true, false],
-    ['toggleMute', true, true, true, false],
-    ['toggleFullscreen', true, true, true, true],
-    ['navigate', true, true, false, false],
-    ['pressFocused', true, true, false, false],
-    ['closeSettings', true, true, false, false],
-  ])('%s: none %s, settings %s, rotate %s, crash %s', (input, none, settings, rotate, crash) => {
+  it.each<[RoutedInput, none: boolean, settings: boolean, records: boolean, rotate: boolean, crash: boolean]>([
+    ['start', true, false, false, false, false],
+    ['resume', true, false, false, false, false],
+    ['pause', true, false, false, true, false],
+    ['leave', true, false, false, true, false],
+    ['toggleMute', true, true, true, true, false],
+    ['toggleFullscreen', true, true, true, true, true],
+    ['navigate', true, true, true, false, false],
+    ['pressFocused', true, true, true, false, false],
+    ['closeCard', true, true, true, false, false],
+  ])('%s: none %s, settings %s, records %s, rotate %s, crash %s', (input, none, settings, records, rotate, crash) => {
     const under = (cover: Cover) => actsUnder(input, [cover]);
-    expect([under('none'), under('settings'), under('rotate'), under('crash')]).toEqual([none, settings, rotate, crash]);
+    expect([under('none'), under('settings'), under('records'), under('rotate'), under('crash')]).toEqual([none, settings, records, rotate, crash]);
   });
 
   it('needs every cover that is up to allow the input', () => {
     // M acts under settings and under the rotate prompt, so it acts under both; Esc closing settings does not.
     expect(actsUnder('toggleMute', ['settings', 'rotate'])).toBe(true);
-    expect(actsUnder('closeSettings', ['settings', 'rotate'])).toBe(false);
-    // A level key acts under the rotate prompt alone, but not when the settings card is open beneath it.
-    expect(actsUnder('selectLevel', ['settings', 'rotate'])).toBe(false);
+    expect(actsUnder('closeCard', ['settings', 'rotate'])).toBe(false);
+    expect(actsUnder('closeCard', ['records', 'rotate'])).toBe(false);
+    // Leaving a card acts under the rotate prompt alone, but not when the settings card is open beneath it.
+    expect(actsUnder('leave', ['settings', 'rotate'])).toBe(false);
   });
 });
 
@@ -51,10 +53,25 @@ describe('inputForCommand', () => {
     expect(inputForCommand(toggle, 'paused')).toBe('resume');
   });
 
-  it('names every other command by its kind', () => {
-    expect(inputForCommand({ kind: 'start' }, 'title')).toBe('start');
-    expect(inputForCommand({ kind: 'selectLevel', level: 3 }, 'title')).toBe('selectLevel');
-    expect(inputForCommand({ kind: 'toTitle' }, 'gameOver')).toBe('toTitle');
+  it.each<Command>([
+    { kind: 'start' },
+    { kind: 'resumeRank' },
+    { kind: 'chooseMode', mode: 'rank' },
+    { kind: 'openDimension', dimension: 2 },
+    { kind: 'openGalaxy', id: '1-1' },
+    { kind: 'confirm' },
+    { kind: 'next' },
+    { kind: 'retry' },
+    { kind: 'continue' },
+  ])('routes %j, which goes forward and may start a run, as start', (command) => {
+    expect(inputForCommand(command, 'title')).toBe('start');
+  });
+
+  it.each<Command>([{ kind: 'back' }, { kind: 'map' }, { kind: 'title' }])('routes %j, which leaves a card, as leave', (command) => {
+    expect(inputForCommand(command, 'gameOver')).toBe('leave');
+  });
+
+  it('names mute and full screen by their kind', () => {
     expect(inputForCommand({ kind: 'toggleMute' }, 'playing')).toBe('toggleMute');
     expect(inputForCommand({ kind: 'toggleFullscreen' }, 'paused')).toBe('toggleFullscreen');
   });
@@ -73,8 +90,11 @@ describe('commandActs', () => {
     expect(commandActs({ kind: 'togglePause' }, 'playing', ['rotate'], 0)).toBe(true);
   });
 
-  it('waits out the game-over guard on the game-over card', () => {
-    expect(commandActs(start, 'gameOver', NO_COVER, GAME_OVER_GUARD_MS - 1)).toBe(false);
-    expect(commandActs(start, 'gameOver', NO_COVER, GAME_OVER_GUARD_MS)).toBe(true);
+  it('waits out the game-over guard on the end cards', () => {
+    const retry: Command = { kind: 'retry' };
+    for (const screen of ['results', 'gameOver', 'rankComplete'] as const) {
+      expect(commandActs(retry, screen, NO_COVER, GAME_OVER_GUARD_MS - 1)).toBe(false);
+      expect(commandActs(retry, screen, NO_COVER, GAME_OVER_GUARD_MS)).toBe(true);
+    }
   });
 });

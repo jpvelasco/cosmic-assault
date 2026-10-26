@@ -1,7 +1,8 @@
+import type { Screen } from '../app/flow';
 import type { Settings } from '../app/settings';
 import type { SimEvent } from '../sim/events';
 import { createMusicPlayer, type MusicPlayer } from './music';
-import { sfxFor, type SfxName } from './sfx';
+import { isBossKill, screenCue, sfxFor, type SfxName } from './sfx';
 import { playSfx, type VoiceBed } from './voices';
 
 /** What the test bridge reports: no context yet, or the context's own state. */
@@ -9,6 +10,9 @@ export type AudioState = 'none' | 'suspended' | 'running' | 'closed';
 
 /** How loud the music is relative to its volume setting. */
 export type MusicLevel = 'play' | 'paused' | 'menu';
+
+/** Play and pause have their own music level; every other screen plays the menu's. */
+export const musicFor = (screen: Screen): MusicLevel => (screen === 'playing' ? 'play' : screen === 'paused' ? 'paused' : 'menu');
 
 /** Whether sound is wanted but waits for a key press or tap to start (or wake) the context: not muted, not failed, not running. */
 export function needsSoundGesture(state: AudioState, muted: boolean): boolean {
@@ -20,9 +24,12 @@ export interface AudioEngine {
   readonly muted: boolean;
   /** Starts a new frame, which resets the shot cap. */
   beginFrame(): void;
-  /** Plays the sound for each event that makes one. */
+  /** Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss). */
   handle(events: readonly SimEvent[]): void;
-  play(name: SfxName): void;
+  /** Plays `name`, `delay` seconds from now on the audio clock. */
+  play(name: SfxName, delay?: number): void;
+  /** A new screen: its music level, and the sound it opens with (the clear fanfare on the results card). */
+  setScreen(screen: Screen): void;
   setMuted(muted: boolean): void;
   /** Sets the music and effects volumes (0–1); they take hold at once, even mid-sound. */
   setVolumes(music: number, sfx: number): void;
@@ -83,8 +90,9 @@ function ramp(param: AudioParam, ctx: AudioContext, value: number, smoothing: nu
  * Nothing is built while the context is not running or while muted: a suspended clock never ends a
  * voice, so queued voices would pile up and then all sound at once.
  *
- * Graph: sfx gain ─────────────────┐
+ * Graph: (screen bus →) sfx gain ──┐
  *        music gain → 2.6 kHz lowpass ┴→ master gain → compressor (−14 dB, 4:1) → output
+ * The screen bus carries the open screen's own sound, the clear fanfare; a new screen fades it out.
  */
 export function createAudioEngine(initial: Settings, onFailure: (message: string) => void = console.warn): AudioEngine {
   let graph: Graph | null = null;
@@ -95,6 +103,8 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let sfxVolume = initial.sfxVolume;
   let musicLevel: MusicLevel = 'menu';
   let shotsThisFrame = 0;
+  /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
+  let screenBus: GainNode | null = null;
 
   /** The music bus gain for `level`: the saved volume scaled by the mode's level. */
   const musicGain = (level: MusicLevel): number => musicVolume * MUSIC_LEVELS[level];
@@ -221,12 +231,32 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   addGestureListeners();
   document.addEventListener('visibilitychange', onVisibilityChange);
 
-  function play(name: SfxName): void {
+  function setMusicLevel(level: MusicLevel): void {
+    musicLevel = level;
+    syncBusGains();
+  }
+
+  /** Fades out the last screen's sound, so a fanfare never runs on into the next run, and starts `screen`'s own. */
+  function playScreenCue(screen: Screen): void {
+    if (graph === null) return;
+    const { ctx, bed, sfx } = graph;
+    guard(() => {
+      if (screenBus !== null) ramp(screenBus.gain, ctx, 0, MUTE_SMOOTHING);
+      screenBus = null;
+      const cue = screenCue(screen);
+      if (cue === null || !audible()) return;
+      screenBus = ctx.createGain();
+      screenBus.connect(sfx);
+      playSfx(bed, screenBus, cue.name, cue.delay);
+    });
+  }
+
+  function play(name: SfxName, delay = 0): void {
     if (graph === null || !audible()) return;
     if (name === 'shoot' && ++shotsThisFrame > MAX_SHOTS_PER_FRAME) return;
     const { bed, sfx } = graph;
     guard(() => {
-      playSfx(bed, sfx, name);
+      playSfx(bed, sfx, name, delay);
     });
   }
 
@@ -243,9 +273,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       shotsThisFrame = 0;
     },
     handle(events) {
+      const bossKill = isBossKill(events);
       for (const event of events) {
-        const name = sfxFor(event);
-        if (name !== null) play(name);
+        const cue = sfxFor(event, bossKill);
+        if (cue !== null) play(cue.name, cue.delay);
       }
     },
     play,
@@ -264,9 +295,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       sfxVolume = sfx;
       syncBusGains();
     },
-    setMusicLevel(level) {
-      musicLevel = level;
-      syncBusGains();
+    setMusicLevel,
+    setScreen(screen) {
+      setMusicLevel(musicFor(screen));
+      playScreenCue(screen);
     },
     dispose() {
       disposed = true;

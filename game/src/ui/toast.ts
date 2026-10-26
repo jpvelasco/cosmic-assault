@@ -1,6 +1,6 @@
 export interface Toast {
   /** Shows `text` in a pill for a moment, replacing any toast already up. */
-  show(text: string): void;
+  readonly show: (text: string) => void;
   dispose(): void;
 }
 

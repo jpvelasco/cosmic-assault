@@ -4,15 +4,14 @@ import type { Effects } from '../render/effects';
 import { listen } from '../ui/dom';
 import { createSettingsCard, type SettingsCard } from '../ui/settingsCard';
 import type { Toast } from '../ui/toast';
-import type { AppMode } from './game';
+import { createCardToggle, type CardToggleDeps } from './cardToggle';
 import type { HitStop } from './hitStop';
-import { actsUnder, type Cover } from './inputRouting';
 import { saveSettings, shakeEnabled, type Settings } from './settings';
 
 const TOAST_MUTED = 'Muted';
 const TOAST_SOUND_ON = 'Sound on';
 
-export interface SettingsControllerDeps {
+export interface SettingsControllerDeps extends Omit<CardToggleDeps, 'opensOn'> {
   readonly storage: Storage | null;
   /** The settings loaded at start; the audio engine was built from them. */
   readonly initial: Settings;
@@ -21,11 +20,6 @@ export interface SettingsControllerDeps {
   readonly touch: Pick<TouchControls, 'setLeftHanded'>;
   readonly hitStop: HitStop;
   readonly effects: Effects;
-  mode(): AppMode;
-  covers(): readonly Cover[];
-  syncView(): void;
-  /** Puts focus back on the chip that opened the card. */
-  focusOpener(): void;
 }
 
 export interface SettingsController {
@@ -46,7 +40,6 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
   const { storage, audio, toast, touch, hitStop, effects } = deps;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let settings = deps.initial;
-  let open = false;
   /** The save warning is given once: a slider that is dragged again and again must not flood the console. */
   let warnedStorage = false;
 
@@ -81,15 +74,6 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     persistSettings();
   }
 
-  function closeSettings(): void {
-    // A settings card under the rotate prompt is covered and stays put, however closing is asked.
-    if (!open || !actsUnder('closeSettings', deps.covers())) return;
-    open = false;
-    card.hide();
-    deps.syncView();
-    deps.focusOpener();
-  }
-
   const card = createSettingsCard(root, {
     change: applySettings,
     save: persistSettings,
@@ -97,8 +81,11 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     previewSfx: () => {
       audio.play('uiClick');
     },
-    done: closeSettings,
+    done: () => {
+      toggle.close();
+    },
   });
+  const toggle = createCardToggle(card, { ...deps, opensOn: ['title', 'paused'] });
   const unlisten = listen(reducedMotion, 'change', syncMotion);
   applySettings({});
 
@@ -107,18 +94,12 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
       return settings;
     },
     get open() {
-      return open;
+      return toggle.open;
     },
     card,
     toggleMute,
-    openSettings: () => {
-      const mode = deps.mode();
-      if (open || (mode !== 'title' && mode !== 'paused')) return;
-      open = true;
-      deps.syncView();
-      card.show();
-    },
-    closeSettings,
+    openSettings: toggle.show,
+    closeSettings: toggle.close,
     dispose: () => {
       unlisten();
       card.dispose();

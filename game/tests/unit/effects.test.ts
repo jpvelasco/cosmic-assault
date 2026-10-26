@@ -8,7 +8,7 @@ import type { SimEvent } from '../../src/sim/events';
 import { World } from '../../src/sim/world';
 
 const THRUST = { ...NO_CONTROLS, thrust: true };
-const DESTROYED = (size: 0 | 1 | 2 | 3): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 300, y: 200, size, points: 20 });
+const DESTROYED = (size: 0 | 1 | 2 | 3, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 300, y: 200, size, points });
 const SHIP_HIT: SimEvent = { type: 'shipHit', x: 640, y: 360, livesLeft: 2 };
 
 function makeWorld(): World {
@@ -69,6 +69,15 @@ describe('burstFor', () => {
     }
   });
 
+  it('gives a rock the warp clears (0 points) a light puff with no shake or flash, whatever its size', () => {
+    const smallest = burstFor(DESTROYED(3), DRIFT);
+    for (const size of [0, 1, 2, 3] as const) {
+      const warped = burstFor(DESTROYED(size, 0), DRIFT);
+      expect(warped).toMatchObject({ rings: 0, smoke: 0, shake: 0, flash: 0 });
+      expect((warped?.shards ?? 99) + (warped?.sparks ?? 99)).toBeLessThan((smallest?.shards ?? 0) + (smallest?.sparks ?? 0));
+    }
+  });
+
   it('gives a ship hit the biggest burst, tinted red', () => {
     const hit = burstFor(SHIP_HIT, DRIFT);
     expect(hit).toMatchObject({ shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45, flashColor: '#ff5a5a' });
@@ -76,6 +85,21 @@ describe('burstFor', () => {
 
   it('gives a shot a single spark and no shake or flash', () => {
     expect(burstFor({ type: 'shot', x: 0, y: 0 }, DRIFT)).toMatchObject({ shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 });
+  });
+
+  it('gives a boss hit a small spark burst and no shake or flash', () => {
+    expect(burstFor({ type: 'bossHit', x: 0, y: 0, hp: 5 }, DRIFT)).toMatchObject({ shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 });
+  });
+
+  it('sprays a boss hit\'s sparks from where it struck', () => {
+    const pool = new ParticlePool(400);
+    createEffects(pool, 1).handle([{ type: 'bossHit', x: 300, y: 200, hp: 5 }], makeWorld());
+    const sparks: { x: number; y: number }[] = [];
+    pool.forEach((p) => {
+      sparks.push({ x: p.x, y: p.y });
+    });
+    expect(sparks).toHaveLength(6);
+    for (const s of sparks) expect(Math.hypot(s.x - 300, s.y - 200)).toBeLessThan(5);
   });
 
   it('has no burst for game over', () => {

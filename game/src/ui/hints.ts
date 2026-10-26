@@ -7,11 +7,13 @@ export const TOUCH_STYLE_QUERY = '(hover: none) and (pointer: coarse)';
 export interface HintCopy {
   readonly start: string;
   readonly restart: string;
+  /** Mode select: what to press to choose, since nothing is focused until a key or tap moves there. */
+  readonly choose: string;
 }
 
 const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
-  keys: { start: 'Press Space to start', restart: 'Press R to restart' },
-  touch: { start: 'Tap to start', restart: 'Tap Restart to play again' },
+  keys: { start: 'Press Space to start', restart: 'Press R to play again', choose: 'Arrow keys to choose, Enter to go' },
+  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode' },
 };
 
 export function hintCopy(style: InputStyle): HintCopy {

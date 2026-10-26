@@ -1,4 +1,4 @@
-import { createAudioEngine, needsSoundGesture, type AudioState, type MusicLevel } from '../audio/engine';
+import { createAudioEngine, needsSoundGesture, type AudioState } from '../audio/engine';
 import { currentBuildLabel } from '../buildLabel';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
@@ -14,44 +14,34 @@ import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
-import { PLAYER } from '../sim/config';
-import type { Controls } from '../sim/controls';
+import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
-import { MIN_PRACTICE_LEVEL, World } from '../sim/world';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
 import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
-import { START, TO_TITLE, TOGGLE_FULLSCREEN, type Command } from './commands';
+import type { CardToggleDeps } from './cardToggle';
+import { TOGGLE_FULLSCREEN, type Command } from './commands';
+import { installE2eHooks, type E2eHooks } from './e2eHooks';
+import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { coversFor, createInputRouter, type Cover } from './inputRouting';
-import { clockSeed, runOverrides } from './seed';
+import { createRunController, type RunController } from './runController';
+import { runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
 import { createSettingsController } from './settingsController';
 import { createViewSync } from './viewSync';
-
-/**
- * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
- * release builds carry no trace of them. The long property name is deliberate: unlike a local name it survives
- * minification, which lets `check:no-bridge` find it.
- */
-export interface E2eHooks {
-  /** Runs at the start of every guarded frame. */
-  e2eBeforeFrame?: (() => void) | undefined;
-}
-
-export type AppMode = 'title' | 'playing' | 'paused' | 'gameOver';
+import { createRecords } from './records';
 
 export interface App {
-  readonly mode: AppMode;
-  /** The current run; null on the title screen. */
-  readonly world: World | null;
-  /** The level the next run starts at (1–7), chosen on the title screen. */
-  readonly practiceLevel: number;
+  /** The screen shown. */
+  readonly mode: Screen;
+  /** The run: its World (null on the menu screens), the screen flow, the save in memory and the run total. */
+  readonly run: Pick<RunController, 'world' | 'flow' | 'save' | 'runTotal'>;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
@@ -74,21 +64,12 @@ export interface App {
   readonly fullscreen: boolean;
   /** What the game has noticed: mode changes, long stalls and errors. Kept in memory only. */
   readonly log: RingLog;
-  /** Starts a run from the title or game-over screen; ignored in other modes. */
-  start(): void;
   pause(): void;
   resume(): void;
-  /** Ends the run and returns to the title screen. */
+  /** Ends the paused run and returns to the title screen. */
   quit(): void;
   dispose(): void;
 }
-
-const MUSIC_LEVEL: Readonly<Record<AppMode, MusicLevel>> = {
-  title: 'menu',
-  playing: 'play',
-  paused: 'paused',
-  gameOver: 'menu',
-};
 
 /** Caps the visual step after a stalled frame, so stars and particles never jump. */
 const MAX_VISUAL_STEP_SECONDS = 0.1;
@@ -121,15 +102,33 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const installPrompt = createInstallPrompt(window, log, syncView);
   const overrides = runOverrides();
   if (overrides.quality !== undefined) scaler.pin(overrides.quality);
+  const run = createRunController({
+    storage,
+    overrides,
+    log,
+    field: () => {
+      applyPendingResize();
+      return field;
+    },
+    showScreen: setMode,
+    onRunStarted,
+    notify: toast.show,
+    onEvents: (events, world) => {
+      hitStop.trigger(events);
+      renderer.handle(events, world);
+      audio.handle(events);
+      overlay.handle(events);
+    },
+    refresh: syncView,
+  });
 
-  let mode: AppMode = 'title';
-  let world: World | null = null;
-  let practiceLevel = MIN_PRACTICE_LEVEL;
+  let mode: Screen = 'title';
   let field: Field | null = null;
   let resizePending = true;
-  /** Outside play the frame only changes on a mode change or resize, so it is redrawn only then. */
+  /** Outside play the frame only changes on a screen change or resize, so it is redrawn only then. */
   let redrawPending = false;
-  let gameOverAt = 0;
+  /** When the run on the end card ended; the card's guard counts from it. */
+  let runEndedAt = 0;
   /** The pad as of the last frame, kept as plain arrays so a browser that reuses its Gamepad object cannot alter it. */
   let previousPad: PadSnapshot | null = null;
   const padFire = createPadFireLatch();
@@ -137,21 +136,24 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let frameId = 0;
   /** The sound hint is given once a visit: a pad-only player needs it once, and a toast on every A would nag. */
   let soundHintGiven = false;
-  const button = (command: Command) => (): void => {
+  const applyNow = (command: Command): void => {
     router.applyCommand(command, performance.now());
   };
   const overlay = createOverlay(root, {
-    start: button(START),
-    selectLevel,
+    command: applyNow,
     resume,
     quit,
-    toTitle: button(TO_TITLE),
     toggleMute: () => {
       prefs.toggleMute();
     },
-    toggleFullscreen: button(TOGGLE_FULLSCREEN),
+    toggleFullscreen: () => {
+      applyNow(TOGGLE_FULLSCREEN);
+    },
     openSettings: () => {
       prefs.openSettings();
+    },
+    openRecords: () => {
+      records.show();
     },
     install: installPrompt.install,
   });
@@ -164,13 +166,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     touch,
     hitStop,
     effects: renderer.effects,
-    mode: () => mode,
-    covers,
-    syncView,
-    focusOpener: () => {
-      overlay.focusSettingsChip();
-    },
+    ...coverCardDeps('settings'),
   });
+  const records = createRecords(root, coverCardDeps('records'));
   const rotatePrompt = createRotatePrompt(root);
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
@@ -180,20 +178,22 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const view = createViewSync(root, {
     overlay,
     settingsCard: prefs.card,
+    records,
     rotatePrompt,
     touch,
     renderer,
     read: () => ({
-      mode,
-      practiceLevel,
-      score: world?.score ?? 0,
+      flow: run.flow,
+      save: run.save,
+      rankLock: run.rankLock,
+      score: run.world?.score ?? 0,
       muted: audio.muted,
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       installOffer: installPrompt.offer,
       settings: prefs.settings,
       settingsOpen: prefs.open,
     }),
-    mode: () => mode,
+    screen: () => mode,
     tripped: () => guard.tripped,
     onTurnUpright: pause,
   });
@@ -201,9 +201,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     keyboard,
     startKeys,
     run: {
-      start,
-      quit,
-      selectLevel,
+      flow: run.command,
       pause: pauseByPlayer,
       resume,
       toggleMute: prefs.toggleMute,
@@ -211,16 +209,27 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
         fullscreen.toggle();
       },
     },
-    mode: () => mode,
+    screen: () => mode,
     covers,
-    msSinceGameOver: (now) => now - gameOverAt,
-    menuControls: () => (prefs.open ? prefs.card.controls() : overlay.controls(mode)),
-    closeSettings: prefs.closeSettings,
+    msSinceRunEnd: (now) => now - runEndedAt,
+    menuControls: () => (prefs.open ? prefs.card.controls() : records.open ? records.card.controls() : overlay.controls(mode)),
+    closeCard: () => {
+      prefs.closeSettings();
+      records.close();
+    },
   });
+
+  /** What the settings or records card needs to open and close over the screens, its focus going back to its chip. */
+  function coverCardDeps(chip: 'settings' | 'records'): Omit<CardToggleDeps, 'opensOn'> {
+    const focusOpener = (): void => {
+      overlay.focusChip(chip);
+    };
+    return { screen: () => mode, covers, syncView, focusOpener };
+  }
 
   /** What covers the cards right now, for the router's table. */
   function covers(): Cover[] {
-    return coversFor({ settings: prefs.open, rotate: view.needsRotation(), crash: guard.tripped });
+    return coversFor({ settings: prefs.open, records: records.open, rotate: view.needsRotation(), crash: guard.tripped });
   }
 
   function syncView(): void {
@@ -233,12 +242,15 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     document.body.classList.toggle('lite', scaler.index >= LITE_FROM_INDEX);
   }
 
-  function setMode(next: AppMode): void {
+  function setMode(next: Screen): void {
     // After a crash the log and the report's mode stay as they were when the game stopped.
     if (guard.tripped) return;
     mode = next;
-    log.add('mode', next, performance.now());
-    audio.setMusicLevel(MUSIC_LEVEL[next]);
+    const now = performance.now();
+    log.add('mode', next, now);
+    if (END_SCREENS.includes(next)) runEndedAt = now;
+    if (MENU_SCREENS.includes(next)) hitStop.clear();
+    audio.setScreen(next);
     redrawPending = true;
     view.armIdleCursor();
     view.sync();
@@ -252,22 +264,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     field = fieldForViewport(clientWidth, clientHeight);
     renderer.resize(clientWidth, clientHeight, field);
     view.syncHudBounds();
-    world?.resize(field);
+    run.world?.resize(field);
     redrawPending = true;
   }
 
-  function start(): void {
-    if (mode !== 'title' && mode !== 'gameOver') return;
-    applyPendingResize();
-    if (field === null) {
-      throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
-    }
-    world = new World({
-      seed: overrides.seed ?? clockSeed(),
-      field,
-      practiceLevel,
-      startLives: overrides.startLives ?? PLAYER.startLives,
-    });
+  /** A new World is in place: fresh input latches, loop, renderer and frame stats for it. */
+  function onRunStarted(): void {
     startKeys.latch(keyboard.held);
     padFire.latch(previousPad);
     loop.reset();
@@ -276,14 +278,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     monitor.reset();
     scaler.startRun();
     audio.play('uiClick');
-    setMode('playing');
   }
 
   /** Pauses a run in play; returns whether it did. */
   function pause(): boolean {
     if (mode !== 'playing') return false;
     hitStop.clear();
-    setMode('paused');
+    run.pause();
     return true;
   }
 
@@ -297,23 +298,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     audio.play('pause');
     loop.reset();
     padFire.latch(previousPad);
-    setMode('playing');
+    run.resume();
   }
 
   function quit(): void {
-    if (world === null) return;
-    world.endRun();
-    world = null;
-    hitStop.clear();
+    if (mode !== 'paused') return;
     audio.play('uiClick');
-    setMode('title');
-  }
-
-  function selectLevel(level: number): void {
-    if (mode !== 'title') return;
-    practiceLevel = level;
-    audio.play('uiClick');
-    view.sync();
+    run.quit();
   }
 
   /** Pads grant no user activation, so the first A while sound waits for one says how to turn it on. */
@@ -328,23 +319,19 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
   }
 
-  function stepWorld(run: World, controls: Controls, frameSeconds: number, now: number): void {
+  /** Steps the run; a clear or game over moves the flow to its end card, after which the steps do nothing. */
+  function stepRun(controls: Controls, frameSeconds: number): void {
     // A freeze triggered by a step in this frame takes effect from the next frame's consume().
     loop.advance(hitStop.consume(frameSeconds), (dt) => {
-      const events = run.step(dt, controls);
-      hitStop.trigger(events);
-      renderer.handle(events, run);
-      audio.handle(events);
+      run.step(dt, controls);
     });
-    if (run.status === 'gameOver') {
-      gameOverAt = now;
-      setMode('gameOver');
-    }
   }
 
   /** Stops the game for good and shows the recovery card. Silences audio without touching the saved sound setting. */
   function stopAfterCrash(error: unknown): void {
     cancelAnimationFrame(frameId);
+    // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
+    run.dispose();
     touch.show(false);
     prefs.card.hide();
     rotatePrompt.show(false);
@@ -376,9 +363,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
-    const settling = mode === 'gameOver' && renderer.hasActiveParticles();
+    const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
     // Still screens cost next to nothing, so their frame interval is the display's own rate.
     if (mode !== 'playing' && !settling) scaler.sampleIdle(frameMs);
+    const { world } = run;
     if (world === null) return;
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
     const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
@@ -388,18 +376,32 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       scaler.sample(frameMs);
       if (scaler.index !== levelBefore) applyQuality();
       const frozen = hitStop.frozen;
-      stepWorld(world, readControls(pad), frameSeconds, now);
+      stepRun(readControls(pad), frameSeconds);
       renderer.advance(visualSeconds, world, frozen);
+    } else if (run.warpingUnderCard) {
+      // The clear is recorded and its card shown as the warp starts; the warp plays out under the card, untouched by input.
+      stepRun(NO_CONTROLS, frameSeconds);
+      renderer.advance(visualSeconds, world, hitStop.frozen);
+      redrawPending = true;
     } else if (settling) {
-      // The death burst plays out under the card; redrawing stops once the last particle is gone.
+      // The death or warp burst plays out under the card; redrawing stops once the last particle is gone.
       renderer.settle(visualSeconds, world);
       redrawPending = true;
     }
     if (mode === 'playing' || redrawPending) {
-      renderer.draw(world, loop.alpha());
+      renderer.draw(world, loop.alpha(), run.runTotal);
       redrawPending = false;
     }
   }
+
+  installE2eHooks(e2e, {
+    run,
+    mode: () => mode,
+    controls: () => readControls(previousPad),
+    redraw: () => {
+      redrawPending = true;
+    },
+  });
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */
   const guardedFrame =
@@ -439,12 +441,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get mode() {
       return mode;
     },
-    get world() {
-      return world;
-    },
-    get practiceLevel() {
-      return practiceLevel;
-    },
+    run,
     get hudRects() {
       return renderer.hudRects;
     },
@@ -476,7 +473,6 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       return fullscreen.active;
     },
     log,
-    start,
     pause,
     resume,
     quit,
@@ -489,10 +485,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       view.dispose();
       overlay.dispose();
       prefs.dispose();
+      records.card.dispose();
       rotatePrompt.dispose();
       toast.dispose();
       crashCard.dispose();
       audio.dispose();
+      run.dispose();
       renderer.dispose();
       document.body.classList.remove('lite');
     },

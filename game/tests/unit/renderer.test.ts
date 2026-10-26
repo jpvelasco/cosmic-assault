@@ -9,7 +9,7 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
-import type { World } from '../../src/sim/world';
+import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
 
@@ -76,7 +76,7 @@ function fakeCanvas(): FakeCanvas {
 }
 
 interface Stub {
-  status: 'playing' | 'gameOver';
+  status: WorldStatus;
   elapsed: number;
   ship: { x: number; y: number; px: number; py: number; angle: number; pangle: number; vx: number; vy: number; thrusting: boolean; invulnerable: boolean };
   asteroids: Asteroid[];
@@ -94,7 +94,7 @@ function stubWorld(): { stub: Stub; world: World } {
     ship: { x: 640, y: 360, px: 640, py: 360, angle: 0, pangle: 0, vx: 0, vy: 0, thrusting: false, invulnerable: false },
     asteroids: [rock],
   };
-  const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1 }) as unknown as World;
+  const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null }) as unknown as World;
   return { stub, world };
 }
 
@@ -134,12 +134,12 @@ describe('createRenderer', () => {
 
   function drawFrame(world: World, alpha: number): void {
     canvas.draws.length = 0;
-    renderer.draw(world, alpha);
+    renderer.draw(world, alpha, 0);
   }
 
   it('refuses to draw before the first resize, saying what to do', () => {
     expect(() => {
-      renderer.draw(stubWorld().world, 0);
+      renderer.draw(stubWorld().world, 0, 0);
     }).toThrow('call resize() once the canvas has a size');
   });
 
@@ -170,6 +170,13 @@ describe('createRenderer', () => {
     expect(forget.mock.calls).toEqual([[7], [9]]);
   });
 
+  it('forgets the sprite of a meteor that left the field', () => {
+    const forget = vi.spyOn(baker, 'forget');
+    const { world } = stubWorld();
+    renderer.handle([{ type: 'asteroidLeft', id: 4 }, { type: 'showerEnd' }], world);
+    expect(forget.mock.calls).toEqual([[4]]);
+  });
+
   it('interpolates while playing and draws the latest pose at game over', () => {
     renderer.resize(1280, 720, FIELD);
     const { stub, world } = stubWorld();
@@ -179,6 +186,18 @@ describe('createRenderer', () => {
     drawFrame(world, 0.5);
     expect(drawsOf(rock).map((call) => call.e)).toEqual([295]);
     stub.status = 'gameOver';
+    drawFrame(world, 0);
+    expect(drawsOf(rock).map((call) => call.e)).toEqual([300]);
+  });
+
+  it('freezes on the latest pose once a galaxy is cleared, and still interpolates through the warp-out', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { stub, world } = stubWorld();
+    const rock = baker.asteroid(stub.asteroids[0] as Asteroid, DRIFT).canvas;
+    stub.status = 'warping';
+    drawFrame(world, 0.5);
+    expect(drawsOf(rock).map((call) => call.e)).toEqual([295]);
+    stub.status = 'cleared';
     drawFrame(world, 0);
     expect(drawsOf(rock).map((call) => call.e)).toEqual([300]);
   });
@@ -236,8 +255,8 @@ describe('createRenderer', () => {
   it('counts the frames it draws', () => {
     renderer.resize(1280, 720, FIELD);
     const { world } = stubWorld();
-    renderer.draw(world, 1);
-    renderer.draw(world, 1);
+    renderer.draw(world, 1, 0);
+    renderer.draw(world, 1, 0);
     expect(renderer.drawCount).toBe(2);
   });
 
@@ -288,7 +307,7 @@ describe('createRenderer', () => {
       expect(canvas.height).toBe(900);
       expect(canvas.style['width']).toBe('1280px');
       expect(setScale).not.toHaveBeenCalled();
-      renderer.draw(stubWorld().world, 1);
+      renderer.draw(stubWorld().world, 1, 0);
       expect(setScale).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(REBAKE_DELAY_MS);
@@ -345,11 +364,11 @@ describe('createRenderer', () => {
     it('draws fewer stars at a lower level', () => {
       renderer.resize(1280, 720, FIELD);
       const { world } = stubWorld();
-      renderer.draw(world, 1);
+      renderer.draw(world, 1, 0);
       const full = canvas.arcs;
       canvas.arcs = 0;
       renderer.setQuality(lowest);
-      renderer.draw(world, 1);
+      renderer.draw(world, 1, 0);
       expect(canvas.arcs).toBeLessThan(full);
     });
   });

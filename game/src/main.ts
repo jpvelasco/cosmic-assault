@@ -1,4 +1,5 @@
-import { createApp, type App, type E2eHooks } from './app/game';
+import type { E2eHooks } from './app/e2eHooks';
+import { createApp, type App } from './app/game';
 import { registerServiceWorker } from './platform/serviceWorker';
 
 const root = document.querySelector('#app');

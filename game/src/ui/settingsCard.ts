@@ -1,5 +1,6 @@
 import type { ScreenShake, Settings } from '../app/settings';
-import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
+import { createCoverCard, type CoverCard } from './coverCard';
+import { button, chip, element, PRIMARY_BUTTON, showSoundState } from './dom';
 
 export interface SettingsCardActions {
   /** A control moved: apply the change now (sent on every `input` event, so a slider is live while dragged). */
@@ -13,17 +14,9 @@ export interface SettingsCardActions {
   readonly done: () => void;
 }
 
-export interface SettingsCard {
-  /** Shows the card and moves keyboard focus to the first control. */
-  show(): void;
-  hide(): void;
-  /** While another card covers it (the rotate prompt), the settings card ignores taps, keys and Tab. */
-  cover(covered: boolean): void;
+export interface SettingsCard extends CoverCard {
   /** Brings every control in line with `settings`. The left-handed choice is offered only where `touchScreen` is true. */
   update(settings: Settings, touchScreen: boolean): void;
-  /** The controls that can take focus now, in document order; none while the card is hidden or covered. */
-  controls(): HTMLElement[];
-  dispose(): void;
 }
 
 const SHAKE_CHOICES: readonly { readonly value: ScreenShake; readonly label: string }[] = [
@@ -31,7 +24,6 @@ const SHAKE_CHOICES: readonly { readonly value: ScreenShake; readonly label: str
   { value: 'on', label: 'On' },
   { value: 'off', label: 'Off' },
 ];
-const HEADING_ID = 'settings-heading';
 
 function input(type: 'range' | 'radio' | 'checkbox', onInput: (el: HTMLInputElement) => void): HTMLInputElement {
   const el = document.createElement('input');
@@ -105,12 +97,7 @@ function shakeChoices(onShake: (shake: ScreenShake) => void): { group: HTMLEleme
  * `actions` and are refreshed by `update`; Esc anywhere closes it, even from a focused slider.
  */
 export function createSettingsCard(root: HTMLElement, actions: SettingsCardActions): SettingsCard {
-  const { panel, card } = cardPanel('settings');
-  panel.hidden = true;
-  card.setAttribute('role', 'dialog');
-  card.setAttribute('aria-modal', 'true');
-  card.setAttribute('aria-labelledby', HEADING_ID);
-
+  const cover = createCoverCard(root, 'settings', 'Settings', actions.done);
   const music = volumeSlider('Music volume', 'settings-music', (musicVolume) => {
     actions.change({ musicVolume });
   });
@@ -129,37 +116,16 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
   effects.control.addEventListener('change', actions.previewSfx);
   const sound = chip('sound-toggle', actions.toggleMute, 'settings-sound');
 
-  const heading = element('h2', 'heading', 'Settings');
-  heading.id = HEADING_ID;
   const list = element('div', 'settings-list');
   list.append(music.row, effects.row, shake.group, leftHandedRow);
-  const done = button('menu-button menu-button--primary', 'Done', actions.done);
+  const done = button(PRIMARY_BUTTON, 'Done', actions.done);
   const footer = element('div', 'chips');
   footer.append(sound, done);
-  card.append(heading, list, footer);
-  card.addEventListener('change', actions.save);
-  root.append(panel);
-
-  /** Esc closes the card from any focus. It stops here: the game's own Esc (resume, back to title) must not also run. */
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (e.code !== 'Escape') return;
-    e.stopPropagation();
-    if (!e.repeat) actions.done();
-  };
+  cover.card.append(list, footer);
+  cover.card.addEventListener('change', actions.save);
 
   return {
-    show() {
-      panel.hidden = false;
-      document.addEventListener('keydown', onKeyDown);
-      music.control.focus();
-    },
-    hide() {
-      panel.hidden = true;
-      document.removeEventListener('keydown', onKeyDown);
-    },
-    cover(covered) {
-      panel.inert = covered;
-    },
+    ...cover,
     update(settings, touchScreen) {
       music.set(settings.musicVolume);
       effects.set(settings.sfxVolume);
@@ -167,13 +133,6 @@ export function createSettingsCard(root: HTMLElement, actions: SettingsCardActio
       leftHanded.checked = settings.leftHanded;
       leftHandedRow.hidden = !touchScreen;
       showSoundState(sound, settings.muted);
-    },
-    controls() {
-      return focusableControls(panel);
-    },
-    dispose() {
-      document.removeEventListener('keydown', onKeyDown);
-      panel.remove();
     },
   };
 }

@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const SIM_PURITY_MESSAGE = 'sim/ must be deterministic and DOM-free: use the injected Rng and dt instead';
+const SIM_PURITY_MESSAGE = 'sim/, content/ and meta/ must be deterministic and DOM-free: use the injected Rng and dt instead';
 
 export default defineConfig(
   { ignores: ['dist', 'dist-e2e', 'playwright-report', 'test-results'] },
@@ -16,7 +16,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['src/sim/**/*.ts'],
+    files: ['src/sim/**/*.ts', 'src/content/**/*.ts', 'src/meta/**/*.ts'],
     rules: {
       'no-restricted-globals': [
         'error',
@@ -51,6 +51,22 @@ export default defineConfig(
           selector,
           message: 'Bake glow into sprites instead of setting shadowBlur per frame',
         })),
+      ],
+    },
+  },
+  {
+    files: ['src/content/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/sim/**', '**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**', '**/platform/**'],
+              message: 'content/ is plain data that sim/ builds on: move shared rules into content/ instead of importing sim/ or any DOM folder',
+            },
+          ],
+        },
       ],
     },
   },

@@ -18,9 +18,16 @@ interface CosmicAssaultTestRect {
 }
 
 interface CosmicAssaultTestState {
-  readonly mode: import('./app/game').AppMode;
-  readonly practiceLevel: number;
-  /** Score, lives and counts are 0 and ship is null while no run exists (title screen). */
+  /** The screen shown; the same as `screen`, kept from before there were more screens than modes. */
+  readonly mode: import('./app/flow').Screen;
+  readonly screen: import('./app/flow').Screen;
+  /** The galaxy in play or just played (on its end card); null before the first run. */
+  readonly galaxy: import('./content/types').GalaxyId | null;
+  /** A frozen copy of the save in memory. A debug run (`?galaxy=`, `?seed=` or `?lives=`) keeps it in memory only. */
+  readonly save: import('./meta/save').SaveData;
+  /** The Rank run as carried into the galaxy in play (on results, into the next one); null outside Rank. A frozen copy. */
+  readonly rankRun: import('./meta/rankRun').RankRun | null;
+  /** Score, lives and counts are 0 and ship is null while no run exists (title and menu screens). */
   readonly score: number;
   readonly lives: number;
   readonly ship: CosmicAssaultTestShip | null;
@@ -53,6 +60,16 @@ interface CosmicAssaultTestState {
 interface CosmicAssaultTestApi {
   readonly version: 3;
   getState(): CosmicAssaultTestState;
+  /**
+   * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event
+   * handling as a frame; stops early once the run leaves play (a clear at warp start, or a game over).
+   */
+  fastForward(seconds: number): void;
+  /**
+   * Takes `damage` hit points off the boss, as that many shots would; the blow that empties it kills it, and the next
+   * step ends the galaxy, warping out while the boss dies. Throws unless a boss is fighting (not in its intro, dying or down).
+   */
+  damageBoss(damage: number): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }

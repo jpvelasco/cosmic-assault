@@ -46,8 +46,6 @@ describe('the app icons', () => {
 describe('manifest.webmanifest', () => {
   it('names the app and opens it full screen in landscape from its own directory', () => {
     expect(manifest).toMatchObject({
-      // The installed app's identity: without it the browser derives one from start_url, which a later move would change.
-      id: './',
       name: 'Cosmic Assault',
       short_name: 'Cosmic Assault',
       display: 'standalone',
@@ -70,8 +68,12 @@ describe('manifest.webmanifest', () => {
     ]);
   });
 
+  it('leaves id out: it would only repeat start_url, which the browser uses when there is none', () => {
+    expect(manifest).not.toHaveProperty('id');
+  });
+
   it('uses only relative URLs, each naming a file of the size it claims', () => {
-    for (const key of ['id', 'start_url', 'scope'] as const) expect(isRelative(String(manifest[key])), key).toBe(true);
+    for (const key of ['start_url', 'scope'] as const) expect(isRelative(String(manifest[key])), key).toBe(true);
     for (const { src, sizes } of manifest.icons) {
       expect(isRelative(src), src).toBe(true);
       const { width, height } = pngSize(src);

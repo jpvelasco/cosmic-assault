@@ -1,32 +1,44 @@
-import type { AppMode } from '../app/game';
+import type { Command } from '../app/commands';
+import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
+import type { SaveData } from '../meta/save';
+import type { RankLock } from '../app/runController';
+import { galaxyLabel } from '../content/galaxies';
 import type { InstallOffer } from '../platform/install';
-import { MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL } from '../sim/world';
-import { button, cardPanel, chip, element, focusableControls, showSoundState } from './dom';
+import type { SimEvent } from '../sim/events';
+import { createBossAnnouncer } from './bossAnnouncer';
+import { createDimensionMap } from './dimensionMap';
+import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_BUTTON, showSoundState, withTestId, type Act, type MenuCard } from './dom';
+import { createGalaxySelect } from './galaxySelect';
 import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
+import { createModeSelect } from './modeSelect';
+import { createResultsCard } from './resultsCard';
 
 export interface OverlayActions {
-  /** A tap on the title screen outside its buttons, or the game-over Restart button. */
-  readonly start: () => void;
-  readonly selectLevel: (level: number) => void;
+  /** A screen command from a button: the router applies it, through its cover table and the end-card guard. */
+  readonly command: (command: Command) => void;
   readonly resume: () => void;
   readonly quit: () => void;
-  readonly toTitle: () => void;
   readonly toggleMute: () => void;
   readonly toggleFullscreen: () => void;
   readonly openSettings: () => void;
+  /** The Records chip on the title and mode select. */
+  readonly openRecords: () => void;
   /** The title card's Install chip: shows the browser's install prompt. */
   readonly install: () => void;
 }
 
 export interface OverlayState {
-  readonly mode: AppMode;
-  readonly practiceLevel: number;
+  readonly flow: FlowState;
+  readonly save: SaveData;
+  /** Whether the saved Rank run is being checked, or played in another tab, so it cannot be resumed here. */
+  readonly rankLock: RankLock;
+  /** The galaxy's score, which the end cards show. */
   readonly score: number;
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
   readonly fullscreen: boolean | null;
-  /** While another card (settings, or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
+  /** While another card (settings, records, or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
   readonly covered: boolean;
   /** Decides whether the start and restart hints name keys or taps. */
   readonly inputStyle: InputStyle;
@@ -36,10 +48,12 @@ export interface OverlayState {
 
 export interface Overlay {
   update(state: OverlayState): void;
-  /** Puts keyboard focus on the Settings chip of the visible card, as the settings card closes. */
-  focusSettingsChip(): void;
-  /** The controls of the card for `mode` that can take focus now, in document order; none while another card covers it. */
-  controls(mode: AppMode): HTMLElement[];
+  /** One step's events: a boss's arrival, phases and fall are announced to screen readers. */
+  handle(events: readonly SimEvent[]): void;
+  /** Puts keyboard focus on the visible card's Settings or Records chip, as the card it opened closes. */
+  focusChip(which: 'settings' | 'records'): void;
+  /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
+  controls(screen: Screen): HTMLElement[];
   dispose(): void;
 }
 
@@ -69,99 +83,108 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function levelChips(selectLevel: (level: number) => void): HTMLButtonElement[] {
-  const chips: HTMLButtonElement[] = [];
-  for (let level = MIN_PRACTICE_LEVEL; level <= MAX_PRACTICE_LEVEL; level++) {
-    chips.push(
-      button('level-chip', String(level), () => {
-        selectLevel(level);
-      }),
-    );
-  }
-  return chips;
-}
-
-function titlePanel(chips: readonly HTMLButtonElement[], chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
+function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
-  const label = element('p', 'label', 'Practice level');
-  label.id = 'practice-level-label';
-  const group = element('div', 'chips');
-  group.setAttribute('role', 'group');
-  group.setAttribute('aria-labelledby', label.id);
-  group.append(...chips);
-  const build = element('p', 'build', currentBuildLabel());
-  build.dataset['testid'] = 'build-label';
-  card.append(
-    element('h1', 'title', 'Cosmic Assault'),
-    label,
-    group,
-    startHint,
-    chipRow,
-    build,
-  );
+  const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
+  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, chipRow, build);
   return panel;
 }
 
-function pausePanel(actions: OverlayActions, chipRow: HTMLElement): HTMLElement {
+function pausePanel(actions: OverlayActions, quit: HTMLButtonElement, chipRow: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('pause');
-  card.append(
-    element('h2', 'heading', 'Paused'),
-    button('menu-button menu-button--primary', 'Resume', actions.resume),
-    button('menu-button', 'Quit', actions.quit),
-    chipRow,
-  );
+  card.append(element('h2', 'heading', 'Paused'), button(PRIMARY_BUTTON, 'Resume', actions.resume), quit, chipRow);
   return panel;
 }
 
-/** Only its buttons act, so taps that were aimed at the ship cannot skip the score. */
-function gameOverPanel(score: HTMLElement, restartHint: HTMLElement, actions: OverlayActions): HTMLElement {
-  const { panel, card } = cardPanel('game-over');
-  card.append(
-    element('h2', 'heading', 'Game over'),
-    score,
-    restartHint,
-    button('menu-button menu-button--primary', 'Restart', actions.start),
-    button('menu-button', 'Title', actions.toTitle),
-  );
-  return panel;
+/** In Rank a Quit mid-galaxy forfeits it, so the button says what it costs. */
+const quitLabel = (flow: FlowState): string => (flow.mode === 'rank' ? 'Quit (costs a life)' : 'Quit');
+/** A lost run (no lives) can only go on through a Continue, which resets the score. */
+const resumeLabel = (save: SaveData): string => (save.rankRun?.lives === 0 ? 'Continue Rank (score resets)' : 'Resume Rank');
+
+/** Where the saved run stands, under its Resume button. */
+function savedRunText(save: SaveData): string {
+  const run = save.rankRun;
+  if (run === null) return '';
+  if (run.lives === 0) return `Run lost at ${galaxyLabel(run.next)}`;
+  return `${galaxyLabel(run.next)} · ${String(run.lives)} ${run.lives === 1 ? 'life' : 'lives'} · ${String(run.score)}`;
 }
 
-/** The title, pause and game-over screens as DOM layers over the canvas; one is visible per mode. */
+/** Moves `el` into `host` if it is elsewhere: only on a screen change, so a focused control keeps its focus. */
+function keepIn(host: HTMLElement | undefined, el: HTMLElement): void {
+  if (host !== undefined && el.parentElement !== host) host.append(el);
+}
+
+/**
+ * The screens as DOM layers over the canvas, one visible per screen: the title and pause cards here, mode select, the
+ * Dimension map, galaxy select and the end card from their own modules. Every card button sends a command, so the
+ * router's cover table and the end-card guard apply to taps as to keys. The end cards act only on their buttons, so
+ * taps that were aimed at the ship cannot skip the score.
+ */
 export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
-  const chips = levelChips(actions.selectLevel);
-  const score = element('p', 'score');
+  const send: Act = (command: Command) => (): void => {
+    actions.command(command);
+  };
+  const play = withTestId(button(PRIMARY_BUTTON, 'Play', send({ kind: 'start' })), 'play');
+  const quit = withTestId(button('menu-button', '', actions.quit), 'quit');
+  // One Resume Rank group, with where the run stands and whether another tab plays it, on the title and mode select.
+  const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
+  const savedRun = element('p', 'hint resume-summary');
+  const elsewhere = withTestId(element('p', 'hint', 'This run is playing in another tab'), 'rank-elsewhere');
+  const resumeGroup = element('div', 'resume-group');
+  resumeGroup.append(resumeRank, savedRun, elsewhere);
+  const titleResumeSlot = element('div', 'resume-slot');
+  // One shared Back, moved into the menu card shown, so its test id stays unique.
+  const back = withTestId(button('menu-button', 'Back', send({ kind: 'back' })), 'back');
+  const modes = createModeSelect(send);
+  const dimensionMap = createDimensionMap(send);
+  const galaxySelect = createGalaxySelect(send);
+  const results = createResultsCard(send);
+  /** The menu cards, which take the shared Back. */
+  const menus: Partial<Record<Screen, MenuCard>> = { modeSelect: modes.modeSelect, confirmNewRank: modes.confirmNewRank, map: dimensionMap, galaxySelect };
+  const resumeSlots: Partial<Record<Screen, HTMLElement>> = { title: titleResumeSlot, modeSelect: modes.resumeSlot };
   // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
   const sound = chip('sound-toggle', actions.toggleMute);
   const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
   const settings = chip('settings-open', actions.openSettings);
   settings.textContent = 'Settings';
+  const records = chip('records-open', actions.openRecords);
+  records.textContent = 'Records';
   // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
   const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
   installChip.textContent = 'Install';
-  const iosHint = element('p', 'install-hint', IOS_INSTALL_HINT);
-  iosHint.dataset['testid'] = INSTALL_TEST_ID;
+  const iosHint = withTestId(element('p', 'install-hint', IOS_INSTALL_HINT), INSTALL_TEST_ID);
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
-  const chipRows: Partial<Record<AppMode, HTMLElement>> = { title: titleRow, paused: pauseRow };
+  const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
-  const restartHint = element('p', 'hint');
-  const title = titlePanel(chips, titleRow, startHint);
-  const gameOver = gameOverPanel(score, restartHint, actions);
-  onTapOutsideButtons(title, actions.start);
-  const panels: Partial<Record<AppMode, HTMLElement>> = { title, paused: pausePanel(actions, pauseRow), gameOver };
-  const all = Object.values(panels);
+  const title = titlePanel(play, titleResumeSlot, titleRow, startHint);
+  onTapOutsideButtons(title, send({ kind: 'start' }));
+  const panels: Partial<Record<Screen, HTMLElement>> = {
+    title,
+    paused: pausePanel(actions, quit, pauseRow),
+    results: results.panel,
+    gameOver: results.panel,
+    rankComplete: results.panel,
+  };
+  for (const [screen, menu] of Object.entries(menus) as [Screen, MenuCard][]) panels[screen] = menu.panel;
+  const all = [...new Set(Object.values(panels))];
   root.append(...all);
+  const announcer = createBossAnnouncer(root);
 
   return {
-    update({ mode, practiceLevel, score: points, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+    update({ flow, save, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+      const { screen } = flow;
       for (const panel of all) {
-        panel.hidden = panel !== panels[mode];
+        panel.hidden = panel !== panels[screen];
         panel.inert = covered;
       }
-      const row = chipRows[mode];
+      const row = chipRows[screen];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
       // stay ahead of the title's Install chip.
       if (row !== undefined && sound.parentElement !== row) row.prepend(sound, fullscreen, settings);
+      // Records sits after Settings on the title, and ahead of Back in the last row of mode select.
+      if (screen === 'title' && records.previousElementSibling !== settings) settings.after(records);
+      else if (screen === 'modeSelect' && records.parentElement !== modes.chipRow) modes.chipRow.prepend(records);
       mountWhen(installOffer === 'prompt', installChip, (el) => {
         titleRow.append(el);
       });
@@ -171,23 +194,36 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       showSoundState(sound, muted);
       fullscreen.hidden = fullscreenState === null;
       fullscreen.textContent = fullscreenState === true ? 'Exit full screen' : 'Full screen';
-      for (const [i, chip] of chips.entries()) {
-        chip.setAttribute('aria-pressed', String(i + MIN_PRACTICE_LEVEL === practiceLevel));
-      }
-      score.textContent = `Score ${String(points)}`;
+      keepIn(screen === 'modeSelect' ? modes.chipRow : menus[screen]?.card, back);
+      keepIn(resumeSlots[screen], resumeGroup);
+      resumeGroup.hidden = save.rankRun === null;
+      resumeRank.textContent = resumeLabel(save);
+      resumeRank.disabled = rankLock !== 'free';
+      // On mode select Resume leads, ahead of the two mode cards.
+      resumeRank.classList.toggle(PRIMARY, screen === 'modeSelect');
+      savedRun.textContent = savedRunText(save);
+      elsewhere.hidden = rankLock !== 'elsewhere';
+      quit.textContent = quitLabel(flow);
       const hints = hintCopy(inputStyle);
       startHint.textContent = hints.start;
-      restartHint.textContent = hints.restart;
+      modes.setHint(hints.choose);
+      dimensionMap.update(save);
+      galaxySelect.update(flow.dimension, save);
+      results.update({ flow, score, restartHint: hints.restart });
     },
-    focusSettingsChip() {
-      settings.focus();
+    handle(events) {
+      announcer.handle(events);
     },
-    controls(mode) {
-      const panel = panels[mode];
+    focusChip(which) {
+      (which === 'settings' ? settings : records).focus();
+    },
+    controls(screen) {
+      const panel = panels[screen];
       return panel === undefined ? [] : focusableControls(panel);
     },
     dispose() {
       for (const panel of all) panel.remove();
+      announcer.dispose();
     },
   };
 }

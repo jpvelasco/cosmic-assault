@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
-import { expect, expectMode, gameState, nextFrames, openGame, shipState, test } from './fixtures';
+import { defaultSave } from '../src/meta/save';
+import { expect, expectMode, gameState, nextFrames, openGame, seedSave, shipState, test, toastOf } from './fixtures';
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -10,6 +11,7 @@ const RT = 7;
 const START = 9;
 const DPAD_UP = 12;
 const DPAD_DOWN = 13;
+const DPAD_LEFT = 14;
 const DPAD_RIGHT = 15;
 
 interface FakePad {
@@ -74,7 +76,7 @@ test('A on the title starts a run', { tag: '@desktop' }, async ({ page }) => {
 });
 
 test('the first A with sound still locked says how to turn it on, once', { tag: '@desktop' }, async ({ page }) => {
-  const toast = page.getByRole('status');
+  const toast = toastOf(page);
   await startRun(page);
   // A pad press is no user activation, so the browser keeps sound off until a tap or key press.
   expect((await gameState(page)).audioState).toBe('none');
@@ -134,28 +136,41 @@ test('Start pauses and resumes, and B resumes from the pause card', { tag: '@des
 });
 
 test('on the title the arrow keys move focus instead of starting, and A presses the focused chip', { tag: '@desktop' }, async ({ page }) => {
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: '2', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('play')).toBeFocused();
+  // Down lands on the chip under Play, Settings; the sound chip is to its left.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('settings-open')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('sound-toggle')).toBeFocused();
   await nextFrames(page, 3);
   await expectMode(page, 'title');
 
   await tap(page, A);
-  expect((await gameState(page)).practiceLevel).toBe(2);
+  expect((await gameState(page)).muted).toBe(true);
   await expectMode(page, 'title');
 });
 
-test('the D-pad walks from the level chips down to the sound chip and across to settings, and A opens it', { tag: '@desktop' }, async ({ page }) => {
+test('the D-pad walks from Play down to Settings and across to Records, A opens it, and B closes it', { tag: '@desktop' }, async ({ page }) => {
   await tap(page, DPAD_DOWN);
-  await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
+  await expect(page.getByTestId('play')).toBeFocused();
 
   await tap(page, DPAD_DOWN);
-  await expect(page.getByTestId('sound-toggle')).toBeFocused();
-  await tap(page, DPAD_RIGHT);
   await expect(page.getByTestId('settings-open')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('records-open')).toBeFocused();
   await tap(page, A);
-  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByTestId('records')).toBeVisible();
+  await expect(page.getByTestId('records-back')).toBeFocused();
+  // Under the card A presses its Back, and B closes it too: both return to the chip.
+  await tap(page, A);
+  await expect(page.getByTestId('records')).toBeHidden();
+  await expect(page.getByTestId('records-open')).toBeFocused();
+  await tap(page, A);
+  await expect(page.getByTestId('records')).toBeVisible();
+  await tap(page, B);
+  await expect(page.getByTestId('records')).toBeHidden();
+  await expectMode(page, 'title');
 });
 
 test('in settings the D-pad adjusts a slider and B closes the card', { tag: '@desktop' }, async ({ page }) => {
@@ -179,18 +194,39 @@ test('Start starts a run from the title', { tag: '@desktop' }, async ({ page }) 
 });
 
 test('pad navigation shows the focus ring even after a mouse click, until the next pointer press', { tag: '@desktop' }, async ({ page }) => {
-  const outline = (name: string) => page.getByRole('button', { name, exact: true }).evaluate((el) => getComputedStyle(el).outlineStyle);
-  // A click picks the level without taking focus, so the pad starts from the first chip.
-  await page.getByRole('button', { name: '3', exact: true }).click();
-  await tap(page, DPAD_RIGHT);
-  await tap(page, DPAD_RIGHT);
-  const two = page.getByRole('button', { name: '2', exact: true });
-  await expect(two).toBeFocused();
-  expect(await outline('2')).toBe('solid');
+  const sound = page.getByTestId('sound-toggle');
+  const outline = () => sound.evaluate((el) => getComputedStyle(el).outlineStyle);
+  // A click on a chip does not take focus, so the pad starts from the first control.
+  await sound.click();
+  await tap(page, DPAD_DOWN);
+  await tap(page, DPAD_DOWN);
+  await tap(page, DPAD_LEFT);
+  await expect(sound).toBeFocused();
+  expect(await outline()).toBe('solid');
 
-  await page.getByRole('button', { name: '1', exact: true }).click();
+  await sound.click();
   await expect.poll(() => page.evaluate(() => document.body.classList.contains('nav-keys'))).toBe(false);
-  expect(await outline('2')).toBe('none');
+  expect(await outline()).toBe('none');
+});
+
+test('on mode select A focuses the first button, A presses it, and B goes back a screen', { tag: '@desktop' }, async ({ page }) => {
+  await openGame(page, { galaxy: null });
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
+
+  await tap(page, A);
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await expectMode(page, 'modeSelect');
+  // The two mode cards sit side by side.
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await tap(page, A);
+  await expectMode(page, 'map');
+
+  await tap(page, B);
+  await expectMode(page, 'modeSelect');
+  await tap(page, B);
+  await expectMode(page, 'title');
 });
 
 test('behind the settings card the pad can only reach the card, and Start does not begin a run', { tag: '@desktop' }, async ({ page }) => {
@@ -217,4 +253,32 @@ test('the rotate prompt covers every card: the pad focuses nothing and cannot st
   await tap(page, START);
   await nextFrames(page, 3);
   await expectMode(page, 'title');
+});
+
+test('the D-pad walks the side-by-side mode cards and the row of Dimensions, skipping the locked ones', { tag: '@desktop' }, async ({ page }) => {
+  await seedSave(page, { ...defaultSave(), frontier: '2-1' });
+  await openGame(page, { galaxy: null });
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
+  await tap(page, A);
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await tap(page, DPAD_LEFT);
+  await expect(page.getByTestId('mode-rank')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await tap(page, A);
+  await expectMode(page, 'map');
+
+  await tap(page, A);
+  await expect(page.getByTestId('dimension-1')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('dimension-2')).toBeFocused();
+  // D3 to D5 are locked.
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('dimension-2')).toBeFocused();
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('back')).toBeFocused();
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
 });

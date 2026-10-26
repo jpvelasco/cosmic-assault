@@ -1,0 +1,137 @@
+import { mergeSaves, parseSave, SAVE_KEY, defaultSave, type SaveData } from '../meta/save';
+import { errorMessage, type RingLog } from '../platform/log';
+import { browserStorage } from './settings';
+
+/** The classic game's high score: a plain integer string. Read once and never deleted. */
+export const CLASSIC_HIGH_SCORE_KEY = 'cosmicAssaultHighScore';
+
+/** The slice of `window` the store listens on. */
+export interface StorageEvents {
+  addEventListener(type: 'storage', listener: (event: { key: string | null }) => void): void;
+  removeEventListener(type: 'storage', listener: (event: { key: string | null }) => void): void;
+}
+
+export interface SaveStoreOptions {
+  /** Defaults to `localStorage`; null where the browser refuses it. */
+  readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+  readonly events?: StorageEvents;
+  /** False for debug runs: changes stay in memory and storage is never written. */
+  readonly writes?: boolean;
+  /** Where a write-failure callback that throws is noted; such a throw never reaches `update`. */
+  readonly log?: RingLog;
+}
+
+export interface SaveStore {
+  /** The in-memory save, as of the last load, update or external change. */
+  readonly save: SaveData;
+  /** Whether changes reach storage; false for a debug run, which keeps its progress in memory only. */
+  readonly writes: boolean;
+  /** Reads storage and folds it into memory. */
+  load(): SaveData;
+  /** Re-reads storage, merges it with memory, applies `change`, writes, and returns the result. */
+  update(change: (save: SaveData) => SaveData): SaveData;
+  /** Calls back with the merged save when another tab writes one or clears storage; returns a function that stops listening. */
+  onExternalChange(callback: (save: SaveData) => void): () => void;
+  /** Calls back once per session, on the first save that could not be stored (no storage, full or blocked), so the app can warn; never in `writes: false` mode. A callback added after that failure is called at once. Returns a function that stops listening. */
+  onWriteFailure(callback: () => void): () => void;
+  /** Copies the classic game's high score into the save, the first time only. */
+  importClassicOnce(): SaveData;
+}
+
+/** A positive integer score from the classic game's string, else null. */
+function parseClassicScore(raw: string | null): number | null {
+  const score = raw !== null && /^\d+$/.test(raw) ? Number(raw) : 0;
+  return Number.isSafeInteger(score) && score > 0 ? score : null;
+}
+
+/**
+ * The save in `localStorage`. Every storage access is guarded: unreadable storage gives defaults, and a
+ * failed write keeps the change in memory for the session. Never throws.
+ */
+export function createSaveStore(options: SaveStoreOptions = {}): SaveStore {
+  const storage = options.storage === undefined ? browserStorage() : options.storage;
+  const events: StorageEvents = options.events ?? window;
+  const writes = options.writes ?? true;
+  let memory = defaultSave();
+  let writeFailed = false;
+  const failureListeners = new Set<() => void>();
+  /** Calls a write-failure callback; one that throws is logged, so it cannot break the update that failed to write. */
+  const tellFailure = (callback: () => void): void => {
+    try {
+      callback();
+    } catch (error) {
+      options.log?.add('error', `save failure listener threw: ${errorMessage(error)}`, performance.now());
+    }
+  };
+
+  /** What is stored, or null when storage could not be read: nothing may then be written over it. */
+  const readStored = (): SaveData | null => {
+    try {
+      return parseSave(storage?.getItem(SAVE_KEY) ?? null);
+    } catch {
+      return null;
+    }
+  };
+  const tryWrite = (text: string): boolean => {
+    if (storage === null) return false;
+    try {
+      storage.setItem(SAVE_KEY, text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const merged = (stored: SaveData | null): SaveData => (stored === null ? memory : mergeSaves(memory, stored));
+
+  const store: SaveStore = {
+    writes,
+    get save() {
+      return memory;
+    },
+    load() {
+      memory = merged(readStored());
+      return memory;
+    },
+    update(change) {
+      const stored = readStored();
+      memory = change(merged(stored));
+      const persisted = !writes || (stored !== null && tryWrite(JSON.stringify(memory)));
+      if (!persisted && !writeFailed) {
+        // The session carries on with the in-memory save; the app is told once.
+        writeFailed = true;
+        failureListeners.forEach(tellFailure);
+      }
+      return memory;
+    },
+    onExternalChange(callback) {
+      const listener = (event: { key: string | null }): void => {
+        // A null key is another tab's localStorage.clear(): whatever is stored now is re-read and merged.
+        if (event.key !== SAVE_KEY && event.key !== null) return;
+        callback(store.load());
+      };
+      events.addEventListener('storage', listener);
+      return () => {
+        events.removeEventListener('storage', listener);
+      };
+    },
+    onWriteFailure(callback) {
+      if (writeFailed) tellFailure(callback);
+      failureListeners.add(callback);
+      return () => {
+        failureListeners.delete(callback);
+      };
+    },
+    importClassicOnce() {
+      if (store.load().classicImported) return memory;
+      let raw: string | null;
+      try {
+        raw = storage?.getItem(CLASSIC_HIGH_SCORE_KEY) ?? null;
+      } catch {
+        return memory;
+      }
+      const classic = parseClassicScore(raw);
+      return store.update((s) => ({ ...s, classicBest: Math.max(s.classicBest ?? 0, classic ?? 0) || null, classicImported: true }));
+    },
+  };
+  return store;
+}

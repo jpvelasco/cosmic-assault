@@ -22,6 +22,7 @@ describe('index.html palette properties', () => {
     ['nebula-orange', DRIFT.nebula[1]?.color],
     ['nebula-teal', DRIFT.nebula[2]?.color],
     ['nebula-violet', DRIFT.nebula[3]?.color],
+    ['ring', DRIFT.ring],
   ])('--%s matches the Drift palette', (name, color) => {
     expect(cssVar(name)).toBe(color);
   });

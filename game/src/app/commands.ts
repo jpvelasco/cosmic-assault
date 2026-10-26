@@ -1,66 +1,89 @@
-import { GAME_KEY_CODES } from '../input/keyboard';
+import type { Dimension, GalaxyId } from '../content/types';
 import type { PadButton } from '../input/gamepad';
+import { GAME_KEY_CODES } from '../input/keyboard';
 import { arrowDirection } from '../input/menuFocus';
-import { isPracticeLevel } from '../sim/world';
-import type { AppMode } from './game';
+import type { GalaxyMode } from '../sim/scoring';
+import type { Screen } from './flow';
+
+/** The end-card and Back commands, which are the flow's own actions of the same name. */
+export type EndCommandKind = 'confirm' | 'next' | 'retry' | 'continue' | 'map' | 'title' | 'back';
 
 export type Command =
+  /** The title's Play: mode select, or straight into a `?galaxy=` run. */
   | { readonly kind: 'start' }
-  | { readonly kind: 'selectLevel'; readonly level: number }
+  | { readonly kind: 'resumeRank' }
+  | { readonly kind: 'chooseMode'; readonly mode: GalaxyMode }
+  | { readonly kind: 'openDimension'; readonly dimension: Dimension }
+  | { readonly kind: 'openGalaxy'; readonly id: GalaxyId }
+  | { readonly kind: EndCommandKind }
   | { readonly kind: 'togglePause' }
-  | { readonly kind: 'toTitle' }
   | { readonly kind: 'toggleMute' }
   | { readonly kind: 'toggleFullscreen' };
 
-/** Starts a run from the title, or restarts one from the game-over card. */
+/** The commands that move between screens: all but pause, mute and full screen. */
+export type FlowCommand = Exclude<Command, { readonly kind: 'togglePause' | 'toggleMute' | 'toggleFullscreen' }>;
+
 export const START: Command = { kind: 'start' };
-export const TO_TITLE: Command = { kind: 'toTitle' };
+/** Enter or pad A on an end card: its first button. */
+export const CONFIRM: Command = { kind: 'confirm' };
+const RETRY: Command = { kind: 'retry' };
+const BACK: Command = { kind: 'back' };
 const TOGGLE_PAUSE: Command = { kind: 'togglePause' };
 const TOGGLE_MUTE: Command = { kind: 'toggleMute' };
-/** The full-screen chip's command. The F key does not use it: see `attachFullscreenKey`. */
+/** The full-screen chip's command, and the F key's too: the router's `attachFullscreenKey` listener applies it from inside the key handler. */
 export const TOGGLE_FULLSCREEN: Command = { kind: 'toggleFullscreen' };
 /** The arrow keys are left out: on the title they move menu focus, as on every other card. */
 const START_KEYS: ReadonlySet<string> = new Set([...GAME_KEY_CODES, 'Enter'].filter((code) => arrowDirection(code) === null));
 const PAUSE_KEYS: ReadonlySet<string> = new Set(['Escape', 'KeyP']);
 const MUTE_KEY = 'KeyM';
-const RESTART_KEY = 'KeyR';
-const TITLE_KEY = 'Escape';
+const RETRY_KEY = 'KeyR';
+const BACK_KEY = 'Escape';
 
-function levelForKey(code: string): number | null {
-  const level = Number(/^Digit(\d)$/.exec(code)?.[1]);
-  return isPracticeLevel(level) ? level : null;
-}
-
-/** What a key press (`KeyboardEvent.code`) asks the app to do in `mode`, if anything. */
-export function commandForKey(mode: AppMode, code: string): Command | null {
+/**
+ * What a key press (`KeyboardEvent.code`) asks the app to do on `screen`, if anything. On an end card Space is left
+ * out: it fires, so a player still holding or mashing it must not skip the card.
+ */
+export function commandForKey(screen: Screen, code: string): Command | null {
   if (code === MUTE_KEY) return TOGGLE_MUTE;
-  switch (mode) {
-    case 'title': {
-      const level = levelForKey(code);
-      if (level !== null) return { kind: 'selectLevel', level };
+  switch (screen) {
+    case 'title':
       return START_KEYS.has(code) ? START : null;
-    }
+    case 'modeSelect':
+    case 'confirmNewRank':
+    case 'map':
+    case 'galaxySelect':
+      return code === BACK_KEY ? BACK : null;
     case 'playing':
     case 'paused':
       return PAUSE_KEYS.has(code) ? TOGGLE_PAUSE : null;
+    case 'results':
     case 'gameOver':
-      if (code === RESTART_KEY) return START;
-      return code === TITLE_KEY ? TO_TITLE : null;
+    case 'rankComplete':
+      if (code === 'Enter') return CONFIRM;
+      if (code === RETRY_KEY) return RETRY;
+      return code === BACK_KEY ? BACK : null;
   }
 }
 
 /**
- * What a pad button asks for in `mode` when no menu button is focused. Back does what Esc does, except in play, where
- * a stray B must not pause; Start starts from the title and game over, and pauses or resumes otherwise.
+ * What a pad button asks for on `screen` when no menu button is focused. Back does what Esc does, except in play, where
+ * a stray B must not pause. A and Start play from the title and take an end card's first button; in play and on the
+ * pause card Start pauses and resumes. On the menu cards A and Start ask for nothing: A then focuses the first button.
  */
-export function commandForPad(mode: AppMode, button: PadButton): Command | null {
-  const idle = mode === 'title' || mode === 'gameOver';
-  switch (button) {
-    case 'confirm':
-      return idle ? START : mode === 'paused' ? TOGGLE_PAUSE : null;
-    case 'back':
-      return mode === 'playing' ? null : commandForKey(mode, TITLE_KEY);
-    case 'pause':
-      return idle ? START : TOGGLE_PAUSE;
+export function commandForPad(screen: Screen, button: PadButton): Command | null {
+  if (button === 'back') return screen === 'playing' ? null : commandForKey(screen, BACK_KEY);
+  switch (screen) {
+    case 'title':
+      return START;
+    case 'results':
+    case 'gameOver':
+    case 'rankComplete':
+      return CONFIRM;
+    case 'paused':
+      return TOGGLE_PAUSE;
+    case 'playing':
+      return button === 'pause' ? TOGGLE_PAUSE : null;
+    default:
+      return null;
   }
 }

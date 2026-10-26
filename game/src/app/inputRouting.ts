@@ -6,24 +6,29 @@ import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachFullscreenKey } from '../platform/fullscreen';
 import { listen } from '../ui/dom';
 import { focusedControl, moveFocus, nudgeSlider } from '../ui/menuNav';
-import { commandForKey, commandForPad, TOGGLE_FULLSCREEN, type Command } from './commands';
-import type { AppMode } from './game';
+import { commandForKey, commandForPad, TOGGLE_FULLSCREEN, type Command, type FlowCommand } from './commands';
+import type { Screen } from './flow';
 import { passesGameOverGuard } from './gameOverGuard';
 
-/** What can sit over the game's cards: nothing, the settings card, the rotate prompt or the crash card. */
-export type Cover = 'none' | 'settings' | 'rotate' | 'crash';
+/** What can sit over the game's cards: nothing, the settings or records card, the rotate prompt or the crash card. */
+export type Cover = 'none' | 'settings' | 'records' | 'rotate' | 'crash';
 
-/** The inputs the router hands on: the commands (a pause toggle split by mode), and the menu's own inputs. */
+/** The inputs the router hands on: the commands, grouped (and a pause toggle split by screen), and the menu's own inputs. */
 export type RoutedInput =
-  | Exclude<Command['kind'], 'togglePause'>
+  /** A command that goes forward, and so may start a run: Play, a mode, Dimension or galaxy, Next, Retry, Continue. */
+  | 'start'
+  /** A command that leaves a card: Back, Map and Title. */
+  | 'leave'
+  | 'toggleMute'
+  | 'toggleFullscreen'
   | 'pause'
   | 'resume'
   /** Arrow keys and the D-pad moving menu focus. */
   | 'navigate'
   /** Pad A pressing the focused control. */
   | 'pressFocused'
-  /** Esc, pad Back or Done closing the settings card. */
-  | 'closeSettings';
+  /** Esc, pad Back, Done or Back closing the settings or records card. */
+  | 'closeCard';
 
 const Y = true;
 const N = false;
@@ -33,21 +38,23 @@ const N = false;
  * every cover that is up allows it. Under the crash card the loop is dead, so only the synchronous F key still runs.
  */
 const ACTS_UNDER: Readonly<Record<RoutedInput, Readonly<Record<Cover, boolean>>>> = {
-  start: { none: Y, settings: N, rotate: N, crash: N },
-  resume: { none: Y, settings: N, rotate: N, crash: N },
-  pause: { none: Y, settings: N, rotate: Y, crash: N },
-  selectLevel: { none: Y, settings: N, rotate: Y, crash: N },
-  toTitle: { none: Y, settings: N, rotate: Y, crash: N },
-  toggleMute: { none: Y, settings: Y, rotate: Y, crash: N },
-  toggleFullscreen: { none: Y, settings: Y, rotate: Y, crash: Y },
-  navigate: { none: Y, settings: Y, rotate: N, crash: N },
-  pressFocused: { none: Y, settings: Y, rotate: N, crash: N },
-  closeSettings: { none: Y, settings: Y, rotate: N, crash: N },
+  start: { none: Y, settings: N, records: N, rotate: N, crash: N },
+  resume: { none: Y, settings: N, records: N, rotate: N, crash: N },
+  pause: { none: Y, settings: N, records: N, rotate: Y, crash: N },
+  leave: { none: Y, settings: N, records: N, rotate: Y, crash: N },
+  toggleMute: { none: Y, settings: Y, records: Y, rotate: Y, crash: N },
+  toggleFullscreen: { none: Y, settings: Y, records: Y, rotate: Y, crash: Y },
+  navigate: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
+  pressFocused: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
+  closeCard: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
 };
 
+/** The cover cards a player opens and closes: pad Back closes the one that is up. */
+const CARD_COVERS: readonly Cover[] = ['settings', 'records'];
+
 /** The covers that are up, bottom first; `['none']` when the cards are uncovered. */
-export function coversFor(up: { readonly settings: boolean; readonly rotate: boolean; readonly crash: boolean }): Cover[] {
-  const covers = (['settings', 'rotate', 'crash'] as const).filter((cover) => up[cover]);
+export function coversFor(up: Readonly<Record<Exclude<Cover, 'none'>, boolean>>): Cover[] {
+  const covers = (['settings', 'records', 'rotate', 'crash'] as const).filter((cover) => up[cover]);
   return covers.length === 0 ? ['none'] : covers;
 }
 
@@ -55,21 +62,29 @@ export function actsUnder(input: RoutedInput, covers: readonly Cover[]): boolean
   return covers.every((cover) => ACTS_UNDER[input][cover]);
 }
 
-export function inputForCommand(command: Command, mode: AppMode): RoutedInput {
-  if (command.kind !== 'togglePause') return command.kind;
-  return mode === 'playing' ? 'pause' : 'resume';
+const LEAVING: ReadonlySet<Command['kind']> = new Set(['back', 'map', 'title']);
+
+export function inputForCommand(command: Command, screen: Screen): RoutedInput {
+  switch (command.kind) {
+    case 'togglePause':
+      return screen === 'playing' ? 'pause' : 'resume';
+    case 'toggleMute':
+    case 'toggleFullscreen':
+      return command.kind;
+    default:
+      return LEAVING.has(command.kind) ? 'leave' : 'start';
+  }
 }
 
 /** Whether `command` runs now: the game-over guard has lapsed and every cover allows it. */
-export function commandActs(command: Command, mode: AppMode, covers: readonly Cover[], msSinceGameOver: number): boolean {
-  return passesGameOverGuard(mode, command, msSinceGameOver) && actsUnder(inputForCommand(command, mode), covers);
+export function commandActs(command: Command, screen: Screen, covers: readonly Cover[], msSinceRunEnd: number): boolean {
+  return passesGameOverGuard(screen, command, msSinceRunEnd) && actsUnder(inputForCommand(command, screen), covers);
 }
 
 /** What a routed command does. */
 export interface CommandHandlers {
-  start(): void;
-  quit(): void;
-  selectLevel(level: number): void;
+  /** A command that moves between screens. */
+  flow(command: FlowCommand): void;
   /** The pause key or button: unlike a blur, it blips. */
   pause(): void;
   resume(): void;
@@ -82,12 +97,14 @@ export interface InputRouterDeps {
   /** Released key by key as presses drain, so a key held through a start acts again once pressed anew. */
   readonly startKeys: KeyLatch;
   readonly run: CommandHandlers;
-  mode(): AppMode;
+  screen(): Screen;
   covers(): readonly Cover[];
-  msSinceGameOver(now: number): number;
-  /** The controls menu focus moves among: the settings card's while it is open, else the card for the mode. */
+  /** Milliseconds since the run on the end card ended. */
+  msSinceRunEnd(now: number): number;
+  /** The controls menu focus moves among: an open settings or records card's, else the card for the screen. */
   menuControls(): HTMLElement[];
-  closeSettings(): void;
+  /** Closes the settings or records card, whichever is open. */
+  closeCard(): void;
 }
 
 export interface InputRouter {
@@ -113,20 +130,11 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
   const acts = (input: RoutedInput): boolean => actsUnder(input, deps.covers());
 
   function applyCommand(command: Command, now: number): void {
-    const mode = deps.mode();
-    if (!commandActs(command, mode, deps.covers(), deps.msSinceGameOver(now))) return;
+    const screen = deps.screen();
+    if (!commandActs(command, screen, deps.covers(), deps.msSinceRunEnd(now))) return;
     switch (command.kind) {
-      case 'start':
-        run.start();
-        break;
-      case 'toTitle':
-        run.quit();
-        break;
-      case 'selectLevel':
-        run.selectLevel(command.level);
-        break;
       case 'togglePause':
-        if (mode === 'playing') run.pause();
+        if (screen === 'playing') run.pause();
         else run.resume();
         break;
       case 'toggleMute':
@@ -135,6 +143,8 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
       case 'toggleFullscreen':
         run.toggleFullscreen();
         break;
+      default:
+        run.flow(command);
     }
   }
 
@@ -155,9 +165,11 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
     moveFocus(controls, dir);
   }
 
+  /** A pad button with no menu button focused; on a menu card, where A asks for nothing, A focuses its first button. */
   function runPadCommand(button: 'confirm' | 'back' | 'pause', now: number): void {
-    const command = commandForPad(deps.mode(), button);
+    const command = commandForPad(deps.screen(), button);
     if (command !== null) applyCommand(command, now);
+    else if (button === 'confirm' && deps.screen() !== 'playing') navigateMenu('down');
   }
 
   function routePadEdge(edge: PadEdge, now: number): void {
@@ -172,8 +184,8 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         break;
       }
       case 'back':
-        // Back closes the top card: the settings card when it is open, else what Esc does on the card for the mode.
-        if (deps.covers().includes('settings')) deps.closeSettings();
+        // Back closes the top card: the settings or records card when one is open, else what Esc does on the card for the screen.
+        if (deps.covers().some((cover) => CARD_COVERS.includes(cover))) deps.closeCard();
         else runPadCommand('back', now);
         break;
       case 'pause':
@@ -181,7 +193,7 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         break;
       default:
         // In play the D-pad and stick steer the ship, which the frame reads as controls.
-        if (deps.mode() !== 'playing') navigateMenu(edge);
+        if (deps.screen() !== 'playing') navigateMenu(edge);
     }
   }
 
@@ -201,11 +213,11 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         startKeys.release(code);
         const direction = arrowDirection(code);
         // Out of play the arrows move menu focus, unless a slider has focus and needs them itself.
-        if (direction !== null && deps.mode() !== 'playing') {
+        if (direction !== null && deps.screen() !== 'playing') {
           if (!isFormControlTarget(document.activeElement)) navigateMenu(direction);
           continue;
         }
-        const command = commandForKey(deps.mode(), code);
+        const command = commandForKey(deps.screen(), code);
         if (command !== null) applyCommand(command, now);
       }
     },

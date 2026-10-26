@@ -30,8 +30,11 @@ async function expectHudClearOfPause(page: Page): Promise<void> {
   if (viewport === null) throw new Error('The project has no viewport; set one in playwright.config.ts');
   const { hudRects } = await gameState(page);
 
-  // Score, lives and practice level.
-  expect(hudRects).toHaveLength(3);
+  // Score, lives, the galaxy and its timer bar.
+  expect(hudRects).toHaveLength(4);
+  hudRects.forEach((rect, i) => {
+    for (const other of hudRects.slice(i + 1)) expect(intersects(rect, other), `HUD pill ${JSON.stringify(rect)} overlaps ${JSON.stringify(other)}`).toBe(false);
+  });
   for (const rect of hudRects) {
     expect(intersects(rect, pause), `HUD pill ${JSON.stringify(rect)} overlaps the pause button`).toBe(false);
     expect(rect.x).toBeGreaterThanOrEqual(0);

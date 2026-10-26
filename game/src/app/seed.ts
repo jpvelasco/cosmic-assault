@@ -1,5 +1,7 @@
+import { isGalaxyId } from '../content/galaxies';
+import type { GalaxyId } from '../content/types';
 import { QUALITY_LEVELS } from '../render/quality';
-import { isStartLives, isWorldSeed, UINT32_MAX } from '../sim/world';
+import { isGalaxyStartLives, isWorldSeed, MAX_GALAXY_START_LIVES, UINT32_MAX } from '../sim/world';
 
 const DECIMAL_DIGITS = /^\d+$/;
 
@@ -9,15 +11,29 @@ const DECIMAL_DIGITS = /^\d+$/;
  */
 export const E2E_QUERY_MARK = '__E2E_QUERY__';
 
-/** The run settings an e2e build may take from the URL; undefined means use the normal value. */
+/**
+ * The run settings an e2e or dev build may take from the URL; undefined means use the normal value.
+ *
+ * Free play always starts with 3 lives (the World refuses any other count), so `startLives` applies only to Rank:
+ * a Rank run started from mode select begins with it, and a `?galaxy=` run given `?lives=` is played as a Rank run
+ * from that galaxy with those lives instead of in Free play. Continue still restores the normal 3.
+ */
 export interface RunOverrides {
   readonly seed: number | undefined;
+  /** 1 to 5: a Rank run's starting lives. */
   readonly startLives: number | undefined;
   /** A quality level index (see QUALITY_LEVELS) to pin instead of adapting to frame time. */
   readonly quality: number | undefined;
+  /** The title's Play jumps straight into this galaxy, skipping mode select and the map. */
+  readonly galaxy: GalaxyId | undefined;
 }
 
-const NO_OVERRIDES: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined };
+const NO_OVERRIDES: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
+
+/** Warns, with the e2e mark, that `?name=raw` breaks `rule` and what happens instead. */
+function warnIgnored(name: string, raw: string, rule: string, fallback: string): void {
+  console.warn(`${E2E_QUERY_MARK} Ignoring ?${name}=${raw}: it must be ${rule}; ${fallback}`);
+}
 
 /** Parses a decimal query value accepted by `isValid`, or warns (naming the rule and fallback) and returns undefined. */
 function parseQueryInteger(
@@ -30,7 +46,7 @@ function parseQueryInteger(
   if (raw === null) return undefined;
   const value = DECIMAL_DIGITS.test(raw) ? Number(raw) : Number.NaN;
   if (isValid(value)) return value;
-  console.warn(`${E2E_QUERY_MARK} Ignoring ?${name}=${raw}: it must be an integer from ${range}; ${fallback}`);
+  warnIgnored(name, raw, `an integer from ${range}`, fallback);
   return undefined;
 }
 
@@ -39,9 +55,17 @@ export function parseSeed(raw: string | null): number | undefined {
   return parseQueryInteger('seed', raw, isWorldSeed, `0 to ${String(UINT32_MAX)}`, 'using a time-based seed instead');
 }
 
-/** Parses a `?lives=` value into the run's starting lives (1–3), or warns and returns undefined. */
+/** Parses a `?lives=` value into a Rank run's starting lives (1–5), or warns and returns undefined. */
 export function parseLives(raw: string | null): number | undefined {
-  return parseQueryInteger('lives', raw, isStartLives, '1 to 3', 'starting with the default lives instead');
+  return parseQueryInteger('lives', raw, isGalaxyStartLives, `1 to ${String(MAX_GALAXY_START_LIVES)}`, 'starting with the default lives instead');
+}
+
+/** Parses a `?galaxy=` value (`D-G`, 1-1 to 5-6), or warns and returns undefined. */
+export function parseGalaxy(raw: string | null): GalaxyId | undefined {
+  if (raw === null) return undefined;
+  if (isGalaxyId(raw)) return raw;
+  warnIgnored('galaxy', raw, 'a galaxy from 1-1 to 5-6 (Dimension-galaxy, 6 is the boss)', 'starting on the title as normal instead');
+  return undefined;
 }
 
 /** Parses a `?quality=` value (a level index or name) into a QUALITY_LEVELS index, or warns and returns undefined. */
@@ -54,7 +78,12 @@ export function parseQuality(raw: string | null): number | undefined {
   return parseQueryInteger('quality', raw, (value) => value <= last, `0 to ${String(last)} (or one of ${names})`, 'adapting to frame time instead');
 }
 
-/** The `?seed=`, `?lives=` and `?quality=` overrides; only e2e and dev builds honour them, release builds never parse the URL. */
+/** A run started with `?galaxy=`, `?seed=` or `?lives=` is a debug run: it never writes the save. */
+export function isDebugRun({ seed, startLives, galaxy }: RunOverrides): boolean {
+  return seed !== undefined || startLives !== undefined || galaxy !== undefined;
+}
+
+/** The `?seed=`, `?lives=`, `?quality=` and `?galaxy=` overrides; only e2e and dev builds honour them, release builds never parse the URL. */
 export function runOverrides(): RunOverrides {
   if (import.meta.env.MODE !== 'e2e' && !import.meta.env.DEV) return NO_OVERRIDES;
   const params = new URLSearchParams(window.location.search);
@@ -62,6 +91,7 @@ export function runOverrides(): RunOverrides {
     seed: parseSeed(params.get('seed')),
     startLives: parseLives(params.get('lives')),
     quality: parseQuality(params.get('quality')),
+    galaxy: parseGalaxy(params.get('galaxy')),
   };
 }
 

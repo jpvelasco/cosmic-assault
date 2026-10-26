@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudioEngine, needsSoundGesture, type AudioEngine } from '../../src/audio/engine';
+import { SFX_NAMES } from '../../src/audio/sfx';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/app/settings';
 import type { SimEvent } from '../../src/sim/events';
 
@@ -372,6 +373,53 @@ describe('sound effects', () => {
     expect(sources() - before).toBe(4);
   });
 
+  it('starts a boss kill\'s warp 0.3 s after the boss goes down, and the results fanfare after both, on the audio clock', () => {
+    const e = engine();
+    press();
+    const c = ctx();
+    c.currentTime = 2;
+    const startOf = (node: FakeNode): number => node.start.mock.calls[0]?.[0] as number;
+    /** The voices `act` starts, in the order it starts them. */
+    const started = (act: () => void): number[] => {
+      const [oscillators, sources] = [nodesOf('oscillator').length, nodesOf('bufferSource').length];
+      act();
+      return [...nodesOf('oscillator').slice(oscillators), ...nodesOf('bufferSource').slice(sources)].map(startOf);
+    };
+    const down = started(() => {
+      e.handle([{ type: 'bossDown', id: 'sentinel' }]);
+    });
+    const kill = started(() => {
+      e.handle([{ type: 'bossDown', id: 'sentinel' }, { type: 'warpOut' }]);
+    });
+    expect(new Set(down)).toEqual(new Set([2]));
+    // The same boss-down voices at once, and the warp's 0.3 s behind them.
+    expect(kill.filter((t) => t === 2)).toHaveLength(down.length);
+    expect(kill.filter((t) => t !== 2).every((t) => Math.abs(t - 2.3) < 1e-9)).toBe(true);
+    expect(kill.length).toBeGreaterThan(down.length);
+    const fanfare = started(() => {
+      e.setScreen('results');
+    });
+    expect(fanfare.length).toBeGreaterThan(0);
+    expect(Math.min(...fanfare)).toBeGreaterThan(2.3);
+  });
+
+  it('plays the results fanfare through its own bus, and fades that bus out when the card is left', () => {
+    const e = engine();
+    press();
+    const before = nodesOf('gain').length;
+    e.setScreen('results');
+    const made = nodesOf('gain').slice(before);
+    const sfxBus = nodesOf('gain')[1];
+    const bus = made.find((node) => sfxBus !== undefined && node.outputs.has(sfxBus));
+    if (bus === undefined) throw new Error('the fanfare should play through a bus of its own on the effects bus');
+    // Every fanfare voice goes through that bus, none straight to the effects bus.
+    expect(made.filter((node) => node !== bus && sfxBus !== undefined && node.outputs.has(sfxBus))).toEqual([]);
+    const silenced = (): boolean => bus.gain.setTargetAtTime.mock.calls.some(([value]) => value === 0);
+    expect(silenced()).toBe(false);
+    e.setScreen('playing');
+    expect(silenced()).toBe(true);
+  });
+
   it('does not cap other sounds', () => {
     const e = engine();
     press();
@@ -392,11 +440,9 @@ describe('sound effects', () => {
   it('builds every sound from short-lived nodes that stop and disconnect themselves', () => {
     const e = engine();
     press();
-    for (const name of ['shoot', 'boomLarge', 'boomMedium', 'boomSmall', 'boomTiny', 'shipHit', 'gameOver', 'uiClick', 'pause'] as const) {
-      e.play(name);
-    }
+    for (const name of SFX_NAMES) e.play(name);
     const voices = [...nodesOf('oscillator'), ...nodesOf('bufferSource')];
-    expect(voices.length).toBeGreaterThan(9);
+    expect(voices.length).toBeGreaterThan(SFX_NAMES.length);
     for (const voice of voices) {
       expect(voice.start).toHaveBeenCalledTimes(1);
       expect(voice.stop).toHaveBeenCalledTimes(1);

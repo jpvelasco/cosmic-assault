@@ -32,6 +32,11 @@ export interface SpriteBaker {
    */
   flame(palette: Palette, length: number): Sprite;
   /**
+   * Art painted by `paint` in field units around its centre, spanning ±`half` on each axis, cached under `key` (by
+   * convention `kind|name|size`). Make `paint` once rather than per frame: it runs only on a miss.
+   */
+  custom(key: string, half: number, paint: (ctx: CanvasRenderingContext2D) => void): Sprite;
+  /**
    * Device pixels per field unit are `pixelsPerUnit × dpr`. `visual` draws the ship, flame, rocks and shots
    * larger than their field size (a sprite's `halfW`/`halfH` then report the drawn size); glows take their
    * size from the caller. A change clears the cache.
@@ -457,6 +462,9 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
           }),
         )
       );
+    },
+    custom(key, half, paint) {
+      return cache.get(key)?.sprite ?? store(key, bake(half, half, 1, paint));
     },
     setScale(nextPixelsPerUnit, nextDpr, nextVisual = UNIT_VISUAL) {
       requirePositive('pixelsPerUnit', nextPixelsPerUnit);

@@ -1,9 +1,8 @@
 import type { Page } from '@playwright/test';
 import { TOAST_MS } from '../src/ui/toast';
 import { SETTINGS_KEY } from '../src/app/settings';
-import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
+import { expect, expectMode, gameState, nextFrames, openGame, test, toastOf } from './fixtures';
 
-const toast = (page: Page) => page.getByRole('status');
 const soundChip = (page: Page) => page.getByTestId('sound-toggle');
 
 /** Keys are applied on the next animation frame, so state follows a press a frame later. */
@@ -34,13 +33,13 @@ test('M toggles mute in every mode, shows a toast, and never starts the game', a
   await page.keyboard.press('KeyM');
   await expectMuted(page, true);
   await expectMode(page, 'title');
-  await expect(toast(page)).toHaveText('Muted');
+  await expect(toastOf(page)).toHaveText('Muted');
   // The live region stays in the page; it is emptied (and invisible) when the toast ends.
-  await expect(toast(page)).toHaveText('', { timeout: TOAST_MS + 1500 });
+  await expect(toastOf(page)).toHaveText('', { timeout: TOAST_MS + 1500 });
 
   await page.keyboard.press('KeyM');
   await expectMuted(page, false);
-  await expect(toast(page)).toHaveText('Sound on');
+  await expect(toastOf(page)).toHaveText('Sound on');
 
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
@@ -64,7 +63,7 @@ test('the sound chip mutes on the title and pause cards without starting or resu
   await expectMuted(page, true);
   await expect(chip).toHaveText('Sound: off');
   await expect(chip).not.toHaveAttribute('aria-pressed');
-  await expect(toast(page)).toHaveText('Muted');
+  await expect(toastOf(page)).toHaveText('Muted');
   await nextFrames(page, 3);
   await expectMode(page, 'title');
 

@@ -1,4 +1,5 @@
-import type { App, E2eHooks } from './app/game';
+import type { E2eHooks } from './app/e2eHooks';
+import type { App } from './app/game';
 import type { World } from './sim/world';
 
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
@@ -9,11 +10,26 @@ function shipState({ ship }: World): CosmicAssaultTestShip {
   return { x, y, vx, vy, angle, thrusting, invulnerable };
 }
 
+/** A copy of `value` frozen all the way down, so a spec cannot change the game's state through it. */
+function frozenCopy<T>(value: T): T {
+  const freeze = (v: unknown): unknown => {
+    if (typeof v === 'object' && v !== null) {
+      for (const child of Object.values(v)) freeze(child);
+      Object.freeze(v);
+    }
+    return v;
+  };
+  return freeze(structuredClone(value)) as T;
+}
+
 function snapshot(app: App): CosmicAssaultTestState {
-  const { world } = app;
+  const { world, flow, save } = app.run;
   return {
     mode: app.mode,
-    practiceLevel: app.practiceLevel,
+    screen: app.mode,
+    galaxy: flow.galaxy,
+    save: frozenCopy(save),
+    rankRun: flow.rankRun === null ? null : frozenCopy(flow.rankRun),
     score: world?.score ?? 0,
     lives: world?.lives ?? 0,
     ship: world === null ? null : shipState(world),
@@ -38,6 +54,12 @@ export function exposeTestBridge(app: App, hooks: E2eHooks): void {
   window.__COSMIC_ASSAULT_TEST_API__ = {
     version: 3,
     getState: () => snapshot(app),
+    fastForward(seconds) {
+      hooks.e2eFastForward?.(seconds);
+    },
+    damageBoss(damage) {
+      hooks.e2eDamageBoss?.(damage);
+    },
     crash() {
       hooks.e2eBeforeFrame = () => {
         hooks.e2eBeforeFrame = undefined;
