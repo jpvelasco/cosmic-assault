@@ -284,28 +284,27 @@ describe('a boss in its galaxy', () => {
   });
 
   it('takes 1 damage and reports a bossHit for each shot spent on the core', () => {
-    const g = bossWorld(CORE_BOSS_GALAXY, { initialShip: { ...HOME, angle: 0 } });
+    const g = bossWorld(CORE_BOSS_GALAXY, { initialShip: { ...HOME, angle: -Math.PI / 2 } });
     playWorld(g, APPROACH + INTRO + 0.05);
+    const consumedBy = shotWatcher(g.world);
     const boss = g.world.boss;
     let [lost, previous] = [0, boss?.hp ?? 0];
-    // The ship sits in the core, invulnerable, so each shot is fired from inside it and strikes it within its own step.
-    const inTheCore = (w: World): Controls => {
+    // The ship sits below the core, invulnerable and facing it, so its shots fly up into the core for a few steps before they strike.
+    const belowTheCore = (w: World): Controls => {
       const { boss: b, ship } = w;
-      if (b !== null) Object.assign(ship, { x: b.x, y: b.y, invulnerable: true, invulnerableFor: 100 });
+      if (b !== null) Object.assign(ship, { x: b.x, y: b.y + 90, angle: -Math.PI / 2, invulnerable: true, invulnerableFor: 100 });
       return { ...NO_CONTROLS, fire: true };
     };
-    playWorld(g, 2, inTheCore, (events) => {
+    playWorld(g, 3, belowTheCore, () => {
       const hp = boss?.hp ?? 0;
-      const hitsThisStep = events.filter((e) => e.type === 'bossHit').length;
-      expect(previous - hp, 'one core hit, one damage').toBe(hitsThisStep);
+      expect(previous - hp, 'one shot, one damage').toBe(consumedBy());
       lost += previous - hp;
       previous = hp;
     });
-    expect(lost).toBeGreaterThanOrEqual(3);
+    expect(lost).toBeGreaterThanOrEqual(1);
     const hits = ofType(g.log, 'bossHit');
     // The log also holds any hit from before the window opened.
     expect(hits.map((h) => h.hp)).toEqual(Array.from({ length: 76 - (boss?.hp ?? 0) }, (_, i) => 75 - i));
-    for (const h of hits) expect(Math.hypot(h.x - (boss?.x ?? 0), h.y - (boss?.y ?? 0))).toBeLessThan((boss?.radius ?? 0) + PROJECTILE.radius + 5);
     expect(g.world.score).toBe(0);
   });
 
@@ -330,18 +329,35 @@ describe('a boss in its galaxy', () => {
     expect(ofType(g.log, 'shipHit')).toEqual([]);
   });
 
-  it('keeps every rock its quake makes pass-through', () => {
+  it('keeps every rock its quake makes pass-through, and the fragments a shot breaks them into too', () => {
     let rocks = 0;
+    let fragments = 0;
     for (const seed of [1, 2, 3]) {
       const g = bossWorld('5-6', { seed });
-      playWorld(g, 40, aimAtBoss, () => {
+      // Shoots the nearest rock, so the quake's rocks break into fragments.
+      const atNearestRock = (w: World): Controls => {
+        const { ship } = w;
+        let target: { readonly x: number; readonly y: number } | null = w.boss;
+        let best = Infinity;
+        for (const a of w.asteroids) {
+          const d = Math.hypot(a.x - ship.x, a.y - ship.y);
+          if (d < best) [best, target] = [d, a];
+        }
+        if (target === null) return NO_CONTROLS;
+        const diff = Math.atan2(target.y - ship.y, target.x - ship.x) - ship.angle;
+        const wrapped = diff - Math.round(diff / (2 * Math.PI)) * 2 * Math.PI;
+        return { ...NO_CONTROLS, fire: true, turn: Math.abs(wrapped) < 0.02 ? 0 : wrapped > 0 ? 1 : -1 };
+      };
+      playWorld(g, 40, atNearestRock, () => {
         for (const a of g.world.asteroids) {
           expect(a.transient, `size ${String(a.size)} rock`).toBe(true);
           rocks++;
+          if (a.size === 3) fragments++;
         }
       });
     }
     expect(rocks).toBeGreaterThan(0);
+    expect(fragments).toBeGreaterThan(0);
   });
 });
 

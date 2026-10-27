@@ -271,7 +271,8 @@ describe('the Eclipse moves', () => {
     expect(seen.shardVolley).toMatchObject({ kind: 'lane', reach: 74 });
     expect(seen.dive).toMatchObject({ kind: 'lane', reach: ECLIPSE_REACH });
     expect(seen.pulse).toMatchObject({ kind: 'shove' });
-    expect(seen.turretVolley).toMatchObject({ kind: 'ring', reach: ECLIPSE_CORONA.radius, ring: { radius: ECLIPSE_CORONA.orbit, around: 'core' } });
+    // Its bolts fly outward along rays no threat kind describes yet, so the turret volley declares none.
+    expect(seen.turretVolley).toMatchObject({ kind: 'none' });
     expect(seen.quake).toMatchObject({ kind: 'none' });
     expect(seen.launch).toMatchObject({ kind: 'none' });
   });
@@ -391,13 +392,19 @@ describe('the Eclipse\'s fairness', () => {
     }
   });
 
-  it('keeps the whole corona inside the field as its fight begins', () => {
+  it('keeps the whole corona inside the field, and the core\'s reach, as its fight begins', () => {
     const rig = fighting(8);
+    const { width, height } = BOSS_FIELD;
     for (const part of rig.r.view.parts) {
       expect(part.x - part.radius).toBeGreaterThanOrEqual(0);
+      expect(part.x + part.radius).toBeLessThanOrEqual(width);
       expect(part.y - part.radius).toBeGreaterThanOrEqual(0);
+      expect(part.y + part.radius).toBeLessThanOrEqual(height);
     }
+    expect(rig.r.view.x - rig.r.reach).toBeGreaterThanOrEqual(0);
+    expect(rig.r.view.x + rig.r.reach).toBeLessThanOrEqual(width);
     expect(rig.r.view.y - rig.r.reach).toBeGreaterThanOrEqual(0);
+    expect(rig.r.view.y + rig.r.reach).toBeLessThanOrEqual(height);
   });
 
   it('draws only from the fight\'s stream, never Math.random, and replays exactly', () => {

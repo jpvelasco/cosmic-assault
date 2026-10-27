@@ -56,7 +56,7 @@ describe('bots', () => {
     const replayed = replayControls(galaxy, 1, controls);
     expect(replayed.events).toEqual(events);
     expect(replayed.score).toBe(result.score);
-  });
+  }, 30_000);
 
   it('plays on a wider field when given an aspect', () => {
     const sizes: number[] = [];

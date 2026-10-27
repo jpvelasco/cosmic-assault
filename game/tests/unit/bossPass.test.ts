@@ -736,7 +736,7 @@ describe('createBossPass', () => {
       expect(keysOf(custom).filter((key) => key === `${KEY}|warnMouth|18`)).toHaveLength(3);
     });
 
-    it('rings each of its windups in a colour of its own', () => {
+    it('rings each of its windups with a ring keyed by its attack', () => {
       const custom = vi.spyOn(baker, 'custom');
       for (const windup of ['shardVolley', 'quake', 'pulse', 'launch', 'turretVolley', 'dive'] as const) pass.draw(eclipse({ windup }), 1, LOOK);
       expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|shardVolley|70', 'boss|drift|ring|quake|70', 'boss|drift|ring|pulse|70', 'boss|drift|ring|launch|70', 'boss|drift|ring|turretVolley|70', 'boss|drift|ring|dive|70']));

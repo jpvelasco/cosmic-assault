@@ -23,7 +23,7 @@ function bareOrbit(options: ShardOrbitOptions): Orbit {
   const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { quake: SPEC, dive: SPEC }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
   const runner = new BossRunner({ ...FIXTURE_DEF, phases: [['quake'], ['quake'], ['quake']] }, behaviour, setup);
   runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
-  for (let i = 0; i < orbit.parts.length && runner.view.vulnerable === false; i++) while ((orbit.parts[i]?.hp ?? 0) > 0) runner.hitPart(i, 1);
+  for (let i = 0; i < orbit.parts.length && !runner.view.vulnerable; i++) while ((orbit.parts[i]?.hp ?? 0) > 0) runner.hitPart(i, 1);
   return { orbit, runner, arena };
 }
 

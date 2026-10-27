@@ -3,6 +3,7 @@ import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import type { GalaxyDef } from '../../src/content/types';
+import { recordRun, replayControls } from '../helpers/botReplay';
 import { BALANCE_SEEDS } from '../helpers/botRuns';
 import { MUTED_KINDS } from '../helpers/mute';
 
@@ -62,4 +63,13 @@ describe('the Eclipse on 5-★, over 40 seeds', { timeout: TIMEOUT_MS }, () => {
   it('takes at least one life off a ship that never moves or fires, on all 40 seeds', () => {
     for (const f of statue) expect(f.lostToBoss, `seed ${String(f.seed)}`).toBeGreaterThanOrEqual(1);
   });
+  it('replays a fight exactly, from the same seed and from its own controls', () => {
+    const options = { galaxy: GALAXY, seed: 1, profile: 'expert', maxSeconds: FIGHT_SECONDS } as const;
+    const { result, controls, events } = recordRun(options);
+    expect(events.some((e) => e.type === 'bossWindup')).toBe(true);
+    expect(runGalaxy(options)).toEqual(result);
+    const replayed = replayControls(GALAXY, 1, controls);
+    expect(replayed.events).toEqual(events);
+    expect(replayed.score).toBe(result.score);
+  }, TIMEOUT_MS);
 });

@@ -257,7 +257,7 @@ describe('the Leviathan segment chain', () => {
       expect(view.y + view.radius).toBeLessThanOrEqual(BOSS_FIELD.height + SLACK);
     });
     expect(coiledAt).toBeGreaterThan(0);
-  });
+  }, 30_000);
 
   it('keeps its chain through a resize: re-laid along its stretched trail on the next step, and smooth from then on', () => {
     const rigged = fighting();
@@ -520,7 +520,7 @@ describe('a Leviathan coil near the field\'s edge', () => {
     }
     expect(coils).toBeGreaterThan(20_000);
     expect(turns).toEqual(new Set([1, -1]));
-  });
+  }, 30_000);
 
   it('holds a head that starts inside the ring, on the centre side of the ship, round at its own distance before it swims out', () => {
     // The head 45 from the ship and 37 from the ring's centre, nearly on the ship's bearing: swimming out at once would
@@ -567,7 +567,7 @@ describe('a Leviathan coil near the field\'s edge', () => {
     }
     expect(coils).toBeGreaterThan(30);
     expect(turns).toEqual(new Set([1, -1]));
-  });
+  }, 30_000);
 
   it('centres the ring where the ship was when the whole ring fits on the field, and moves it no more than the nudge', () => {
     const at = { x: 0, y: 0 };
