@@ -3,7 +3,7 @@ import { galaxyById, tierOf } from '../../src/content/galaxies';
 import { noEffects } from '../../src/content/pickups';
 import type { GalaxyDef, GalaxyId, PickupId, WeaponTier } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
-import { bossTarget } from '../../src/sim/boss/bossRunner';
+import { bossTarget } from '../../src/sim/boss/bossRules';
 import { PICKUP, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';

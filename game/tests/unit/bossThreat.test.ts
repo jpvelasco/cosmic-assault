@@ -12,8 +12,8 @@ import { createRng } from '../../src/sim/rng';
 import { BOSS_FIELD, runFor, stubArena, type StubArena } from '../helpers/bossArena';
 
 const BOT_DIR = new URL('../../src/bot/', import.meta.url);
-/** The boss modules a bot may read: the seam's types, the runner's generic rules and the shared attack library. */
-const GENERIC_BOSS_MODULES = ['attacks', 'behaviour', 'bossRunner'];
+/** The boss modules a bot may read: the seam's types, the rules every fight keeps and the shared attack library. */
+const GENERIC_BOSS_MODULES = ['attacks', 'behaviour', 'bossRules'];
 
 /** A fight of boss `id` with the galaxy's foes to launch into, its intro over. */
 function fight(id: BossId, arena: StubArena = stubArena()): { runner: BossRunner; arena: StubArena } {

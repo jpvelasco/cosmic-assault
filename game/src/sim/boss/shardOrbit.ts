@@ -1,6 +1,6 @@
 import { smoothstep, TAU } from '../math';
 import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView } from './behaviour';
-import { bossHome } from './bossRunner';
+import { bossHome } from './bossRules';
 
 /** A ring of shards orbiting a boss's core, as a boss's definition of it sets it up. */
 export interface ShardOrbitOptions {

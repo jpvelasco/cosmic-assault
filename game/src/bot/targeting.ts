@@ -1,5 +1,5 @@
 import type { BossView } from '../sim/boss/behaviour';
-import { bossTarget } from '../sim/boss/bossRunner';
+import { bossTarget } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS } from '../sim/config';
 import type { Field } from '../sim/field';
 import { wrapDelta } from '../sim/wrap';

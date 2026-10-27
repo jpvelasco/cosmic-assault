@@ -2,7 +2,7 @@ import { createView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, BossId } from '../../src/content/types';
 import type { AttackSpec, BossThreat, Point } from '../../src/sim/boss/behaviour';
-import { bossThreat } from '../../src/sim/boss/bossRunner';
+import { bossThreat } from '../../src/sim/boss/bossRules';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { createRng } from '../../src/sim/rng';
 import { World, type AsteroidPlacement } from '../../src/sim/world';

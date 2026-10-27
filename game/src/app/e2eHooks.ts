@@ -1,5 +1,5 @@
 import type { PickupId } from '../content/types';
-import { bossTarget } from '../sim/boss/bossRunner';
+import { bossTarget } from '../sim/boss/bossRules';
 import { PICKUP, STEP_SECONDS } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';

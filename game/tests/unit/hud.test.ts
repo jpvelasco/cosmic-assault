@@ -11,7 +11,7 @@ import type { ShowerState } from '../../src/sim/galaxy/showers';
 import { World } from '../../src/sim/world';
 import { BOSSES } from '../../src/content/bosses';
 import { HIVE_HOME_SHARE } from '../../src/sim/boss/hiveCarrier';
-import { bossHome, clearSpot } from '../../src/sim/boss/bossRunner';
+import { bossHome, clearSpot } from '../../src/sim/boss/bossRules';
 import { ORBIT_RADIUS, SHARD_RADIUS } from '../../src/sim/boss/monolith';
 import { ASTEROID, PLAYER } from '../../src/sim/config';
 import { fieldForViewport } from '../../src/sim/field';

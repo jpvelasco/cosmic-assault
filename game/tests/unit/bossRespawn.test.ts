@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
-import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE } from '../../src/sim/boss/bossRunner';
+import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE } from '../../src/sim/boss/bossRules';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';

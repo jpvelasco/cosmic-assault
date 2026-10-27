@@ -2,7 +2,7 @@ import { clamp } from '../content/curves';
 import type { AttackId } from '../content/types';
 import { radialShove } from '../sim/boss/attacks';
 import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
-import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
+import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';

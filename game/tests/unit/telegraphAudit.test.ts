@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
-import { bossTarget } from '../../src/sim/boss/bossRunner';
+import { bossTarget } from '../../src/sim/boss/bossRules';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { createRng } from '../../src/sim/rng';

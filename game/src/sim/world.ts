@@ -2,7 +2,7 @@ import { noEffects, type TimedPickupId } from '../content/pickups';
 import type { GalaxyDef, WeaponTier } from '../content/types';
 import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
 import type { BossView } from './boss/behaviour';
-import { bossTarget } from './boss/bossRunner';
+import { bossTarget } from './boss/bossRules';
 import { circlesOverlap, SpatialHash } from './collision';
 import { ASTEROID, PLAYER } from './config';
 import type { Controls } from './controls';

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
-import { bossTarget } from '../../src/sim/boss/bossRunner';
+import { bossTarget } from '../../src/sim/boss/bossRules';
 import { PICKUP, STEP_SECONDS, TIME_WARP_SCALE } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';

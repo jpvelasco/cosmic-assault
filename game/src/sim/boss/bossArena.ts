@@ -3,7 +3,8 @@ import type { Field } from '../field';
 import type { Moving } from '../math';
 import type { Arena } from '../rules';
 import type { BossView, Point } from './behaviour';
-import { BossRunner, clearSpot, type HitResult, type PartHitResult } from './bossRunner';
+import { clearSpot } from './bossRules';
+import { BossRunner, type HitResult, type PartHitResult } from './bossRunner';
 
 /**
  * Where a galaxy's boss meets everything else, once it has arrived: the player's shots and blasts strike it here, which
