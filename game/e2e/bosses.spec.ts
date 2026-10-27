@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test';
 import { defaultSave, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
+import { BOSSES } from '../src/content/bosses';
+import { SEGMENT_COUNT, SEGMENT_HP } from '../src/sim/boss/leviathan';
 import { EXPOSED_AT } from '../src/sim/boss/monolith';
 import {
   clickPastGuard,
@@ -139,5 +141,41 @@ test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
     expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: WARDEN_GALAXY });
     await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
     expect(save.galaxies[WARDEN_GALAXY]?.stars).toBeGreaterThan(0);
+  });
+});
+
+/** The Leviathan's galaxy. Like the Warden's case, it leans on no seed: five lives carry the idle ship through the approach. */
+const LEVIATHAN_GALAXY = '4-6';
+
+test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {
+  test('is hurt only on its tail, lays its head bare once the last segment breaks, and falls to shots on the head', async ({ page }) => {
+    await openGame(page, { galaxy: LEVIATHAN_GALAXY, lives: 5 });
+    await page.keyboard.press('Space');
+    await expectMode(page, 'playing');
+
+    await fastForward(page, TO_BOSS_FIGHT_SECONDS);
+    const whole = await bossOf(page);
+    expect(whole).toMatchObject({ id: 'leviathan', state: 'fighting', vulnerable: false, liveParts: SEGMENT_COUNT });
+    // A shielded head offers the tail as the only place a shot does harm.
+    expect(whole.target).not.toBeNull();
+
+    // Four blows break the tail, and the break takes its share off the head.
+    await damageBoss(page, SEGMENT_HP);
+    expect(await bossOf(page)).toMatchObject({ liveParts: SEGMENT_COUNT - 1, hp: whole.maxHp - (BOSSES.leviathan.partBreakDamage ?? 0), vulnerable: false });
+
+    // The rest of the body, tail first: the head is bare, and the next step announces it.
+    await damageBoss(page, (SEGMENT_COUNT - 1) * SEGMENT_HP);
+    await fastForward(page, STEP_SECONDS);
+    const bare = await bossOf(page);
+    expect(bare).toMatchObject({ liveParts: 0, vulnerable: true });
+    expect((await gameState(page)).events).toMatchObject({ bossExposed: 1 });
+
+    await damageBoss(page, 1);
+    expect((await bossOf(page)).hp).toBe(bare.hp - 1);
+    await damageBoss(page, KILL_SHOTS);
+    await fastForward(page, STEP_SECONDS);
+    const { screen, galaxy } = await gameState(page);
+    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: LEVIATHAN_GALAXY });
+    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
   });
 });
