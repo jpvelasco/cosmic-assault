@@ -9,6 +9,8 @@ import type { GalaxyId } from '../../src/content/types';
 import type { BossView } from '../../src/sim/boss/behaviour';
 import type { ShowerState } from '../../src/sim/galaxy/showers';
 import { World } from '../../src/sim/world';
+import { BOSSES } from '../../src/content/bosses';
+import { HIVE_HOME_SHARE } from '../../src/sim/boss/hiveCarrier';
 
 const NONE: HudBounds = { insets: { top: 0, right: 0, left: 0 }, topRight: null };
 
@@ -362,15 +364,20 @@ describe('createHud', () => {
     expectClearLayout(hud.rects, width, height, corner);
   });
 
-  it('centres the boss bar at the top when the row has room', () => {
+  it('centres the boss bar at the bottom, clear of a boss in the top of the field and inside the safe area', () => {
     const hud = createHud(DRIFT);
     const { ctx } = fakeContext();
     hud.resize(1280, 720);
-    hud.draw(ctx, galaxyWorld({ galaxy: '1-6', timeLeft: 0, boss: {} }), 0);
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: {} }), 0);
     const boss = hud.pill('boss');
     if (boss === null) throw new Error('expected the boss bar');
-    expect(boss.y).toBe(hud.pill('score')?.y);
     expect(boss.x + boss.width / 2).toBeCloseTo(640);
+    expect(boss.y + boss.height).toBeCloseTo(720 - 12 * hudScale(720));
+    // The Hive Carrier's row, hull and all, stays above it.
+    expect(boss.y).toBeGreaterThan(720 * HIVE_HOME_SHARE + BOSSES.hiveCarrier.radius);
+    hud.setBounds({ insets: { top: 0, right: 0, left: 0, bottom: 34 }, topRight: null });
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: {} }), 0);
+    expect(boss.y + boss.height).toBeCloseTo(720 - 34);
   });
 
   it('keeps every pill apart mid-galaxy with a combo going, on a phone and a desktop', () => {
