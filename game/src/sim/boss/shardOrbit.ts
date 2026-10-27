@@ -1,4 +1,4 @@
-import { smoothstep, TAU } from '../math';
+import { outAndBack, TAU } from '../math';
 import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView, Point } from './behaviour';
 import { bossHome } from './bossRules';
 
@@ -178,8 +178,7 @@ export class ShardOrbit {
     const tx = ctx.aimX + ux * overshoot - uy * lane * spread;
     const ty = ctx.aimY + uy * overshoot + ux * lane * spread;
     // Out to the turning point over the first half, then back to its orbit, wherever that has turned to.
-    const out = this.progress < 0.5;
-    const s = out ? smoothstep(this.progress * 2) : 1 - smoothstep(this.progress * 2 - 1);
+    const s = outAndBack(this.progress);
     part.x += (tx - part.x) * s;
     part.y += (ty - part.y) * s;
   }

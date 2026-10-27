@@ -4,6 +4,9 @@ import { createFieldPen } from '../../src/render/fieldPen';
 import { DRIFT, SINGULARITY, VOID_RIFT, type Palette } from '../../src/render/palette';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
+import { BOSSES } from '../../src/content/bosses';
+import type { BossId } from '../../src/content/types';
+import { WARDEN_RING } from '../../src/sim/boss/warden';
 import { bossView } from '../helpers/bossView';
 
 interface Draw {
@@ -70,6 +73,16 @@ const fakeCanvas = (): unknown => {
 };
 
 const boss = (over: Partial<BossView> = {}): BossView => bossView({ y: 200, px: 600, ...over });
+
+/** The Warden's 14 turrets about (640, 200), still, slot 0 (its first gap) at bearing `turn`, the ring at `radius`. */
+function wardenRing(turn = 0, radius = WARDEN_RING.radius): BossPart[] {
+  const slots = Array.from({ length: WARDEN_RING.slots }, (_, slot) => slot).filter((slot) => !WARDEN_RING.gaps.includes(slot));
+  return slots.map((slot) => {
+    const a = turn + (slot * 2 * Math.PI) / WARDEN_RING.slots;
+    const [x, y] = [640 + Math.cos(a) * radius, 200 + Math.sin(a) * radius];
+    return { x, y, px: x, py: y, radius: 16, hp: 3, maxHp: 3 };
+  });
+}
 const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600 };
 
 describe('createBossPass', () => {
@@ -121,8 +134,8 @@ describe('createBossPass', () => {
       const custom = vi.spyOn(baker, 'custom');
       custom.mockClear();
       const drawing = createBossPass(fake.ctx, pen, baker, palette);
-      for (const id of ['sentinel', 'monolith', 'hiveCarrier'] as const) {
-        drawing.draw(boss({ id, windup: 'lunge' }), 1, LOOK);
+      for (const id of Object.keys(BOSSES) as BossId[]) {
+        drawing.draw(boss({ id, windup: 'lunge', parts: id === 'warden' ? wardenRing() : [] }), 1, LOOK);
       }
       return [...new Set(custom.mock.calls.map(([key]) => key))];
     };
@@ -454,6 +467,109 @@ describe('createBossPass', () => {
       const custom = vi.spyOn(baker, 'custom');
       for (const windup of ['launch', 'broadside', 'retreat'] as const) pass.draw(carrier({ windup }), 1, LOOK);
       expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|launch|100', 'boss|drift|ring|broadside|100', 'boss|drift|ring|retreat|100']));
+    });
+  });
+
+  describe('the Warden', () => {
+    const warden = (over: Partial<BossView> = {}): BossView => boss({ id: 'warden', radius: 48, hp: 76, maxHp: 76, px: 640, parts: wardenRing(), ...over });
+    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
+    const TRACK = 'boss|drift|warden|track|120';
+    const TURRETS = ['boss|drift|warden|turret|0|16', 'boss|drift|warden|turret|1|16', 'boss|drift|warden|turret|2|16'] as const;
+    /** The canvases of the sprites `spy` returned. */
+    const canvases = (spy: Parameters<typeof drawOf>[1]): Set<unknown> => new Set(spy.mock.results.map((r) => (r.value as { canvas: unknown }).canvas));
+    /** The glows drawn at the ring's turrets' muzzles, past the ring's radius, from draw `from` on. */
+    const muzzles = (spy: Parameters<typeof drawOf>[1], from = 0): Draw[] => {
+      const glows = canvases(spy);
+      return draws.slice(from).filter((d) => glows.has(d.image) && Math.hypot(d.e - 640, d.f - 200) > 125);
+    };
+
+    it('draws its core, eye and track, and a turret for each live part, cracked by the blows it has taken', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const parts = wardenRing();
+      Object.assign(parts[0] as BossPart, { hp: 2 });
+      Object.assign(parts[1] as BossPart, { hp: 1 });
+      Object.assign(parts[2] as BossPart, { hp: 0 });
+      pass.draw(warden({ parts }), 1, LOOK);
+      const keys = keysOf(custom);
+      expect(keys).toEqual(expect.arrayContaining(['boss|drift|warden|core|48', 'boss|drift|warden|eye|48', TRACK, ...TURRETS]));
+      expect(keys.filter((k) => k === TURRETS[0])).toHaveLength(11);
+      expect(keys.filter((k) => k === TURRETS[1])).toHaveLength(1);
+      expect(keys.filter((k) => k === TURRETS[2])).toHaveLength(1);
+      expect(keys).not.toContain('boss|drift|core|48');
+    });
+
+    it('turns its track with the ring, its first gap one slot behind turret 0, and stretches it with a pulse', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(warden({ parts: wardenRing(0.4) }), 1, LOOK);
+      const track = drawOf(TRACK, custom);
+      expect(Math.atan2(Math.sqrt(Math.max(0, (track?.scale ?? 0) ** 2 - (track?.a ?? 0) ** 2)), track?.a ?? 0)).toBeCloseTo(0.4, 6);
+      expect(track?.scale).toBeCloseTo(1, 6);
+      pass.draw(warden({ parts: wardenRing(0.4, 220) }), 1, LOOK);
+      expect(drawOf(TRACK, custom)?.scale).toBeCloseTo(220 / 120, 6);
+    });
+
+    it('flashes a turret white when a shot hurts it, and grows a turret back in', () => {
+      const white = vi.spyOn(baker, 'white');
+      pass.handle([{ type: 'bossPartHit', part: 3, x: 0, y: 0, hp: 2 }]);
+      pass.draw(warden(), 1, LOOK);
+      expect(white.mock.calls.map(([key]) => key)).toContain(TURRETS[0]);
+      const custom = vi.spyOn(baker, 'custom');
+      const broken = wardenRing();
+      Object.assign(broken[5] as BossPart, { hp: 0 });
+      pass.advance(0.01, warden({ parts: broken }));
+      pass.advance(0.05, warden());
+      const from = draws.length;
+      pass.draw(warden(), 1, LOOK);
+      const whole = drawOf(TURRETS[0], custom)?.image;
+      const scales = draws.slice(from).filter((d) => d.image === whole).map((d) => d.scale);
+      expect(scales).toHaveLength(14);
+      expect(Math.min(...scales)).toBeLessThan(0.7);
+      expect(Math.max(...scales)).toBeCloseTo(1, 6);
+    });
+
+    it('charges every live turret\'s muzzle as a volley winds up, brighter as it nears', () => {
+      const glow = vi.spyOn(baker, 'glow');
+      const winding = warden({ windup: 'turretVolley', threat: { attack: 'turretVolley', windup: 0.6, kind: 'none', reach: 0, speed: 0 } });
+      pass.advance(0.01, winding);
+      pass.advance(0.1, winding);
+      pass.draw(winding, 1, { ...LOOK, still: true });
+      const early = muzzles(glow);
+      expect(early).toHaveLength(14);
+      const from = draws.length;
+      pass.advance(0.4, winding);
+      pass.draw(winding, 1, { ...LOOK, still: true });
+      const later = muzzles(glow, from);
+      expect(early[0]?.alpha ?? 0).toBeGreaterThan(0);
+      expect(later[0]?.alpha ?? 0).toBeGreaterThan((early[0]?.alpha ?? 1) * 1.5);
+    });
+
+    it('lights the two turrets nearest the ship and puts a reticle on the ship as a lock-on winds up', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const glow = vi.spyOn(baker, 'glow');
+      const look = { ...LOOK, aimX: 640, aimY: 600 };
+      pass.draw(warden({ windup: 'lockOn' }), 1, look);
+      expect(muzzles(glow)).toHaveLength(2);
+      const reticle = drawOf('boss|drift|warden|reticle', custom);
+      expect([reticle?.e, reticle?.f]).toEqual([640, 600]);
+    });
+
+    it('rings the space a pulse will sweep with a ghost ring, and lights the track through a spin', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(warden({ windup: 'ringPulse' }), 1, LOOK);
+      expect(drawOf('boss|drift|warden|ghost|220', custom)?.scale).toBeCloseTo(1, 6);
+      pass.draw(warden({ windup: 'spin' }), 1, LOOK);
+      pass.draw(warden({ active: 'spin' }), 1, LOOK);
+      expect(keysOf(custom).filter((k) => k === 'boss|drift|warden|spinBand|120')).toHaveLength(2);
+      custom.mockClear();
+      pass.draw(warden(), 1, LOOK);
+      expect(keysOf(custom)).not.toContain('boss|drift|warden|ghost|220');
+      expect(keysOf(custom)).not.toContain('boss|drift|warden|spinBand|120');
+    });
+
+    it('rings each of its windups in a colour of its own', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      for (const windup of ['turretVolley', 'lockOn', 'spin', 'ringPulse'] as const) pass.draw(warden({ windup }), 1, LOOK);
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|turretVolley|48', 'boss|drift|ring|lockOn|48', 'boss|drift|ring|spin|48', 'boss|drift|ring|ringPulse|48']));
     });
   });
 

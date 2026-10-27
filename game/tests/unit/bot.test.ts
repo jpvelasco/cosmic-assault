@@ -46,8 +46,8 @@ describe('bots', () => {
     expect(replayed.score).toBe(result.score);
   });
 
-  it('replays a boss fight exactly: the expert against the Sentinel on 3-6, from the same seed and from its own controls', () => {
-    const galaxy = galaxyById('3-6');
+  it('replays a boss fight exactly: the expert against the Sentinel on 3-6\'s field, from the same seed and from its own controls', () => {
+    const galaxy = { ...galaxyById('3-6'), boss: 'sentinel' as const };
     const options = { galaxy, seed: 1, profile: 'expert', maxSeconds: 80 } as const;
     const { result, controls, events } = recordRun(options);
     expect(result.bossKillTime).toBeGreaterThan(0);

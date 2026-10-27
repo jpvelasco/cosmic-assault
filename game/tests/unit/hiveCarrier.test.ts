@@ -106,7 +106,7 @@ describe('the Hive Carrier definition', () => {
   it('guards 2-★, while the later Dimensions keep the Sentinel for now', () => {
     expect(galaxyById('2-6').boss).toBe('hiveCarrier');
     expect(bossHp(DEF, 2)).toBe(28);
-    for (const id of ['3-6', '4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
+    for (const id of ['4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
   });
 
   it('needs the galaxy\'s foes to launch its drones into, and says so', () => {

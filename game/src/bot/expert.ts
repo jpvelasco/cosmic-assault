@@ -151,7 +151,7 @@ export class Pilot {
   /** Where the ship would be at each sample, relative to now. */
   private readonly sx = new Float64Array(SAMPLES + 1);
   private readonly sy = new Float64Array(SAMPLES + 1);
-  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0, wraps: true };
+  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0, wraps: true, weakPoint: false };
   private readonly last = idleIntent();
   private inDanger = false;
   /** Whether it dodges in the danger episode under way, and in the boss attack under way. */

@@ -7,6 +7,7 @@ import { radial, type BossDrawer, type BossFrame, type BossLook, type DrawerFact
 import { hiveCarrierDrawer } from './boss/hiveCarrier';
 import { monolithDrawer } from './boss/monolith';
 import { sentinelDrawer } from './boss/sentinel';
+import { wardenDrawer } from './boss/warden';
 import { mix, rgba } from './color';
 import type { FieldPen } from './fieldPen';
 import { HIT_FLASH_SECONDS } from './hitFlash';
@@ -36,7 +37,7 @@ export interface BossPass {
 }
 
 /** Each boss's look. */
-const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer };
+const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer, warden: wardenDrawer };
 
 const WHITE = '#ffffff';
 /** The core shows white while the flash is above this, the share of BOSS_FLASH_SECONDS left after HIT_FLASH_SECONDS. */
@@ -75,7 +76,7 @@ function paintRing(ctx: CanvasRenderingContext2D, r: number, color: string): voi
 }
 
 /** Every attack, once: the `satisfies` makes a new one fail to compile until it is listed. */
-const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0 } as const satisfies Record<AttackId, 0>;
+const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0, turretVolley: 0, lockOn: 0, spin: 0, ringPulse: 0 } as const satisfies Record<AttackId, 0>;
 const ATTACK_IDS = Object.keys(ATTACK_ID_SET) as AttackId[];
 
 /** A record of `make(id)` for every attack. */
@@ -106,6 +107,10 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
     launch: palette.accent[0],
     broadside: palette.ring,
     retreat: palette.accent[2],
+    turretVolley: palette.accent[0],
+    lockOn: palette.ring,
+    spin: palette.accent[1],
+    ringPulse: palette.accent[2],
   };
   /** The radius the rings are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;

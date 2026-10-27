@@ -3,7 +3,7 @@ import { BOLT, FOES } from '../../content/foes';
 import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU } from '../math';
+import { TAU, TIME_EPSILON } from '../math';
 import type { AttackContext, AttackSpec, BossFoes, BossPart, BossView, Point } from './behaviour';
 
 // The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
@@ -183,6 +183,12 @@ export function aimedBolts(ctx: AttackContext, from: Readonly<Point>, count: num
  */
 export const fanBearing = (from: Readonly<Point>, aimX: number, aimY: number, i: number, count: number, spread: number): number =>
   Math.atan2(aimY - from.y, aimX - from.x) + (count > 1 ? lane(i, count, spread / (count - 1)) : 0);
+
+/**
+ * Whether an attack's active time reaches `t` seconds during this step: true on exactly one step for each `t` inside its
+ * active window, its first step for 0, so a move made at set times into the attack (a second volley, say) is made once.
+ */
+export const crosses = (ctx: Readonly<Pick<AttackContext, 'age' | 'dt'>>, t: number): boolean => ctx.age - TIME_EPSILON <= t && t < ctx.age + ctx.dt - TIME_EPSILON;
 
 /** An attack telegraphed for `windup` s that fires `radialBolts` from `parts` (the behaviour's own, the same objects all fight) as it ends. */
 export const radialBoltsAttack = (windup: number, parts: readonly Readonly<BossPart>[], speed: number = BOLT.speed): AttackSpec => ({

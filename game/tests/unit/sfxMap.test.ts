@@ -125,8 +125,8 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'splitter', x: 0, y: 0 })).toBeNull();
   });
 
-  it('caps the swarm buzz and deflections at one a frame and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2 });
+  it('caps the swarm buzz, deflections and boss bolts at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2, bossBolt: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
@@ -180,6 +180,13 @@ describe('sfxFor', () => {
 
   it('caps the bolt zap at two a frame, as gunships fire together', () => {
     expect(PER_FRAME_CAPS.bolt).toBe(2);
+  });
+
+  it('gives each source of bolt its own voice: a boss\'s its quieter zap, a foe\'s the zap', () => {
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'boss', owner: 0, x: 0, y: 0, angle: 0 })).toBe('bossBolt');
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'gunship', owner: 3, x: 0, y: 0, angle: 0 })).toBe('bolt');
+    const taken = new Set([...Object.values(GALAXY_EVENTS), ...Object.values(CONTENT_EVENTS)].map(nameOf));
+    expect(taken.has('bossBolt')).toBe(false);
   });
 
   it('whooshes softly as a shower starts, and keeps its end and a meteor leaving silent', () => {

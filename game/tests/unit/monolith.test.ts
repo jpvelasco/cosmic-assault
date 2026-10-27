@@ -76,7 +76,7 @@ describe('the Monolith definition', () => {
 
   it('guards 1-★, while the later Dimensions keep the Sentinel for now', () => {
     expect(galaxyById('1-6').boss).toBe('monolith');
-    for (const id of ['3-6', '4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
+    for (const id of ['4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
   });
 });
 

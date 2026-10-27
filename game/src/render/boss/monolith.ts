@@ -1,10 +1,9 @@
 import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
-import { HIT_FLASH_SECONDS } from '../hitFlash';
-import { easeOut } from '../scene';
-import { blitCore, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
+import { blitCore, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { MONOLITH_ART_REACH, paintFissures, paintMonolithCore, paintShard } from './monolithArt';
+import { PartClocks } from './partClocks';
 
 /** The fissures, dim behind the shield and blazing once the core is bare, pulsing at this rate unless held still. */
 const FISSURE_SHIELDED = 0.3;
@@ -29,12 +28,6 @@ const shardKeys = (radius: number, palette: PaletteId): { readonly whole: string
   whole: `boss|${palette}|monolith|shard|${String(radius)}`,
   cracked: `boss|${palette}|monolith|shardCracked|${String(radius)}`,
 });
-
-/** Grows `list` to `length` with `fill`, or cuts it down, so it has one slot per part. */
-function fit(list: number[], length: number, fill: number): void {
-  while (list.length < length) list.push(fill);
-  list.length = length;
-}
 
 /**
  * The Monolith: a dark slate rock whose cracks glow dimly behind its shield and blaze, with a warm haze and bloom, once it
@@ -62,16 +55,13 @@ export const monolithDrawer: DrawerFactory = (kit) => {
   const paintCrackedShard = shardPainter(true);
   /** Real seconds of the fight so far, for the fissures' pulse and the shards' tumble. */
   let time = 0;
-  /** Per part: seconds of hit flash left, seconds since it last grew back, and whether it was live last frame (1 or 0). */
-  const partFlash: number[] = [];
-  const partGrowth: number[] = [];
-  const partLive: number[] = [];
+  const clocks = new PartClocks(GROW_SECONDS);
+  /** A shard's place from the core; one point, reused. */
+  const offset = { x: 0, y: 0 };
 
   function reset(): void {
     time = 0;
-    partFlash.length = 0;
-    partGrowth.length = 0;
-    partLive.length = 0;
+    clocks.reset();
   }
 
   /** A live shard, interpolated, placed about the core at its scale, turned outward and tumbling. */
@@ -81,16 +71,17 @@ export const monolithDrawer: DrawerFactory = (kit) => {
       shardRadius = part.radius;
       shards = shardKeys(shardRadius, palette.id);
     }
-    const { alpha, size } = frame;
-    const x = frame.x + (part.px + (part.x - part.px) * alpha - cx) * size;
-    const y = frame.y + (part.py + (part.y - part.py) * alpha - cy) * size;
+    const { size } = frame;
+    const at = partOffset(part, frame, cx, cy, offset);
+    const x = frame.x + at.x * size;
+    const y = frame.y + at.y * size;
     const turn = Math.atan2(y - frame.y, x - frame.x) + (frame.look.still ? 0 : time * SHARD_TUMBLE);
-    const scale = size * easeOut(Math.min(1, (partGrowth[i] ?? GROW_SECONDS) / GROW_SECONDS));
+    const scale = size * clocks.grown(i);
     pen.place(x, y, Math.cos(turn) * scale, Math.sin(turn) * scale);
     const cracked = part.hp < part.maxHp;
     const key = cracked ? shards.cracked : shards.whole;
     const sprite = baker.custom(key, shardRadius + RIM_PAD, cracked ? paintCrackedShard : paintWholeShard);
-    pen.blit((partFlash[i] ?? 0) > 0 ? (baker.white(key) ?? sprite) : sprite);
+    pen.blit(clocks.flashing(i) ? (baker.white(key) ?? sprite) : sprite);
   }
 
   const bare = (boss: Readonly<BossView>): boolean => boss.vulnerable && boss.state === 'fighting';
@@ -128,28 +119,13 @@ export const monolithDrawer: DrawerFactory = (kit) => {
       const { parts } = boss;
       for (let i = 0; i < parts.length; i++) drawShard(parts[i] as BossPart, i, frame, cx, cy);
     },
-    /** Counts each part's flash down and its growth up, starting the growth afresh for a part that has just grown back. */
     advance(dt, boss) {
       time += dt;
-      const { parts } = boss;
-      const fresh = partLive.length !== parts.length;
-      fit(partFlash, parts.length, 0);
-      fit(partGrowth, parts.length, GROW_SECONDS);
-      fit(partLive, parts.length, 1);
-      for (let i = 0; i < parts.length; i++) {
-        const live = (parts[i]?.hp ?? 0) > 0 ? 1 : 0;
-        if (live === 1 && partLive[i] === 0 && !fresh) partGrowth[i] = 0;
-        partLive[i] = live;
-        partGrowth[i] = (partGrowth[i] ?? 0) + dt;
-        partFlash[i] = Math.max(0, (partFlash[i] ?? 0) - dt);
-      }
+      clocks.advance(dt, boss.parts);
     },
     handle(event) {
-      if (event.type === 'bossIntro') reset();
-      else if (event.type === 'bossPartHit') {
-        fit(partFlash, Math.max(partFlash.length, event.part + 1), 0);
-        partFlash[event.part] = HIT_FLASH_SECONDS;
-      }
+      clocks.handle(event);
+      if (event.type === 'bossIntro') time = 0;
     },
     reset,
   };

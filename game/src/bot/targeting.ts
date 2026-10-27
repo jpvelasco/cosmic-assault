@@ -15,6 +15,12 @@ export interface Target {
    * far side of its hull.
    */
   wraps: boolean;
+  /**
+   * True for a boss's weak point offered through a clear line of fire. The next choice reads it back: a blocking part
+   * must stand `LINE_HOLD` farther off the line to let the bot switch to the weak point than to keep it, so the choice
+   * does not flicker as a part grazes the line.
+   */
+  weakPoint: boolean;
 }
 
 interface Body {
@@ -27,6 +33,9 @@ interface Posed extends Body {
   readonly px: number;
   readonly py: number;
 }
+
+/** How much farther off the line of fire a blocking part must stand for the bot to switch to a weak point than to keep it. */
+const LINE_HOLD = 4;
 
 /**
  * Extra effective distance, by kind, when choosing what to shoot: drones, gunships, mines (shot from range, before the
@@ -47,6 +56,7 @@ function offer(view: Readonly<BotView>, out: Target, best: number, body: Body, v
   out.vx = vx;
   out.vy = vy;
   out.wraps = wraps;
+  out.weakPoint = false;
   return score;
 }
 
@@ -66,33 +76,50 @@ function partAt(boss: Readonly<BossView>, point: Readonly<Point>): Readonly<Boss
  */
 const blocks = (part: Readonly<BossPart>): boolean => part.armoured === true || part.hp > 1;
 
+/** How far (x, y) lies from the line of fire, the segment from `ship` along (dx, dy); infinite off either end of it. */
+function offLine(ship: Readonly<Point>, dx: number, dy: number, length2: number, x: number, y: number): number {
+  const along = length2 > 0 ? ((x - ship.x) * dx + (y - ship.y) * dy) / length2 : 0;
+  if (along <= 0 || along >= 1) return Infinity;
+  return Math.hypot(ship.x + dx * along - x, ship.y + dy * along - y);
+}
+
 /**
- * Whether a straight shot from the ship reaches `to` without striking a blocking part other than `to` on the way: a
- * shot strikes the first part it touches, so one in the way spends it.
+ * Whether a straight shot from the ship reaches `to` without striking a blocking part other than `to` on the way, with
+ * `margin` to spare: a shot strikes the first part it touches, so one in the way spends it. A part counts where it is
+ * and where it will be as a shot fired now reaches it, moving as it did over the latest step, so a turning ring that
+ * would swing a part into the shot's path blocks it.
  */
-function clearLine(ship: Readonly<Point>, to: Readonly<Point>, parts: readonly Readonly<BossPart>[]): boolean {
+function clearLine(ship: Readonly<Point>, to: Readonly<Point>, parts: readonly Readonly<BossPart>[], margin: number): boolean {
   const dx = to.x - ship.x;
   const dy = to.y - ship.y;
   const length2 = dx * dx + dy * dy;
+  const length = Math.sqrt(length2);
   for (const part of parts) {
     if (part.hp <= 0 || part === to || !blocks(part)) continue;
-    const along = length2 > 0 ? ((part.x - ship.x) * dx + (part.y - ship.y) * dy) / length2 : 0;
-    if (along <= 0 || along >= 1) continue;
-    const reach = part.radius + PROJECTILE.radius;
-    if (Math.hypot(ship.x + dx * along - part.x, ship.y + dy * along - part.y) < reach) return false;
+    const reach = part.radius + PROJECTILE.radius + margin;
+    if (offLine(ship, dx, dy, length2, part.x, part.y) < reach) return false;
+    const flight = length > 0 ? ((part.x - ship.x) * dx + (part.y - ship.y) * dy) / length / PLAYER.projectileSpeed : 0;
+    if (flight <= 0) continue;
+    const steps = flight / STEP_SECONDS;
+    if (offLine(ship, dx, dy, length2, part.x + (part.x - part.px) * steps, part.y + (part.y - part.py) * steps) < reach) return false;
   }
   return true;
 }
 
 /**
  * Offers the boss where a shot hurts it now: the point its behaviour names while its core can be hurt, led by its own
- * motion if it is a part and by the core's otherwise, as long as no blocking part stands in the line of fire; else the
- * nearest of its live parts that are not armoured; nothing outside the fight.
+ * motion if it is a part and by the core's otherwise, as long as no blocking part stands in the line of fire (by
+ * `LINE_HOLD` to spare unless the weak point was `held`, the last choice); else the nearest of its live parts that are
+ * not armoured; nothing outside the fight.
  */
-function offerBoss(view: Readonly<BotView>, out: Target, best: number, boss: Readonly<BossView>): number {
+function offerBoss(view: Readonly<BotView>, out: Target, best: number, boss: Readonly<BossView>, held: boolean): number {
   if (boss.state !== 'fighting') return best;
   const weakPoint = bossTarget(boss);
-  if (boss.vulnerable && weakPoint !== null && clearLine(view.ship, weakPoint, boss.parts)) return offerBossPoint(view, out, best, weakPoint, partAt(boss, weakPoint) ?? boss);
+  if (boss.vulnerable && weakPoint !== null && clearLine(view.ship, weakPoint, boss.parts, held ? 0 : LINE_HOLD)) {
+    const score = offerBossPoint(view, out, best, weakPoint, partAt(boss, weakPoint) ?? boss);
+    if (score < best) out.weakPoint = true;
+    return score;
+  }
   for (const part of boss.parts) if (part.hp > 0 && part.armoured !== true) best = offerBossPoint(view, out, best, part, part);
   return best;
 }
@@ -102,9 +129,10 @@ function offerBoss(view: Readonly<BotView>, out: Target, best: number, boss: Rea
  * `PRIORITY`. False when there is nothing to shoot.
  */
 export function chooseTarget(view: Readonly<BotView>, out: Target): boolean {
+  const held = out.weakPoint;
   let best = Infinity;
   for (const foe of view.foes) if (foe.hp > 0) best = offer(view, out, best, foe, foe.vx, foe.vy, PRIORITY[foe.kind], true);
-  if (view.boss !== null) best = offerBoss(view, out, best, view.boss);
+  if (view.boss !== null) best = offerBoss(view, out, best, view.boss, held);
   for (const rock of view.asteroids) best = offer(view, out, best, rock, rock.vx, rock.vy, PRIORITY.rock, true);
   return best < Infinity;
 }

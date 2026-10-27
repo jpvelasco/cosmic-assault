@@ -49,6 +49,7 @@ export const SFX_NAMES = [
   'zoneWarn',
   'gunshipDown',
   'mineDown',
+  'bossBolt',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -80,9 +81,10 @@ const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm', gunship: null, min
 /**
  * The most times a sound starts in one frame; the rest are dropped. Held fire plus a hit-stop catch-up would stack shot
  * blips, and a drone group arrives in one step, three to five at once, which is heard as one swarm. A spread volley
- * glancing off a shielded core is heard as one tick.
+ * glancing off a shielded core is heard as one tick. Foes' bolts are heard two at a time, and a boss's volley of bolts, a
+ * dozen at once, as one zap.
  */
-export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2 };
+export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2, bossBolt: 1 };
 
 /** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
 export function isBossKill(events: readonly SimEvent[]): boolean {
@@ -146,9 +148,9 @@ function soundOf(event: SimEvent): SfxName | null {
       return FORCE_SOUNDS[event.kind]?.close ?? null;
     case 'foeWindup':
       return 'windupTick';
-    // A foe's bolt zaps; a boss's bolts are its own to voice.
+    // Each source of bolt has its own voice: a foe's zaps, a boss's (a dozen at once in a volley) zaps more quietly.
     case 'boltFired':
-      return event.source === 'boss' ? null : 'bolt';
+      return event.source === 'boss' ? 'bossBolt' : 'bolt';
     case 'mineArmed':
       return 'mineArm';
     case 'mineBlast':

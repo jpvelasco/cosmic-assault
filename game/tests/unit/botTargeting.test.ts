@@ -24,7 +24,7 @@ function boss(target: Point | null, state: BossView['state'] = 'fighting', parts
   return bossView({ state, vulnerable: target !== null, parts, target });
 }
 
-const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0, wraps: true });
+const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0, wraps: true, weakPoint: false });
 
 function chosen(view: BotView): Target | null {
   const out = target();
@@ -125,11 +125,11 @@ describe('bot targeting', () => {
 
   it('leads a crossing target so a shot meets it, and aims across the wrap', () => {
     const view = sceneView();
-    const crossing = { x: 640 + 450, y: 360, vx: 0, vy: 225, wraps: true };
+    const crossing = { x: 640 + 450, y: 360, vx: 0, vy: 225, wraps: true, weakPoint: false };
     const heading = leadHeading(view, crossing);
     const t = 450 / (PLAYER.projectileSpeed * Math.cos(heading));
     expect(Math.sin(heading) * PLAYER.projectileSpeed * t).toBeCloseTo(225 * t, 6);
-    const acrossEdge = { x: 20, y: 360, vx: 0, vy: 0, wraps: true };
+    const acrossEdge = { x: 20, y: 360, vx: 0, vy: 0, wraps: true, weakPoint: false };
     view.ship = { ...view.ship, x: 1260 };
     expect(leadHeading(view, acrossEdge)).toBeCloseTo(0, 9);
   });

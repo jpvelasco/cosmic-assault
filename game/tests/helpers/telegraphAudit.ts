@@ -102,6 +102,10 @@ export const ATTACK_TELEGRAPHS: Readonly<Record<AttackId, AttackHarm>> = {
   launch: 'foes',
   broadside: 'rocks',
   retreat: 'active',
+  turretVolley: 'bolts',
+  lockOn: 'bolts',
+  spin: 'active',
+  ringPulse: 'active',
 };
 
 /**

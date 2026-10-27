@@ -54,7 +54,7 @@ function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
 }
 
 /** Each Dimension's boss; the M4 Sentinel holds the later ones until they get their own. */
-const BOSS_OF: Readonly<Record<Dimension, BossId>> = { 1: 'monolith', 2: 'hiveCarrier', 3: 'sentinel', 4: 'sentinel', 5: 'sentinel' };
+const BOSS_OF: Readonly<Record<Dimension, BossId>> = { 1: 'monolith', 2: 'hiveCarrier', 3: 'warden', 4: 'sentinel', 5: 'sentinel' };
 
 /** When, as a share of the duration, a galaxy's showers fall: one, or two with the second at 60%. */
 const SHOWER_SHARES: Readonly<Record<1 | 2, readonly number[]>> = { 1: [0.45], 2: [0.3, 0.6] };

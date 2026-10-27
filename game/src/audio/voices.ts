@@ -346,6 +346,11 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
     boom(bed, out, t, BOOMS.boomSmall);
     tone(bed, out, { type: 'triangle', from: 1800, to: 1200, start: t, duration: 0.12, peak: 0.07 });
   },
+  // A boss's bolt: a short falling zap over a hiss, quiet, since a volley fires a dozen at once.
+  bossBolt: (bed, out, t) => {
+    tone(bed, out, { type: 'square', from: 1100, to: 280, start: t, duration: 0.09, peak: 0.045 });
+    noiseBurst(bed, out, { filter: 'highpass', from: 3000, to: 1500, start: t, duration: 0.06, peak: 0.05 });
+  },
 };
 
 /** A sound that plays until it is stopped. */

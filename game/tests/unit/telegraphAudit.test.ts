@@ -118,8 +118,8 @@ describe('auditFoeAttacks', () => {
   });
 });
 
-/** Every boss galaxy, each with its own boss: the Monolith, the Hive Carrier and the Sentinel. */
-const BOSS_GALAXIES = ['1-6', '2-6', '3-6'] as const;
+/** The first galaxy each boss guards, so every boss's attacks are audited. */
+const BOSS_GALAXIES = GALAXIES.filter((g, i) => g.boss !== null && GALAXIES.findIndex((h) => h.boss === g.boss) === i).map((g) => g.id);
 
 /** Seconds between the blows that walk a boss through its phases, slow enough for each phase to show its attacks. */
 const BLOW_SECONDS = 1;

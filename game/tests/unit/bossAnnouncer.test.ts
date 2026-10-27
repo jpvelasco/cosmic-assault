@@ -83,6 +83,17 @@ describe('createBossAnnouncer', () => {
     expect(el?.textContent).toBe('Hive Carrier\'s hangar is closed');
   });
 
+  it('names the Warden as it arrives, through its phases and as it goes down', () => {
+    const announcer = createBossAnnouncer(root);
+    const el = made[0];
+    announcer.handle([{ type: 'bossIntro', id: 'warden' }]);
+    expect(el?.textContent).toBe('Warden approaches');
+    announcer.handle([{ type: 'bossPhase', phase: 3 }]);
+    expect(el?.textContent).toBe('Warden, phase 3 of 3');
+    announcer.handle([{ type: 'bossDown', id: 'warden' }]);
+    expect(el?.textContent).toBe('Warden down');
+  });
+
   it('clears its text as a galaxy starts, so a retry announces the same boss again', () => {
     const announcer = createBossAnnouncer(root);
     const el = made[0];
