@@ -3,12 +3,15 @@ import { bossHp, BOSSES } from '../../src/content/bosses';
 import { DRONE_SEPARATION } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
-import { bossTarget, BossRunner, MIN_WINDUP_SECONDS, type BossSetup } from '../../src/sim/boss/bossRunner';
-import { createHiveCarrier, DRONE_CAP, HANGAR_HALF_ARC, HANGAR_OPEN_SECONDS, LAUNCH_WAVES, TURN_RATE } from '../../src/sim/boss/hiveCarrier';
-import { STEP_SECONDS } from '../../src/sim/config';
+import { bossTarget, BossRunner, MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
+import type { BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import { CRUISE_SPEED, createHiveCarrier, DRONE_CAP, HANGAR_HALF_ARC, HANGAR_OPEN_SECONDS, HIVE_HOME_SHARE, LAUNCH_WAVES, TURN_RATE } from '../../src/sim/boss/hiveCarrier';
+import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
+import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import { FoeField } from '../../src/sim/foes/foeField';
+import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
@@ -16,6 +19,7 @@ import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed 
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF = BOSSES.hiveCarrier;
+/** Its HP in 2-★, the only galaxy it guards. */
 const MAX_HP = 70;
 const INTRO = 2;
 const APPROACH = 20;
@@ -85,7 +89,7 @@ const near = (a: number, b: number): boolean => Math.abs(a - b) < 1.5 * STEP_SEC
 
 describe('the Hive Carrier definition', () => {
   it('is a radius-100, 70 HP hull on three phases of launches, broadsides and retreats, resting less each phase', () => {
-    expect(DEF).toMatchObject({ name: 'Hive Carrier', radius: 100, hp: 70 });
+    expect(DEF).toMatchObject({ name: 'Hive Carrier', radius: 100, hp: 64 });
     expect(DEF.phases).toEqual([['launch', 'broadside'], ['launch', 'retreat', 'broadside'], ['launch', 'broadside', 'launch', 'retreat']]);
     expect(DEF.rest).toEqual([2.2, 1.6, 1.2]);
     expect(ATTACKS.launch.windup).toBe(0.7);
@@ -97,7 +101,7 @@ describe('the Hive Carrier definition', () => {
 
   it('guards 2-★, while the later Dimensions keep the Sentinel for now', () => {
     expect(galaxyById('2-6').boss).toBe('hiveCarrier');
-    expect(bossHp(DEF, 2)).toBe(MAX_HP + 6);
+    expect(bossHp(DEF, 2)).toBe(MAX_HP);
     for (const id of ['3-6', '4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
   });
 
@@ -315,6 +319,72 @@ describe('the Hive Carrier\'s flight', () => {
   });
 });
 
+describe('the Hive Carrier keeps clear of a fresh ship', () => {
+  /** The fields the game can have: 720 high, from the narrowest to the widest aspect. */
+  const FIELDS = [MIN_ASPECT, 16 / 9, MAX_ASPECT].map((aspect) => ({ width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT }));
+
+  it('arrives on its own row, centred no lower than 110 on a 720-high field, its hull at least the safe radius from the field\'s centre', () => {
+    for (const field of FIELDS) {
+      const foes = new FoeField(stubArena(undefined, field), createRng(FOES_SEED), { score: (base) => base, killed: () => undefined });
+      const setup: BossSetup = { maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field, foes };
+      const { view } = new BossRunner(DEF, createHiveCarrier(setup), setup);
+      expect(view.y).toBeCloseTo(field.height * HIVE_HOME_SHARE, 9);
+      expect(view.y).toBeLessThanOrEqual(110);
+      expect(Math.hypot(view.x - field.width / 2, view.y - field.height / 2) - view.radius, `${String(field.width)} wide`).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
+    }
+  });
+
+  it('keeps that row through a fight, so its hull never comes within the safe radius of the field\'s centre', () => {
+    for (const field of FIELDS) {
+      const rig = fighting(1, stubArena(undefined, field));
+      runFor(stepper(rig.r), rig.arena, 60, () => {
+        const { x, y, radius } = rig.r.view;
+        expect(Math.hypot(x - field.width / 2, y - field.height / 2) - radius).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
+        if (rig.r.view.vulnerable && rig.r.hp > 10) hitAt(rig, rim(rig, 0));
+      });
+    }
+  });
+
+  it('launches no drone within the safe radius of the ship, wherever the ship waits, yet still opens its hangar', () => {
+    /** Where the ship waits each step: at the field's centre, or riding along just under the hangar mouth. */
+    const waits: readonly ((view: Readonly<BossView>) => { x: number; y: number })[] = [
+      () => ({ x: BOSS_FIELD.width / 2, y: BOSS_FIELD.height / 2 }),
+      (view) => ({ x: view.x, y: view.y + view.radius + 30 }),
+      (view) => ({ x: view.x + 150, y: view.y + view.radius + 60 }),
+    ];
+    for (const [i, wait] of waits.entries()) {
+      const rig = fighting(1);
+      const { ship } = rig.arena;
+      let skipped = 0;
+      const log = runFor(stepper(rig.r), rig.arena, 40, () => {
+        Object.assign(ship, wait(rig.r.view));
+        for (const e of rig.arena.events) if (e.type === 'foeSpawned') expect(Math.hypot(e.x - ship.x, e.y - ship.y), `wait ${String(i)}`).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
+        if (rig.arena.events.some((e) => e.type === 'hangarOpen') && !rig.arena.events.some((e) => e.type === 'foeSpawned')) skipped++;
+        if (rig.r.view.vulnerable && rig.r.hp > 30) hitAt(rig, rim(rig, 0));
+      });
+      expect(launchTimes(log).length, `wait ${String(i)}`).toBeGreaterThan(3);
+      expect(timedOfType(log, 'hangarOpen').length, `wait ${String(i)}`).toBeGreaterThan(0);
+      // Under the mouth, every slot is too near: the waves are all skipped, and the hangar opens all the same.
+      if (i === 1) expect(skipped).toBe(timedOfType(log, 'hangarOpen').length);
+    }
+  });
+
+  it('forms no drone or broadside rock outside the field, even cruising against a wall', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const rig = fighting(seed);
+      // Off to one side and low, so the hangar turns toward the wall the carrier is cruising along.
+      Object.assign(rig.arena.ship, { x: 20, y: 300 });
+      const log = runFor(stepper(rig.r), rig.arena, 90, () => {
+        if (rig.foes.launched >= DRONE_CAP) rig.foes.clear();
+      });
+      const inField = (p: { x: number; y: number }) => p.x >= 0 && p.x <= BOSS_FIELD.width && p.y >= 0 && p.y <= BOSS_FIELD.height;
+      for (const l of timedOfType(log, 'foeSpawned')) expect(inField(l.event), `seed ${String(seed)} drone at ${String(l.event.x)}`).toBe(true);
+      for (const rock of rig.arena.asteroids) expect(inField({ x: rock.px, y: rock.py }), `seed ${String(seed)} rock`).toBe(true);
+      expect(timedOfType(log, 'foeSpawned').length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe('the Hive Carrier\'s telegraphs', () => {
   it('winds every attack up for at least 0.35 s, launching, firing and retreating nothing meanwhile', () => {
     for (const spec of Object.values(ATTACKS)) expect(spec.windup).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
@@ -325,9 +395,10 @@ describe('the Hive Carrier\'s telegraphs', () => {
     let rocks = 0;
     let lastX = rig.r.view.x;
     runFor(stepper(rig.r), rig.arena, 40, () => {
-      const { windup, x } = rig.r.view;
+      const { windup, active, x, radius } = rig.r.view;
       const moved = Math.abs(x - lastX);
       lastX = x;
+      const atWall = x === radius || x === BOSS_FIELD.width - radius;
       if (windup === null) {
         steps = 0;
         rocks = rig.arena.asteroids.length;
@@ -337,7 +408,9 @@ describe('the Hive Carrier\'s telegraphs', () => {
       seen.set(windup, Math.max(seen.get(windup) ?? 0, steps * STEP_SECONDS));
       expect(rig.arena.asteroids.length, `${windup}: no rocks`).toBe(rocks);
       expect(rig.arena.events.filter((e) => e.type === 'foeSpawned' || e.type === 'hangarOpen'), `${windup}: no drones`).toEqual([]);
-      expect(moved, `${windup}: no retreat`).toBeLessThan(1);
+      // Only its cruise moves it: one cruise step exactly, or less as it meets a wall.
+      expect(active, `${windup}: nothing active`).toBeNull();
+      if (!atWall) expect(Math.abs(moved - CRUISE_SPEED * STEP_SECONDS), `${windup}: no retreat`).toBeLessThan(1e-9);
     });
     for (const id of ['launch', 'broadside', 'retreat'] as const) expect(seen.get(id) ?? 0, id).toBeGreaterThanOrEqual(ATTACKS[id].windup - 2 * STEP_SECONDS);
   });
@@ -387,6 +460,27 @@ describe('the Hive Carrier in 2-★', () => {
   function calm(id: GalaxyId): GalaxyDef {
     return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
   }
+
+  it('spends a shot that strikes its hull with a spark, leaving the drone and the rock behind it whole', () => {
+    const world = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('2-6'), mode: 'free' } });
+    for (let i = 0; i < Math.round((APPROACH + INTRO + 0.5) / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
+    const boss = world.boss;
+    if (boss?.state !== 'fighting') throw new Error('the Hive Carrier should be fighting 22.5 s into 2-6');
+    // The stern, which never takes a hit, just outside the hull.
+    const at = { x: boss.x - Math.cos(boss.facing) * (boss.radius + 2), y: boss.y - Math.sin(boss.facing) * (boss.radius + 2) };
+    const run = (world as unknown as { run: { foes: FoeField } }).run;
+    expect(run.foes.launch('drone', at.x, at.y, 0)).toBe(true);
+    const rock = createAsteroid(createRng(1), at.x, at.y, 3, 0, 0);
+    (world.asteroids as Asteroid[]).push(rock);
+    (world.projectiles as Projectile[]).push(projectileFromShot({ x: at.x, y: at.y, vx: 0, vy: 0 }, 9000));
+    const events = world.step(STEP_SECONDS, NO_CONTROLS);
+    expect(events.filter((e) => e.type === 'bossDeflected')).toEqual([{ type: 'bossDeflected', x: at.x, y: at.y }]);
+    expect(events.filter((e) => e.type === 'bossHit' || e.type === 'foeHit' || e.type === 'foeDestroyed' || e.type === 'asteroidDestroyed')).toEqual([]);
+    expect(world.projectiles.filter((p) => p.id === 9000)).toEqual([]);
+    expect(world.asteroids).toContain(rock);
+    expect(world.foes).toHaveLength(1);
+    expect(boss.hp).toBe(MAX_HP);
+  });
 
   it('takes a life off a ship that never moves or fires, in a 120 s fight', () => {
     for (const seed of [1, 2, 3]) {

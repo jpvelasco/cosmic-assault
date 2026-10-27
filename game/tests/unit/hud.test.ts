@@ -6,7 +6,7 @@ import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { galaxyById } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, type TimedPickupId } from '../../src/content/pickups';
 import type { GalaxyId } from '../../src/content/types';
-import type { BossView } from '../../src/sim/boss/bossRunner';
+import type { BossView } from '../../src/sim/boss/behaviour';
 import type { ShowerState } from '../../src/sim/galaxy/showers';
 import { World } from '../../src/sim/world';
 

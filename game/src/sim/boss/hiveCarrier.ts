@@ -19,7 +19,12 @@ export const HANGAR_HALF_ARC = 0.5;
 export const TURN_RATE = 0.9;
 
 /** How fast it cruises across the field between retreats, units per second. */
-const CRUISE_SPEED = 40;
+export const CRUISE_SPEED = 40;
+/**
+ * Its row, as a share of the field height from the top: 108 on the 720-high field, so its hull stays more than the safe
+ * radius from a ship at the field's centre, where a ship starts and respawns.
+ */
+export const HIVE_HOME_SHARE = 0.15;
 /** A retreat ends this far inside the far wall, past the hull's own radius. */
 const RETREAT_INSET = 40;
 const RETREAT_SECONDS = 3;
@@ -58,8 +63,10 @@ function hullPoint(boss: Readonly<BossView>, ahead: number, across: number, out:
 /** Where the next drone or rock forms; one point, reused. */
 const spot: Point = { x: 0, y: 0 };
 
+const inField = ({ x, y }: Readonly<Point>, field: Field): boolean => x >= 0 && x <= field.width && y >= 0 && y <= field.height;
+
 /**
- * The Hive Carrier, Dimension 2's boss: a carrier hull cruising across the top third of the field, turning its hangar
+ * The Hive Carrier, Dimension 2's boss: a carrier hull cruising along a row high in the field, turning its hangar
  * toward the ship. Each launch sends a wave of drones out of the hangar and leaves its doors open for 2.5 s, the only
  * time and the only arc of hull where a shot hurts it; anywhere else the hull deflects the shot. It also fires
  * broadsides of rocks and retreats to the far side of the field.
@@ -86,6 +93,10 @@ class HiveCarrier implements BossBehaviour {
     private readonly foes: BossFoes,
   ) {
     this.direction = setup.rng.chance(0.5) ? 1 : -1;
+  }
+
+  home(field: Field): Readonly<Point> {
+    return { x: field.width / 2, y: field.height * HIVE_HOME_SHARE };
   }
 
   vulnerable(): boolean {
@@ -121,28 +132,35 @@ class HiveCarrier implements BossBehaviour {
     else if (boss.x === max) this.direction = -1;
   }
 
-  /** Opens the hangar, and sends out the phase's wave of drones, as many as the cap leaves room for. */
+  /**
+   * Opens the hangar, and sends out the phase's wave of drones, as many as the cap leaves room for. A drone whose slot
+   * lies outside the field or within the safe radius of the ship stays in.
+   */
   private launch(ctx: AttackContext): void {
-    const { boss } = ctx;
-    this.closesAt = ctx.arena.elapsed() + HANGAR_OPEN_SECONDS;
+    const { boss, arena } = ctx;
+    const { ship } = arena;
+    const field = arena.field();
+    this.closesAt = arena.elapsed() + HANGAR_OPEN_SECONDS;
     const count = Math.min(LAUNCH_WAVES[boss.phase], DRONE_CAP - this.foes.launched);
     const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;
     for (let i = 0; i < count; i++) {
-      const { x, y } = hullPoint(boss, mouth, lane(i, count, LAUNCH_SPACING), spot);
-      if (!this.foes.launch('drone', x, y, boss.facing + lane(i, count, LAUNCH_FAN))) return;
+      const at = hullPoint(boss, mouth, lane(i, count, LAUNCH_SPACING), spot);
+      if (!inField(at, field) || Math.hypot(at.x - ship.x, at.y - ship.y) < ASTEROID.safeRadius) continue;
+      if (!this.foes.launch('drone', at.x, at.y, boss.facing + lane(i, count, LAUNCH_FAN))) return;
     }
   }
 }
 
-/** Fires a line of pass-through rocks across its hangar, all flying the way it faces, none formed on top of the ship. */
+/** Fires a line of pass-through rocks across its hangar, all flying the way it faces, none formed off the field or on top of the ship. */
 function broadside(ctx: AttackContext): void {
   const { boss, arena } = ctx;
   const { ship } = arena;
+  const field = arena.field();
   const count = BROADSIDE_ROCKS[boss.phase];
   const ahead = boss.radius + ASTEROID.radii[BROADSIDE_SIZE];
   for (let i = 0; i < count; i++) {
-    const { x, y } = hullPoint(boss, ahead, lane(i, count, BROADSIDE_SPACING), spot);
-    if (Math.hypot(x - ship.x, y - ship.y) >= BROADSIDE_CLEARANCE) transientRock(ctx, x, y, BROADSIDE_SIZE, boss.facing, BROADSIDE_SPEED);
+    const at = hullPoint(boss, ahead, lane(i, count, BROADSIDE_SPACING), spot);
+    if (inField(at, field) && Math.hypot(at.x - ship.x, at.y - ship.y) >= BROADSIDE_CLEARANCE) transientRock(ctx, at.x, at.y, BROADSIDE_SIZE, boss.facing, BROADSIDE_SPEED);
   }
 }
 

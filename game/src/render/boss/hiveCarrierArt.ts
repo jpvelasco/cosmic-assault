@@ -25,7 +25,7 @@ const polar = (angle: number, radius: number): Point => ({ x: Math.cos(angle) * 
 
 /**
  * The hull at radius 1, its hangar facing +x and its long axis across it: a rounded prow around the hangar, swept
- * wings out to the tips and a squared stern with two engine pods.
+ * wings out to the tips and a blunt stern with two engine pods, reaching most of the way round its hit circle.
  */
 const HULL: readonly Point[] = [
   ...Array.from({ length: 7 }, (_, i) => polar(-0.62 + (i / 6) * 1.24, 0.96)),
@@ -33,12 +33,14 @@ const HULL: readonly Point[] = [
   { x: 0.36, y: 0.92 },
   { x: 0.12, y: 1.02 },
   { x: -0.12, y: 0.96 },
-  { x: -0.3, y: 0.72 },
-  { x: -0.46, y: 0.46 },
-  { x: -0.56, y: 0.22 },
-  { x: -0.56, y: -0.22 },
-  { x: -0.46, y: -0.46 },
-  { x: -0.3, y: -0.72 },
+  { x: -0.34, y: 0.78 },
+  { x: -0.56, y: 0.56 },
+  { x: -0.74, y: 0.3 },
+  { x: -0.8, y: 0.12 },
+  { x: -0.8, y: -0.12 },
+  { x: -0.74, y: -0.3 },
+  { x: -0.56, y: -0.56 },
+  { x: -0.34, y: -0.78 },
   { x: -0.12, y: -0.96 },
   { x: 0.12, y: -1.02 },
   { x: 0.36, y: -0.92 },
@@ -57,7 +59,7 @@ const DECK: readonly Point[] = [
 ];
 
 /** Where the engines and the wing lights sit, at radius 1. */
-export const ENGINES: readonly Point[] = [{ x: -0.56, y: 0.15 }, { x: -0.56, y: -0.15 }];
+export const ENGINES: readonly Point[] = [{ x: -0.72, y: 0.2 }, { x: -0.72, y: -0.2 }];
 const WING_LIGHTS: readonly Point[] = [{ x: 0.12, y: 0.94 }, { x: 0.12, y: -0.94 }, { x: -0.16, y: 0.86 }, { x: -0.16, y: -0.86 }];
 
 /** Traces an annular sector from `from` to `to` radians, between radii `inner` and `outer`. */

@@ -24,10 +24,10 @@ export type FoeKind = 'splitter' | 'drone';
 /** Everything the director can spawn from its threat budget. */
 export type ThreatKind = RockKind | FoeKind;
 
-/** The bosses so far: the Monolith guards Dimension 1; the M4 placeholder Sentinel stands in for the rest. */
+/** The bosses so far: the Monolith guards Dimension 1 and the Hive Carrier Dimension 2; the M4 placeholder Sentinel stands in for the rest. */
 export type BossId = 'sentinel' | 'monolith' | 'hiveCarrier';
 
-/** The moves a boss draws on: the Sentinel's, then the Monolith's. */
+/** The moves a boss draws on: the Sentinel's, then the Monolith's, then the Hive Carrier's. */
 export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat';
 
 /**

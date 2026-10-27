@@ -3,7 +3,7 @@ import { BOSS_FLASH_SECONDS, createBossPass, type BossPass } from '../../src/ren
 import { createFieldPen } from '../../src/render/fieldPen';
 import { DRIFT } from '../../src/render/palette';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
-import type { BossPart, BossView } from '../../src/sim/boss/bossRunner';
+import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 
 interface Draw {
   readonly image: unknown;

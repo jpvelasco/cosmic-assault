@@ -104,6 +104,8 @@ export interface BossBehaviour {
   readonly parts?: readonly BossPart[];
   /** How far from the core's centre the boss reaches, parts included; its drift keeps that much inside the field. The core radius if absent. */
   readonly reach?: number;
+  /** Where in `field` it arrives; `bossHome` if absent. */
+  home?(field: Field): Readonly<Point>;
   /** The events announcing its core exposed and shielded again; `bossExposed` and `bossShielded` if absent. */
   readonly exposure?: Exposure;
   /** Runs at the end of every step until the boss is down, after its core has drifted or attacked: it moves its parts, say. */

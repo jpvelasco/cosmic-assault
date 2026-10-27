@@ -9,6 +9,7 @@ import type { Arena } from '../rules';
 import { rescale } from '../wrap';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
 
+// The contract lives in ./behaviour; this re-export serves the bot branch until it is rebased onto it, then goes.
 export type { AttackContext, AttackSpec, BossBehaviour, BossFactory, BossFoes, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
 
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
@@ -117,7 +118,7 @@ export class BossRunner {
     private readonly setup: BossSetup,
   ) {
     assertAttacks(def, behaviour);
-    const home = bossHome(setup.field);
+    const home = behaviour.home?.(setup.field) ?? bossHome(setup.field);
     this.view = {
       id: def.id,
       x: home.x,

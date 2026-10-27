@@ -1,5 +1,6 @@
 import { HANGAR_HALF_ARC } from '../../sim/boss/hiveCarrier';
 import { TAU } from '../../sim/math';
+import type { Palette } from '../palette';
 import { blitCore, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { ENGINES, HIVE_ART_REACH, paintHiveBay, paintHiveDoor, paintHiveHull } from './hiveCarrierArt';
 
@@ -30,18 +31,14 @@ export const hiveCarrierDrawer: DrawerFactory = (kit) => {
   const glowColor = palette.accent[2];
   let radius = 0;
   let keys = keysFor(radius);
-  const paintHull = (c: CanvasRenderingContext2D): void => {
-    paintHiveHull(c, radius, palette);
+  /** A sprite painter for `paint` at the radius in force, made once so drawing builds no closures. */
+  const painter = (paint: (c: CanvasRenderingContext2D, r: number, p: Palette) => void) => (c: CanvasRenderingContext2D): void => {
+    paint(c, radius, palette);
   };
-  const paintBay = (c: CanvasRenderingContext2D): void => {
-    paintHiveBay(c, radius, palette);
-  };
-  const paintDoorUp = (c: CanvasRenderingContext2D): void => {
-    paintHiveDoor(c, radius, palette, 1);
-  };
-  const paintDoorDown = (c: CanvasRenderingContext2D): void => {
-    paintHiveDoor(c, radius, palette, -1);
-  };
+  const paintHull = painter(paintHiveHull);
+  const paintBay = painter(paintHiveBay);
+  const paintDoorUp = painter((c, r, p) => { paintHiveDoor(c, r, p, 1); });
+  const paintDoorDown = painter((c, r, p) => { paintHiveDoor(c, r, p, -1); });
   /** How far open the doors are, 0 shut to 1 wide open. */
   let doors = 0;
   let time = 0;
