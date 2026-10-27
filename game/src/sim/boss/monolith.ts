@@ -55,8 +55,9 @@ function offsetFrom(aim: number, part: Readonly<BossPart>, boss: Readonly<BossVi
 }
 
 /**
- * The Monolith, Dimension 1's boss: a heavy core wrapped in 8 to 12 orbiting shards of 2 HP each. While four or more
- * remain the core deflects every shot; at three or fewer it is bare, and grows one back every 6 s. It throws its shards
+ * The Monolith, Dimension 1's boss: a heavy core wrapped in `SHARD_COUNTS` orbiting shards of `SHARD_HP` each. While
+ * more than `EXPOSED_AT` remain the core deflects every shot; at `EXPOSED_AT` or fewer it is bare, and grows one back
+ * every `REGROW_SECONDS`. It throws its shards
  * at the ship and calls them back, quakes rings of small rocks out of itself, and pulses the ship away.
  */
 class Monolith implements BossBehaviour {

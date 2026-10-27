@@ -66,8 +66,8 @@
     lowers it by one) and the timed effects, each with a clock; collecting a
     running kind refreshes it and never stacks. `volley.ts` composes the ship's
     barrels from the tier and the running effects, and effects only ever add
-    shots or shorten the fire interval. The shield absorbs one hit. The HUD
-    shows a pill with a countdown for each running timed effect
+    shots or shorten the fire interval. A protective pickup absorbs one hit.
+    The HUD shows a pill with a countdown for each running timed effect
     (`render/hudPickups.ts`). Which kinds the player has collected is saved
     (`seenPickups`) and decided in `app/pickupNotices.ts`, because the sim
     knows nothing of what the player has seen: a kind's first drop is announced

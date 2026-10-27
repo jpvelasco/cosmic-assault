@@ -27,8 +27,8 @@ export const FOES: Readonly<Record<FoeKind, FoeDef>> = {
 /** Radians per second a drone can turn toward the ship. */
 export const DRONE_TURN_RATE = 2.2;
 /**
- * How drones keep apart (Ruling R14): a neighbour within `radius` units pushes a drone's wanted heading away from it,
- * up to `weight` times the pull of the ship when the two touch centres.
+ * How drones keep apart, so a swarm never stacks into what looks like one drone: a neighbour within `radius` units
+ * pushes a drone's wanted heading away from it, up to `weight` times the pull of the ship when the two touch centres.
  */
 export const DRONE_SEPARATION = { radius: 28, weight: 2.5 } as const;
 /** A broken splitter leaves this many tiny fragments, each this many times as fast as a tiny rock. */

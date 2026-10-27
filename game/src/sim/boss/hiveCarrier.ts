@@ -71,9 +71,9 @@ const clearSlot = ({ x, y }: Readonly<Point>, field: Field, ship: Readonly<Point
 
 /**
  * The Hive Carrier, Dimension 2's boss: a carrier hull cruising along a row high in the field, turning its hangar
- * toward the ship. Each launch sends a wave of drones out of the hangar and leaves its doors open for 2.5 s, the only
- * time and the only arc of hull where a shot hurts it; anywhere else the hull deflects the shot. It also fires
- * broadsides of rocks and retreats to the far side of the field.
+ * toward the ship. Each launch sends a wave of drones out of the hangar and leaves its doors open for
+ * `HANGAR_OPEN_SECONDS`, the only time and the only arc of hull where a shot hurts it; anywhere else the hull deflects
+ * the shot. It also fires broadsides of rocks and retreats to the far side of the field.
  */
 class HiveCarrier implements BossBehaviour {
   readonly driftSpeed = 0;

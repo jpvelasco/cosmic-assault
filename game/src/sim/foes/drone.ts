@@ -57,8 +57,8 @@ function pickLine(rng: Rng, count: number, field: Field, ship: Readonly<Ship>): 
 
 /**
  * A small craft that hunts the ship at a constant speed, turning toward it at a limited rate, so a wide circle or a
- * sharp turn of your own sheds it. It steers clear of the drones beside it as it seeks (Ruling R14), so a swarm
- * stays a swarm rather than one stacked drone. It arrives in a line along one edge. Gravity wells do not pull it: its
+ * sharp turn of your own sheds it. It steers clear of the drones beside it as it seeks (`DRONE_SEPARATION`), so a
+ * swarm stays a swarm of separate drones rather than stacking into one. It arrives in a line along one edge. Gravity wells do not pull it: its
  * speed is its own, and a nudge would break both that and the turn limit that makes it fair.
  */
 export const DRONE: FoeBehaviour = {

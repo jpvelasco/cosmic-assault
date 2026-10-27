@@ -58,7 +58,9 @@ export type ClaimId = (typeof ENTRIES)[number]['claim'];
  * Specs take their seeds from here (`seedFor`), never as literals.
  *
  * When content or balance changes break a claim, the guard fails and prints `run: npm run find-seeds -- <claim>`; set
- * the seed here to the lowest one it lists. Add a claim for any new seed a spec relies on.
+ * the seed here to the lowest one it lists. A seed that still keeps its claim stays, even where a lower one would keep
+ * it too, so the specs it drives do not change under them (and specs that share one seed across claims keep sharing
+ * it). Add a claim for any new seed a spec relies on, with the lowest seed `find-seeds` lists for it.
  */
 export const E2E_SEEDS: readonly SeedEntry[] = ENTRIES;
 

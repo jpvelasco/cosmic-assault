@@ -285,7 +285,7 @@ describe('drone', () => {
     expect(r.foes.list).toHaveLength(2);
   });
 
-  it('keeps a swarm of 5 chasing a circling ship at least 16 units apart once 2 s have passed (Ruling R14)', () => {
+  it('keeps a swarm of 5 chasing a circling ship at least 16 units apart once 2 s have passed, never stacking into one', () => {
     const r = rig({ field: FIELD_43, shipX: 820, shipY: 360 });
     r.foes.spawn('drone', 5, 1);
     const drones = r.foes.list;

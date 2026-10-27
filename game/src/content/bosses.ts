@@ -28,7 +28,7 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   hiveCarrier: {
     id: 'hiveCarrier',
     name: 'Hive Carrier',
-    // 70 in 2-★, the only galaxy it guards.
+    // `bossHp` adds a Dimension's share in 2-★, the only galaxy it guards.
     hp: 22,
     radius: 100,
     phases: [['launch', 'broadside'], ['launch', 'retreat', 'broadside'], ['launch', 'broadside', 'launch', 'retreat']],

@@ -146,7 +146,7 @@ describe('the Hive Carrier\'s hangar', () => {
     expect(hitAt(rig, target)).toBe('hit');
   });
 
-  it('opens on the step each launch runs and stays open 2.5 s, then deflects every blow until the next', () => {
+  it('opens on the step each launch runs and stays open HANGAR_OPEN_SECONDS, then deflects every blow until the next', () => {
     const rig = fighting();
     const log = runFor(stepper(rig.r), rig.arena, 12);
     const opened = timedOfType(log, 'hangarOpen').map((l) => l.at);
@@ -165,7 +165,7 @@ describe('the Hive Carrier\'s hangar', () => {
     expect(hitAt(rig, rim(rig, 0))).toBe('deflected');
   });
 
-  it('always opens again after a launch, even one the drone cap leaves empty, and stays open 2.5 s (RF 4)', () => {
+  it('always opens again after a launch, even one the drone cap leaves empty, and stays open HANGAR_OPEN_SECONDS, so the fight never stalls shut', () => {
     for (const seed of [1, 2, 3, 4]) {
       const rig = fighting(seed);
       // Fill the cap before the first launch: every launch of the fight is then skipped.
