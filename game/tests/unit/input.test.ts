@@ -22,7 +22,7 @@ describe('controlsFromKeys', () => {
     expect(controlsFromKeys(keys(code)).thrust).toBe(true);
   });
 
-  it.each(['Space', 'ShiftLeft', 'ShiftRight'])('fires on %s', (code) => {
+  it.each(['Space', 'ShiftLeft', 'ShiftRight', 'KeyZ', 'KeyX'])('fires on %s', (code) => {
     expect(controlsFromKeys(keys(code)).fire).toBe(true);
   });
 
@@ -34,13 +34,31 @@ describe('controlsFromKeys', () => {
     expect(controlsFromKeys(keys(a, b)).turn).toBe(0);
   });
 
+  // Many keyboards cannot report Up + Left + Space at once (key ghosting), so the third key of that chord never
+  // arrives; the game's answer is fire keys away from the arrow cluster. Every steering and thrust key must still
+  // combine with every fire key.
+  it.each(
+    ['ArrowUp', 'KeyW'].flatMap((thrust) =>
+      ['Space', 'ShiftLeft', 'KeyZ', 'KeyX'].flatMap((fire) =>
+        ([
+          ['ArrowLeft', -1],
+          ['KeyA', -1],
+          ['ArrowRight', 1],
+          ['KeyD', 1],
+        ] as const).map(([turnKey, turn]) => [thrust, fire, turnKey, turn] as const),
+      ),
+    ),
+  )('turns with %s + %s + %s held', (thrust, fire, turnKey, turn) => {
+    expect(controlsFromKeys(keys(thrust, fire, turnKey))).toEqual({ turn, thrust: true, fire: true });
+  });
+
   it('ignores unrelated keys', () => {
-    expect(controlsFromKeys(keys('KeyZ', 'KeyD'))).toEqual({ turn: 1, thrust: false, fire: false });
+    expect(controlsFromKeys(keys('KeyQ', 'KeyD'))).toEqual({ turn: 1, thrust: false, fire: false });
   });
 
   it('claims exactly the game keys, with no debug binding', () => {
     expect([...GAME_KEY_CODES].sort()).toEqual(
-      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'KeyA', 'KeyD', 'KeyW', 'Space', 'ShiftLeft', 'ShiftRight'].sort(),
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'KeyA', 'KeyD', 'KeyW', 'Space', 'ShiftLeft', 'ShiftRight', 'KeyZ', 'KeyX'].sort(),
     );
   });
 });

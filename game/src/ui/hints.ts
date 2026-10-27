@@ -9,11 +9,18 @@ export interface HintCopy {
   readonly restart: string;
   /** Mode select: what to press to choose, since nothing is focused until a key or tap moves there. */
   readonly choose: string;
+  /** Title: how to fly and fire, or empty where the touch controls speak for themselves. */
+  readonly controls: string;
 }
 
 const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
-  keys: { start: 'Press Space to start', restart: 'Press R to play again', choose: 'Arrow keys to choose, Enter to go' },
-  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode' },
+  keys: {
+    start: 'Press Space to start',
+    restart: 'Press R to play again',
+    choose: 'Arrow keys to choose, Enter to go',
+    controls: 'Fly with the arrows or WASD · fire with Space, Z or X',
+  },
+  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode', controls: '' },
 };
 
 export function hintCopy(style: InputStyle): HintCopy {

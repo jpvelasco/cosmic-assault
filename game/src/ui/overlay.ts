@@ -83,10 +83,10 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement): HTMLElement {
+function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, chipRow, build);
+  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
   return panel;
 }
 
@@ -157,7 +157,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
-  const title = titlePanel(play, titleResumeSlot, titleRow, startHint);
+  const controlsHint = withTestId(element('p', 'hint'), 'controls-hint');
+  const title = titlePanel(play, titleResumeSlot, titleRow, startHint, controlsHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
   const panels: Partial<Record<Screen, HTMLElement>> = {
     title,
@@ -206,6 +207,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       quit.textContent = quitLabel(flow);
       const hints = hintCopy(inputStyle);
       startHint.textContent = hints.start;
+      controlsHint.textContent = hints.controls;
+      controlsHint.hidden = hints.controls === '';
       modes.setHint(hints.choose);
       dimensionMap.update(save);
       galaxySelect.update(flow.dimension, save);
