@@ -1,5 +1,5 @@
 import { clamp } from '../content/curves';
-import { HAZARD_RULES, WARP_RIFT } from '../content/hazards';
+import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../content/hazards';
 import type { Field } from '../sim/field';
 import type { HazardState, PointHazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
 import { TAU } from '../sim/math';
@@ -15,12 +15,26 @@ export interface HazardPass {
    * a glow, three arcs swirling round it (held still and breathing under reduced motion) and a dark lens at its heart.
    * A repulsion field: a warning ring growing outward, then ripples spreading out from its heart. A warp rift, once
    * open: a swirl at each mouth linked by a dashed arc. A lethal danger zone: filled, hatched and outlined solid in the
-   * hostile hue (its warning is `drawWarnings`'). Expects `source-over`, which it leaves as it found it, with alpha 1.
+   * hostile hue (its warning is `drawWarnings`'). A black hole: a dark lens with a bent-light halo and an accretion ring
+   * turning over it (still under reduced motion), its warning a dashed ring in the hostile hue. Expects `source-over`, which it leaves as it found it, with alpha 1.
    */
   drawHazards(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
   /** The danger zones' and warp rifts' warnings, drawn over the rocks and foes so nothing hides one. */
   drawWarnings(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
 }
+
+/**
+ * The black hole: its dark lens is drawn at its true horizon, its bent-light halo and accretion ring at these multiples of
+ * it, and its pull's glow over the field's middle. The ring is a flat ellipse, turning slowly; under reduced motion it holds still.
+ */
+const { telegraph: HOLE_TELEGRAPH_SECONDS, seconds: HOLE_SECONDS } = HAZARD_RULES.blackHole;
+const HOLE_HORIZON = BLACK_HOLE.horizon;
+const HOLE_LENS_RADIUS = HOLE_HORIZON * 2.4;
+const HOLE_DISC_RADIUS = HOLE_HORIZON * 2.4;
+const HOLE_DISC_SQUASH = 0.32;
+const HOLE_SPIN_RATE = 0.9;
+const HOLE_GLOW_DIAMETER = 520;
+const HOLE_GLOW_ALPHA = 0.45;
 
 /** A repulsion field: its ripples, one a third of a cycle behind the next, spread out from it over this many seconds. */
 const { telegraph: REPULSE_TELEGRAPH_SECONDS, seconds: REPULSE_SECONDS } = HAZARD_RULES.repulsionField;
@@ -174,6 +188,52 @@ function paintHorizon(ctx: CanvasRenderingContext2D, r: number, rim: string): vo
   strokePath(ctx, rgba(mix(rim, WHITE, 0.6), 0.9), 1.6);
 }
 
+/** The black hole's lens: a bent-light halo just beyond the horizon, the dark disc within it and a bright photon ring at its rim. */
+function paintLens(ctx: CanvasRenderingContext2D, rim: string): void {
+  const halo = ctx.createRadialGradient(0, 0, HOLE_HORIZON, 0, 0, HOLE_LENS_RADIUS);
+  halo.addColorStop(0, rgba(rim, 0.5));
+  halo.addColorStop(1, rgba(rim, 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(-HOLE_LENS_RADIUS, -HOLE_LENS_RADIUS, HOLE_LENS_RADIUS * 2, HOLE_LENS_RADIUS * 2);
+  const dark = ctx.createRadialGradient(0, 0, 0, 0, 0, HOLE_HORIZON * 1.1);
+  dark.addColorStop(0, rgba('#000000', 1));
+  dark.addColorStop(0.85, rgba('#000000', 0.97));
+  dark.addColorStop(1, rgba('#000000', 0));
+  ctx.fillStyle = dark;
+  ctx.fillRect(-HOLE_HORIZON * 1.1, -HOLE_HORIZON * 1.1, HOLE_HORIZON * 2.2, HOLE_HORIZON * 2.2);
+  ctx.beginPath();
+  ctx.arc(0, 0, HOLE_HORIZON * 1.02, 0, TAU);
+  strokePath(ctx, rgba(mix(rim, WHITE, 0.6), 0.95), 2);
+}
+
+/** The accretion ring: a flat, glowing ellipse, with a hot head on one side that carries the turn. */
+function paintDisc(ctx: CanvasRenderingContext2D, color: string): void {
+  const rx = HOLE_DISC_RADIUS;
+  const ry = HOLE_DISC_RADIUS * HOLE_DISC_SQUASH;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
+  strokePath(ctx, rgba(color, 0.18), 10);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
+  strokePath(ctx, rgba(color, 0.7), 3.5);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, -0.6, 0.6);
+  strokePath(ctx, rgba(mix(color, WHITE, 0.7), 0.95), 2.2);
+}
+
+/** The black hole's warning: a dashed ring where its accretion will be, and a solid one at its horizon. */
+function paintHoleWarning(ctx: CanvasRenderingContext2D, color: string): void {
+  ctx.setLineDash([12, 9]);
+  ctx.beginPath();
+  ctx.arc(0, 0, HOLE_DISC_RADIUS, 0, TAU);
+  strokePath(ctx, rgba(color, 0.9), 2.5);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(0, 0, HOLE_HORIZON, 0, TAU);
+  strokePath(ctx, rgba(mix(color, WHITE, 0.4), 0.9), 1.6);
+}
+
 /** The warning: a thin ring with a fainter halo either side of it. */
 function paintOutline(ctx: CanvasRenderingContext2D, r: number, color: string): void {
   for (const [width, alpha] of [
@@ -257,6 +317,47 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), well, size * (0.92 + 0.08 * shown), (still ? 0 : time * arc.rate) + arc.phase, field);
     ctx.globalCompositeOperation = 'source-over';
     if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), well, size * shown, 0, field);
+  }
+
+  const holeLensKey = `hole|${palette.id}|lens`;
+  const holeDiscKey = `hole|${palette.id}|disc`;
+  const holeWarnKey = `hole|${palette.id}|warn`;
+  const [holeGlow, holeDisc, holeRim] = palette.accent;
+  const paintLensNow = (c: CanvasRenderingContext2D): void => {
+    paintLens(c, holeRim);
+  };
+  const paintDiscNow = (c: CanvasRenderingContext2D): void => {
+    paintDisc(c, holeDisc);
+  };
+  const paintHoleWarnNow = (c: CanvasRenderingContext2D): void => {
+    paintHoleWarning(c, palette.hostile);
+  };
+  const holeLensHalf = HOLE_LENS_RADIUS + SPRITE_PAD;
+  const holeDiscHalf = HOLE_DISC_RADIUS + SPRITE_PAD;
+  const holeDiscHalfH = HOLE_DISC_RADIUS * HOLE_DISC_SQUASH + SPRITE_PAD;
+
+  /**
+   * An active black hole: its glow over the field, the dark lens at its horizon and the accretion ring turning over it.
+   * Each is a baked sprite, and under reduced motion the ring holds still.
+   */
+  function drawHole(hole: Readonly<PointHazardState>, field: Field, { glow, time, still }: SceneLook): void {
+    const shown = presenceOf(hole.remaining, HOLE_SECONDS);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = HOLE_GLOW_ALPHA * glow * shown;
+    put(baker.glow(holeGlow, HOLE_GLOW_DIAMETER), hole, 1, 0, field);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = shown;
+    put(baker.custom(holeLensKey, holeLensHalf, paintLensNow), hole, 1, 0, field);
+    ctx.globalCompositeOperation = 'lighter';
+    put(baker.custom(holeDiscKey, holeDiscHalf, paintDiscNow, holeDiscHalfH), hole, 1, still ? 0 : time * HOLE_SPIN_RATE, field);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /** A black hole's warning: its rings, pulsing faster as it comes due; still under reduced motion. */
+  function drawHoleWarning(hole: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
+    const due = 1 - clamp(hole.remaining / HOLE_TELEGRAPH_SECONDS, 0, 1);
+    ctx.globalAlpha = still ? 0.7 : 0.4 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * (OUTLINE_PULSE_HZ + 2 * due)));
+    put(baker.custom(holeWarnKey, holeDiscHalf, paintHoleWarnNow), hole, 1, 0, field);
   }
 
   const rippleKey = `repulse|${palette.id}|ripple`;
@@ -404,6 +505,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
           if (hazard.stage === 'warning') drawRepulsionWarning(hazard, field, look);
           else drawRepulsion(hazard, field, look);
         } else if (hazard.type === 'warpRift' && hazard.stage === 'active') drawRiftOpen(hazard, field, look);
+        else if (hazard.type === 'blackHole' && hazard.stage === 'active') drawHole(hazard, field, look);
         ctx.globalAlpha = 1;
       }
     },
@@ -411,6 +513,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
       for (const hazard of hazards) {
         if (hazard.type === 'dangerZone' && hazard.stage === 'warning') drawZone(hazard, field, look);
         else if (hazard.type === 'warpRift' && hazard.stage === 'warning') drawRiftWarning(hazard, field, look);
+        else if (hazard.type === 'blackHole' && hazard.stage === 'warning') drawHoleWarning(hazard, field, look);
       }
       ctx.globalAlpha = 1;
     },

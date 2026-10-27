@@ -40,6 +40,7 @@ export const HAZARD_TELEGRAPHS: Readonly<Partial<Record<HazardType, HazardTelegr
   repulsionField: { warning: 'wellWarning', start: 'wellStart' },
   dangerZone: { warning: 'zoneWarning', start: 'zoneStart' },
   warpRift: { warning: 'riftWarning', start: 'riftOpen' },
+  blackHole: { warning: 'holeWarning', start: 'holeStart' },
 };
 
 const AUDITED = Object.entries(HAZARD_TELEGRAPHS) as [HazardType, HazardTelegraph][];

@@ -61,6 +61,9 @@ export const SFX_NAMES = [
   'repulseClose',
   'blast',
   'armourDeflect',
+  'holeWarn',
+  'holeOpen',
+  'holeClose',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -166,6 +169,13 @@ function soundOf(event: SimEvent): SfxName | null {
       return FORCE_SOUNDS[event.kind].open;
     case 'wellEnd':
       return FORCE_SOUNDS[event.kind].close;
+    // The black hole's own sounds: its warning, its opening and its close; it hums while it is active (see `humFor`).
+    case 'holeWarning':
+      return 'holeWarn';
+    case 'holeStart':
+      return 'holeOpen';
+    case 'holeEnd':
+      return 'holeClose';
     case 'foeDeflected':
       return 'armourDeflect';
     case 'phaserWarn':
@@ -230,7 +240,7 @@ function soundOf(event: SimEvent): SfxName | null {
 }
 
 /** The looped hums: a gravity well's while it pulls, a danger zone's while it is lethal. */
-export const HUM_NAMES = ['well', 'zone'] as const;
+export const HUM_NAMES = ['well', 'zone', 'hole'] as const;
 export type HumName = (typeof HUM_NAMES)[number];
 
 /** How an event changes the hums: one starts or stops, or every one falls silent. */
@@ -241,6 +251,8 @@ const HUM_CHANGES = {
   wellOff: { hum: 'well', on: false },
   zoneOn: { hum: 'zone', on: true },
   zoneOff: { hum: 'zone', on: false },
+  holeOn: { hum: 'hole', on: true },
+  holeOff: { hum: 'hole', on: false },
 } as const satisfies Readonly<Record<string, HumChange>>;
 
 /**
@@ -259,6 +271,10 @@ export function humFor(event: SimEvent): HumChange | null {
       return HUM_CHANGES.zoneOn;
     case 'zoneEnd':
       return HUM_CHANGES.zoneOff;
+    case 'holeStart':
+      return HUM_CHANGES.holeOn;
+    case 'holeEnd':
+      return HUM_CHANGES.holeOff;
     case 'warpOut':
     case 'gameOver':
     case 'galaxyStart':

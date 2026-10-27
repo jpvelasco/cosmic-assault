@@ -168,8 +168,8 @@ export class WarpRifts implements Hazard {
       // A charging mine that blasts within the windup reaches the ship by its blast radius, whether the mine or the ship jumped.
       if ((shipJumped || jumped) && foe.kind === 'mine' && foe.charging && foe.timer <= MIN_WINDUP_SECONDS) this.grace(field, ship, foe, MINE.blastRadius, foe.timer);
     }
-    if (!shipJumped) return;
-    for (const bolt of bodies.bolts) this.grace(field, ship, bolt, bolt.radius, MIN_WINDUP_SECONDS);
+    if (!shipJumped || bodies.bolts === null) return;
+    for (const bolt of bodies.bolts.list) this.grace(field, ship, bolt, bolt.radius, MIN_WINDUP_SECONDS);
   }
 
   /**

@@ -1,6 +1,6 @@
 import type { Field } from '../sim/field';
 import type { Palette } from './palette';
-import { bakeSky, bakeVignette } from './sky';
+import { bakeSky, bakeTimeWarp, bakeVignette } from './sky';
 import type { SpriteBaker } from './sprites';
 import { visualScaleFor, type VisualScale } from './visualScale';
 
@@ -23,6 +23,8 @@ export interface Layout {
 export interface Bakes {
   readonly sky: HTMLCanvasElement;
   readonly vignette: HTMLCanvasElement;
+  /** Time Warp's vignette: drawn over the field only while the warp runs. */
+  readonly timeWarp: HTMLCanvasElement;
 }
 
 /**
@@ -69,8 +71,8 @@ export function layoutFor(cssWidth: number, cssHeight: number, field: Field, dpr
 }
 
 /** Releases the bakes' backing stores now, rather than whenever the collector gets to them (iOS caps canvas memory). */
-function freeBakes({ sky, vignette }: Bakes): void {
-  for (const canvas of [sky, vignette]) {
+function freeBakes({ sky, vignette, timeWarp }: Bakes): void {
+  for (const canvas of [sky, vignette, timeWarp]) {
     canvas.width = 0;
     canvas.height = 0;
   }
@@ -85,7 +87,7 @@ export function createBackdrop(baker: SpriteBaker, initial: Palette, skySeed: nu
 
   function bake({ field, scale, dpr, k, visual }: Layout): void {
     const previous = bakes;
-    bakes = { sky: bakeSky(field, k, palette, skySeed), vignette: bakeVignette(field, k) };
+    bakes = { sky: bakeSky(field, k, palette, skySeed), vignette: bakeVignette(field, k), timeWarp: bakeTimeWarp(field, k) };
     if (previous !== null) freeBakes(previous);
     baker.setScale(scale, dpr, visual);
   }

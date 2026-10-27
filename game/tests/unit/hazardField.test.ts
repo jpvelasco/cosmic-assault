@@ -127,8 +127,8 @@ describe('HazardField', () => {
     ]);
   });
 
-  it('builds hazards from the shared table: wells, repulsion fields, danger zones and warp rifts', () => {
-    expect(Object.keys(HAZARD_FACTORIES).sort()).toEqual(['dangerZone', 'gravityWell', 'repulsionField', 'warpRift']);
+  it('builds hazards from the shared table: wells, repulsion fields, danger zones, warp rifts and the black hole', () => {
+    expect(Object.keys(HAZARD_FACTORIES).sort()).toEqual(['blackHole', 'dangerZone', 'gravityWell', 'repulsionField', 'warpRift']);
   });
 
   it('says what to do when a scheduled hazard has no factory yet', () => {

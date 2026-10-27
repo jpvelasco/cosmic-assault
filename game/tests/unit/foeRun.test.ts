@@ -196,11 +196,15 @@ describe('foes in other rules', () => {
     expect(w.foes).toEqual([]);
   });
 
-  it('never appear in 1-1, 1-2 or Singularity, which keeps its rocks until its own foes are made', () => {
-    for (const id of ['1-1', '1-2', '5-1', '5-5'] as const) {
+  it('never appear in 1-1 or 1-2, which bring in no foe, and do appear in Singularity, which mixes every one in', () => {
+    for (const id of ['1-1', '1-2'] as const) {
       const w = new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode: 'rank' }, startLives: 5 });
       for (let i = 0; i < 40 * 120 && w.status === 'playing'; i++) expect(ofType(step(w), 'foeSpawned'), id).toEqual([]);
     }
+    const w = new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById('5-1'), mode: 'rank' }, startLives: 5 });
+    let spawned = 0;
+    for (let i = 0; i < 40 * 120 && w.status === 'playing'; i++) spawned += ofType(step(w), 'foeSpawned').length;
+    expect(spawned).toBeGreaterThan(0);
   });
 
   it('are deterministic: the same seed brings the same events, a different seed another', () => {

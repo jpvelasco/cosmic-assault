@@ -399,6 +399,20 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
   repulseClose: (bed, out, t) => {
     tone(bed, out, { type: 'sine', from: 220, to: 60, start: t, duration: 0.35, peak: 0.12 });
   },
+  // The black hole forming: a low, slow drone that deepens as it comes due.
+  holeWarn: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 70, to: 40, start: t, duration: 0.9, peak: 0.16, attack: 0.2 });
+    noiseBurst(bed, out, { filter: 'lowpass', from: 300, to: 120, start: t, duration: 0.9, peak: 0.06 });
+  },
+  // The black hole opening: a deep sinking boom, like a gate dropping shut on the light.
+  holeOpen: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomLarge);
+    tone(bed, out, { type: 'sine', from: 120, to: 30, start: t, duration: 1.1, peak: 0.2, attack: 0.04 });
+  },
+  // The black hole going: a long rise, and a thin release.
+  holeClose: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 40, to: 200, start: t, duration: 0.7, peak: 0.12, attack: 0.1 });
+  },
   // A Field Bomb or a Nova going off: a large boom under a rushing crackle.
   blast: (bed, out, t) => {
     boom(bed, out, t, BOOMS.boomLarge);
@@ -432,6 +446,8 @@ const HUM_VOICES: Readonly<Record<HumName, HumVoice>> = {
   well: { peak: 0.09, fadeIn: 0.8, low: ['sine', 49], high: ['triangle', 73.5, 7], swell: 0.6, swellDepth: 0.4 },
   // The zone: an electric buzz, a sawtooth and a detuned square a fifth above, throbbing fast.
   zone: { peak: 0.035, fadeIn: 0.25, low: ['sawtooth', 110], high: ['square', 165, -9], swell: 4, swellDepth: 0.35 },
+  // The black hole: a sub-bass and a detuned octave above, swelling very slowly.
+  hole: { peak: 0.1, fadeIn: 1.2, low: ['sine', 35], high: ['sine', 70, 4], swell: 0.25, swellDepth: 0.5 },
 };
 
 /**

@@ -58,6 +58,9 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
   bossDeflected: { type: 'bossDeflected', x: 0, y: 0 },
   foeDeflected: { type: 'foeDeflected', id: 1, x: 0, y: 0 },
   phaserWarn: { type: 'phaserWarn', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  holeWarning: { type: 'holeWarning', id: 1, x: 0, y: 0, at: 12 },
+  holeStart: { type: 'holeStart', id: 1, x: 0, y: 0 },
+  holeEnd: { type: 'holeEnd', id: 1 },
   phaserBlink: { type: 'phaserBlink', id: 1, x: 0, y: 0 },
   riftWarning: { type: 'riftWarning', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
   riftOpen: { type: 'riftOpen', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
@@ -108,6 +111,14 @@ describe('sfxFor', () => {
     expect(new Set(names).size).toBe(names.length);
     const older = (['shoot', 'boomLarge', 'boomMedium', 'boomSmall', 'boomTiny', 'shipHit', 'gameOver', 'uiClick', 'pause'] as const).filter((n) => names.includes(n));
     expect(older).toEqual([]);
+  });
+
+  it('gives the black hole a warning, an opening and a close of its own, and a hum while it pulls', () => {
+    expect(nameOf({ type: 'holeWarning', id: 1, x: 0, y: 0, at: 12 })).toBe('holeWarn');
+    expect(nameOf({ type: 'holeStart', id: 1, x: 0, y: 0 })).toBe('holeOpen');
+    expect(nameOf({ type: 'holeEnd', id: 1 })).toBe('holeClose');
+    expect(humFor({ type: 'holeStart', id: 1, x: 0, y: 0 })).toEqual({ hum: 'hole', on: true });
+    expect(humFor({ type: 'holeEnd', id: 1 })).toEqual({ hum: 'hole', on: false });
   });
 
   it('gives every pickup, foe and well event a synthesized voice of its own, shared with no other event', () => {
@@ -275,7 +286,7 @@ describe('humFor', () => {
 
   it('leaves it be for every other event', () => {
     for (const event of [...Object.values(GALAXY_EVENTS), ...Object.values(CONTENT_EVENTS)]) {
-      if (['wellStart', 'wellEnd', 'warpOut', 'galaxyStart'].includes(event.type)) continue;
+      if (['wellStart', 'wellEnd', 'holeStart', 'holeEnd', 'warpOut', 'galaxyStart'].includes(event.type)) continue;
       expect(humFor(event), event.type).toBeNull();
     }
   });

@@ -94,6 +94,25 @@ describe('the Wingman', () => {
 });
 
 describe('PlayerShots collisions', () => {
+  it('spends a shot the horizon swallows before it strikes anything, and strikes nothing with it', () => {
+    const { shots: s } = shots();
+    s.fire([shot()], SHIP, null);
+    const hits: string[] = [];
+    s.collide(targets({ swallows: () => true, hitRock: () => (hits.push('rock'), 7) }));
+    expect(s.list).toEqual([]);
+    expect(hits).toEqual([]);
+  });
+
+  it('lets a shot the horizon does not reach strike as before', () => {
+    const { shots: s } = shots();
+    s.fire([shot()], SHIP, null);
+    s.collide(targets({ swallows: () => false, hitRock: () => 7 }));
+    expect(s.list).toEqual([]);
+    s.fire([shot()], SHIP, null);
+    s.collide(targets({ swallows: () => false, hitRock: () => -1 }));
+    expect(s.list).toHaveLength(1);
+  });
+
   it('spends a plain shot on the first rock or foe it reaches', () => {
     const { shots: s } = shots();
     s.fire([shot()], SHIP, null);

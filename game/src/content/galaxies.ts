@@ -53,19 +53,34 @@ const VOID: Ramps = {
   phaser: { from: 3, base: 0.12, step: 0.1, max: 0.3 },
   armoured: { from: 3, base: 0.1, step: 0.1, max: 0.28 },
 };
+/**
+ * Singularity brings every foe into the mix, each at a maximum of about a fifth to a quarter of the budget, the rocks
+ * and the foes it has in common with Void Rift kept as they are. The director's budget, not these maxima, sets how
+ * crowded the field gets.
+ */
+const SINGULARITY: Ramps = {
+  ...VOID,
+  splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.25 },
+  drone: { from: 1, base: 0.15, step: 0.3, max: 0.25 },
+  gunship: { from: 2, base: 0.1, step: 0.2, max: 0.25 },
+  mine: { from: 2, base: 0, step: 0.3, max: 0.2 },
+  phaser: { from: 3, base: 0.12, step: 0.1, max: 0.25 },
+  armoured: { from: 3, base: 0.1, step: 0.1, max: 0.25 },
+};
 const BOSS_FIELD: Ramps = { ...ROCKS, large: ABSENT };
 
 /**
  * Splitters join from 1-3, drones from Ion Reach, which keeps the splitters, gunships and mines from Crimson Nebula,
- * which keeps the rest, and phasers and armoured rocks from Void Rift; a boss galaxy has none. Singularity keeps its
- * rocks until its own foes are made.
+ * which keeps the rest, and phasers and armoured rocks from Void Rift, which Singularity keeps and mixes every foe into; a
+ * boss galaxy has none.
  */
 function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
   if (index === 6) return BOSS_FIELD;
   if (dimension === 1) return index >= 3 ? SPLITTERS : ROCKS;
   if (dimension === 2) return SWARMS;
   if (dimension === 3) return GUNSHIPS;
-  return dimension === 4 ? VOID : ROCKS;
+  if (dimension === 4) return VOID;
+  return SINGULARITY;
 }
 
 /** Each Dimension's boss; the M4 Sentinel holds the later ones until they get their own. */
@@ -94,15 +109,20 @@ const well = eventsOf('gravityWell');
 const zone = eventsOf('dangerZone');
 const repulsion = eventsOf('repulsionField');
 const rift = eventsOf('warpRift');
+const hole = eventsOf('blackHole');
 
 /**
- * Each Dimension's hazards by galaxy index: Ion Reach's gravity wells, Crimson Nebula's danger zones and Void Rift's
- * repulsion fields and warp rifts. Each ends before the lull.
+ * Each Dimension's hazards by galaxy index: Ion Reach's gravity wells, Crimson Nebula's danger zones, Void Rift's
+ * repulsion fields and warp rifts, and Singularity's black hole with the rest. Each ends before the lull.
  */
 const HAZARDS: Readonly<Partial<Record<Dimension, Readonly<Partial<Record<GalaxyIndex, readonly GalaxyEvent[]>>>>>> = {
   2: { 2: [well(25, 1)], 3: [well(25, 1)], 4: [well(46, 1)], 5: [well(46, 1)] },
   3: { 2: [zone(30, 1)], 3: [zone(30, 1), zone(70, 1)], 4: [zone(20, 1), zone(50, 2)], 5: [zone(20, 2), zone(50, 2)] },
-  4: { 2: [repulsion(25, 1)], 3: [rift(20, 1), repulsion(80, 1)], 4: [rift(20, 1), repulsion(56, 2)], 5: [rift(15, 2), repulsion(56, 2)] },
+  4: { 2: [repulsion(25, 1)], 3: [rift(20, 1), repulsion(80, 1)], 4: [rift(20, 1), repulsion(56, 2)], 5: [rift(15, 2), repulsion(56, 2)] },  // Singularity's black hole opens at 12 s on every survival galaxy, warned from 9 s, and ends at 87, before the lull. Each
+  // other event starts 10 s or more after the one before it, and no more than two run at once, showers included: 5-4's
+  // repulsion field moves from 30 to 25 so it ends before the shower at 45 warns (from 42), and its zone from 95 to 100,
+  // 10 s after the shower at 90. 5-5's rift moves from 20 to 22 for the same 10 s.
+  5: { 1: [hole(12, 1)], 2: [hole(12, 1), zone(30, 1)], 3: [hole(12, 2), rift(25, 1), zone(100, 1)], 4: [hole(12, 2), repulsion(25, 1), zone(100, 2)], 5: [hole(12, 3), rift(22, 2), zone(60, 2)] },
 };
 
 const hazards = (dimension: Dimension, index: GalaxyIndex): readonly GalaxyEvent[] => HAZARDS[dimension]?.[index] ?? [];

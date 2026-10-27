@@ -27,6 +27,11 @@ describe('hitStopFor', () => {
     expect(hitStopFor({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toBe(0);
   });
 
+  it('freezes 110 ms as a Nova goes off, and not for a Field Bomb', () => {
+    expect(hitStopFor({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBe(0.11);
+    expect(hitStopFor({ type: 'blast', kind: 'fieldBomb', x: 0, y: 0, radius: 220 })).toBe(0);
+  });
+
   it('freezes 80 ms as a boss core is laid bare, and not for its parts cracking, breaking or shots glancing off', () => {
     expect(hitStopFor({ type: 'bossExposed', x: 0, y: 0 })).toBe(0.08);
     expect(hitStopFor({ type: 'bossShielded', x: 0, y: 0 })).toBe(0);

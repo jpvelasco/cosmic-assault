@@ -115,9 +115,9 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   /** How many times each capped sound has started this frame. */
   const startedThisFrame: Partial<Record<SfxName, number>> = {};
   /** Which hums the hazards ask for, as the events last told; and whether the screen is play, where they are heard. */
-  const humWanted: Record<HumName, boolean> = { well: false, zone: false };
+  const humWanted: Record<HumName, boolean> = { well: false, zone: false, hole: false };
   let inPlay = false;
-  const hums: Record<HumName, Loop | null> = { well: null, zone: null };
+  const hums: Record<HumName, Loop | null> = { well: null, zone: null, hole: null };
   /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
   let screenBus: GainNode | null = null;
   /** The theme of the last galaxy started, and whether its boss has appeared; together they choose the music. */

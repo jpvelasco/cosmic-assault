@@ -92,6 +92,11 @@ export type SimEvent =
   | { type: 'phaserBlink'; id: number; x: number; y: number }
   /** Warp rift `id`'s mouths, at (x, y) and (toX, toY), are drawn as a warning from now: harmless until `riftOpen`. */
   | { type: 'riftWarning'; id: number; x: number; y: number; toX: number; toY: number }
+  /** The black hole `id`, at (x, y), the field's centre, is drawn as a warning from now: harmless until `holeStart`. */
+  | { type: 'holeWarning'; id: number; x: number; y: number; at: number }
+  /** The black hole `id` is active from (x, y): it pulls, swallows what reaches its horizon and strikes the ship that touches it. */
+  | { type: 'holeStart'; id: number; x: number; y: number }
+  | { type: 'holeEnd'; id: number }
   /** Warp rift `id` is open: a body reaching either mouth leaves by the other. */
   | { type: 'riftOpen'; id: number; x: number; y: number; toX: number; toY: number }
   | { type: 'riftClose'; id: number }

@@ -149,12 +149,12 @@ describe('GalaxyDirector kinds', () => {
     expect(kinds.size).toBeGreaterThan(0);
   });
 
-  it('brings in every kind once the opening is over', () => {
+  it('brings in every rock size once the opening is over', () => {
     const kinds = new Set<string>();
     for (let seed = 1; seed <= 30; seed++) {
       for (const o of run(g53, seed, { start: 40, seconds: 20, decay: 1 }).orders) kinds.add(o.kind);
     }
-    expect([...kinds].sort()).toEqual(['large', 'medium', 'small']);
+    expect([...kinds].filter((k) => k === 'large' || k === 'medium' || k === 'small').sort()).toEqual(['large', 'medium', 'small']);
   });
 
   it('weights kinds by kindProbability: large rocks (0.6) outnumber small (0.1, from tier 0.5) at tier 0', () => {

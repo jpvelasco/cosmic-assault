@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { FOES } from '../../src/content/foes';
 import { WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { Bolt } from '../../src/sim/foes/bolts';
+import type { Bolt, Bolts } from '../../src/sim/foes/bolts';
+
+/** The galaxy's bolt pool, as a hazard sees it: its list, and the clearing a black hole asks of it. */
+const poolOf = (...list: Bolt[]): Bolts => ({ list, clearWithin: () => undefined }) as unknown as Bolts;
 import { MOUTH_SPACING } from '../../src/sim/hazards/warpRift';
 import { wrappedDistance } from '../../src/sim/wrap';
 import type { GalaxyEvent } from '../../src/content/types';
@@ -393,7 +396,7 @@ describe('warp rift exit grace', () => {
     r.ship.vy = 0;
     // The exit is 42 east of the mouth; a bolt 60 further east flies back at the ship at 230 units a second.
     const bolt = { id: 801, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: -230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
-    r.hazards.move(DT, r.ship, [], [], [], [bolt]);
+    r.hazards.move(DT, r.ship, [], [], [], poolOf(bolt));
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
   });
@@ -419,7 +422,7 @@ describe('warp rift exit grace', () => {
     r.ship.vy = 0;
     const late = { id: 803, kind: 'mine', x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 1, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
     const away = { id: 804, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
-    r.hazards.move(DT, r.ship, [], [late], [], [away]);
+    r.hazards.move(DT, r.ship, [], [late], [], poolOf(away));
     expect(r.ship.invulnerable).toBe(false);
   });
 

@@ -96,6 +96,7 @@ export class World {
     hitBoss: (x, y, radius) => this.run?.bosses.hitBoss(x, y, radius) === true,
     hitFoe: (x, y, radius, struck) => this.run?.hitFoe(x, y, radius, struck) ?? -1,
     hitRock: (x, y, radius) => this.breakRock(x, y, radius),
+    swallows: (x, y, radius) => this.run?.swallows(x, y, radius) ?? false,
   };
   private readonly hash = new SpatialHash(HASH_CELL_SIZE);
   /** Asteroid indices broken this step, in the order they broke. */

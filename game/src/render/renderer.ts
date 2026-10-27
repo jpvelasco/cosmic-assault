@@ -15,7 +15,7 @@ import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
 import { createBossPass } from './bossPass';
-import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layout';
+import { createBackdrop, devicePixelRatio, layoutFor, type Bakes, type Layout } from './layout';
 import { DRIFT, paletteFor, type Palette } from './palette';
 import { createParticlePass } from './particlePass';
 import { createPickupPass } from './pickupPass';
@@ -100,6 +100,8 @@ const SHIP_GLOW_ALPHA = 0.3;
 const FLAME_MIN_LENGTH = 12;
 const FLAME_FLICKER = 6;
 const FLASH_ALPHA = 0.22;
+/** Time Warp's vignette fades over this many seconds as the warp runs out. */
+const TIME_WARP_FADE_SECONDS = 0.5;
 
 /** True while an invulnerable ship is in the hidden half of its BLINK_HZ blink. */
 export function blinkHidden(elapsed: number): boolean {
@@ -323,8 +325,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     particlePass.drawBursts(visual.effect);
   }
 
-  /** Steps 9–10, in device pixels: the vignette, then the flash. */
-  function drawOverlays({ field, k, fieldX, fieldY }: Layout, vignette: HTMLCanvasElement): void {
+  /** Steps 9–11, in device pixels: the vignette, Time Warp's cool one while it runs, then the flash. */
+  function drawOverlays({ field, k, fieldX, fieldY }: Layout, { vignette, timeWarp }: Bakes, timeWarpLeft: number): void {
     const width = field.width * k;
     const height = field.height * k;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -334,6 +336,12 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(vignette, fieldX, fieldY, width, height);
       ctx.imageSmoothingEnabled = true;
+    }
+    if (timeWarpLeft > 0) {
+      // Time Warp's vignette is baked, not filtered: it fades out over the warp's last moments.
+      ctx.globalAlpha = Math.min(1, timeWarpLeft / TIME_WARP_FADE_SECONDS);
+      ctx.drawImage(timeWarp, fieldX, fieldY, width, height);
+      ctx.globalAlpha = 1;
     }
     if (effects.flash > 0) {
       ctx.globalAlpha = effects.flash * FLASH_ALPHA;
@@ -356,7 +364,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.save();
     drawBackdrop(world, current, bakes.sky);
     drawScene(world, a, current);
-    drawOverlays(current, bakes.vignette);
+    drawOverlays(current, bakes, world.effects.timeWarp);
     ctx.restore();
     ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
     hud.draw(ctx, world, score, effects.reducedMotion);

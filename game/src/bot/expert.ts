@@ -1,6 +1,6 @@
 import { clamp } from '../content/curves';
 import { MINE } from '../content/foes';
-import { WARP_RIFT } from '../content/hazards';
+import { BLACK_HOLE, WARP_RIFT } from '../content/hazards';
 import type { AttackId } from '../content/types';
 import { radialShove } from '../sim/boss/attacks';
 import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
@@ -8,7 +8,7 @@ import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import type { Foe } from '../sim/foes/foe';
 import { zoneClearance } from '../sim/hazards/dangerZone';
-import type { HazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
+import type { HazardState, PointHazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
 import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
@@ -53,6 +53,10 @@ const ARM_CLEARANCE = 20;
 const ZONE_LEAD_SECONDS = 1;
 /** It keeps this far clear of a warp rift's mouth, beyond the rim the ship may touch, and so never passes through one. */
 const MOUTH_CLEARANCE = 20;
+/** It keeps this far clear of a black hole's horizon: the 40 units beyond the ship's contact the escape invariant holds from. */
+const HOLE_CLEARANCE = 40;
+/** Within this range of an active black hole, the pilot thrusts straight away from it, if that is safe. */
+const HOLE_FLEE_RANGE = 260;
 /** It goes for a pickup this near that will not expire on the way. */
 const PICKUP_REACH = 450;
 const PICKUP_MIN_SECONDS = 1;
@@ -93,6 +97,18 @@ const zoneToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<ZoneStat
 /** Whether a warp rift is to be kept clear of now: open, or opening within `ZONE_LEAD_SECONDS`. */
 const riftToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<RiftState> =>
   hazard.type === 'warpRift' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
+
+/** Whether a black hole's horizon is to be kept clear of now: active, or starting within `ZONE_LEAD_SECONDS`. */
+const holeToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<PointHazardState> =>
+  hazard.type === 'blackHole' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
+
+/** The active black hole within `HOLE_FLEE_RANGE` of the ship, if there is one. */
+function holeNear(view: Readonly<BotView>): Readonly<PointHazardState> | null {
+  for (const hazard of view.hazards) {
+    if (hazard.type === 'blackHole' && hazard.stage === 'active' && wrappedDistance(view.ship, hazard, view.field) < HOLE_FLEE_RANGE) return hazard;
+  }
+  return null;
+}
 
 /** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
 function splitterAhead(view: Readonly<BotView>): boolean {
@@ -217,7 +233,16 @@ export class Pilot {
       this.dodge(view, aim ?? view.ship.angle, out);
       return;
     }
+    if (this.fleeHole(view, out)) return;
     if (!this.seekPickup(view, out)) this.closeIn(view, out);
+  }
+
+  /** Thrusts straight away from an active black hole within `HOLE_FLEE_RANGE`, if that is safe; true if it did. */
+  private fleeHole(view: Readonly<BotView>, out: Intent): boolean {
+    const hole = holeNear(view);
+    if (hole === null) return false;
+    const { ship } = view;
+    return this.steer(view, 2 * ship.x - hole.x, 2 * ship.y - hole.y, out);
   }
 
   /**
@@ -398,6 +423,7 @@ export class Pilot {
     for (const hazard of view.hazards) {
       if (zoneToAvoid(hazard)) this.zones.push(hazard);
       else if (riftToAvoid(hazard)) this.addMouths(view, hazard);
+      else if (holeToAvoid(hazard)) this.addThreat(view, hazard.x, hazard.y, 0, 0, BLACK_HOLE.horizon + HOLE_CLEARANCE, true);
     }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);

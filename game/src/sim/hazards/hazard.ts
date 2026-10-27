@@ -2,7 +2,7 @@ import type { GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import type { Bolt } from '../foes/bolts';
+import type { Bolts } from '../foes/bolts';
 import type { Foe } from '../foes/foe';
 import type { Moving } from '../math';
 import type { Rng } from '../rng';
@@ -26,8 +26,11 @@ export interface Bodies {
   readonly ship: Ship;
   readonly rocks: Asteroid[];
   readonly foes: readonly Foe[];
-  /** The galaxy's hostile bolts: a rift jump may leave the ship in one's path, which grants it a windup's grace. */
-  readonly bolts: readonly Bolt[];
+  /**
+   * The galaxy's hostile bolts: a rift jump may leave the ship in one's path, which grants it a windup's grace, and a black
+   * hole's horizon clears the ones that reach it. Null where the galaxy has none (a bare field, a practice run).
+   */
+  readonly bolts: Bolts | null;
 }
 
 /** What every hazard shows the renderer, the HUD and the bots: where it is, and how long until it changes. */
@@ -80,6 +83,8 @@ export interface Hazard {
   pull?(dt: number, bodies: Bodies): void;
   /** True when a ship of radius `r` at (x, y) touches a lethal part of it. */
   strikes?(x: number, y: number, r: number): boolean;
+  /** True when a player shot of radius `r` at (x, y) is taken by the hazard (a black hole's horizon), and spent with nothing struck. */
+  swallows?(x: number, y: number, r: number): boolean;
   /** Moves or removes bodies once the pulls are applied, pushing what it did into `out`. */
   carry?(bodies: Bodies, out: SimEvent[]): void;
   /** Where a respawning ship must come back while it is active, or null for the default. */

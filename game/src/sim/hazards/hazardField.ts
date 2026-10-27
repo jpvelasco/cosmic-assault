@@ -5,18 +5,17 @@ import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import type { Bolt } from '../foes/bolts';
+import type { Bolts } from '../foes/bolts';
 import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
+import { BlackHole } from './blackHole';
 import { DangerZones } from './dangerZone';
 import { ForceField } from './forceField';
 import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
 import { WarpRifts } from './warpRift';
-
-const NO_BOLTS: readonly Bolt[] = [];
 
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
@@ -24,6 +23,7 @@ export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory
   repulsionField: (setup) => new ForceField('repulsionField', FORCE_SIGN.repulsionField, setup),
   dangerZone: (setup) => new DangerZones(setup),
   warpRift: (setup) => new WarpRifts(setup),
+  blackHole: (setup) => new BlackHole(setup),
 };
 
 /** The stream a hazard type draws from: the gravity wells keep M5's `'hazards'`, so Ion Reach does not move. */
@@ -92,7 +92,7 @@ export class HazardField {
    * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
    * invulnerability spares the ship collisions, not physics.
    */
-  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: readonly Bolt[] = NO_BOLTS): void {
+  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: Bolts | null = null): void {
     const bodies = (this.bodies ??= { ship, rocks, foes, bolts });
     bodies.ship = ship;
     bodies.rocks = rocks;
@@ -107,6 +107,12 @@ export class HazardField {
   /** True when a ship of radius `r` at (x, y) touches a lethal hazard. */
   strikes(x: number, y: number, r: number): boolean {
     for (const hazard of this.hazards) if (hazard.strikes?.(x, y, r) === true) return true;
+    return false;
+  }
+
+  /** True when a player shot of radius `r` at (x, y) is taken by a hazard, such as a black hole's horizon. */
+  swallows(x: number, y: number, r: number): boolean {
+    for (const hazard of this.hazards) if (hazard.swallows?.(x, y, r) === true) return true;
     return false;
   }
 

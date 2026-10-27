@@ -1,5 +1,5 @@
 import { FOES, MINE } from '../content/foes';
-import { WARP_RIFT } from '../content/hazards';
+import { BLACK_HOLE, WARP_RIFT } from '../content/hazards';
 import type { FoeKind } from '../content/types';
 import { ASTEROID, PICKUP } from '../sim/config';
 import { isWarpClear, type SimEvent } from '../sim/events';
@@ -95,6 +95,8 @@ const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = {
 const MINE_BLAST_BURST: Counts = { shards: 0, sparks: 22, rings: 2, smoke: 4, shake: 5, flash: 0.25 };
 /** A blast going off: two rings out to its reach, sparks and a hard shake, in the ring colour. */
 const BLAST_BURST: Counts = { shards: 0, sparks: 20, rings: 1, smoke: 0, shake: 8, flash: 0.25 };
+/** A Nova going off: the field's whole flash, more sparks and rings than a Field Bomb, and a harder shake. */
+const NOVA_BURST: Counts = { shards: 0, sparks: 34, rings: 2, smoke: 0, shake: 14, flash: 0.6 };
 /** An armoured rock turning a shot aside: more sparks than a boss's shield tick, so it reads on a phone. */
 const FOE_DEFLECT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A phaser blinking: a spray of sparks and a ring where it lands. */
@@ -111,6 +113,10 @@ const PICKUP_DROP_BURST: Counts = { shards: 0, sparks: 8, rings: 1, smoke: 0, sh
 const PICKUP_TAKE_BURST: Counts = { shards: 0, sparks: 12, rings: 1, smoke: 0, shake: 0, flash: 0 };
 /** The Shield taking a hit for the ship: it shatters, with a little shake but none of a lost life's weight. */
 const SHIELD_BREAK_BURST: Counts = { shards: 10, sparks: 14, rings: 1, smoke: 0, shake: 3, flash: 0 };
+/** The black hole's horizon, where its opening ring starts. */
+const HOLE_HORIZON = BLACK_HOLE.horizon;
+/** A black hole opening: a ring at its horizon and a shake, the one sudden thing the field gets when it starts pulling. */
+const HOLE_OPEN_BURST: Counts = { shards: 0, sparks: 8, rings: 2, smoke: 0, shake: 10, flash: 0 };
 /** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
 const WARP_CLEAR_BURST: Counts = { shards: 2, sparks: 4, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
@@ -147,7 +153,7 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'riftJump':
       return writeBurst(into, event.ship ? RIFT_SHIP_BURST : RIFT_BODY_BURST, palette.accent[1]);
     case 'blast':
-      return writeBurst(into, BLAST_BURST, palette.ring);
+      return writeBurst(into, event.kind === 'nova' ? NOVA_BURST : BLAST_BURST, palette.ring);
     case 'bossPartBroken':
       return writeBurst(into, PART_BREAK_BURST, palette.ring);
     case 'bossExposed':
@@ -171,6 +177,8 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'foeWindup':
     case 'phaserWarn':
     case 'riftWarning':
+    case 'holeWarning':
+    case 'holeEnd':
     case 'riftOpen':
     case 'riftClose':
     case 'mineArmed':
@@ -199,6 +207,8 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'wellStart':
     case 'wellEnd':
       return null;
+    case 'holeStart':
+      return writeBurst(into, HOLE_OPEN_BURST, palette.accent[1]);
   }
 }
 
@@ -372,9 +382,13 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'wellEnd':
       case 'phaserWarn':
       case 'riftWarning':
+      case 'holeWarning':
+      case 'holeEnd':
       case 'riftOpen':
       case 'riftClose':
         return null;
+      case 'holeStart':
+        return writeOrigin(origin, event.x, event.y, HOLE_HORIZON, emitter.palette.accent[1]);
     }
   };
 

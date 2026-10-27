@@ -75,10 +75,11 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.duration).toBe(20);
   });
 
-  it('keeps every event inside the window from the opening\'s end to 25 s before the end', () => {
+  it('keeps every event inside the window from the opening\'s end, less its warning, to 25 s before the end', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
-        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
+        // A warning may begin inside the opening, so a black hole at 12 s warns from 9 s and is felt from 12 s.
+        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS - warning(e));
         expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);
       }
   });
@@ -258,7 +259,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('shares six ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, Void Rift\'s phasers and armour, and a boss\'s field', () => {
+  it('shares seven ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, Void Rift\'s phasers and armour, Singularity\'s every foe, and a boss\'s field', () => {
     const rocks = {
       large: { from: 0, base: 0.6, step: 0, max: 0.6 },
       medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
@@ -281,19 +282,20 @@ describe('the galaxy table', () => {
       armoured: { from: 3, base: 0.1, step: 0.1, max: 0.28 },
     });
     for (const id of ['1-6', '2-6', '3-6', '5-6'] as const) expect(galaxyById(id).kinds, id).toEqual({ ...rocks, large: none, ...foesNone });
-    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(6);
+    expect(galaxyById('5-1').kinds).toEqual({ ...swarms, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.25 }, drone: { from: 1, base: 0.15, step: 0.3, max: 0.25 }, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.25 }, mine: { from: 2, base: 0, step: 0.3, max: 0.2 }, phaser: { from: 3, base: 0.12, step: 0.1, max: 0.25 }, armoured: { from: 3, base: 0.1, step: 0.1, max: 0.25 } });
+    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(7);
   });
 
-  it('brings in splitters from 1-3, drones from Ion Reach, gunships and mines in Crimson Nebula and phasers and armour in Void Rift, each keeping the table before it; none before that, and none in a boss galaxy', () => {
+  it('brings in splitters from 1-3, drones from Ion Reach, gunships and mines in Crimson Nebula and phasers and armour in Void Rift, each keeping the table before it, and every foe in Singularity; none before that, and none in a boss galaxy', () => {
     for (const g of GALAXIES) {
       const survival = g.kind === 'survival';
       const has = (kind: ThreatKind): boolean => g.kinds[kind].max > 0;
-      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || (g.dimension >= 2 && g.dimension <= 4)));
-      expect(has('drone'), g.id).toBe(survival && g.dimension >= 2 && g.dimension <= 4);
-      expect(has('gunship'), g.id).toBe(survival && (g.dimension === 3 || g.dimension === 4));
-      expect(has('mine'), g.id).toBe(survival && (g.dimension === 3 || g.dimension === 4));
-      expect(has('phaser'), g.id).toBe(survival && g.dimension === 4);
-      expect(has('armoured'), g.id).toBe(survival && g.dimension === 4);
+      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || (g.dimension >= 2 && g.dimension <= 5)));
+      expect(has('drone'), g.id).toBe(survival && g.dimension >= 2 && g.dimension <= 5);
+      expect(has('gunship'), g.id).toBe(survival && g.dimension >= 3 && g.dimension <= 5);
+      expect(has('mine'), g.id).toBe(survival && g.dimension >= 3 && g.dimension <= 5);
+      expect(has('phaser'), g.id).toBe(survival && g.dimension >= 4);
+      expect(has('armoured'), g.id).toBe(survival && g.dimension >= 4);
     }
   });
 
@@ -340,14 +342,19 @@ describe('the galaxy table', () => {
     expect(MINE).toMatchObject({ armRadius: 110, fuse: 0.6, blastRadius: 80 });
   });
 
-  it('schedules Crimson Nebula\'s danger zones as the brief lays out, and no zone anywhere else', () => {
+  it('schedules Crimson Nebula\'s danger zones as the brief lays out, and Singularity\'s, and no zone anywhere else', () => {
     const zones = (id: GalaxyId): [number, number][] => galaxyById(id).events.filter((e) => e.type === 'dangerZone').map((e) => [e.at, e.intensity]);
     expect(zones('3-1')).toEqual([]);
     expect(zones('3-2')).toEqual([[30, 1]]);
     expect(zones('3-3')).toEqual([[30, 1], [70, 1]]);
     expect(zones('3-4')).toEqual([[20, 1], [50, 2]]);
     expect(zones('3-5')).toEqual([[20, 2], [50, 2]]);
-    for (const g of GALAXIES.filter((x) => x.dimension !== 3)) expect(zones(g.id), g.id).toEqual([]);
+    expect(zones('5-1')).toEqual([]);
+    expect(zones('5-2')).toEqual([[30, 1]]);
+    expect(zones('5-3')).toEqual([[100, 1]]);
+    expect(zones('5-4')).toEqual([[100, 2]]);
+    expect(zones('5-5')).toEqual([[60, 2]]);
+    for (const g of GALAXIES.filter((x) => x.dimension !== 3 && x.dimension !== 5)) expect(zones(g.id), g.id).toEqual([]);
     // An event shows one zone per intensity, at most two, each 120 to 220 units a side.
     for (const g of GALAXIES) for (const e of g.events) if (e.type === 'dangerZone') expect(e.intensity, g.id).toBeLessThanOrEqual(DANGER_ZONE.maxZones);
     expect(DANGER_ZONE).toMatchObject({ maxZones: 2, side: [120, 220] });

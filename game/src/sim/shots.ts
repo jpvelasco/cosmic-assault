@@ -27,6 +27,8 @@ export interface ShotTargets {
   foes(): readonly Readonly<Point & { readonly id: number; readonly hp: number }>[];
   /** Where a shot harms the boss now (`bossTarget`), or null. */
   aim(): Readonly<Point> | null;
+  /** True when a shot of `radius` at (x, y) is taken by the galaxy before it strikes anything: a black hole's horizon. */
+  swallows?(x: number, y: number, radius: number): boolean;
   /** A shot at (x, y) has reached the boss, core or part, if true: it is spent, however much it pierces. */
   hitBoss(x: number, y: number, radius: number): boolean;
   /** The id of the foe a shot at (x, y) struck, never one in `struck`; -1 for none, or `FOE_DEFLECTED` when a foe's armour spent it. */
@@ -91,6 +93,10 @@ export class PlayerShots {
     const r = PROJECTILE.radius;
     for (let i = list.length - 1; i >= 0; i--) {
       const p = list[i] as Projectile;
+      if (targets.swallows?.(p.x, p.y, r) === true) {
+        spent[i] = true;
+        continue;
+      }
       if (targets.hitBoss(p.x, p.y, r)) {
         spent[i] = true;
         continue;

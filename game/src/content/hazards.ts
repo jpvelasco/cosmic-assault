@@ -54,6 +54,16 @@ export const DANGER_ZONE: { readonly maxZones: 2; readonly side: readonly [numbe
  */
 export const WARP_RIFT = { maxPairs: 2, radius: 30, drawn: 48, apart: 0.4, inset: 60, rest: 0.25 } as const;
 
+/**
+ * The black hole at the field's centre. Its pull on the ship, and on the rocks and pulled foes, is
+ * `min(maxAccel, strength · intensity / max(r, minRadius))` units/s². Its horizon has radius `horizon`: it swallows rocks,
+ * foes, bolts and shots that reach it for no points and no drop, and touching it (within `horizon` plus the ship's radius)
+ * costs the ship a life. While it is active a respawning ship comes back at `respawn`, a share of the field. It speeds the
+ * rocks and foes it pulls up to `rockSpeedCap`, lower than the ship's cap: at the wells' 300 the fragments it accelerates
+ * are too fast to read (a tuning value, set with the Singularity balance).
+ */
+export const BLACK_HOLE = { horizon: 32, strength: 9000, maxAccel: 100, minRadius: 80, rockSpeedCap: 120, respawn: { x: 0.5, y: 0.8 } } as const;
+
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };
 
