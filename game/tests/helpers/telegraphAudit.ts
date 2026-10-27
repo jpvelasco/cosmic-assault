@@ -108,6 +108,9 @@ export const ATTACK_TELEGRAPHS: Readonly<Record<AttackId, AttackHarm>> = {
   lockOn: 'bolts',
   spin: 'active',
   ringPulse: 'active',
+  dive: 'active',
+  spit: 'bolts',
+  coil: 'active',
 };
 
 /**

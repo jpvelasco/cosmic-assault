@@ -20,7 +20,7 @@ export interface BossDef {
 
 const HP_PER_DIMENSION = 6;
 
-/** The boss roster: the Monolith guards 1-★, the Hive Carrier 2-★ and the Warden 3-★, and M4's Sentinel stands in for the bosses still to come. */
+/** The boss roster: the Monolith guards 1-★, the Hive Carrier 2-★, the Warden 3-★ and the Leviathan 4-★, and M4's Sentinel stands in for the bosses still to come. */
 export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   monolith: {
     id: 'monolith',
@@ -47,6 +47,16 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
     radius: 48,
     phases: [['turretVolley', 'lockOn'], ['turretVolley', 'spin', 'lockOn'], ['ringPulse', 'turretVolley', 'spin', 'lockOn']],
     rest: [2.0, 1.5, 1.0],
+  },
+  leviathan: {
+    id: 'leviathan',
+    name: 'Leviathan',
+    // `bossHp` adds three Dimensions' share in 4-★, the only galaxy it guards: 88.
+    hp: 70,
+    radius: 34,
+    phases: [['spit', 'dive'], ['dive', 'spit', 'coil'], ['coil', 'dive', 'spit', 'dive']],
+    rest: [1.8, 1.4, 1.0],
+    partBreakDamage: 6,
   },
   sentinel: {
     id: 'sentinel',

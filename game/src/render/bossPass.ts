@@ -3,8 +3,10 @@ import type { BossState, BossView } from '../sim/boss/behaviour';
 import { DYING_SECONDS } from '../sim/boss/bossRunner';
 import type { SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
+import { createAimLine } from './boss/aimLine';
 import { radial, type BossDrawer, type BossFrame, type BossLook, type DrawerFactory } from './boss/drawer';
 import { hiveCarrierDrawer } from './boss/hiveCarrier';
+import { leviathanDrawer } from './boss/leviathan';
 import { monolithDrawer } from './boss/monolith';
 import { sentinelDrawer } from './boss/sentinel';
 import { wardenDrawer } from './boss/warden';
@@ -40,7 +42,7 @@ export interface BossPass {
 }
 
 /** Each boss's look. */
-const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer, warden: wardenDrawer };
+const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer, warden: wardenDrawer, leviathan: leviathanDrawer };
 
 const WHITE = '#ffffff';
 /** The core shows white while the flash is above this, the share of BOSS_FLASH_SECONDS left after HIT_FLASH_SECONDS. */
@@ -79,7 +81,7 @@ function paintRing(ctx: CanvasRenderingContext2D, r: number, color: string): voi
 }
 
 /** Every attack, once: the `satisfies` makes a new one fail to compile until it is listed. */
-const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0, turretVolley: 0, lockOn: 0, spin: 0, ringPulse: 0 } as const satisfies Record<AttackId, 0>;
+const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0, turretVolley: 0, lockOn: 0, spin: 0, ringPulse: 0, dive: 0, spit: 0, coil: 0 } as const satisfies Record<AttackId, 0>;
 const ATTACK_IDS = Object.keys(ATTACK_ID_SET) as AttackId[];
 
 /** A record of `make(id)` for every attack. */
@@ -92,8 +94,9 @@ const ringKeys = (radius: number, palette: PaletteId): Record<AttackId, string> 
 
 /**
  * Draws the boss from baked sprites (no `shadowBlur`): what every boss shares (a glow, a closing ring while an attack
- * winds up, a shockwave as it pulses, and a white flash on each hit, the core's silhouette for 60 ms with a glow that
- * lingers), and its body through its own drawer (`render/boss/`), looked up by its id. The boss fades in through the
+ * winds up, a shockwave as it pulses, an aim line as it winds up a dive, and a white flash on each hit, the core's
+ * silhouette for 60 ms with a glow that lingers), and its body through its own drawer (`render/boss/`), looked up by its
+ * id. The boss fades in through the
  * intro and out, whitening, as it dies. Sprite keys and painters are made once per radius, so a frame of drawing builds
  * no strings or closures.
  */
@@ -101,6 +104,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
   const kit = { ctx, pen, baker, palette };
   const drawers = Object.fromEntries(Object.entries(DRAWERS).map(([id, make]) => [id, make(kit)])) as Record<BossId, BossDrawer>;
   const allDrawers = Object.values(drawers);
+  const aimLine = createAimLine(kit);
   const ringColors: Readonly<Record<AttackId, string>> = {
     shardRing: palette.shot,
     lunge: palette.ring,
@@ -114,6 +118,9 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
     lockOn: palette.ring,
     spin: palette.spark,
     ringPulse: palette.accent[2],
+    dive: palette.accent[0],
+    spit: palette.accent[2],
+    coil: palette.ring,
   };
   /** The radius the rings are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;
@@ -203,6 +210,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       drawer.underglow?.(boss, frame);
       if (boss.windup !== null) drawRing(boss.windup, r, look.still);
       if (boss.active === 'pulse' && active === 'pulse') drawShockwave(r, look.still);
+      aimLine.draw(boss, frame, frame.windupAge);
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = shown;
       drawer.body(boss, frame);
@@ -225,6 +233,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       windup = null;
       active = null;
       for (const drawer of allDrawers) drawer.reset?.();
+      aimLine.reset();
     },
   };
 }

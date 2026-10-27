@@ -20,9 +20,13 @@ interface Draw {
   readonly alpha: number;
 }
 
-/** A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force, to `sink`. */
-function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
+/**
+ * A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force, to `sink`,
+ * and the name of every other call, to `calls`.
+ */
+function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[]; calls: string[] } {
   const draws: Draw[] = [];
+  const calls: string[] = [];
   const log = sink ?? ((draw: Draw) => draws.push(draw));
   let a = 1;
   let b = 0;
@@ -50,7 +54,9 @@ function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext
           case 'createRadialGradient':
             return () => gradient;
           default:
-            return () => undefined;
+            return () => {
+              calls.push(String(name));
+            };
         }
       },
       set: (_target, name, value) => {
@@ -60,7 +66,7 @@ function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext
       },
     },
   ) as CanvasRenderingContext2D;
-  return { ctx, draws };
+  return { ctx, draws, calls };
 }
 
 /** Draws onto offscreen canvases (bakes, and the Hive Carrier's turned hull), each with the canvas it lands on. */
@@ -88,6 +94,7 @@ const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600, field: { width: 1280
 describe('createBossPass', () => {
   let baker: SpriteBaker;
   let draws: Draw[];
+  let calls: string[];
   let pass: BossPass;
 
   beforeEach(() => {
@@ -96,6 +103,7 @@ describe('createBossPass', () => {
     baker = createSpriteBaker();
     const fake = fakeContext();
     draws = fake.draws;
+    calls = fake.calls;
     const pen = createFieldPen(fake.ctx);
     pen.aim(1, 0, 0);
     pass = createBossPass(fake.ctx, pen, baker, DRIFT);
@@ -592,6 +600,81 @@ describe('createBossPass', () => {
       const custom = vi.spyOn(baker, 'custom');
       for (const windup of ['turretVolley', 'lockOn', 'spin', 'ringPulse'] as const) pass.draw(warden({ windup }), 1, LOOK);
       expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|turretVolley|48', 'boss|drift|ring|lockOn|48', 'boss|drift|ring|spin|48', 'boss|drift|ring|ringPulse|48']));
+    });
+  });
+
+  describe('the Leviathan', () => {
+    const segment = (x: number, hp = 4): BossPart => ({ x, y: 200, px: x, py: 200, radius: 24, hp, maxHp: 4 });
+    /** A head at (640, 200) facing +x, its tail at x 520 and two segments ahead of it, the tail hurt unless `hp` says. */
+    const leviathan = (over: Partial<BossView> = {}, tailHp = 3): BossView =>
+      boss({ id: 'leviathan', x: 640, px: 640, radius: 34, hp: 88, maxHp: 88, vulnerable: false, facing: 0, parts: [segment(480, 0), segment(520, tailHp), segment(560), segment(600)], ...over });
+    const KEY = 'boss|drift|leviathan';
+    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
+
+    it('draws each live segment, tail first, the open tail cracked once hurt and the rest armoured, then the shut head', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(leviathan(), 1, LOOK);
+      const body = keysOf(custom).filter((key) => String(key).startsWith(`${KEY}|`));
+      expect(body).toEqual([`${KEY}|segment|cracked|24`, `${KEY}|segment|armoured|24`, `${KEY}|segment|armoured|24`, `${KEY}|head|34`]);
+      // Where it is, give or take the half pixel an upright sprite snaps by.
+      const offBy = (key: string, x: number, y: number): number => {
+        const draw = drawOf(key, custom);
+        return Math.max(Math.abs((draw?.e ?? Infinity) - x), Math.abs((draw?.f ?? Infinity) - y));
+      };
+      expect(offBy(`${KEY}|segment|cracked|24`, 520, 200)).toBeLessThanOrEqual(0.5);
+      expect(offBy(`${KEY}|head|34`, 640, 200)).toBeLessThanOrEqual(0.5);
+      custom.mockClear();
+      pass.draw(leviathan({}, 4), 1, LOOK);
+      expect(keysOf(custom)).toContain(`${KEY}|segment|open|24`);
+    });
+
+    it('opens the head on a glowing maw once it is bare', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(leviathan({ vulnerable: true, parts: [] }), 1, LOOK);
+      expect(keysOf(custom)).toContain(`${KEY}|headBare|34`);
+      expect(keysOf(custom)).not.toContain(`${KEY}|head|34`);
+    });
+
+    it('flashes a segment white when it is hit, for a moment', () => {
+      const white = vi.spyOn(baker, 'white');
+      pass.draw(leviathan(), 1, LOOK);
+      white.mockClear();
+      pass.handle([{ type: 'bossPartHit', part: 1, x: 520, y: 200, hp: 2 }]);
+      pass.draw(leviathan(), 1, LOOK);
+      expect(keysOf(white)).toContain(`${KEY}|segment|cracked|24`);
+      white.mockClear();
+      pass.advance(0.2, leviathan());
+      pass.draw(leviathan(), 1, LOOK);
+      expect(keysOf(white)).not.toContain(`${KEY}|segment|cracked|24`);
+    });
+
+    it('draws a dive\'s aim line and reticle at where the ship was as it wound up, and only through a dive\'s windup', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(leviathan(), 1, LOOK);
+      expect(calls).not.toContain('setLineDash');
+      calls.length = 0;
+      pass.draw(leviathan({ windup: 'dive' }), 1, LOOK);
+      expect(calls).toEqual(expect.arrayContaining(['setLineDash', 'moveTo', 'lineTo', 'stroke']));
+      const reticle = drawOf('boss|drift|aim|reticle', custom);
+      expect(reticle).toMatchObject({ e: LOOK.aimX, f: LOOK.aimY });
+      // The ship moves on; the line still points where it was.
+      draws.length = 0;
+      pass.draw(leviathan({ windup: 'dive' }), 1, { ...LOOK, aimX: 100, aimY: 100 });
+      expect(draws.findLast((d) => d.image === reticle?.image)).toMatchObject({ e: LOOK.aimX, f: LOOK.aimY });
+    });
+
+    it('draws a coil\'s ring round where the ship was through its windup and while it runs, and not after', () => {
+      pass.draw(leviathan(), 1, LOOK);
+      expect(calls).not.toContain('arc');
+      calls.length = 0;
+      pass.draw(leviathan({ windup: 'coil' }), 1, LOOK);
+      expect(calls.filter((c) => c === 'arc')).toHaveLength(3);
+      calls.length = 0;
+      pass.draw(leviathan({ active: 'coil' }), 1, LOOK);
+      expect(calls).toContain('arc');
+      calls.length = 0;
+      pass.draw(leviathan(), 1, LOOK);
+      expect(calls).not.toContain('arc');
     });
   });
 
