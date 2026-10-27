@@ -68,7 +68,7 @@ export function createBoltPass(ctx: CanvasRenderingContext2D, stamp: Stamp, bake
       if (bolts.length === 0) return;
       zoom.value = visual.shot;
       const reach = BOLT.radius * GLOW_SCALE * zoom.value;
-      // Looked up once a frame, not once a bolt: the lookup builds its key.
+      // Looked up once a frame, which keeps the per-bolt loop to drawing.
       const halo = baker.glow(glowColor, reach);
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = GLOW_ALPHA * glow;

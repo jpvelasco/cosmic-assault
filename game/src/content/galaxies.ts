@@ -44,8 +44,7 @@ const BOSS_FIELD: Ramps = { ...ROCKS, large: ABSENT };
 
 /**
  * Splitters join from 1-3, drones from Ion Reach, which keeps the splitters, and gunships and mines from Crimson Nebula,
- * which keeps the rest; a boss galaxy has none. The Dimensions after it keep their rocks until their own foes are made
- * (M6).
+ * which keeps the rest; a boss galaxy has none. The Dimensions after it keep their rocks until their own foes are made.
  */
 function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
   if (index === 6) return BOSS_FIELD;
