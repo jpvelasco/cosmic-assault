@@ -56,6 +56,8 @@ export class BossRunner {
   private shownVulnerable: boolean;
   /** Each attack's threat, resolved once, so showing one on the view allocates nothing. */
   private readonly threats: ReadonlyMap<AttackId, BossThreat>;
+  /** How far the boss extends each way from its core, as the drift keeps it inside the field; refilled by `measure`. */
+  private readonly extent = { left: 0, right: 0, up: 0, down: 0 };
 
   constructor(
     private readonly def: BossDef,
@@ -85,6 +87,7 @@ export class BossRunner {
       threat: null,
       aim: { x: home.x, y: home.y },
     };
+    this.assertFits(setup.field);
     const heading = setup.rng.range(0, TAU);
     this.dx = Math.cos(heading) * behaviour.driftSpeed;
     this.dy = Math.sin(heading) * behaviour.driftSpeed;
@@ -365,21 +368,39 @@ export class BossRunner {
   }
 
   /**
+   * Measures into `extent` how far the boss extends each way from its core, as the drift keeps it inside the field: its
+   * reach, or further where a live part of a boss whose parts move rigidly with its core lies beyond it.
+   */
+  private measure(): Readonly<BossRunner['extent']> {
+    const { view, reach, extent } = this;
+    extent.left = extent.right = extent.up = extent.down = reach;
+    const parts = this.behaviour.rigidParts === true ? view.parts : NO_PARTS;
+    for (const part of parts) {
+      if (part.hp <= 0) continue;
+      extent.left = beyond(extent.left, view.x - part.x + part.radius);
+      extent.right = beyond(extent.right, part.x - view.x + part.radius);
+      extent.up = beyond(extent.up, view.y - part.y + part.radius);
+      extent.down = beyond(extent.down, part.y - view.y + part.radius);
+    }
+    return extent;
+  }
+
+  /** Throws, naming the boss, if the extent its drift keeps inside the field, as it arrives, is wider or taller than `field`. */
+  private assertFits(field: Field): void {
+    const { left, right, up, down } = this.measure();
+    if (left + right <= field.width && up + down <= field.height) return;
+    throw new RangeError(
+      `${this.def.id} reaches ${String(left + right)} across and ${String(up + down)} down from its core, more than its ${String(field.width)}×${String(field.height)} field holds: shrink its reach, its orbit or its parts' radius`,
+    );
+  }
+
+  /**
    * Moves the core along its heading, bouncing it off the walls so its reach stays inside the field, and with it every
    * live part of a boss whose parts move rigidly with its core.
    */
   private drift(dt: number, field: Field): void {
-    const { view, reach } = this;
-    // How far the boss extends each way from its core: its reach, or further where a rigid live part lies beyond it.
-    let [left, right, up, down] = [reach, reach, reach, reach];
-    const parts = this.behaviour.rigidParts === true ? view.parts : NO_PARTS;
-    for (const part of parts) {
-      if (part.hp <= 0) continue;
-      left = beyond(left, view.x - part.x + part.radius);
-      right = beyond(right, part.x - view.x + part.radius);
-      up = beyond(up, view.y - part.y + part.radius);
-      down = beyond(down, part.y - view.y + part.radius);
-    }
+    const { view } = this;
+    const { left, right, up, down } = this.measure();
     const [maxX, maxY] = [field.width - right, field.height - down];
     view.x = clamp(view.x + this.dx * dt, left, maxX);
     view.y = clamp(view.y + this.dy * dt, up, maxY);

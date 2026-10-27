@@ -140,6 +140,15 @@ describe('part-aware boss reach', () => {
     expect(paths[0]).toEqual(paths[1]);
   });
 
+  it('refuses, naming the boss, rigid parts that reach further than the field holds, but leaves trailing ones to their boss', () => {
+    const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
+    const at = (dy: number): BossPart => ({ x: 640, y: 201.6 + dy, px: 0, py: 0, radius: SEGMENT_RADIUS, hp: 4, maxHp: 4 });
+    // 380 above and below the core, and their radii: 808 down, in a field 720 high.
+    const tall = (rigidParts: boolean): BossBehaviour => ({ driftSpeed: 0, rigidParts, attacks: { shardRing: spec, lunge: spec }, parts: [at(-380), at(380)] });
+    expect(() => new BossRunner(BOSSES.sentinel, tall(true), setupFor(BOSS_FIELD))).toThrow(/^sentinel reaches .*808 down.*720 field.*shrink its reach, its orbit or its parts' radius/);
+    expect(() => new BossRunner(BOSSES.sentinel, tall(false), setupFor(BOSS_FIELD))).not.toThrow();
+  });
+
   it('respawns a ship clear of a segment that lies across the usual spot, not only clear of the core', () => {
     const arena = stubArena();
     const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
