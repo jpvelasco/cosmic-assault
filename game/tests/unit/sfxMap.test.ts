@@ -51,10 +51,10 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
   showerStart: { type: 'showerStart' },
   warpOut: { type: 'warpOut' },
   combo: { type: 'combo', multiplier: 2 },
-  bossIntro: { type: 'bossIntro', id: 'sentinel' },
-  bossWindup: { type: 'bossWindup', attack: 'shardRing', x: 0, y: 0 },
+  bossIntro: { type: 'bossIntro', id: 'monolith' },
+  bossWindup: { type: 'bossWindup', attack: 'quake', x: 0, y: 0 },
   bossPhase: { type: 'bossPhase', phase: 2 },
-  bossDown: { type: 'bossDown', id: 'sentinel' },
+  bossDown: { type: 'bossDown', id: 'monolith' },
   bossDeflected: { type: 'bossDeflected', x: 0, y: 0 },
   foeDeflected: { type: 'foeDeflected', id: 1, x: 0, y: 0 },
   phaserWarn: { type: 'phaserWarn', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
@@ -76,7 +76,7 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
 
 /** The step a boss dies on: it goes down, the galaxy warps out (clearing the field for 0 points) and is cleared. */
 const BOSS_KILL_STEP: readonly SimEvent[] = [
-  { type: 'bossDown', id: 'sentinel' },
+  { type: 'bossDown', id: 'monolith' },
   { type: 'warpOut' },
   destroyed(2, 0),
   { type: 'galaxyCleared', score: 2250, deaths: 0, stars: 3, bonus: 750 },

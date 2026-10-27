@@ -388,10 +388,10 @@ describe('sound effects', () => {
       return [...nodesOf('oscillator').slice(oscillators), ...nodesOf('bufferSource').slice(sources)].map(startOf);
     };
     const down = started(() => {
-      e.handle([{ type: 'bossDown', id: 'sentinel' }]);
+      e.handle([{ type: 'bossDown', id: 'monolith' }]);
     });
     const kill = started(() => {
-      e.handle([{ type: 'bossDown', id: 'sentinel' }, { type: 'warpOut' }]);
+      e.handle([{ type: 'bossDown', id: 'monolith' }, { type: 'warpOut' }]);
     });
     expect(new Set(down)).toEqual(new Set([2]));
     // The same boss-down voices at once, and the warp's 0.3 s behind them.
@@ -915,7 +915,7 @@ describe('unavailable audio', () => {
 
 describe('music themes', () => {
   const start = (id: GalaxyId): SimEvent => ({ type: 'galaxyStart', id });
-  const INTRO: SimEvent = { type: 'bossIntro', id: 'sentinel' };
+  const INTRO: SimEvent = { type: 'bossIntro', id: 'monolith' };
   /** A Drift bar at 96 bpm lasts 2.5 s, and the music starts 0.1 s after the first gesture. */
   const BAR = 2.5;
   const FIRST_BEAT = 0.1;

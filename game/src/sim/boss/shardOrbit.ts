@@ -1,3 +1,4 @@
+import { clamp } from '../../content/curves';
 import { outAndBack, TAU } from '../math';
 import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView, Point } from './behaviour';
 import { bossHome } from './bossRules';
@@ -20,6 +21,8 @@ export interface ShardOrbitOptions {
   readonly regrowCap: number;
   /** How its shard volley flies; the Monolith's if absent. */
   readonly volley?: VolleyShape;
+  /** Whether a shard's turning point is held inside the field, so a shard thrown past a wall stays where the ship can strike it. */
+  readonly keepInField?: boolean;
 }
 
 /** How a shard volley flies. */
@@ -175,8 +178,13 @@ export class ShardOrbit {
     const ux = length > 0 ? dx / length : 0;
     const uy = length > 0 ? dy / length : 1;
     const { overshoot, spread } = this.shape;
-    const tx = ctx.boss.aim.x + ux * overshoot - uy * lane * spread;
-    const ty = ctx.boss.aim.y + uy * overshoot + ux * lane * spread;
+    let tx = ctx.boss.aim.x + ux * overshoot - uy * lane * spread;
+    let ty = ctx.boss.aim.y + uy * overshoot + ux * lane * spread;
+    if (this.options.keepInField === true) {
+      const field = ctx.arena.field();
+      tx = clamp(tx, part.radius, field.width - part.radius);
+      ty = clamp(ty, part.radius, field.height - part.radius);
+    }
     // Out to the turning point over the first half, then back to its orbit, wherever that has turned to.
     const s = outAndBack(this.progress);
     part.x += (tx - part.x) * s;

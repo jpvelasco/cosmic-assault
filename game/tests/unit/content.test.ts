@@ -244,7 +244,7 @@ describe('the galaxy table', () => {
       else expect(g.boss).toBeNull();
       if (g.boss !== null) expect(Object.keys(BOSSES)).toContain(g.boss);
     }
-    expect(BOSSES.sentinel.name).toBe('Sentinel');
+    expect(BOSSES.eclipse.name).toBe('Eclipse');
   });
 
   it('keeps every ramp a probability: 0 <= base <= max <= 1', () => {

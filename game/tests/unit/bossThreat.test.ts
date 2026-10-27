@@ -10,7 +10,7 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, runFor, stubArena, type StubArena } from '../helpers/bossArena';
 import { ATTACK_TELEGRAPHS } from '../helpers/telegraphAudit';
 
 const BOT_DIR = new URL('../../src/bot/', import.meta.url);
@@ -18,10 +18,11 @@ const BOT_DIR = new URL('../../src/bot/', import.meta.url);
 const GENERIC_BOSS_MODULES = ['attacks', 'behaviour', 'bossRules'];
 
 /** A fight of boss `id` with the galaxy's foes to launch into, its intro over. */
-function fight(id: BossId, arena: StubArena = stubArena()): { runner: BossRunner; arena: StubArena } {
+/** A fight of the boss `id` in the test fixture's place, or of the fixture itself. */
+function fight(id: BossId | 'fixture', arena: StubArena = stubArena()): { runner: BossRunner; arena: StubArena } {
   const foes = new FoeField(arena, createRng(2), { score: (base) => base, killed: () => undefined });
   const setup = { maxHp: 60, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, foes, bolts: new Bolts(arena) };
-  const runner = new BossRunner(BOSSES[id], BOSS_BEHAVIOURS[id](setup), setup);
+  const runner = id === 'fixture' ? new BossRunner(FIXTURE_DEF, FIXTURE, setup) : new BossRunner(BOSSES[id], BOSS_BEHAVIOURS[id](setup), setup);
   runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
   return { runner, arena };
 }
@@ -73,7 +74,7 @@ describe('the generic boss threat view', () => {
   });
 
   it('shows the attack winding up or running, with its windup and declared threat, and nothing between attacks', () => {
-    const { runner, arena } = fight('sentinel');
+    const { runner, arena } = fight('fixture');
     expect(runner.view.threat).toBeNull();
     const threats: (BossThreat | null)[] = [];
     runFor((dt, a) => { runner.step(dt, a); }, arena, 6, () => {
@@ -84,11 +85,11 @@ describe('the generic boss threat view', () => {
         threats.push(threat);
       }
     });
-    expect(threats[0]).toEqual({ attack: 'shardRing', windup: 0.6, kind: 'none', reach: 0, speed: 0 });
+    expect(threats[0]).toEqual({ attack: 'quake', windup: 0.6, kind: 'none', reach: 0, speed: 0 });
   });
 
-  it.each<{ id: BossId; attack: AttackId; phase: 1 | 2 | 3; threat: Omit<BossThreat, 'attack'> }>([
-    { id: 'sentinel', attack: 'lunge', phase: 2, threat: { windup: 0.5, kind: 'lane', reach: BOSSES.sentinel.radius, speed: 0 } },
+  it.each<{ id: BossId | 'fixture'; attack: AttackId; phase: 1 | 2 | 3; threat: Omit<BossThreat, 'attack'> }>([
+    { id: 'fixture', attack: 'dive', phase: 2, threat: { windup: 0.5, kind: 'lane', reach: FIXTURE_DEF.radius, speed: 0 } },
     { id: 'monolith', attack: 'shardVolley', phase: 1, threat: { windup: 1.2, kind: 'lane', reach: 46 + 15, speed: 0 } },
     { id: 'monolith', attack: 'pulse', phase: 3, threat: { windup: 0.5, kind: 'shove', reach: 320, speed: 260 } },
     { id: 'monolith', attack: 'quake', phase: 2, threat: { windup: 0.8, kind: 'none', reach: 0, speed: 0 } },

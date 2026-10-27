@@ -96,8 +96,6 @@ export type AttackHarm = 'rocks' | 'foes' | 'bolts' | 'active';
  * `MIN_WINDUP_SECONDS` after it. The record is total over `AttackId`, so a new attack cannot slip past the audit.
  */
 export const ATTACK_TELEGRAPHS: Readonly<Record<AttackId, AttackHarm>> = {
-  shardRing: 'rocks',
-  lunge: 'active',
   shardVolley: 'active',
   quake: 'rocks',
   pulse: 'active',

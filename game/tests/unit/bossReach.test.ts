@@ -14,7 +14,7 @@ import { FoeField } from '../../src/sim/foes/foeField';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
-import { BOSS_FIELD, runFor, stubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, runFor, stubArena, FIXTURE_DEF } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const SEGMENT_RADIUS = 24;
@@ -36,8 +36,8 @@ function serpent(trail = TRAIL, driftSpeed = 60): BossBehaviour {
   return {
     driftSpeed,
     rigidParts: true,
-    // Every attack the 1-★ and Sentinel definitions name, so it can stand in for either.
-    attacks: { shardRing: spec, lunge: spec, shardVolley: spec, quake: spec, pulse: spec },
+    // Every attack the fixture's definition names, so it can stand in for any boss's.
+    attacks: { quake: spec, dive: spec, shardVolley: spec, pulse: spec },
     parts: [segment],
     home: (field) => {
       const home = { x: field.width / 2, y: field.height * 0.28 };
@@ -62,7 +62,7 @@ const setupFor = (field: Field, arena = stubArena(undefined, field)) => ({
 describe('part-aware boss reach', () => {
   it('measures clearance from the core\'s reach and from every live part by its own radius', () => {
     const behaviour = serpent();
-    const runner = new BossRunner(BOSSES.sentinel, behaviour, setupFor(BOSS_FIELD));
+    const runner = new BossRunner(FIXTURE_DEF, behaviour, setupFor(BOSS_FIELD));
     const { view } = runner;
     const segment = view.parts[0] as BossPart;
     expect(bossClearance(view, runner.reach, segment.x, segment.y + 30)).toBeCloseTo(30 - SEGMENT_RADIUS, 9);
@@ -88,13 +88,13 @@ describe('part-aware boss reach', () => {
       expect(bossClearance(runner.view, runner.reach, cx, cy), `${id} as its fight starts`).toBeGreaterThan(PLAYER.radius);
     }
     // The check sees a segment the core's reach does not: a serpent whose tail lies on the centre fails it.
-    const tailOnCentre = new BossRunner(BOSSES.sentinel, serpent(field.height / 2 - field.height * 0.28), setupFor(field));
+    const tailOnCentre = new BossRunner(FIXTURE_DEF, serpent(field.height / 2 - field.height * 0.28), setupFor(field));
     expect(bossClearance(tailOnCentre.view, tailOnCentre.reach, field.width / 2, field.height / 2)).toBeLessThan(PLAYER.radius);
   });
 
   it('drifts the core so its far-trailing segment stays inside the field too', () => {
     const arena = stubArena();
-    const runner = new BossRunner(BOSSES.sentinel, serpent(), setupFor(BOSS_FIELD));
+    const runner = new BossRunner(FIXTURE_DEF, serpent(), setupFor(BOSS_FIELD));
     let lowest = 0;
     runFor((dt, a) => {
       runner.step(dt, a);
@@ -116,7 +116,7 @@ describe('part-aware boss reach', () => {
       const ys: number[] = [];
       return {
         driftSpeed: 60,
-        attacks: { shardRing: spec, lunge: spec },
+        attacks: { quake: spec, dive: spec },
         parts: withSegment ? [segment] : [],
         step: (ctx) => {
           if (ctx.boss.state !== 'fighting') return;
@@ -129,7 +129,7 @@ describe('part-aware boss reach', () => {
       };
     };
     const paths = [true, false].map((withSegment) => {
-      const runner = new BossRunner(BOSSES.sentinel, trailing(withSegment), setupFor(BOSS_FIELD));
+      const runner = new BossRunner(FIXTURE_DEF, trailing(withSegment), setupFor(BOSS_FIELD));
       const path: number[] = [];
       runFor((dt, a) => {
         runner.step(dt, a);
@@ -144,9 +144,9 @@ describe('part-aware boss reach', () => {
     const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
     const at = (dy: number): BossPart => ({ x: 640, y: 201.6 + dy, px: 0, py: 0, radius: SEGMENT_RADIUS, hp: 4, maxHp: 4 });
     // 380 above and below the core, and their radii: 808 down, in a field 720 high.
-    const tall = (rigidParts: boolean): BossBehaviour => ({ driftSpeed: 0, rigidParts, attacks: { shardRing: spec, lunge: spec }, parts: [at(-380), at(380)] });
-    expect(() => new BossRunner(BOSSES.sentinel, tall(true), setupFor(BOSS_FIELD))).toThrow(/^sentinel reaches .*808 down.*720 field.*shrink its reach, its orbit or its parts' radius/);
-    expect(() => new BossRunner(BOSSES.sentinel, tall(false), setupFor(BOSS_FIELD))).not.toThrow();
+    const tall = (rigidParts: boolean): BossBehaviour => ({ driftSpeed: 0, rigidParts, attacks: { quake: spec, dive: spec }, parts: [at(-380), at(380)] });
+    expect(() => new BossRunner(FIXTURE_DEF, tall(true), setupFor(BOSS_FIELD))).toThrow(/^monolith reaches .*808 down.*720 field.*shrink its reach, its orbit or its parts' radius/);
+    expect(() => new BossRunner(FIXTURE_DEF, tall(false), setupFor(BOSS_FIELD))).not.toThrow();
   });
 
   it('respawns a ship clear of a segment that lies across the usual spot, not only clear of the core', () => {

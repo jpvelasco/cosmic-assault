@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
+import type { BossPart } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -127,7 +128,7 @@ const BOSS_GALAXIES = GALAXIES.filter((g, i) => g.boss !== null && GALAXIES.find
 
 /** Seconds between the blows that walk a boss through its phases, slow enough for each phase to show its attacks. */
 const BLOW_SECONDS = 1;
-const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 150;
+const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 300;
 
 /**
  * The fight in `id` on `seed`, step by step, audited: an idle ship kept unhurt, so the fight runs its course, and one
@@ -140,7 +141,13 @@ function auditedFight(id: GalaxyId, seed: number): AttackPair[] {
   for (let step = 0; step * STEP_SECONDS < FIGHT_SECONDS && world.status === 'playing'; step++) {
     Object.assign(world['shipState'], { invulnerable: true, invulnerableFor: 1 });
     const target = world.boss === null ? null : bossTarget(world.boss);
-    if (target !== null && step % blowEvery === 0) world['run']?.bosses.hitBoss(target.x, target.y, 1);
+    if (target !== null && step % blowEvery === 0) {
+      // A blow on a part is a blow on that part, as a shot strikes it: a shielded core is only reached through its shards.
+      const run = world['run'];
+      const part = world.boss?.parts.indexOf(target as BossPart) ?? -1;
+      if (part >= 0) run?.bosses.hitPart(part, 1);
+      else run?.bosses.hitBoss(target.x, target.y, 1);
+    }
     recorder.record(world, world.step(STEP_SECONDS, NO_CONTROLS));
   }
   expect(world.status, `${id} seed ${String(seed)}`).not.toBe('playing');
@@ -179,7 +186,7 @@ describe('auditAttacks', () => {
   });
 
   it('fails an attack that goes active, or makes a rock, before the minimum windup, naming it', () => {
-    expect(() => auditAttacks([step(1, { events: [windup('lunge')] }), step(1.2, { active: 'lunge' })])).toThrow(/^lunge .*went active/);
+    expect(() => auditAttacks([step(1, { events: [windup('dive')] }), step(1.2, { active: 'dive' })])).toThrow(/^dive .*went active/);
     expect(() => auditAttacks([step(1, { events: [windup('quake')] }), step(1.1, { made: { rocks: 1, foes: 0, bolts: 0 } })])).toThrow(/^quake .*made rocks/);
   });
 

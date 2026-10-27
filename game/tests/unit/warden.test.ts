@@ -118,7 +118,7 @@ describe('the Warden definition', () => {
     expect(ATTACKS.ringPulse.windup).toBe(0.7);
   });
 
-  it('guards 3-★, replacing the Sentinel there', () => {
+  it('guards 3-★', () => {
     expect(galaxyById('3-6').boss).toBe('warden');
   });
 });

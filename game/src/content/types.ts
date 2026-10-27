@@ -38,11 +38,11 @@ export type FoeKind = 'splitter' | 'drone' | 'gunship' | 'mine' | 'phaser' | 'ar
 /** Everything the director can spawn from its threat budget. */
 export type ThreatKind = RockKind | FoeKind;
 
-/** The bosses so far: the Monolith guards Dimension 1, the Hive Carrier Dimension 2, the Warden Dimension 3 and the Leviathan Dimension 4; the M4 placeholder Sentinel stands in for the rest. */
-export type BossId = 'sentinel' | 'monolith' | 'hiveCarrier' | 'warden' | 'leviathan';
+/** The bosses: the Monolith guards Dimension 1, the Hive Carrier Dimension 2, the Warden Dimension 3, the Leviathan Dimension 4 and the Eclipse Dimension 5. */
+export type BossId = 'monolith' | 'hiveCarrier' | 'warden' | 'leviathan' | 'eclipse';
 
-/** The moves a boss draws on: the Sentinel's, then the Monolith's, the Hive Carrier's, the Warden's and the Leviathan's. */
-export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat' | 'turretVolley' | 'lockOn' | 'spin' | 'ringPulse' | 'dive' | 'spit' | 'coil';
+/** The moves a boss draws on: the Monolith's, the Hive Carrier's, the Warden's and the Leviathan's, then the Eclipse, which remixes them. */
+export type AttackId = 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat' | 'turretVolley' | 'lockOn' | 'spin' | 'ringPulse' | 'dive' | 'spit' | 'coil';
 
 /**
  * How likely a kind is to be picked at tier `t`: `base` while `t` is at or below `from`, then `base + (t - from) * step`

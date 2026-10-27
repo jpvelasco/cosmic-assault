@@ -403,7 +403,7 @@ describe('mercy after a death', () => {
 });
 
 describe('a boss galaxy', () => {
-  it('runs its 20 s approach, then holds in the boss phase until the boss is beaten (see sentinel.test.ts)', () => {
+  it('runs its 20 s approach, then holds in the boss phase until the boss is beaten (see bossFixture.test.ts)', () => {
     const w = galaxyWorld(calm('1-6'));
     play(w, 19);
     expect(w.phase).toBe('opening');

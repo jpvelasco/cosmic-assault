@@ -1,4 +1,7 @@
+import type { BossDef } from '../../src/content/bosses';
 import { ASTEROID, STEP_SECONDS } from '../../src/sim/config';
+import { dashAttack, rockRingAttack } from '../../src/sim/boss/attacks';
+import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { createRng } from '../../src/sim/rng';
@@ -6,6 +9,29 @@ import type { Arena } from '../../src/sim/rules';
 import { createShip, type Ship } from '../../src/sim/ship';
 
 export const BOSS_FIELD: Field = { width: 1280, height: 720 };
+
+/**
+ * A stand-in boss for the runner's own tests, with no galaxy of its own: a core of radius 70 and 20 HP that rings itself
+ * with pass-through rocks (`quake`) and dashes at the ship (`dive`). The runner reads its id as a boss's, so it takes the
+ * Monolith's, which the fixture's numbers and moves do not share.
+ */
+export const FIXTURE_DEF: BossDef = {
+  id: 'monolith',
+  name: 'Fixture',
+  hp: 20,
+  radius: 70,
+  phases: [['quake'], ['quake', 'dive'], ['dive', 'quake', 'quake']],
+  rest: [2.2, 1.6, 1.1],
+};
+
+/** The fixture's behaviour: six rocks in phase 1, eight in phase 2 and ten in phase 3, each ring 0.6 s in its windup; a dash of 0.8 s after 0.5 s of windup. */
+export const FIXTURE: BossBehaviour & { readonly attacks: Readonly<{ quake: AttackSpec; dive: AttackSpec }> } = {
+  driftSpeed: 20,
+  attacks: {
+    quake: rockRingAttack(0.6, { 1: 6, 2: 8, 3: 10 }, 2, 1.5),
+    dive: dashAttack(0.5, 0.8, FIXTURE_DEF.radius),
+  },
+};
 
 export interface StubArena extends Arena {
   readonly ship: Ship;

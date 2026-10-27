@@ -103,10 +103,10 @@ describe('the Hive Carrier definition', () => {
     expect(LAUNCH_WAVES).toEqual({ 1: 1, 2: 2, 3: 2 });
   });
 
-  it('guards 2-★, while 5-★ keeps the Sentinel for now', () => {
+  it('guards 2-★, while 5-★ is the Eclipse\'s', () => {
     expect(galaxyById('2-6').boss).toBe('hiveCarrier');
     expect(bossHp(DEF, 2)).toBe(28);
-    for (const id of ['5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
+    expect(galaxyById('5-6').boss).toBe('eclipse');
   });
 
   it('needs the galaxy\'s foes to launch its drones into, and says so', () => {

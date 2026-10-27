@@ -1,6 +1,6 @@
 import { BOLT } from '../../content/foes';
 import { outAndBack } from '../math';
-import { aimedBolts, crosses, radialBolts } from './attacks';
+import { aimedBolts, turretVolleyAttack } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossSetup } from './behaviour';
 import { nearestParts, TurretRing, type TurretRingOptions } from './turretRing';
 
@@ -69,7 +69,7 @@ class Warden implements BossBehaviour {
     this.parts = ring.parts;
     this.reach = ring.reach;
     this.attacks = {
-      turretVolley: { windup: WINDUPS.turretVolley, active: VOLLEY_SECONDS, run: (ctx) => { this.volley(ctx); } },
+      turretVolley: turretVolleyAttack(WINDUPS.turretVolley, VOLLEY_SECONDS, this.parts, { at: VOLLEY_REPEAT, phase: 3 }),
       lockOn: { windup: WINDUPS.lockOn, active: 0, run: (ctx) => { this.lockOn(ctx); }, threat: { kind: 'lane', reach: LOCK_REACH } },
       spin: {
         windup: WINDUPS.spin,
@@ -89,11 +89,6 @@ class Warden implements BossBehaviour {
 
   step(ctx: AttackContext): void {
     this.ring.step(ctx);
-  }
-
-  /** Every live turret fires one bolt outward as the volley starts, and in phase 3 again `VOLLEY_REPEAT` later. */
-  private volley(ctx: AttackContext): void {
-    if (crosses(ctx, 0) || (ctx.boss.phase === 3 && crosses(ctx, VOLLEY_REPEAT))) radialBolts(ctx, this.parts);
   }
 
   /** The `LOCK_TURRETS` live turrets nearest the ship each fire `LOCK_BOLTS` bolts at where it was as the windup began. */

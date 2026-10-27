@@ -1,21 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { BOSSES } from '../../src/content/bosses';
 import type { AttackId } from '../../src/content/types';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
-import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed } from '../helpers/bossArena';
+import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed, FIXTURE_DEF, FIXTURE } from '../helpers/bossArena';
 
-const DEF = BOSSES.sentinel;
+const DEF = FIXTURE_DEF;
 const MAX_HP = 30;
 const INTRO = 2;
 const DYING = 2;
 const EPS = STEP_SECONDS * 2.5;
 
-function runnerFor(behaviour: BossBehaviour = SENTINEL, maxHp = MAX_HP, seed = 1): BossRunner {
+function runnerFor(behaviour: BossBehaviour = FIXTURE, maxHp = MAX_HP, seed = 1): BossRunner {
   return new BossRunner(DEF, behaviour, { maxHp, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD });
 }
 
@@ -24,7 +22,7 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
 };
 
 /** A boss in `fighting`, with the intro played out. */
-function fighting(maxHp = MAX_HP, behaviour: BossBehaviour = SENTINEL): { r: BossRunner; arena: StubArena } {
+function fighting(maxHp = MAX_HP, behaviour: BossBehaviour = FIXTURE): { r: BossRunner; arena: StubArena } {
   const r = runnerFor(behaviour, maxHp);
   const arena = stubArena();
   runFor(stepper(r), arena, INTRO + 0.05);
@@ -34,7 +32,7 @@ function fighting(maxHp = MAX_HP, behaviour: BossBehaviour = SENTINEL): { r: Bos
 /** A behaviour whose attacks log `[time, age]` on every call, so windup and active time can be measured. */
 function probe(windup: number, active: number, calls: (readonly [number, number])[] = []): BossBehaviour {
   const spec: AttackSpec = { windup, active, run: (ctx) => void calls.push([ctx.arena.elapsed(), ctx.age]) };
-  return { attacks: { shardRing: spec, lunge: spec }, driftSpeed: 0 };
+  return { attacks: { quake: spec, dive: spec }, driftSpeed: 0 };
 }
 
 describe('BossRunner intro and phases', () => {
@@ -45,7 +43,7 @@ describe('BossRunner intro and phases', () => {
       expect(r.state).toBe('intro');
       expect(r.hit(5)).toBe('blocked');
     });
-    expect(timedOfType(log, 'bossIntro')).toEqual([{ at: STEP_SECONDS, event: { type: 'bossIntro', id: 'sentinel' } }]);
+    expect(timedOfType(log, 'bossIntro')).toEqual([{ at: STEP_SECONDS, event: { type: 'bossIntro', id: 'monolith' } }]);
     expect(r.hp).toBe(MAX_HP);
     runFor(stepper(r), arena, 0.2);
     expect(r.state).toBe('fighting');
@@ -100,17 +98,17 @@ describe('BossRunner attacks', () => {
   it('runs the phase list in order and repeats it', () => {
     const { r, arena } = fighting();
     const first = runFor(stepper(r), arena, 20);
-    expect(timedOfType(first, 'bossWindup').slice(0, 4).map((l) => l.event.attack)).toEqual(['shardRing', 'shardRing', 'shardRing', 'shardRing']);
+    expect(timedOfType(first, 'bossWindup').slice(0, 4).map((l) => l.event.attack)).toEqual(['quake', 'quake', 'quake', 'quake']);
 
     r.hit(10); // 20 of 30: phase 2
     const second = runFor(stepper(r), arena, 20);
     const phase2 = timedOfType(second, 'bossWindup').map((l) => l.event.attack);
-    expect(phase2.slice(0, 5)).toEqual(['shardRing', 'lunge', 'shardRing', 'lunge', 'shardRing']);
+    expect(phase2.slice(0, 5)).toEqual(['quake', 'dive', 'quake', 'dive', 'quake']);
 
     r.hit(10); // 10 of 30: phase 3
     const third = runFor(stepper(r), arena, 25);
     const phase3 = timedOfType(third, 'bossWindup').map((l) => l.event.attack);
-    expect(phase3.slice(0, 6)).toEqual(['lunge', 'shardRing', 'shardRing', 'lunge', 'shardRing', 'shardRing']);
+    expect(phase3.slice(0, 6)).toEqual(['dive', 'quake', 'quake', 'dive', 'quake', 'quake']);
   });
 
   it('lets an attack under way finish when the phase changes, fires it at the new phase, then rests the new phase\'s time', () => {
@@ -128,18 +126,18 @@ describe('BossRunner attacks', () => {
       }
     });
     const windups = timedOfType(log, 'bossWindup');
-    expect(windups.map((w) => w.event.attack).slice(0, 3)).toEqual(['shardRing', 'shardRing', 'lunge']);
+    expect(windups.map((w) => w.event.attack).slice(0, 3)).toEqual(['quake', 'quake', 'dive']);
     // The telegraphed ring was not cancelled: it fires once, with phase 2's 8 rocks.
     expect(ring.rocks).toBe(8);
     const [first, second] = [windups[0], windups[1]];
-    expect(ring.at - (first?.at ?? 0)).toBeGreaterThanOrEqual(SENTINEL.attacks.shardRing.windup - EPS);
+    expect(ring.at - (first?.at ?? 0)).toBeGreaterThanOrEqual(FIXTURE.attacks.quake.windup - EPS);
     // And the rest after it is phase 2's 1.6 s, not phase 1's 2.2 s.
     expect((second?.at ?? 0) - ring.at).toBeCloseTo(1.6, 1);
   });
 
   it('is deterministic: the same seed gives the same log, a different seed a different one', () => {
     const play = (seed: number): { log: unknown[]; rocks: unknown[] } => {
-      const r = runnerFor(SENTINEL, MAX_HP, seed);
+      const r = runnerFor(FIXTURE, MAX_HP, seed);
       const arena = stubArena();
       const log = runFor(stepper(r), arena, 30, () => {
         if (arena.elapsed() > 10 && arena.elapsed() < 10.05) r.hit(1);
@@ -168,7 +166,7 @@ describe('BossRunner attacks', () => {
   });
 
   it('gives every attack a telegraph of at least 0.35 s, and runs nothing during it', () => {
-    for (const [id, spec] of Object.entries(SENTINEL.attacks)) expect(spec.windup, id).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
+    for (const [id, spec] of Object.entries(FIXTURE.attacks)) expect(spec.windup, id).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
     const { r, arena } = fighting();
     const rocksAt: number[] = [];
     const log = runFor(stepper(r), arena, 12, () => rocksAt.push(arena.asteroids.length));
@@ -176,7 +174,7 @@ describe('BossRunner attacks', () => {
     const first = windups[0];
     if (first === undefined) throw new Error('expected an attack within 12 s');
     const startIndex = Math.round(first.at / STEP_SECONDS) - 1;
-    const windupSteps = Math.round(SENTINEL.attacks[first.event.attack as keyof typeof SENTINEL.attacks].windup / STEP_SECONDS);
+    const windupSteps = Math.round((first.event.attack === 'dive' ? FIXTURE.attacks.dive : FIXTURE.attacks.quake).windup / STEP_SECONDS);
     const before = rocksAt[startIndex - 1];
     for (let i = startIndex; i < startIndex + windupSteps - 1; i++) expect(rocksAt[i], `step ${String(i)}`).toBe(before);
     expect(rocksAt.at(-1)).toBeGreaterThan(before ?? 0);
@@ -207,7 +205,7 @@ describe('BossRunner attacks', () => {
     const { r, arena } = fighting();
     const seen = new Set<AttackId | null>();
     runFor(stepper(r), arena, 8, () => seen.add(r.view.windup));
-    expect(seen).toEqual(new Set<AttackId | null>([null, 'shardRing']));
+    expect(seen).toEqual(new Set<AttackId | null>([null, 'quake']));
   });
 });
 
@@ -225,7 +223,7 @@ describe('BossRunner death', () => {
     });
     expect(r.state).toBe('dying');
     const down = timedOfType(log, 'bossDown');
-    expect(down.map((l) => l.event)).toEqual([{ type: 'bossDown', id: 'sentinel' }]);
+    expect(down.map((l) => l.event)).toEqual([{ type: 'bossDown', id: 'monolith' }]);
     expect(down[0]?.at).toBeCloseTo(killedAt + STEP_SECONDS, 9);
     const rest = runFor(stepper(r), arena, 0.2);
     expect(r.state).toBe('down');

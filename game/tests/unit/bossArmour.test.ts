@@ -8,7 +8,7 @@ import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const PARTS = 4;
@@ -16,7 +16,7 @@ const PART_RADIUS = 12;
 /** How far apart along the row below the core its parts sit. */
 const PART_SPACING = 60;
 const BREAK_DAMAGE = 6;
-const DEF: BossDef = { ...BOSSES.sentinel, partBreakDamage: BREAK_DAMAGE };
+const DEF: BossDef = { ...FIXTURE_DEF, partBreakDamage: BREAK_DAMAGE };
 
 const live = (boss: Readonly<BossView>): number => boss.parts.filter((p) => p.hp > 0).length;
 
@@ -30,7 +30,7 @@ function segmented(): BossBehaviour {
   const tail = (): number => parts.findLastIndex((p) => p.hp > 0);
   return {
     driftSpeed: 0,
-    attacks: { shardRing: spec, lunge: spec, shardVolley: spec, quake: spec, pulse: spec },
+    attacks: { quake: spec, dive: spec, shardVolley: spec, pulse: spec },
     parts,
     reach: 70,
     step: (ctx) => {
@@ -113,7 +113,7 @@ describe('part break damage (M6-R9)', () => {
   });
 
   it('is nothing for a boss whose definition gives none', () => {
-    const { r } = fighting(BOSSES.sentinel);
+    const { r } = fighting(FIXTURE_DEF);
     while ((r.view.parts[3]?.hp ?? 0) > 0) r.hitPart(3, 1);
     expect(r.hp).toBe(30);
   });

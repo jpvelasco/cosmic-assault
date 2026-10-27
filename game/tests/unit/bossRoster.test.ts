@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { BOSSES } from '../../src/content/bosses';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { BossId } from '../../src/content/types';
 import { aimedBoltsAttack, dash, dashAttack, fireBolt, pulseAttack, radialBoltsAttack } from '../../src/sim/boss/attacks';
@@ -7,13 +6,12 @@ import type { AttackSpec, BossBehaviour, BossPart, BossSetup } from '../../src/s
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { createMonolith, MONOLITH_SHARDS } from '../../src/sim/boss/monolith';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
-import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { ShardOrbit } from '../../src/sim/boss/shardOrbit';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF, FIXTURE } from '../helpers/bossArena';
 import { ATTACK_TELEGRAPHS, auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
 const BOSS_IDS = Object.keys(BOSS_BEHAVIOURS) as BossId[];
@@ -37,18 +35,18 @@ describe('the shared attack library', () => {
     expect(dashAttack(0.7, 1, 70)).toMatchObject({ windup: 0.7, active: 1, threat: { kind: 'lane', reach: 'core' } });
   });
 
-  it("runs the Sentinel's lunge as the shared dash over its 0.8 s, and makes the Monolith's shards a ShardOrbit of its options", () => {
+  it("runs the fixture's dive as the shared dash over its 0.8 s, and makes the Monolith's shards a ShardOrbit of its options", () => {
     const arena = stubArena();
-    const sentinel = new BossRunner(BOSSES.sentinel, SENTINEL, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
-    const dashed = new BossRunner(BOSSES.sentinel, { ...SENTINEL, attacks: { ...SENTINEL.attacks, lunge: { ...SENTINEL.attacks.lunge, run: (ctx) => { dash(ctx, 0.8); } } } }, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
+    const fixture = new BossRunner(FIXTURE_DEF, FIXTURE, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
+    const dashed = new BossRunner(FIXTURE_DEF, { ...FIXTURE, attacks: { ...FIXTURE.attacks, dive: { ...FIXTURE.attacks.dive, run: (ctx) => { dash(ctx, 0.8); } } } }, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
     const poses: number[][] = [[], []];
     runFor((dt, a) => {
-      sentinel.step(dt, a);
+      fixture.step(dt, a);
       dashed.step(dt, a);
-      poses[0]?.push(sentinel.view.x, sentinel.view.y);
+      poses[0]?.push(fixture.view.x, fixture.view.y);
       poses[1]?.push(dashed.view.x, dashed.view.y);
-      if (sentinel.view.active === null && sentinel.hp > 12) {
-        sentinel.hit(1);
+      if (fixture.view.active === null && fixture.hp > 12) {
+        fixture.hit(1);
         dashed.hit(1);
       }
     }, arena, 20);
@@ -57,15 +55,15 @@ describe('the shared attack library', () => {
     expect(createMonolith(setupFor(BOSS_FIELD)).parts).toEqual(shards);
   });
 
-  /** The fixture fights stand their bolt attacks in for the Sentinel's two. */
-  const BOLT_HARMS = { ...ATTACK_TELEGRAPHS, shardRing: 'bolts', lunge: 'bolts' } as const;
+  /** The fixture fights stand their bolt attacks in for the fixture's two. */
+  const BOLT_HARMS = { ...ATTACK_TELEGRAPHS, quake: 'bolts', dive: 'bolts' } as const;
 
   /** A fight whose every attack is `spec`, on a stub arena with bolts, its fight steps recorded for the audit. */
   function boltFight(spec: AttackSpec, parts: readonly BossPart[] = []) {
     const arena = stubArena();
     const setup = setupFor(BOSS_FIELD, arena);
     const bolts = setup.bolts as Bolts;
-    const runner = new BossRunner(BOSSES.sentinel, { driftSpeed: 0, parts, attacks: { shardRing: spec, lunge: spec } }, setup);
+    const runner = new BossRunner(FIXTURE_DEF, { driftSpeed: 0, parts, attacks: { quake: spec, dive: spec } }, setup);
     const recorder = fightRecorder();
     const source = { get elapsed() { return arena.elapsed(); }, boss: runner.view, asteroids: arena.asteroids, foes: [], bolts: bolts.list };
     const log = runFor((dt, a) => { runner.step(dt, a); }, arena, 6, () => { recorder.record(source, arena.events); });
@@ -102,18 +100,18 @@ describe('the shared attack library', () => {
     const arena = stubArena();
     const setup = setupFor(BOSS_FIELD, arena);
     const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
-    const sly: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: spec, lunge: spec }, step: (ctx) => { if (ctx.boss.windup !== null) fireBolt(ctx, ctx.boss.x, ctx.boss.y, 0); } };
-    const runner = new BossRunner(BOSSES.sentinel, sly, setup);
+    const sly: BossBehaviour = { driftSpeed: 0, attacks: { quake: spec, dive: spec }, step: (ctx) => { if (ctx.boss.windup !== null) fireBolt(ctx, ctx.boss.x, ctx.boss.y, 0); } };
+    const runner = new BossRunner(FIXTURE_DEF, sly, setup);
     expect(() => runFor((dt, a) => { runner.step(dt, a); }, arena, 6)).toThrow(/step .*attack's run/);
-    const shover: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: spec, lunge: spec }, step: (ctx) => { ctx.shoveX = 50; } };
-    const pushy = new BossRunner(BOSSES.sentinel, shover, setupFor(BOSS_FIELD, arena));
+    const shover: BossBehaviour = { driftSpeed: 0, attacks: { quake: spec, dive: spec }, step: (ctx) => { ctx.shoveX = 50; } };
+    const pushy = new BossRunner(FIXTURE_DEF, shover, setupFor(BOSS_FIELD, arena));
     expect(() => runFor((dt, a) => { pushy.step(dt, a); }, arena, 1)).toThrow(/step .*attack's run/);
   });
 
   it('refuses a bolt from a fight with no bolts to fire, saying how to give it some', () => {
     const arena = stubArena();
     const volley: AttackSpec = { windup: 0.5, active: 0, run: (ctx) => { fireBolt(ctx, ctx.boss.x, ctx.boss.y, 0, 230); } };
-    const runner = new BossRunner(BOSSES.sentinel, { driftSpeed: 0, attacks: { shardRing: volley, lunge: volley } }, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
+    const runner = new BossRunner(FIXTURE_DEF, { driftSpeed: 0, attacks: { quake: volley, dive: volley } }, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
     expect(() => runFor((dt, a) => { runner.step(dt, a); }, arena, 6)).toThrow(/setup\.bolts/);
   });
 });
@@ -127,8 +125,8 @@ describe('a ShardOrbit', () => {
     const setup = setupFor(BOSS_FIELD, arena);
     const orbit = new ShardOrbit(OPTIONS, setup);
     const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
-    const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { shardRing: spec, lunge: spec }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
-    const runner = new BossRunner(BOSSES.sentinel, behaviour, setup);
+    const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { quake: spec, dive: spec }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
+    const runner = new BossRunner(FIXTURE_DEF, behaviour, setup);
     runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
     return { orbit, runner, arena };
   }

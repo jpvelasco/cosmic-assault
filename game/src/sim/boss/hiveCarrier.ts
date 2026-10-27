@@ -3,7 +3,7 @@ import type { AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import { smoothstep, TIME_EPSILON, turnBetween } from '../math';
-import { clearSlot, hullPoint, lane, launchDrones, transientRock } from './attacks';
+import { clearSlot, hullPoint, lane, launchDrones, transientRock, turnToward } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure, Point } from './behaviour';
 
 /** Seconds the hangar stays open after each launch. */
@@ -98,9 +98,7 @@ class HiveCarrier implements BossBehaviour {
     const { boss, arena, dt } = ctx;
     this.open = boss.state === 'fighting' && arena.elapsed() + TIME_EPSILON < this.closesAt;
     if (boss.state !== 'fighting') return;
-    const { ship } = arena;
-    const limit = TURN_RATE * dt;
-    boss.facing += clamp(turnBetween(boss.facing, Math.atan2(ship.y - boss.y, ship.x - boss.x)), -limit, limit);
+    turnToward(boss, arena.ship, TURN_RATE, dt);
     if (boss.active !== 'retreat') this.cruise(boss, dt, arena.field());
   }
 

@@ -34,10 +34,10 @@ describe('the expert pilot against a boss', () => {
   });
 
   it("keeps out of the lane of an attack aimed at where it was, and stays put for one that is not", () => {
-    const lunge = stage(sceneView(), { id: 'sentinel', at: { x: 640, y: 150 }, radius: 70, windup: 'lunge' });
-    expect(after(lunge, 0).thrust).toBe(true);
+    const dive = stage(sceneView(), { id: 'monolith', at: { x: 640, y: 150 }, radius: 70, windup: 'dive' });
+    expect(after(dive, 0).thrust).toBe(true);
     for (const windup of ['launch', 'broadside', 'quake', 'pulse'] as const) {
-      expect(after(stage(sceneView(), { id: 'sentinel', at: { x: 640, y: 150 }, radius: 70, windup }), 0).thrust, windup).toBe(false);
+      expect(after(stage(sceneView(), { id: 'monolith', at: { x: 640, y: 150 }, radius: 70, windup }), 0).thrust, windup).toBe(false);
     }
   });
 
@@ -86,12 +86,12 @@ describe('the expert pilot against a boss', () => {
   });
 
   it('keeps off the ring an attack sweeps, about the core or about where it was, and stays put well clear of it', () => {
-    const ring = (around: 'core' | 'aim', radius: number): BossThreat => ({ attack: 'shardRing', windup: 0.7, kind: 'ring', reach: 25, speed: 0, ring: { radius, around } });
+    const ring = (around: 'core' | 'aim', radius: number): BossThreat => ({ attack: 'quake', windup: 0.7, kind: 'ring', reach: 25, speed: 0, ring: { radius, around } });
     const core = { x: SCENE_SHIP.x, y: SCENE_SHIP.y - 230 };
-    expect(after(stage(sceneView(), { at: core, radius: 48, windup: 'shardRing', threat: ring('core', 230) }), 0).thrust).toBe(true);
-    expect(after(stage(sceneView(), { at: core, radius: 48, windup: 'shardRing', threat: ring('core', 100) }), 0).thrust).toBe(false);
+    expect(after(stage(sceneView(), { at: core, radius: 48, windup: 'quake', threat: ring('core', 230) }), 0).thrust).toBe(true);
+    expect(after(stage(sceneView(), { at: core, radius: 48, windup: 'quake', threat: ring('core', 100) }), 0).thrust).toBe(false);
     // Coiled round where the ship was as the windup began, 220 out: the ship sits at its centre, safe.
-    expect(after(stage(sceneView(), { at: { x: 340, y: 210 }, radius: 34, windup: 'shardRing', threat: ring('aim', 220) }), 0).thrust).toBe(false);
+    expect(after(stage(sceneView(), { at: { x: 340, y: 210 }, radius: 34, windup: 'quake', threat: ring('aim', 220) }), 0).thrust).toBe(false);
   });
 
   it('dodges a hostile bolt flying at it, and lets one flying away pass', () => {

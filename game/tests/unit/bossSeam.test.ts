@@ -10,10 +10,10 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import { FOE_CAPACITY, FoeField } from '../../src/sim/foes/foeField';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
-const DEF = BOSSES.sentinel;
+const DEF = FIXTURE_DEF;
 const INTRO = 2;
 /** The probe's weak point: the half of its rim facing right, and only while it says its door is open. */
 const WEAK_SIDE = 1;
@@ -36,7 +36,7 @@ function doorProbe(): DoorProbe {
   const asked: { x: number; y: number }[] = [];
   const probe: DoorProbe = {
     driftSpeed: 0,
-    attacks: { shardRing: spec, lunge: spec },
+    attacks: { shardVolley: spec, quake: spec, dive: spec, pulse: spec },
     exposure: { opened: 'hangarOpen', closed: 'hangarClose' },
     open: false,
     asked,
@@ -138,10 +138,10 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
     return Object.fromEntries(Object.keys(BOSSES).map((id) => [id, make])) as unknown as Record<BossId, BossFactory>;
   }
 
-  /** A 1-6 run whose boss, the Sentinel by its definition, is `make`'s, on a stub arena, stepped until the boss is fighting. */
+  /** A 1-6 run whose boss is `make`'s, on a stub arena, stepped until the boss is fighting. */
   function fight(make: (setup: BossSetup) => BossBehaviour): { arena: StubArena; run: GalaxyRun; boss: BossView } {
     const arena = stubArena();
-    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [], boss: 'sentinel' as const };
+    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [], boss: 'monolith' as const };
     const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, standIns(make));
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.events.length = 0;

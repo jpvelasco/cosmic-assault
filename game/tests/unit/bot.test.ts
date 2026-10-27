@@ -46,12 +46,12 @@ describe('bots', () => {
     expect(replayed.score).toBe(result.score);
   });
 
-  it('replays a boss fight exactly: the expert against the Sentinel on 3-6\'s field, from the same seed and from its own controls', () => {
-    const galaxy = { ...galaxyById('3-6'), boss: 'sentinel' as const };
-    const options = { galaxy, seed: 1, profile: 'expert', maxSeconds: 80 } as const;
+  it('replays a boss fight exactly: the expert against the Warden on 3-6, from the same seed and from its own controls', () => {
+    const galaxy = galaxyById('3-6');
+    const options = { galaxy, seed: 1, profile: 'expert', maxSeconds: 120 } as const;
     const { result, controls, events } = recordRun(options);
     expect(result.bossKillTime).toBeGreaterThan(0);
-    expect(events.some((e) => e.type === 'bossWindup' && e.attack === 'lunge')).toBe(true);
+    expect(events.some((e) => e.type === 'bossWindup' && e.attack === 'lockOn')).toBe(true);
     expect(runGalaxy(options)).toEqual(result);
     const replayed = replayControls(galaxy, 1, controls);
     expect(replayed.events).toEqual(events);

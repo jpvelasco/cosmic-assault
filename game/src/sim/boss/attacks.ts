@@ -3,8 +3,8 @@ import { BOLT, FOES } from '../../content/foes';
 import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU, TIME_EPSILON } from '../math';
-import type { AttackContext, AttackSpec, BossFoes, BossPart, BossView, Point } from './behaviour';
+import { TAU, TIME_EPSILON, turnBetween } from '../math';
+import type { AttackContext, AttackSpec, BossFoes, BossPart, BossPhase, BossView, Point } from './behaviour';
 
 // The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
 // moves instead of copying them.
@@ -50,6 +50,12 @@ export function radialShove(boss: Readonly<Pick<BossView, 'x' | 'y' | 'radius'>>
   out.x = (dx / distance) * push;
   out.y = (dy / distance) * push;
   return out;
+}
+
+/** Turns `boss` toward `target` by at most `rate` radians per second over `dt`: how a boss that faces the ship keeps its facing. */
+export function turnToward(boss: BossView, target: Readonly<Point>, rate: number, dt: number): void {
+  const limit = rate * dt;
+  boss.facing += clamp(turnBetween(boss.facing, Math.atan2(target.y - boss.y, target.x - boss.x)), -limit, limit);
 }
 
 /** The shove a pulse asks for; one point, reused. */
@@ -200,6 +206,25 @@ export const radialBoltsAttack = (windup: number, parts: readonly Readonly<BossP
   windup,
   active: 0,
   run: (ctx) => { radialBolts(ctx, parts, speed); },
+});
+
+/**
+ * A turret volley, telegraphed for `windup` s and running `active` s: every live part of `parts` fires one bolt outward
+ * as it goes active, and once more `repeat.at` s later if the boss is in `repeat.phase`.
+ */
+export const turretVolleyAttack = (windup: number, active: number, parts: readonly Readonly<BossPart>[], repeat?: Readonly<{ at: number; phase: BossPhase }>): AttackSpec => ({
+  windup,
+  active,
+  run: (ctx) => {
+    if (crosses(ctx, 0) || (repeat !== undefined && ctx.boss.phase === repeat.phase && crosses(ctx, repeat.at))) radialBolts(ctx, parts);
+  },
+});
+
+/** A quake, telegraphed for `windup` s: a ring of `counts[phase]` pass-through rocks of `size` from the core's rim, at `speed`, as it goes active. */
+export const rockRingAttack = (windup: number, counts: Readonly<Record<BossPhase, number>>, size: AsteroidSize, speed: number): AttackSpec => ({
+  windup,
+  active: 0,
+  run: (ctx) => { rockRing(ctx, counts[ctx.boss.phase], size, speed); },
 });
 
 /** An attack telegraphed for `windup` s that fires `aimedBolts` from the core as it ends. */

@@ -5,7 +5,6 @@ import type { BossId } from '../../src/content/types';
 import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
 import { BossRunner, DYING_SECONDS } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart, BossView } from '../../src/sim/boss/behaviour';
-import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { BLAST, STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { TAU } from '../../src/sim/math';
@@ -16,10 +15,10 @@ import { comboMultiplier } from '../../src/sim/scoring';
 import { createShip } from '../../src/sim/ship';
 import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF, FIXTURE } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
-const DEF: BossDef = BOSSES.sentinel;
+const DEF: BossDef = FIXTURE_DEF;
 const INTRO = 2;
 const PARTS = 4;
 /** How far the probe's parts sit from the core's centre. */
@@ -54,7 +53,7 @@ function probe(shove = 0): Probe {
   return {
     driftSpeed: 0,
     // Every attack any boss names, so the probe can stand in for any of them.
-    attacks: { shardRing: spec, lunge: spec, shardVolley: spec, quake: spec, pulse: spec },
+    attacks: { quake: spec, dive: spec, shardVolley: spec, pulse: spec },
     parts,
     reach: PART_REACH + PART_RADIUS,
     step: (ctx) => {
@@ -100,7 +99,7 @@ describe('a boss with parts', () => {
   });
 
   it('has none for a boss whose behaviour has none', () => {
-    expect(runnerOf(SENTINEL).view.parts).toEqual([]);
+    expect(runnerOf(FIXTURE).view.parts).toEqual([]);
   });
 
   it('finds the live part a circle overlaps, and none once it breaks', () => {
@@ -198,7 +197,7 @@ describe('a boss whose core is only sometimes vulnerable', () => {
   });
 
   it('says nothing of a boss that is always vulnerable', () => {
-    const r = runnerOf(SENTINEL);
+    const r = runnerOf(FIXTURE);
     const log = runFor(stepper(r), stubArena(), 12);
     expect(r.view.vulnerable).toBe(true);
     expect(log.filter((l) => l.event.type === 'bossExposed' || l.event.type === 'bossShielded')).toEqual([]);
@@ -227,7 +226,7 @@ describe('a boss attack under way', () => {
       seen.push(r.view.active);
       if (r.view.active !== null) expect(r.view.windup).toBeNull();
     });
-    expect(new Set(seen)).toEqual(new Set([null, 'shardRing']));
+    expect(new Set(seen)).toEqual(new Set([null, 'quake']));
   });
 
   it('shoves the ship on the next hazard path after the attack asks, never past the speed cap', () => {
@@ -245,8 +244,8 @@ describe('a boss attack under way', () => {
   });
 
   it('refuses a behaviour that lacks an attack its definition names, saying which', () => {
-    const lacking: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: SENTINEL.attacks.shardRing } };
-    expect(() => runnerOf(lacking)).toThrow(/lunge/);
+    const lacking: BossBehaviour = { driftSpeed: 0, attacks: { quake: FIXTURE.attacks.quake } };
+    expect(() => runnerOf(lacking)).toThrow(/dive/);
   });
 });
 

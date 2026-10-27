@@ -3,6 +3,7 @@ import { defaultSave, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { BOSSES } from '../src/content/bosses';
 import { SEGMENT_COUNT, SEGMENT_HP } from '../src/sim/boss/leviathan';
+import { ECLIPSE_CORONA } from '../src/sim/boss/eclipse';
 import { EXPOSED_AT } from '../src/sim/boss/monolith';
 import {
   clickPastGuard,
@@ -180,5 +181,44 @@ test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {
     const { screen, galaxy } = await gameState(page);
     expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: LEVIATHAN_GALAXY });
     await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
+  });
+});
+
+/**
+ * The Eclipse's galaxy. The case plays Free play, where a clear ends on the results card: a Rank run's last galaxy ends
+ * on Rank complete instead. It plays `openGame`'s default seed, whose idle ship reaches the corona with its three lives;
+ * no seed claim guards that yet.
+ */
+const ECLIPSE_GALAXY = '5-6';
+
+test.describe(`the Eclipse in ${ECLIPSE_GALAXY}`, () => {
+  test('is shielded by its corona, bare once four shards remain, and falls to shots on its core', async ({ page }) => {
+    await openGame(page, { galaxy: ECLIPSE_GALAXY });
+    await page.keyboard.press('Space');
+    await expectMode(page, 'playing');
+
+    await fastForward(page, TO_BOSS_FIGHT_SECONDS);
+    const shielded = await bossOf(page);
+    expect(shielded).toMatchObject({ id: 'eclipse', state: 'fighting', vulnerable: false, liveParts: ECLIPSE_CORONA.counts[0], hp: 134, maxHp: 134 });
+    // A shielded core offers a shard as the only place a shot does harm.
+    expect(shielded.target).not.toBeNull();
+
+    // Two blows break a shard: the corona comes down to its exposure, and the next step lays the core bare.
+    await damageBoss(page, ECLIPSE_CORONA.hp * (shielded.liveParts - ECLIPSE_CORONA.exposedAt));
+    await fastForward(page, STEP_SECONDS);
+    const bare = await bossOf(page);
+    expect(bare).toMatchObject({ liveParts: ECLIPSE_CORONA.exposedAt, vulnerable: true, hp: 134 });
+    expect((await gameState(page)).events).toMatchObject({ bossExposed: 1 });
+
+    await damageBoss(page, 1);
+    expect((await bossOf(page)).hp).toBe(133);
+
+    await damageBoss(page, KILL_SHOTS);
+    // The killing blow ends the galaxy on the next step.
+    await fastForward(page, STEP_SECONDS);
+    const { screen, galaxy, save } = await gameState(page);
+    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: ECLIPSE_GALAXY });
+    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
+    expect(save.galaxies[ECLIPSE_GALAXY]?.stars).toBeGreaterThan(0);
   });
 });

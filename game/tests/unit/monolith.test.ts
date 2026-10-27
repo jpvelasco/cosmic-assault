@@ -74,9 +74,9 @@ describe('the Monolith definition', () => {
     expect(ATTACKS.pulse.windup).toBe(0.5);
   });
 
-  it('guards 1-★, while 5-★ keeps the Sentinel for now', () => {
+  it('guards 1-★, while 5-★ is the Eclipse\'s', () => {
     expect(galaxyById('1-6').boss).toBe('monolith');
-    for (const id of ['5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
+    expect(galaxyById('5-6').boss).toBe('eclipse');
   });
 });
 
