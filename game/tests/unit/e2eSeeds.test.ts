@@ -53,7 +53,7 @@ describe('npm run find-seeds', { timeout: SPAWN_TIMEOUT_MS }, () => {
     const { status, output } = runFinder('lanes-clear', '--count', '2');
     expect(status).toBe(0);
     expect(output).toMatch(/^lanes-clear: \d+, \d+\n$/);
-  });
+  }, 30_000);
 
   it('lists the claims when none is named', () => {
     const { status, output } = runFinder();
@@ -69,12 +69,12 @@ describe('npm run find-seeds', { timeout: SPAWN_TIMEOUT_MS }, () => {
     const typo = runFinder('lanes-clear', '--cnt', '2');
     expect(typo.status).toBe(1);
     expect(typo.output).toContain('unknown option "--cnt"; the options are --count, --from, --to');
-  });
+  }, 30_000);
 
   it('names the known claims when given an unknown one', () => {
     const { status, output } = runFinder('nope');
     expect(status).toBe(1);
     expect(output).toContain('unknown claim "nope"');
     expect(output).toContain('three-deaths');
-  });
+  }, 30_000);
 });

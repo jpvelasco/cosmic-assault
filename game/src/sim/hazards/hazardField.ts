@@ -11,12 +11,12 @@ import { nudge } from '../math';
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
 import { DangerZones } from './dangerZone';
-
-const NO_BOLTS: readonly Bolt[] = [];
 import { ForceField } from './forceField';
 import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
 import { WarpRifts } from './warpRift';
+
+const NO_BOLTS: readonly Bolt[] = [];
 
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {

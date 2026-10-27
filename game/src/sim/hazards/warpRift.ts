@@ -163,10 +163,13 @@ export class WarpRifts implements Hazard {
     const shipJumped = this.carryBody(field, ship, PLAYER.radius, SHIP_KEY, true, out);
     for (const rock of bodies.rocks) this.carryOther(field, ship, rock, rock.radius, rock.id, shipJumped, true, out);
     // A phaser that is warning is on its way to its blink spot: carrying it would leave its blink spot where it is not.
-    for (const foe of bodies.foes) this.carryOther(field, ship, foe, foe.radius, foe.id, shipJumped, !(foe.kind === 'phaser' && foe.charging), out);
+    for (const foe of bodies.foes) {
+      const jumped = this.carryOther(field, ship, foe, foe.radius, foe.id, shipJumped, !(foe.kind === 'phaser' && foe.charging), out);
+      // A charging mine that blasts within the windup reaches the ship by its blast radius, whether the mine or the ship jumped.
+      if ((shipJumped || jumped) && foe.kind === 'mine' && foe.charging && foe.timer <= MIN_WINDUP_SECONDS) this.grace(field, ship, foe, MINE.blastRadius, foe.timer);
+    }
     if (!shipJumped) return;
     for (const bolt of bodies.bolts) this.grace(field, ship, bolt, bolt.radius, MIN_WINDUP_SECONDS);
-    for (const foe of bodies.foes) if (foe.kind === 'mine' && foe.charging && foe.timer <= MIN_WINDUP_SECONDS) this.grace(field, ship, foe, MINE.blastRadius, foe.timer);
   }
 
   /**
@@ -207,10 +210,11 @@ export class WarpRifts implements Hazard {
     return null;
   }
 
-  /** Carries a rock or foe, then grants the ship its grace if this jump, or the ship's, leaves them touching it. */
-  private carryOther(field: Field, ship: Readonly<Ship>, body: Mover, radius: number, id: number, shipJumped: boolean, carriable: boolean, out: SimEvent[]): void {
+  /** Carries a rock or foe, then grants the ship its grace if this jump, or the ship's, leaves them touching it; true if it jumped. */
+  private carryOther(field: Field, ship: Readonly<Ship>, body: Mover, radius: number, id: number, shipJumped: boolean, carriable: boolean, out: SimEvent[]): boolean {
     const jumped = carriable && this.carryBody(field, body, radius, id, false, out);
     if (shipJumped || jumped) this.grace(field, ship, body, radius, MIN_WINDUP_SECONDS);
+    return jumped;
   }
 
   /**
