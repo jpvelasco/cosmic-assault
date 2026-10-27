@@ -14,6 +14,9 @@ export const E2E_GALAXY: GalaxyId = '1-1';
 /** The boss galaxy the boss specs play. */
 export const BOSS_GALAXY: GalaxyId = '1-6';
 
+/** The boss galaxy the Hive Carrier spec plays. */
+export const CARRIER_GALAXY: GalaxyId = '2-6';
+
 /** The `?galaxy=` the game-over specs play with `?lives=1`, which makes it a one-life Rank run: a late galaxy, whose busier field ends an idle run within a few seconds, where 1-1 takes ten or more. */
 export const GAME_OVER_GALAXY: GalaxyId = '5-5';
 
@@ -28,6 +31,8 @@ const ENTRIES = [
   { seed: 3, claim: 'lanes-clear', galaxy: E2E_GALAXY },
   // The boss specs: the idle ship lives through the 1-6 approach and intro to the boss fight, on both e2e fields.
   { seed: 3, claim: 'boss-fight', galaxy: BOSS_GALAXY },
+  // The Hive Carrier spec: the idle ship that fires at the shut hangar has a shot turned away, then lives to see the hangar open.
+  { seed: 1, claim: 'hangar-opens', galaxy: CARRIER_GALAXY },
   // The clock seed whose idle ship clears 1-1 on the desktop field, hit twice on the way (runController.test.ts plays it too).
   { seed: 2, claim: 'clears-1-1', galaxy: E2E_GALAXY },
   // The game-over specs, with `?lives=1`: an idle ship is hit a few seconds after its 3 s of invulnerability.
@@ -69,6 +74,12 @@ export function seedFor(claim: ClaimId): number {
 
 /** Sim seconds into a boss galaxy by which its boss is fighting: the approach, the intro, and half a second. */
 export const TO_BOSS_FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 0.5;
+
+/** Sim seconds the Hive Carrier spec holds fire at the shut hangar: its first launch comes 3.2 s into the fight, so this leaves slack. */
+export const HULL_FIRE_SECONDS = 1;
+
+/** Sim seconds after the hull fire by which the Hive Carrier has launched and opened its hangar. */
+export const HANGAR_OPENS_SECONDS = 4;
 
 /** Sim seconds within which the 'three-deaths' idle ship loses three lives on the desktop field. */
 export const THREE_DEATHS_SECONDS = 120;

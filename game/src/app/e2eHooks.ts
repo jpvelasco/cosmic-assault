@@ -1,8 +1,14 @@
+import type { PickupId } from '../content/types';
 import { bossTarget } from '../sim/boss/bossRunner';
-import { STEP_SECONDS } from '../sim/config';
+import { PICKUP, STEP_SECONDS } from '../sim/config';
 import type { Controls } from '../sim/controls';
+import type { SimEvent } from '../sim/events';
+import type { World } from '../sim/world';
 import type { Screen } from './flow';
 import type { RunController } from './runController';
+
+/** How many events of each type the run in play has produced. */
+export type EventCounts = Partial<Record<SimEvent['type'], number>>;
 
 /**
  * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
@@ -16,6 +22,12 @@ export interface E2eHooks {
   e2eFastForward?: ((seconds: number) => void) | undefined;
   /** Set by `installE2eHooks`: lands `damage` shots on a boss that is fighting, each where it does harm; throws if none is. */
   e2eDamageBoss?: ((damage: number) => void) | undefined;
+  /** Set by `installE2eHooks`: drops a pickup of `kind` onto the ship at the next step, announced and collected like any drop; throws outside a galaxy run. */
+  e2eGrantPickup?: ((kind: PickupId) => void) | undefined;
+  /** Set by `installE2eHooks`; the app calls it with every step's events, which it tallies into `e2eEventCounts`. */
+  e2eEvents?: ((events: readonly SimEvent[], world: World) => void) | undefined;
+  /** The events of the run in play by type, from its first step; a new run starts a new count. Undefined before any step. */
+  e2eEventCounts?: EventCounts | undefined;
 }
 
 export interface E2eHookDeps {
@@ -28,8 +40,8 @@ export interface E2eHookDeps {
 }
 
 /**
- * Sets the fast-forward and boss-damage hooks, in an e2e build only: a release build compiles this to nothing, which
- * `check:no-bridge` proves by finding neither hook name in `dist/`.
+ * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally), in an e2e build only: a release build
+ * compiles this to nothing, which `check:no-bridge` proves by finding no hook name in `dist/`.
  */
 export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): void {
   if (import.meta.env.MODE !== 'e2e' || e2e === undefined) return;
@@ -55,5 +67,29 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
     while (struck < damage && strikeBoss()) struck++;
     if (struck === 0) throw new Error('No boss is fighting where a shot can hurt it: fast-forward through the approach and the 2 s intro (for the Hive Carrier, on to a launch, which opens its hangar), and pass a damage of at least 1');
     deps.redraw();
+  };
+  e2e.e2eGrantPickup = (kind) => {
+    const galaxy = run.world?.['run'] ?? null;
+    if (galaxy === null) throw new Error('No galaxy run is in play to grant a pickup in: start a galaxy first (the title\'s Play, or open the e2e build with ?galaxy=)');
+    const begin = galaxy.beginStep.bind(galaxy);
+    // Inside the next step, so the drop's event reaches the app with that step's events instead of being cleared before it.
+    galaxy.beginStep = () => {
+      Reflect.deleteProperty(galaxy, 'beginStep');
+      begin();
+      const { x, y } = galaxy['arena'].ship;
+      const field = galaxy['pickupField'];
+      const id = ++field['lastId'];
+      field.list.push({ id, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: PICKUP.lifespan });
+      galaxy['arena'].events.push({ type: 'pickupDropped', id, kind, x, y });
+    };
+  };
+  let counted: World | null = null;
+  e2e.e2eEvents = (events, world) => {
+    if (world !== counted) {
+      counted = world;
+      e2e.e2eEventCounts = {};
+    }
+    const counts: EventCounts = (e2e.e2eEventCounts ??= {});
+    for (const { type } of events) counts[type] = (counts[type] ?? 0) + 1;
   };
 }

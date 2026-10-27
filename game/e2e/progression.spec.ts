@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
-import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
+import { SAVE_KEY } from '../src/meta/save';
 import {
   clickPastGuard,
+  damageBoss,
   expect,
   expectMode,
   KILL_SHOTS,
@@ -12,7 +13,6 @@ import {
   openGalaxySelect,
   pinClockSeed,
   playFreeGalaxy,
-  seedSave,
   seedStorage,
   storedSave,
   test,
@@ -64,7 +64,7 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     expect((await gameState(page)).screen).toBe('playing');
-    await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_SHOTS);
+    await damageBoss(page, KILL_SHOTS);
     // The killing blow ends the galaxy on the next step: the boss dies under the results card.
     await fastForward(page, STEP_SECONDS);
 
@@ -90,33 +90,6 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
       }
     });
     expect(refused).toContain('No boss is fighting');
-  });
-
-  test('the normal flow records the boss clear and opens Dimension 2', async ({ page }) => {
-    const save: SaveData = { ...defaultSave(), frontier: BOSS_GALAXY };
-    await seedSave(page, save);
-    await pinClockSeed(page, seedFor('boss-fight'));
-    await openFreshGame(page);
-    await page.getByTestId('play').click();
-    await page.getByTestId('mode-free').click();
-    await expect(page.getByTestId('dimension-2')).toBeDisabled();
-    await page.getByTestId('dimension-1').click();
-    await page.getByTestId(`galaxy-${BOSS_GALAXY}`).click();
-    await expectMode(page, 'playing');
-
-    await fastForward(page, TO_BOSS_FIGHT_SECONDS);
-    await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_SHOTS);
-    // The killing blow ends the galaxy on the next step: the boss dies under the results card.
-    await fastForward(page, STEP_SECONDS);
-
-    expect((await gameState(page)).screen).toBe('results');
-    const stored = await storedSave(page);
-    expect(stored.frontier).toBe('2-1');
-    expect(stored.galaxies?.[BOSS_GALAXY]?.stars).toBeGreaterThan(0);
-    await clickPastGuard(page, 'results-map', 'map');
-    await expect(page.getByTestId('dimension-2')).toBeEnabled();
-    await page.getByTestId('dimension-2').click();
-    await expect(page.getByTestId('galaxy-2-1')).toBeEnabled();
   });
 });
 

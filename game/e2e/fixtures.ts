@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
-import type { GalaxyId } from '../src/content/types';
+import type { GalaxyId, PickupId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
@@ -156,6 +156,24 @@ export function gameState(page: Page): Promise<CosmicAssaultTestState> {
     if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
     return api.getState();
   });
+}
+
+/** Drops a pickup onto the ship at the next step (see `grantPickup` in src/testApi.d.ts); step once to collect it. */
+export function grantPickup(page: Page, kind: PickupId): Promise<void> {
+  return page.evaluate((k) => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.grantPickup(k);
+  }, kind);
+}
+
+/** Lands `shots` shots on the boss where they do harm (see `damageBoss` in src/testApi.d.ts); the page throws if none can. */
+export function damageBoss(page: Page, shots: number): Promise<void> {
+  return page.evaluate((n) => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.damageBoss(n);
+  }, shots);
 }
 
 /** The ship in the current run; fails if no run is in play (title and menu screens). */

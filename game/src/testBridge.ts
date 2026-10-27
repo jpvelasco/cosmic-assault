@@ -21,6 +21,14 @@ function wellsOf(world: World | null): CosmicAssaultTestState['wells'] {
   return well === null || well === undefined ? [] : [{ id: well.id, stage: well.stage, x: well.x, y: well.y, intensity: well.intensity, remaining: well.remaining }];
 }
 
+/** The boss of the galaxy in play as plain data, or null before it arrives. */
+function bossOf(world: World | null): CosmicAssaultTestState['boss'] {
+  const boss = world?.boss;
+  if (boss === null || boss === undefined) return null;
+  const { id, state, hp, maxHp, phase, windup, active, vulnerable, parts, target } = boss;
+  return { id, state, hp, maxHp, phase, windup, active, vulnerable, liveParts: parts.filter((part) => part.hp > 0).length, target: target === null ? null : { x: target.x, y: target.y } };
+}
+
 /** A copy of `value` frozen all the way down, so a spec cannot change the game's state through it. */
 function frozenCopy<T>(value: T): T {
   const freeze = (v: unknown): unknown => {
@@ -33,7 +41,7 @@ function frozenCopy<T>(value: T): T {
   return freeze(structuredClone(value)) as T;
 }
 
-function snapshot(app: App): CosmicAssaultTestState {
+function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
   const { world, flow, save } = app.run;
   return {
     mode: app.mode,
@@ -49,6 +57,8 @@ function snapshot(app: App): CosmicAssaultTestState {
     pickups: world?.pickups.map(({ id, kind, x, y, expiresIn }) => ({ id, kind, x, y, expiresIn })) ?? [],
     foes: world?.foes.map(({ id, kind, x, y }) => ({ id, kind, x, y })) ?? [],
     wells: wellsOf(world),
+    boss: bossOf(world),
+    events: { ...hooks.e2eEventCounts },
     effects: world === null ? {} : runningEffects(world),
     weaponTier: world?.weaponTier ?? 0,
     shield: world?.shield ?? false,
@@ -72,12 +82,15 @@ function snapshot(app: App): CosmicAssaultTestState {
 export function exposeTestBridge(app: App, hooks: E2eHooks): void {
   window.__COSMIC_ASSAULT_TEST_API__ = {
     version: 3,
-    getState: () => snapshot(app),
+    getState: () => snapshot(app, hooks),
     fastForward(seconds) {
       hooks.e2eFastForward?.(seconds);
     },
     damageBoss(damage) {
       hooks.e2eDamageBoss?.(damage);
+    },
+    grantPickup(kind) {
+      hooks.e2eGrantPickup?.(kind);
     },
     crash() {
       hooks.e2eBeforeFrame = () => {

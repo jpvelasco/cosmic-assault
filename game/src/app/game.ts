@@ -126,6 +126,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       renderer.handle(events, world);
       audio.handle(events);
       overlay.handle(events);
+      if (import.meta.env.MODE === 'e2e') e2e?.e2eEvents?.(events, world);
     },
     refresh: syncView,
   });
