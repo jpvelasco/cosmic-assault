@@ -41,7 +41,10 @@
   cards (title, mode select, the level map and level select, results and game
   over, pause, settings, records, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
-  crash guard and the local log; `sw/` is the service worker itself.
+  crash guard and the local log; `sw/` is the service worker itself; `bot/`
+  holds the headless statue, casual and expert bots and their galaxy runner
+  (`run.ts`), deterministic and DOM-free like `sim/` and drawing only from the
+  `'bot'` stream.
   - Game key handling stands down while a form control has focus
     (`input/keyEvent.ts`), so sliders and radios keep their keys. `F` requests
     full screen synchronously in its keydown handler, because Safari and

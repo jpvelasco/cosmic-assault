@@ -1,0 +1,325 @@
+import { clamp } from '../content/curves';
+import type { BossView } from '../sim/boss/bossRunner';
+import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
+import { wellAcceleration } from '../sim/hazards/gravityWell';
+import { TAU, turnBetween } from '../sim/math';
+import type { Rng } from '../sim/rng';
+import { wrapDelta } from '../sim/wrap';
+import { copyIntent, Hands, idleIntent, type Intent } from './hands';
+import { chooseTarget, leadHeading, wrappedDistance, type Target } from './targeting';
+import type { Bot, BotView } from './view';
+
+/** How far ahead the pilot looks for a collision. */
+const LOOK_AHEAD_SECONDS = 0.6;
+/** Points along the look-ahead it checks, after the present one. */
+const SAMPLES = 6;
+const SAMPLE_SECONDS = LOOK_AHEAD_SECONDS / SAMPLES;
+/** Escape headings it weighs when in danger, evenly spaced. */
+const HEADINGS = 16;
+/** Clearance, in units between the ship's edge and a threat's, under which it dodges, and over which it calms down again. */
+const DANGER = 45;
+const CALM = 70;
+/** Clearance a predicted point gains per sample ahead: a later, less certain collision weighs less than a near one. */
+const SLACK_PER_SAMPLE = 3;
+/** The clearance past which a sample counts as no safer, when scoring a dodge. */
+const CLEAR_ENOUGH = 120;
+/** How much, in clearance units, a dodge prefers to keep the nose on its target. */
+const AIM_BIAS = 3;
+/**
+ * A splitter breaks into fast fragments, so the pilot keeps this much farther from one than from a rock, and holds fire
+ * on one nearer than `SPLITTER_SAFE` within `HOLD_FIRE_ARC` radians of its nose.
+ */
+const SPLITTER_MARGIN = 40;
+const SPLITTER_SAFE = 200;
+const HOLD_FIRE_ARC = 0.35;
+/** A boss's core sends its attacks out from close by, so the pilot keeps this much farther from it too. */
+const CORE_MARGIN = 40;
+/** It goes for a pickup this near that will not expire on the way. */
+const PICKUP_REACH = 450;
+const PICKUP_MIN_SECONDS = 1;
+/** How often a wobbling aim picks a new error. */
+const WOBBLE_STEPS = Math.round(0.5 / STEP_SECONDS);
+/** A pilot judges afresh every this many steps, at 60 Hz like a player's frames, and holds its intent between. */
+const THINK_STEPS = 2;
+/** A ship coasting, and one on the stick at full thrust, keep this share of their speed per 60 Hz frame. */
+const COAST_DRAG = PLAYER.dragPerFrame60;
+const THRUST_DRAG = Math.min(COAST_DRAG + STICK.maxDragReliefFactor * (1 - COAST_DRAG), STICK.maxDrag);
+const IDLE: Readonly<Intent> = Object.freeze(idleIntent());
+
+/** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
+function splitterAhead(view: Readonly<BotView>): boolean {
+  const { ship, field } = view;
+  for (const foe of view.foes) {
+    if (foe.kind !== 'splitter' || foe.hp <= 0) continue;
+    const dx = wrapDelta(foe.x - ship.x, field.width);
+    const dy = wrapDelta(foe.y - ship.y, field.height);
+    if (Math.hypot(dx, dy) < SPLITTER_SAFE && Math.abs(turnBetween(ship.angle, Math.atan2(dy, dx))) < HOLD_FIRE_ARC) return true;
+  }
+  return false;
+}
+
+export interface PilotOptions {
+  /** The bot's own stream: the only randomness a pilot draws. */
+  readonly rng: Rng;
+  /** The chance it dodges a danger at all, rolled once as each danger starts; at 1 it always dodges and draws nothing. */
+  readonly dodgeChance?: number;
+  /** Radians its aim strays either way, redrawn every half second; at 0 it aims true and draws nothing. */
+  readonly aimWobble?: number;
+}
+
+/**
+ * The expert's judgement, made at 60 Hz. It predicts where each threat (rock, foe, boss core and parts, and the lane a
+ * boss's telegraphed attack may charge down) will be over the next 0.6 s, across the wrap, against where the ship will
+ * be: coasting, or thrusting each of 16 ways, a gravity well's pull included. Coasting into danger, it thrusts the
+ * safest way; otherwise it goes for a pickup if the way there is safe, or turns to lead its target, firing unless that
+ * would break a splitter in its face.
+ */
+export class Pilot {
+  private readonly rng: Rng;
+  private readonly dodgeChance: number;
+  private readonly aimWobble: number;
+  /** Threats, relative to the ship: offset, velocity and the centre distance at which they touch it. */
+  private readonly tx: number[] = [];
+  private readonly ty: number[] = [];
+  private readonly tvx: number[] = [];
+  private readonly tvy: number[] = [];
+  private readonly reach: number[] = [];
+  /** A boss's bodies and its strike lane: worth keeping out of even while the ship cannot be hurt. */
+  private readonly solid: boolean[] = [];
+  private count = 0;
+  /** Seconds until the ship can be hurt by anything but a solid threat. */
+  private harmlessFor = 0;
+  /** What the last `predict` found: the least clearance, slack included, and the mean of each sample's capped least. */
+  private least = 0;
+  private mean = 0;
+  /** Where the ship would be at each sample, relative to now. */
+  private readonly sx = new Float64Array(SAMPLES + 1);
+  private readonly sy = new Float64Array(SAMPLES + 1);
+  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0 };
+  private readonly last = idleIntent();
+  private inDanger = false;
+  private dodging = true;
+  private wobble = 0;
+  private nextWobbleAt = 0;
+  private steps = 0;
+  /** Where the ship was as the boss's current attack began its windup; armed while that attack lasts. */
+  private strikeArmed = false;
+  private strikeX = 0;
+  private strikeY = 0;
+
+  constructor(options: PilotOptions) {
+    this.rng = options.rng;
+    this.dodgeChance = options.dodgeChance ?? 1;
+    this.aimWobble = options.aimWobble ?? 0;
+  }
+
+  /** Writes this step's intent into `out`: a fresh judgement every `THINK_STEPS` steps, the last one held between. */
+  plan(view: Readonly<BotView>, out: Intent): Intent {
+    this.trackStrike(view);
+    if (this.steps % THINK_STEPS === 0 || view.status !== 'playing') this.think(view, this.last);
+    this.steps++;
+    copyIntent(this.last, out);
+    return out;
+  }
+
+  private think(view: Readonly<BotView>, out: Intent): void {
+    if (view.status !== 'playing') {
+      copyIntent(IDLE, out);
+      return;
+    }
+    const aim = this.aimHeading(view);
+    this.gatherThreats(view);
+    out.fire = !splitterAhead(view);
+    out.heading = aim;
+    out.thrust = false;
+    this.predict(view, null);
+    if (this.danger() && this.dodging) {
+      this.dodge(view, aim ?? view.ship.angle, out);
+      return;
+    }
+    this.seekPickup(view, out);
+  }
+
+  /** Whether coasting is in danger, from the last `predict`; it rolls whether to dodge as each danger starts. */
+  private danger(): boolean {
+    if (this.inDanger) {
+      this.inDanger = this.least < CALM;
+    } else if (this.least < DANGER) {
+      this.inDanger = true;
+      this.dodging = this.dodgeChance >= 1 || this.rng.chance(this.dodgeChance);
+    }
+    return this.inDanger;
+  }
+
+  /** Thrusts the safest way, the nose kept near `aim` among equals; leaves `out` coasting if that is safest. */
+  private dodge(view: Readonly<BotView>, aim: number, out: Intent): void {
+    let best = this.mean;
+    for (let i = 0; i < HEADINGS; i++) {
+      const heading = (i * TAU) / HEADINGS;
+      this.predict(view, heading);
+      const score = this.mean + AIM_BIAS * Math.cos(turnBetween(aim, heading));
+      if (score > best) {
+        best = score;
+        out.heading = heading;
+        out.thrust = true;
+      }
+    }
+  }
+
+  /** Steers for the nearest pickup in reach if thrusting that way is safe; leaves `out` aiming otherwise. */
+  private seekPickup(view: Readonly<BotView>, out: Intent): void {
+    const { ship, field } = view;
+    let nearest = PICKUP_REACH;
+    let heading: number | null = null;
+    for (const pickup of view.pickups) {
+      const distance = wrappedDistance(ship, pickup, field);
+      if (distance >= nearest || pickup.expiresIn < PICKUP_MIN_SECONDS) continue;
+      nearest = distance;
+      heading = Math.atan2(wrapDelta(pickup.y - ship.y, field.height), wrapDelta(pickup.x - ship.x, field.width));
+    }
+    if (heading === null) return;
+    this.predict(view, heading);
+    if (this.least < CALM) return;
+    out.heading = heading;
+    out.thrust = true;
+  }
+
+  /** The heading that leads the chosen target, plus any wobble; null with nothing to shoot. */
+  private aimHeading(view: Readonly<BotView>): number | null {
+    if (this.aimWobble > 0 && this.steps >= this.nextWobbleAt) {
+      this.wobble = this.rng.range(-this.aimWobble, this.aimWobble);
+      this.nextWobbleAt = this.steps + WOBBLE_STEPS;
+    }
+    if (!chooseTarget(view, this.target)) return null;
+    return leadHeading(view, this.target) + this.wobble;
+  }
+
+  /** Arms the strike point as a boss attack's windup begins, where the ship is then, and disarms it once the attack is over. */
+  private trackStrike(view: Readonly<BotView>): void {
+    const boss = view.boss;
+    if (boss === null || (boss.windup === null && boss.active === null)) {
+      this.strikeArmed = false;
+    } else if (!this.strikeArmed) {
+      this.strikeArmed = true;
+      this.strikeX = view.ship.x;
+      this.strikeY = view.ship.y;
+    }
+  }
+
+  /** Lists every threat that could come near the ship over the look-ahead, relative to it. */
+  private gatherThreats(view: Readonly<BotView>): void {
+    this.count = 0;
+    const { ship, boss } = view;
+    this.harmlessFor = ship.invulnerable ? ship.invulnerableFor : 0;
+    for (const rock of view.asteroids) this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false);
+    for (const foe of view.foes) {
+      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false);
+    }
+    if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
+    this.addBody(view, boss, boss.radius + CORE_MARGIN);
+    for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
+    if (this.strikeArmed) this.addLane(view, boss);
+  }
+
+  /**
+   * The lane from the core to the strike point, as circles the core's size no more than a radius apart: a telegraphed
+   * attack may send the core charging down it. A boss never leaves the field, so neither does the lane's end.
+   */
+  private addLane(view: Readonly<BotView>, boss: Readonly<BossView>): void {
+    const { field } = view;
+    const { radius } = boss;
+    const dx = clamp(this.strikeX, radius, field.width - radius) - boss.x;
+    const dy = clamp(this.strikeY, radius, field.height - radius) - boss.y;
+    const circles = Math.max(1, Math.ceil(Math.hypot(dx, dy) / radius));
+    for (let i = 1; i <= circles; i++) this.addThreat(view, boss.x + (dx * i) / circles, boss.y + (dy * i) / circles, 0, 0, radius, true);
+  }
+
+  /** A solid boss body, its velocity read from its pose before the latest step. */
+  private addBody(view: Readonly<BotView>, body: Readonly<{ x: number; y: number; px: number; py: number }>, radius: number): void {
+    this.addThreat(view, body.x, body.y, (body.x - body.px) / STEP_SECONDS, (body.y - body.py) / STEP_SECONDS, radius, true);
+  }
+
+  /** Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. */
+  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean): void {
+    const { ship, field } = view;
+    const dx = wrapDelta(x - ship.x, field.width);
+    const dy = wrapDelta(y - ship.y, field.height);
+    const closing = (Math.hypot(vx, vy) + PLAYER.maxSpeed) * LOOK_AHEAD_SECONDS;
+    if (Math.hypot(dx, dy) - radius - PLAYER.radius > closing + CLEAR_ENOUGH) return;
+    const i = this.count++;
+    this.tx[i] = dx;
+    this.ty[i] = dy;
+    this.tvx[i] = vx;
+    this.tvy[i] = vy;
+    this.reach[i] = radius + PLAYER.radius;
+    this.solid[i] = solid;
+  }
+
+  /**
+   * Scores coasting (null) or thrusting along `heading` over the look-ahead into `least` and `mean`: the clearance
+   * between the ship and each threat at each sample, a later sample given a little slack, and a threat that cannot
+   * hurt the ship yet skipped.
+   */
+  private predict(view: Readonly<BotView>, heading: number | null): void {
+    this.predictShip(view, heading);
+    const { width, height } = view.field;
+    const { tx, ty, tvx, tvy, reach, solid, sx, sy } = this;
+    let least = Infinity;
+    let total = 0;
+    for (let k = 0; k <= SAMPLES; k++) {
+      const t = k * SAMPLE_SECONDS;
+      const harmless = t < this.harmlessFor;
+      let sample = Infinity;
+      for (let i = 0; i < this.count; i++) {
+        if (harmless && solid[i] !== true) continue;
+        const dx = wrapDelta((tx[i] ?? 0) + (tvx[i] ?? 0) * t - (sx[k] ?? 0), width);
+        const dy = wrapDelta((ty[i] ?? 0) + (tvy[i] ?? 0) * t - (sy[k] ?? 0), height);
+        sample = Math.min(sample, Math.hypot(dx, dy) - (reach[i] ?? 0));
+      }
+      least = Math.min(least, sample + k * SLACK_PER_SAMPLE);
+      if (k > 0) total += Math.min(sample, CLEAR_ENOUGH);
+    }
+    this.least = least;
+    this.mean = total / SAMPLES;
+  }
+
+  /** Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap and a well's pull. */
+  private predictShip(view: Readonly<BotView>, heading: number | null): void {
+    const { ship, well } = view;
+    const drag = Math.pow(heading === null ? COAST_DRAG : THRUST_DRAG, 60 * SAMPLE_SECONDS);
+    let ax = heading === null ? 0 : Math.cos(heading) * PLAYER.thrust;
+    let ay = heading === null ? 0 : Math.sin(heading) * PLAYER.thrust;
+    if (well?.stage === 'active') {
+      const dx = well.x - ship.x;
+      const dy = well.y - ship.y;
+      const distance = Math.hypot(dx, dy);
+      const pull = distance === 0 ? 0 : wellAcceleration(distance, well.intensity) / distance;
+      ax += dx * pull;
+      ay += dy * pull;
+    }
+    let { vx, vy } = ship;
+    let x = 0;
+    let y = 0;
+    for (let k = 1; k <= SAMPLES; k++) {
+      vx = vx * drag + ax * SAMPLE_SECONDS;
+      vy = vy * drag + ay * SAMPLE_SECONDS;
+      const speed = Math.hypot(vx, vy);
+      if (speed > PLAYER.maxSpeed) {
+        vx *= PLAYER.maxSpeed / speed;
+        vy *= PLAYER.maxSpeed / speed;
+      }
+      x += vx * SAMPLE_SECONDS;
+      y += vy * SAMPLE_SECONDS;
+      this.sx[k] = x;
+      this.sy[k] = y;
+    }
+  }
+}
+
+/** The expert: its pilot's intents, acted on at once. */
+export function createExpert(rng: Rng): Bot {
+  const pilot = new Pilot({ rng });
+  const hands = new Hands();
+  const intent = idleIntent();
+  return { decide: (view) => hands.apply(pilot.plan(view, intent), view.ship.angle) };
+}
