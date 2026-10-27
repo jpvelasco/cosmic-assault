@@ -166,6 +166,33 @@ test('a second tab leaves the first tab live attempt alone, and offers Resume on
   await expect(other.getByTestId('rank-elsewhere')).toBeHidden();
 });
 
+test('a new tab that is busy right after it starts a Rank run does not cost the run a life', async ({ page, context }) => {
+  await openFreshGame(page);
+  const other = await context.newPage();
+  await openFreshGame(other);
+  await other.getByTestId('play').click();
+  // A listener added after the app's own click handler runs in the same task, once the Rank run is written and claimed:
+  // the new tab then stays busy for half a second, as while it builds the galaxy, before it can answer a probe.
+  await other.evaluate(() => {
+    document.querySelector('[data-testid="mode-rank"]')?.addEventListener(
+      'click',
+      () => {
+        const end = performance.now() + 500;
+        while (performance.now() < end) {
+          // Busy on purpose.
+        }
+      },
+      { once: true },
+    );
+  });
+  await other.getByTestId('mode-rank').click();
+  await expectMode(other, 'playing');
+
+  await expect(page.getByTestId('rank-elsewhere')).toBeVisible();
+  await expect(page.getByText(LEFT_RUN_NOTICE)).toBeHidden();
+  expect((await storedSave(page)).rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+});
+
 test('a tab whose Rank run another tab replaced does not write over it, and says so', async ({ page, context }) => {
   await openFreshGame(page);
   await startRankRun(page);

@@ -99,6 +99,81 @@ describe('createTabPresence', () => {
     await expect(first).resolves.toBe(true);
   });
 
+  it('owning a run announces it at once, to tabs already listening', () => {
+    const open = bus();
+    const watcher = open();
+    const heard: unknown[] = [];
+    watcher.addEventListener('message', ({ data }) => {
+      heard.push(data);
+    });
+    createTabPresence(open()).own(7);
+    expect(heard).toEqual([{ kind: 'claim', runSeq: 7 }]);
+  });
+
+  it('a probe for a run whose owner was already heard resolves at once, without asking', async () => {
+    vi.useFakeTimers();
+    const open = bus();
+    const asking = createTabPresence(open());
+    const asked: unknown[] = [];
+    const watcher = open();
+    watcher.addEventListener('message', ({ data }) => {
+      asked.push(data);
+    });
+    createTabPresence(open()).own(7);
+    await expect(asking.probe(7)).resolves.toBe(true);
+    expect(asked).toEqual([{ kind: 'claim', runSeq: 7 }]);
+  });
+
+  it('a heard owner answers one probe only: the next one asks again, so a tab that has closed is found', async () => {
+    vi.useFakeTimers();
+    const open = bus();
+    const asking = createTabPresence(open());
+    const playing = createTabPresence(open());
+    playing.own(7);
+    // The owner's tab goes away without a release: nothing answers from here on.
+    playing.dispose();
+    await expect(asking.probe(7)).resolves.toBe(true);
+    const again = asking.probe(7);
+    vi.advanceTimersByTime(PROBE_MS);
+    await expect(again).resolves.toBe(false);
+  });
+
+  it('a heard owner that has since let go is not believed', async () => {
+    vi.useFakeTimers();
+    const open = bus();
+    const asking = createTabPresence(open());
+    const playing = createTabPresence(open());
+    playing.own(7)();
+    const probe = asking.probe(7);
+    vi.advanceTimersByTime(PROBE_MS);
+    await expect(probe).resolves.toBe(false);
+  });
+
+  it('an owner that answers after a probe timed out is heard by the next one', async () => {
+    vi.useFakeTimers();
+    const open = bus();
+    const asking = createTabPresence(open());
+    const first = asking.probe(9);
+    vi.advanceTimersByTime(PROBE_MS);
+    await expect(first).resolves.toBe(false);
+    createTabPresence(open()).own(9);
+    await expect(asking.probe(9)).resolves.toBe(true);
+  });
+
+  it('an owner that announces while a probe waits settles that probe, and the claim is not kept for the next', async () => {
+    vi.useFakeTimers();
+    const open = bus();
+    const asking = createTabPresence(open());
+    const waiting = asking.probe(4);
+    const owner = createTabPresence(open());
+    owner.own(4);
+    await expect(waiting).resolves.toBe(true);
+    owner.dispose();
+    const next = asking.probe(4);
+    vi.advanceTimersByTime(PROBE_MS);
+    await expect(next).resolves.toBe(false);
+  });
+
   it('dispose settles a pending probe as unanswered', async () => {
     const asking = createTabPresence(bus()());
     const pending = asking.probe(8);
