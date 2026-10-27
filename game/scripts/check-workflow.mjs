@@ -17,7 +17,7 @@ function jobBlock(id) {
   return lines.slice(start + 1, end === -1 ? undefined : end);
 }
 
-const jobs = Object.fromEntries(['game', 'legacy', 'deploy'].map((id) => [id, jobBlock(id)]));
+const jobs = Object.fromEntries(['game', 'legacy', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
 const anyLine = (id, test) => jobs[id]?.some((line) => test(line.trim())) ?? false;
 const hasLine = (id, entry) => anyLine(id, (line) => line === entry);
@@ -34,7 +34,7 @@ const problems = Object.entries(jobs)
 
 const checks = [
   [hasJobKey('deploy', 'needs: [game, legacy]'),
-    'ci.yml: deploy must declare needs: [game, legacy] (job level) so it only runs after both test jobs pass'],
+    'ci.yml: deploy must declare needs: [game, legacy] (job level) so it only runs after both test jobs pass, and never waits for the non-required balance or perf jobs'],
   [hasJobKey('deploy', "if: github.event_name == 'push' && github.ref == 'refs/heads/main'"),
     "ci.yml: deploy must declare if: github.event_name == 'push' && github.ref == 'refs/heads/main' (job level) so only pushes to main publish"],
   [hasLine('deploy', 'run: diff -r website _site --exclude next'),
@@ -58,6 +58,10 @@ const checks = [
     'ci.yml: in the game job, npm run check:no-bridge must come after npm run build; move it below the release build step so it scans the fresh dist/'],
   [anyLine('legacy', (line) => line.startsWith('run: npx playwright test')),
     'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
+  [hasLine('balance', 'run: npm run test:balance'),
+    'ci.yml: the balance job must run "npm run test:balance"; restore the step so the bot kill and clear rates are reported'],
+  [hasLine('balance', 'node-version-file: .nvmrc'),
+    'ci.yml: balance must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
 ];
 problems.push(...checks.filter(([ok]) => !ok).map(([, message]) => message));
 

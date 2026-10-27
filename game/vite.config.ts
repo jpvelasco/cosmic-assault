@@ -10,5 +10,6 @@ export default defineConfig(({ mode }) => ({
   },
   // e2e builds include the test bridge, so they never share dist/ with the release build.
   build: mode === 'e2e' ? { outDir: 'dist-e2e' } : {},
-  test: { include: ['tests/**/*.test.ts'], environment: 'node' },
+  // tests/balance holds the slow bot runs, which vitest.balance.config.ts runs instead.
+  test: { include: ['tests/**/*.test.ts'], exclude: ['tests/balance/**'], environment: 'node' },
 }));

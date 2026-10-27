@@ -117,7 +117,9 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    4318 (release), clear of Vite's default preview port. `npm run test:perf`
    (the report-only `perf` project: 4x CPU slowdown, writes
    `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
-   non-required `perf` job. For changes to
+   non-required `perf` job. `npm run test:balance` runs the slow many-seed bot
+   suites in `game/tests/balance/` (boss kill rates and clear rates), which
+   `npm test` leaves out; CI runs it as the non-required `balance` job. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
@@ -158,8 +160,9 @@ and `tests/test-results/` and are ignored by Git.
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
   `website/`. Job `deploy` runs only on pushes to `main`, and only after both
   `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.
-  Job `perf` builds both bundles and runs `npm run test:perf`; it is not a
-  required check and does not gate deployment.
+  Job `perf` builds both bundles and runs `npm run test:perf`, and job `balance`
+  runs `npm run test:balance`; neither is a required check, and neither gates
+  deployment.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.

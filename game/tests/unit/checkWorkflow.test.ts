@@ -38,6 +38,9 @@ const buildStep = '        run: npm run build\n';
 const noBridgeStep = '        run: npm run check:no-bridge\n';
 const buildE2eStep = '        run: npm run build:e2e\n';
 const legacyRun = '        run: npx playwright test --project=chromium-desktop --reporter=html,list\n';
+const balanceStep = '        run: npm run test:balance\n';
+/** The balance job's own Node setup: the first after the balance job starts. */
+const balanceNode = (t: string) => t.indexOf(nodeVersionLine, t.indexOf('  balance:\n'));
 const comment = (line: string) => `    # ${line.trim()}\n`;
 
 const failingCases: [name: string, mutate: (text: string) => string, message: string, websiteDirs?: string[]][] = [
@@ -84,6 +87,18 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
     'npm run check:no-bridge must come after npm run build',
   ],
   ['deleted legacy playwright run', (t) => replaceOnce(t, legacyRun, ''), 'the legacy job must run the Playwright suite'],
+  [
+    'removed balance job',
+    (t) => t.slice(0, t.indexOf('  balance:\n')) + t.slice(t.indexOf('  legacy:\n')),
+    'missing job balance:',
+  ],
+  ['deleted balance run', (t) => replaceOnce(t, balanceStep, ''), 'the balance job must run "npm run test:balance"'],
+  [
+    'balance without node-version-file',
+    (t) => t.slice(0, balanceNode(t)) + t.slice(balanceNode(t) + nodeVersionLine.length),
+    'balance must set up Node with node-version-file: .nvmrc',
+  ],
+  ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, balance]\n'), 'never waits for the non-required balance or perf jobs'],
   ['website/assets/next directory', (t) => t, 'website/assets/next is named "next"', ['assets/next']],
 ];
 
@@ -94,8 +109,8 @@ describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(status).toBe(0);
   });
 
-  it('accepts the report-only perf job, which deploy does not wait for', () => {
-    expect(realText).toMatch(/^ {2}perf:$/m);
+  it.each(['perf', 'balance'])('accepts the report-only %s job, which deploy does not wait for', (job) => {
+    expect(realText).toMatch(new RegExp(`^ {2}${job}:$`, 'm'));
     expect(realText).toContain(needsLine);
     const { status, output } = runGuard(realWorkflow);
     expect(output).toContain('workflow ok');

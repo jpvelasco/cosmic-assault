@@ -1,16 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { runGalaxy, type BotProfile, type RunOptions } from '../../src/bot/run';
+import { runGalaxy, type BotProfile } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import { World } from '../../src/sim/world';
+import { copyControls, recordRun, REFERENCE_FIELD, replayControls } from '../helpers/botReplay';
 
 const GALAXY = galaxyById('1-1');
-const FIELD = { width: 1280, height: 720 };
 const SECONDS = 20;
-
-const copyControls = (c: Controls): Controls => ({ ...c, stick: c.stick === null ? null : { ...c.stick } });
 
 describe('bots', () => {
   it.each<BotProfile>(['statue', 'casual', 'expert'])('a %s run with the same seed gives the same result', (profile) => {
@@ -33,7 +31,7 @@ describe('bots', () => {
   it("a statue run steps the World exactly as no input does: bots never touch the World's streams", () => {
     const botEvents: SimEvent[] = [];
     runGalaxy({ galaxy: GALAXY, seed: 5, profile: 'statue', maxSeconds: SECONDS, onStep: (_world, _controls, events) => botEvents.push(...events.map((e) => ({ ...e }))) });
-    const plain = new World({ seed: 5, field: FIELD, rules: { kind: 'galaxy', galaxy: GALAXY, mode: 'free' } });
+    const plain = new World({ seed: 5, field: REFERENCE_FIELD, rules: { kind: 'galaxy', galaxy: GALAXY, mode: 'free' } });
     const plainEvents: SimEvent[] = [];
     for (let i = 0; i < SECONDS / STEP_SECONDS; i++) plainEvents.push(...plain.step(STEP_SECONDS, NO_CONTROLS).map((e) => ({ ...e })));
     expect(botEvents.length).toBeGreaterThan(0);
@@ -41,43 +39,23 @@ describe('bots', () => {
   });
 
   it.each<BotProfile>(['casual', 'expert'])('a %s bot reaches the World only through its controls: replaying them replays the run', (profile) => {
-    const sent: Controls[] = [];
-    const events: SimEvent[] = [];
-    const result = runGalaxy({
-      galaxy: GALAXY,
-      seed: 9,
-      profile,
-      maxSeconds: SECONDS,
-      onStep: (_world, controls, stepEvents) => {
-        sent.push(copyControls(controls));
-        events.push(...stepEvents.map((e) => ({ ...e })));
-      },
-    });
-    const replay = new World({ seed: 9, field: FIELD, rules: { kind: 'galaxy', galaxy: GALAXY, mode: 'free' } });
-    const replayed: SimEvent[] = [];
-    for (const controls of sent) replayed.push(...replay.step(STEP_SECONDS, controls).map((e) => ({ ...e })));
-    expect(sent.some((c) => c.fire)).toBe(true);
-    expect(replayed).toEqual(events);
-    expect(replay.score).toBe(result.score);
+    const { result, controls, events } = recordRun({ galaxy: GALAXY, seed: 9, profile, maxSeconds: SECONDS });
+    const replayed = replayControls(GALAXY, 9, controls);
+    expect(controls.some((c) => c.fire)).toBe(true);
+    expect(replayed.events).toEqual(events);
+    expect(replayed.score).toBe(result.score);
   });
 
   it('replays a boss fight exactly: the expert against the Sentinel on 3-6, from the same seed and from its own controls', () => {
     const galaxy = galaxyById('3-6');
-    const sent: Controls[] = [];
-    const events: SimEvent[] = [];
-    const run = (onStep?: RunOptions['onStep']) => runGalaxy({ galaxy, seed: 1, profile: 'expert', maxSeconds: 80, ...(onStep === undefined ? {} : { onStep }) });
-    const result = run((_world, controls, stepEvents) => {
-      sent.push(copyControls(controls));
-      events.push(...stepEvents.map((e) => ({ ...e })));
-    });
+    const options = { galaxy, seed: 1, profile: 'expert', maxSeconds: 80 } as const;
+    const { result, controls, events } = recordRun(options);
     expect(result.bossKillTime).toBeGreaterThan(0);
     expect(events.some((e) => e.type === 'bossWindup' && e.attack === 'lunge')).toBe(true);
-    expect(run()).toEqual(result);
-    const replay = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' } });
-    const replayed: SimEvent[] = [];
-    for (const controls of sent) replayed.push(...replay.step(STEP_SECONDS, controls).map((e) => ({ ...e })));
-    expect(replayed).toEqual(events);
-    expect(replay.score).toBe(result.score);
+    expect(runGalaxy(options)).toEqual(result);
+    const replayed = replayControls(galaxy, 1, controls);
+    expect(replayed.events).toEqual(events);
+    expect(replayed.score).toBe(result.score);
   });
 
   it('plays on a wider field when given an aspect', () => {
