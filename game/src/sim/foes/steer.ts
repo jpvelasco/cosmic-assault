@@ -25,7 +25,7 @@ export interface Flight {
 /**
  * The push away from the foes of its own kind crowding `foe`, in seek units: each neighbour within `radius` adds a
  * unit vector away from it, scaled by `weight` and by how deep inside that radius it is. Distances are taken across
- * the wrap, so a foe just over an edge counts as near (Ruling R14). Written into `out`, so a step allocates nothing.
+ * the wrap, so a foe just over an edge counts as near. Written into `out`, so a step allocates nothing.
  */
 function separation(foe: Readonly<Foe>, foes: readonly Readonly<Foe>[], field: Field, { radius, weight }: Separation, out: { x: number; y: number }): void {
   out.x = out.y = 0;

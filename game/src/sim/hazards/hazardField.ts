@@ -85,7 +85,7 @@ export class HazardField {
   /**
    * Applies every hazard's pull to the rocks and foes, nudges the ship once by `shipPullAt` (summed, capped), then lets
    * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
-   * invulnerability spares the ship collisions, not physics (Ruling R11).
+   * invulnerability spares the ship collisions, not physics.
    */
   move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[]): void {
     const bodies = (this.bodies ??= { ship, rocks, foes });

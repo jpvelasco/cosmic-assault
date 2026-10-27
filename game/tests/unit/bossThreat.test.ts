@@ -56,7 +56,7 @@ const BOSS_IMPORT = /from ['"]\.\.\/sim\/boss\/(\w+)['"]/g;
 const quoted = (id: string): RegExp => new RegExp(`['"\`]${id}['"\`]`);
 
 describe('the generic boss threat view (M5-R30)', () => {
-  it('catches a boss or attack named in any quotes, and an import in either (Task 3 N-9)', () => {
+  it('catches a boss or attack named in any quotes, and an import in either', () => {
     for (const source of ["x === 'monolith'", 'x === "monolith"', 'x === `monolith`']) expect(source).toMatch(quoted('monolith'));
     expect('monolithic').not.toMatch(quoted('monolith'));
     expect([...'import { A } from "../sim/boss/monolith";'.matchAll(BOSS_IMPORT)].map((m) => m[1])).toEqual(['monolith']);

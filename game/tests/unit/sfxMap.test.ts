@@ -126,7 +126,7 @@ describe('sfxFor', () => {
   });
 
   it('caps the swarm buzz and deflections at one a frame and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toMatchObject({ shoot: 3, droneSwarm: 1, deflect: 1 });
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
@@ -168,7 +168,7 @@ describe('sfxFor', () => {
   it('ticks as a gunship winds up, zaps as a foe fires a bolt, chirps as a mine arms, booms as it blasts, and stings as a zone warns', () => {
     expect(nameOf(CONTENT_EVENTS.foeWindup)).toBe('windupTick');
     expect(nameOf({ type: 'boltFired', id: 1, source: 'gunship', owner: 3, x: 0, y: 0, angle: 0 })).toBe('bolt');
-    // A boss's bolt never plays the foes' zap (Ruling R23).
+    // A boss's bolt never plays the foes' zap: a boss voices its own.
     expect(nameOf({ type: 'boltFired', id: 1, source: 'boss', owner: 0, x: 0, y: 0, angle: 0 })).not.toBe('bolt');
     expect(nameOf(CONTENT_EVENTS.mineArmed)).toBe('mineArm');
     expect(nameOf(CONTENT_EVENTS.mineBlast)).toBe('mineBlast');

@@ -48,7 +48,7 @@ describe('Crimson Nebula, played by the bots', { timeout: TIMEOUT_MS }, () => {
     expect(lost).toEqual([]);
   });
 
-  it('warns of every gunship bolt, mine blast and danger zone for its whole telegraph, 3-1 to 3-5 on 10 seeds, as the expert, the casual and an idle ship play (Review Focus 2)', () => {
+  it('warns of every gunship bolt, mine blast and danger zone for its whole telegraph, 3-1 to 3-5 on 10 seeds, as the expert, the casual and an idle ship play', () => {
     const zones: TelegraphPair[] = [];
     const attacks: FoeAttackPair[] = [];
     for (const { id, seed, result, log } of [...expert, ...others]) {

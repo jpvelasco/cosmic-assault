@@ -23,8 +23,8 @@ export interface ScheduleHooks<S extends Scheduled> {
 /**
  * One hazard type's events, run one at a time: each warned for `telegraph` seconds, then hostile for its length. It
  * holds the hazards the event under way shows, and keeps their stage and countdown. The next event is warned on the
- * very step the one before it ends, so events scheduled back to back (Ruling R10 lets the next warning start as the
- * last event ends) keep their whole telegraph.
+ * very step the one before it ends, so events scheduled back to back (the schedule may start the next warning as the
+ * last event ends, never before) keep their whole telegraph.
  */
 export class HazardSchedule<S extends Scheduled> {
   /** The hazards of the event warning or active: a live view, mutated by `step`. */
