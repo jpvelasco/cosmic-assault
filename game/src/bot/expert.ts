@@ -1,8 +1,8 @@
 import { clamp } from '../content/curves';
 import type { AttackId } from '../content/types';
-import type { BossView, Point } from '../sim/boss/behaviour';
+import { radialShove } from '../sim/boss/attacks';
+import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
-import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';
@@ -53,14 +53,6 @@ const THINK_STEPS = 2;
 const COAST_DRAG = PLAYER.dragPerFrame60;
 const THRUST_DRAG = Math.min(COAST_DRAG + STICK.maxDragReliefFactor * (1 - COAST_DRAG), STICK.maxDrag);
 const IDLE: Readonly<Intent> = Object.freeze(idleIntent());
-/**
- * Attacks that send the core, or its parts, at where the ship was as their windup began, and how far either side of
- * that line they reach: the pilot keeps out of the lane while the attack lasts.
- */
-const LANE_REACH: Readonly<Partial<Record<AttackId, (boss: Readonly<BossView>) => number>>> = {
-  lunge: (boss) => boss.radius,
-  shardVolley: () => VOLLEY_REACH,
-};
 /** Out of this range of a boss's core, across the field, the pilot closes in, to this far out from it the way it faces. */
 const ENGAGE_RANGE = 420;
 const STANDOFF = 300;
@@ -149,8 +141,9 @@ export class Pilot {
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
-  /** The boss's current attack, and when and where the ship was as its windup began; null between attacks. */
+  /** The boss's current attack and its threat, and when and where the ship was as its windup began; null between attacks. */
   private strike: AttackId | null = null;
+  private strikeThreat: Readonly<BossThreat> | null = null;
   private strikeAt = 0;
   private strikeX = 0;
   private strikeY = 0;
@@ -290,8 +283,8 @@ export class Pilot {
   }
 
   /**
-   * Notes a boss attack as its windup begins, with when and where the ship is then, and rolls whether to dodge it; and
-   * forgets it once the attack is over; and while a pulse winds up, when its shove will land.
+   * Notes a boss attack as its windup begins, with its threat and when and where the ship is then, and rolls whether to
+   * dodge it; and forgets it once the attack is over; and while an attack that shoves winds up, when its shove will land.
    */
   private trackStrike(view: Readonly<BotView>): void {
     // First, while the attack that ran last step is still remembered: an attack with no active time (a launch, a quake,
@@ -300,20 +293,23 @@ export class Pilot {
     const boss = view.boss;
     const attack = boss === null ? null : (boss.windup ?? boss.active);
     if (attack === null) {
-      this.strike = null;
+      this.strike = this.strikeThreat = null;
     } else if (this.strike === null) {
       this.strike = attack;
+      this.strikeThreat = boss?.threat ?? null;
       this.strikeAt = view.elapsed;
       this.strikeX = view.ship.x;
       this.strikeY = view.ship.y;
       this.dodgingStrike = this.roll(this.telegraphDodgeChance);
     }
-    this.shoveIn = boss?.windup === 'pulse' ? Math.max(0, this.strikeAt + MONOLITH_WINDUPS.pulse - view.elapsed) : Infinity;
+    const threat = this.strikeThreat;
+    const windingUp = boss !== null && boss.windup !== null;
+    this.shoveIn = windingUp && threat?.kind === 'shove' ? Math.max(0, this.strikeAt + threat.windup - view.elapsed) : Infinity;
   }
 
   /**
    * Forgets the attacks' rocks and drones that have left the field, and notes the new ones the attack under way sends
-   * out, with its roll: a launch's drones, and the rocks the sim marks as an attack's (never their fragments).
+   * out, with its roll: the foes and rocks the sim marks as an attack's as it makes them (never a rock's fragments).
    */
   private trackSpawns(view: Readonly<BotView>): void {
     const { spawnIds, spawnDodging } = this;
@@ -329,7 +325,7 @@ export class Pilot {
     for (const foe of view.foes) {
       if (foe.id <= this.idMark) continue;
       mark = Math.max(mark, foe.id);
-      if (this.strike === 'launch' && foe.kind === 'drone') this.noteSpawn(foe.id);
+      if (foe.fromAttack) this.noteSpawn(foe.id);
     }
     for (const rock of view.asteroids) {
       if (rock.id <= this.idMark) continue;
@@ -365,8 +361,7 @@ export class Pilot {
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
     for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
-    const laneReach = this.strike === null ? undefined : LANE_REACH[this.strike];
-    if (laneReach !== undefined) this.addLane(view, boss, laneReach(boss));
+    if (this.strikeThreat?.kind === 'lane') this.addLane(view, boss, this.strikeThreat.reach);
   }
 
   /**
@@ -459,14 +454,14 @@ export class Pilot {
     const pull = shipPullAt(hazards, ship.x, ship.y, 1, this.pull);
     ax += pull.x;
     ay += pull.y;
-    const { motion, shove } = this;
+    const { motion, shove, strikeThreat: push } = this;
     motion.vx = ship.vx;
     motion.vy = ship.vy;
     let x = 0;
     let y = 0;
     for (let k = 1; k <= SAMPLES; k++) {
-      if (boss !== null && this.shoveIn < k * SAMPLE_SECONDS && this.shoveIn >= (k - 1) * SAMPLE_SECONDS) {
-        pulseShove(boss, ship.x + x, ship.y + y, shove);
+      if (boss !== null && push !== null && this.shoveIn < k * SAMPLE_SECONDS && this.shoveIn >= (k - 1) * SAMPLE_SECONDS) {
+        radialShove(boss, push.speed, push.reach, ship.x + x, ship.y + y, shove);
         nudge(motion, shove.x, shove.y, MAX_SHOVE_SPEED);
       }
       let vx = motion.vx * drag + ax * SAMPLE_SECONDS;

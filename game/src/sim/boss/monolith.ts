@@ -1,8 +1,7 @@
-import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
 import { smoothstep, TAU } from '../math';
-import { rockRing } from './attacks';
-import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView, Point } from './behaviour';
+import { pulse, rockRing } from './attacks';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from './behaviour';
 import { bossHome } from './bossRunner';
 
 /** How many shards it starts with, least and most. */
@@ -30,7 +29,7 @@ const VOLLEY_SPREAD = 46;
 /** How far past the aim the shards fly before they turn back. */
 const VOLLEY_OVERSHOOT = 70;
 /** How far either side of its line of flight a volley's shards reach. */
-export const VOLLEY_REACH = VOLLEY_SPREAD + SHARD_RADIUS;
+const VOLLEY_REACH = VOLLEY_SPREAD + SHARD_RADIUS;
 
 /** Rocks in a quake's ring, by phase (it quakes only from phase 2). */
 const QUAKE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 8, 2: 8, 3: 10 };
@@ -46,7 +45,7 @@ const PULSE_REACH = 320;
 export type MonolithAttack = 'shardVolley' | 'quake' | 'pulse';
 
 /** The Monolith's windups, in seconds. */
-export const MONOLITH_WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, quake: 0.8, pulse: 0.5 };
+const WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, quake: 0.8, pulse: 0.5 };
 
 /** How far round from bearing `aim` a part sits about the core, in radians from -π to π. */
 function offsetFrom(aim: number, part: Readonly<BossPart>, boss: Readonly<BossView>): number {
@@ -65,9 +64,9 @@ class Monolith implements BossBehaviour {
   readonly reach = ORBIT_RADIUS + SHARD_RADIUS;
   readonly parts: readonly BossPart[];
   readonly attacks: Readonly<Record<MonolithAttack, AttackSpec>> = {
-    shardVolley: { windup: MONOLITH_WINDUPS.shardVolley, active: VOLLEY_SECONDS, run: (ctx) => { this.volley(ctx); } },
-    quake: { windup: MONOLITH_WINDUPS.quake, active: 0, run: (ctx) => { rockRing(ctx, QUAKE_ROCKS[ctx.boss.phase], QUAKE_SIZE, QUAKE_SPEED); } },
-    pulse: { windup: MONOLITH_WINDUPS.pulse, active: PULSE_SECONDS, run: pulse },
+    shardVolley: { windup: WINDUPS.shardVolley, active: VOLLEY_SECONDS, run: (ctx) => { this.volley(ctx); }, threat: { kind: 'lane', reach: VOLLEY_REACH } },
+    quake: { windup: WINDUPS.quake, active: 0, run: (ctx) => { rockRing(ctx, QUAKE_ROCKS[ctx.boss.phase], QUAKE_SIZE, QUAKE_SPEED); } },
+    pulse: { windup: WINDUPS.pulse, active: PULSE_SECONDS, run: (ctx) => { pulse(ctx, PULSE_SPEED, PULSE_REACH); }, threat: { kind: 'shove', speed: PULSE_SPEED, reach: PULSE_REACH } },
   };
 
   /** The bearing of shard 0 from the core; shard i sits i shares of a turn on from it. */
@@ -185,37 +184,6 @@ class Monolith implements BossBehaviour {
     part.x += (tx - part.x) * s;
     part.y += (ty - part.y) * s;
   }
-}
-
-/**
- * Writes into `out`, and returns, the pulse's shove on a ship at (x, y): straight away from the core, hardest at its rim
- * and fading to nothing 320 units beyond it; none on a ship at its very centre.
- */
-export function pulseShove(boss: Readonly<Pick<BossView, 'x' | 'y' | 'radius'>>, x: number, y: number, out: Point): Point {
-  const dx = x - boss.x;
-  const dy = y - boss.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance === 0) {
-    out.x = 0;
-    out.y = 0;
-    return out;
-  }
-  const speed = PULSE_SPEED * clamp(1 - (distance - boss.radius) / PULSE_REACH, 0, 1);
-  out.x = (dx / distance) * speed;
-  out.y = (dy / distance) * speed;
-  return out;
-}
-
-/** The shove a pulse asks for; one point, reused. */
-const shove: Point = { x: 0, y: 0 };
-
-/** Shoves the ship away from the core once, as `pulseShove` says. */
-function pulse(ctx: AttackContext): void {
-  if (ctx.age !== 0) return;
-  const { ship } = ctx.arena;
-  pulseShove(ctx.boss, ship.x, ship.y, shove);
-  ctx.shoveX = shove.x;
-  ctx.shoveY = shove.y;
 }
 
 /** The Monolith's behaviour, with its attacks spelled out. */

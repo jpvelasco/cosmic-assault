@@ -8,9 +8,7 @@ import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type Asteroid
 import type { BossFactory, BossSetup, BossView } from '../boss/behaviour';
 import { BossArena } from '../boss/bossArena';
 import { BossRunner, DYING_SECONDS } from '../boss/bossRunner';
-import { createHiveCarrier } from '../boss/hiveCarrier';
-import { createMonolith } from '../boss/monolith';
-import { SENTINEL } from '../boss/sentinel';
+import { BOSS_BEHAVIOURS } from '../boss/roster';
 import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
@@ -40,8 +38,6 @@ const KIND_SIZE: Readonly<Record<RockKind, AsteroidSize>> = { large: 0, medium: 
  * its fragments inherit `transient`, so they would pass through too.
  */
 const SHOWER_SIZE: AsteroidSize = 3;
-/** How each boss fights, made afresh for each fight. */
-const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossFactory>> = { monolith: createMonolith, hiveCarrier: createHiveCarrier, sentinel: () => SENTINEL };
 /** Points for beating a boss, per Dimension, before the combo multiplier. */
 const BOSS_KILL_POINTS = 1000;
 

@@ -32,6 +32,6 @@ export const SENTINEL = {
   driftSpeed: 20,
   attacks: {
     shardRing: { windup: 0.6, active: 0, run: shardRing },
-    lunge: { windup: 0.5, active: LUNGE_SECONDS, run: lunge },
+    lunge: { windup: 0.5, active: LUNGE_SECONDS, run: lunge, threat: { kind: 'lane', reach: 'core' } },
   },
 } as const satisfies BossBehaviour;

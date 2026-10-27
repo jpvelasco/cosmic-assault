@@ -22,6 +22,8 @@ export interface Foe {
   radius: number;
   /** Hit points left; a foe at 0 or less is spent and is swept out of the pool. */
   hp: number;
+  /** True for a foe a boss's attack launched, marked as it is made: the bots judge it on that attack's telegraph. */
+  fromAttack: boolean;
 }
 
 /** What a foe's behaviour sees of the field it is in. */
@@ -55,7 +57,7 @@ export class FoePool {
 
   constructor(capacity: number) {
     this.spare = Array.from({ length: capacity }, () => ({
-      id: 0, kind: 'splitter', x: 0, y: 0, vx: 0, vy: 0, px: 0, py: 0, rotation: 0, protation: 0, spin: 0, radius: 0, hp: 0,
+      id: 0, kind: 'splitter', x: 0, y: 0, vx: 0, vy: 0, px: 0, py: 0, rotation: 0, protation: 0, spin: 0, radius: 0, hp: 0, fromAttack: false,
     }));
   }
 
@@ -69,6 +71,7 @@ export class FoePool {
     foe.radius = radius;
     foe.hp = hp;
     foe.vx = foe.vy = foe.spin = 0;
+    foe.fromAttack = false;
     return foe;
   }
 

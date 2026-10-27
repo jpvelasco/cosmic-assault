@@ -1,7 +1,10 @@
 import { createView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, BossId } from '../../src/content/types';
-import type { Point } from '../../src/sim/boss/behaviour';
+import type { AttackSpec, BossThreat, Point } from '../../src/sim/boss/behaviour';
+import { bossThreat } from '../../src/sim/boss/bossRunner';
+import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
+import { createRng } from '../../src/sim/rng';
 import { World, type AsteroidPlacement } from '../../src/sim/world';
 import { bossView } from './bossView';
 import { MUTED_KINDS } from './mute';
@@ -25,6 +28,18 @@ export function sceneView(rocks: readonly AsteroidPlacement[] = []): BotView {
   return view;
 }
 
+/** Every roster boss's attacks, made once against a field with no room for drones. */
+const ROSTER_ATTACKS: readonly Readonly<Partial<Record<AttackId, AttackSpec>>>[] = Object.values(BOSS_BEHAVIOURS).map(
+  (make) => make({ maxHp: 60, rng: createRng(1), rockSpeed: 1, field: SCENE_FIELD, foes: { launch: () => false, launched: 0 } }).attacks,
+);
+
+/** `attack`'s threat as a boss of core `radius` shows it, from whichever roster boss declares the attack. */
+export function threatOf(attack: AttackId, radius = 90): BossThreat {
+  const spec = ROSTER_ATTACKS.map((attacks) => attacks[attack]).find((found) => found !== undefined);
+  if (spec === undefined) throw new Error(`no roster boss makes attack ${attack}: stage one that does`);
+  return bossThreat(attack, spec, radius);
+}
+
 export interface Staged {
   readonly id?: BossId;
   readonly at?: Point;
@@ -33,8 +48,12 @@ export interface Staged {
   readonly windup?: AttackId | null;
 }
 
-/** Puts a boss in the fight into `view`, standing still: its weak point at its core unless `target` says otherwise. */
+/**
+ * Puts a boss in the fight into `view`, standing still: its weak point at its core unless `target` says otherwise, and
+ * winding up `windup`, with the threat its roster boss declares, if given.
+ */
 export function stage(view: BotView, { id = 'monolith', at = { x: 640, y: 130 }, radius = 90, target = at, windup = null }: Staged): BotView {
-  view.boss = bossView({ id, ...at, radius, hp: 60, maxHp: 60, phase: 3, windup, vulnerable: target !== null, target });
+  const threat = windup === null ? null : threatOf(windup, radius);
+  view.boss = bossView({ id, ...at, radius, hp: 60, maxHp: 60, phase: 3, windup, vulnerable: target !== null, target, threat });
   return view;
 }

@@ -52,6 +52,8 @@ export interface BossView {
   facing: number;
   /** Where a shot does harm now, or null if nowhere does; refreshed after every step, part broken and resize. Read it through `bossTarget`. */
   target: Readonly<Point> | null;
+  /** The attack winding up or running, as the bots read it, else null; the same object each time that attack comes round. */
+  threat: Readonly<BossThreat> | null;
 }
 
 /** What an attack sees and may change. Refilled in place every step. */
@@ -79,6 +81,28 @@ export interface AttackContext {
   shoveY: number;
 }
 
+/**
+ * How an attack threatens the ship beyond the rocks, foes and bolts it sends out, which carry `fromAttack`: declared as
+ * data, so a bot reads any boss's attack without knowing the boss.
+ */
+export type AttackThreat =
+  /** It sends the core, or its parts, down the lane from the core to where the ship was as its windup began, reaching `reach` either side of that line; 'core' reaches the core's radius. */
+  | { readonly kind: 'lane'; readonly reach: number | 'core' }
+  /** As it goes active it shoves the ship straight away from the core, `speed` at the core's rim and fading to none `reach` beyond it: `radialShove`. */
+  | { readonly kind: 'shove'; readonly speed: number; readonly reach: number };
+
+/** An attack as the bots read it: its windup, in the boss's time, and its threat resolved for the boss that makes it. */
+export interface BossThreat {
+  readonly attack: AttackId;
+  readonly windup: number;
+  /** 'none' for an attack whose only harm is what it sends out. */
+  readonly kind: AttackThreat['kind'] | 'none';
+  /** How far either side of its lane, or past the core's rim, it reaches; 0 for none. */
+  readonly reach: number;
+  /** A shove's speed at the core's rim; 0 for any other. */
+  readonly speed: number;
+}
+
 export interface AttackSpec {
   /** Seconds of telegraph, at least `MIN_WINDUP_SECONDS`. The attack does nothing until it ends. */
   readonly windup: number;
@@ -86,6 +110,8 @@ export interface AttackSpec {
   readonly active: number;
   /** Called every step of the active time. */
   run(ctx: AttackContext): void;
+  /** How it threatens the ship beyond what it sends out; nothing more, if absent. */
+  readonly threat?: AttackThreat;
 }
 
 /** The events announcing a boss's core open to harm and closed to it again. */

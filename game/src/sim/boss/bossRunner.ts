@@ -7,7 +7,7 @@ import type { Field } from '../field';
 import { nudge, TAU, TIME_EPSILON, type Moving } from '../math';
 import type { Arena } from '../rules';
 import { rescale, rescalePose } from '../wrap';
-import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossThreat, BossView, Exposure, Point } from './behaviour';
 
 /** How long a beaten boss takes to die; the renderer fades it over this. */
 export const DYING_SECONDS = 2;
@@ -82,6 +82,14 @@ function assertAttacks(def: BossDef, behaviour: BossBehaviour): void {
   }
 }
 
+/** `attack`'s threat as the bots read it, resolved for a boss whose core has `radius`. */
+export function bossThreat(attack: AttackId, spec: Readonly<AttackSpec>, radius: number): BossThreat {
+  const { windup, threat } = spec;
+  if (threat === undefined) return { attack, windup, kind: 'none', reach: 0, speed: 0 };
+  if (threat.kind === 'shove') return { attack, windup, kind: 'shove', reach: threat.reach, speed: threat.speed };
+  return { attack, windup, kind: 'lane', reach: threat.reach === 'core' ? radius : threat.reach, speed: 0 };
+}
+
 function assertDamage(damage: number): void {
   if (!(damage > 0 && Number.isFinite(damage))) {
     throw new RangeError(`boss damage must be a positive finite damage (got ${String(damage)}): pass 1 for a shot`);
@@ -111,6 +119,8 @@ export class BossRunner {
   private announced: BossPhase = 1;
   /** The vulnerability last announced, with `bossExposed` or `bossShielded`. */
   private shownVulnerable: boolean;
+  /** Each attack's threat, resolved once, so showing one on the view allocates nothing. */
+  private readonly threats: ReadonlyMap<AttackId, BossThreat>;
 
   constructor(
     private readonly def: BossDef,
@@ -118,6 +128,7 @@ export class BossRunner {
     private readonly setup: BossSetup,
   ) {
     assertAttacks(def, behaviour);
+    this.threats = new Map(Object.entries(behaviour.attacks).map(([id, spec]) => [id as AttackId, bossThreat(id as AttackId, spec, def.radius)]));
     const home = behaviour.home?.(setup.field) ?? bossHome(setup.field);
     this.view = {
       id: def.id,
@@ -136,6 +147,7 @@ export class BossRunner {
       parts: behaviour.parts ?? [],
       facing: FACING_DOWN,
       target: null,
+      threat: null,
     };
     const heading = setup.rng.range(0, TAU);
     this.dx = Math.cos(heading) * behaviour.driftSpeed;
@@ -307,6 +319,7 @@ export class BossRunner {
   private rest(): void {
     this.view.windup = null;
     this.view.active = null;
+    this.view.threat = null;
     this.attackId = null;
     this.stage = 'rest';
     this.clock = 0;
@@ -349,6 +362,7 @@ export class BossRunner {
     this.stage = 'windup';
     this.clock = 0;
     view.windup = attack;
+    view.threat = this.threats.get(attack) ?? null;
     const ctx = this.contextFor(arena);
     ctx.aimX = arena.ship.x;
     ctx.aimY = arena.ship.y;

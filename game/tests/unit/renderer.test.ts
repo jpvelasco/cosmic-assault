@@ -254,7 +254,7 @@ describe('createRenderer', () => {
     it('re-bakes the sky once, at once, and draws every sprite kind from the new palette', () => {
       renderer.resize(1280, 720, FIELD);
       const { stub, world } = stubWorld();
-      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false });
       stub.pickups.push({ id: 3, kind: 'rapidFire', x: 700, y: 300, px: 700, py: 300, vx: 0, vy: 0, expiresIn: 9 });
       const setScale = vi.spyOn(baker, 'setScale');
       renderer.setPalette('ionReach');
@@ -275,7 +275,7 @@ describe('createRenderer', () => {
     it('rebuilds the palette-derived sprites on each step of a D3 to D4 to D5 switch', () => {
       renderer.resize(1280, 720, FIELD);
       const { stub, world } = stubWorld();
-      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false });
       const setScale = vi.spyOn(baker, 'setScale');
       let previous = DRIFT;
       for (const id of ['crimsonNebula', 'voidRift', 'singularity'] as const) {
@@ -418,7 +418,7 @@ describe('createRenderer', () => {
 
     describe('foes', () => {
       const KEYS = foeKeys(DRIFT);
-      const drone = (): Foe => ({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      const drone = (): Foe => ({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false });
       const spawned: SimEvent = { type: 'foeSpawned', id: 9, kind: 'drone', x: 400, y: 300 };
       const hurt: SimEvent = { type: 'foeHit', id: 9, x: 400, y: 300, hp: 1 };
       const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };

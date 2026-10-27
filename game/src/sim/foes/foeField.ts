@@ -34,8 +34,6 @@ export interface FoeHooks {
 export class FoeField implements FoeWorld, BossFoes {
   private readonly pool = new FoePool(FOE_CAPACITY);
   private readonly hash = new SpatialHash(HASH_CELL_SIZE);
-  /** The ids of the live foes a boss launched. */
-  private readonly bossIds = new Set<number>();
   /** The circle the running query is for; the visit function reads it, so a query allocates nothing. */
   private queryX = 0;
   private queryY = 0;
@@ -71,7 +69,9 @@ export class FoeField implements FoeWorld, BossFoes {
 
   /** How many of the foes a boss launched are alive. */
   get launched(): number {
-    return this.bossIds.size;
+    let count = 0;
+    for (const foe of this.pool.live) if (foe.fromAttack && foe.hp > 0) count++;
+    return count;
   }
 
   acquire(kind: FoeKind): Foe | null {
@@ -101,7 +101,7 @@ export class FoeField implements FoeWorld, BossFoes {
     foe.rotation = heading;
     foe.vx = Math.cos(heading) * speed;
     foe.vy = Math.sin(heading) * speed;
-    this.bossIds.add(foe.id);
+    foe.fromAttack = true;
     this.commit(foe);
     return true;
   }
@@ -160,7 +160,6 @@ export class FoeField implements FoeWorld, BossFoes {
   clear(): void {
     for (const foe of this.pool.live) this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points: 0 });
     this.pool.clear();
-    this.bossIds.clear();
   }
 
   /** Stretches every foe's place to the new field, like the World's other entities. */
@@ -177,7 +176,6 @@ export class FoeField implements FoeWorld, BossFoes {
   }
 
   private destroy(foe: Foe, points: number, remains = true): void {
-    this.bossIds.delete(foe.id);
     this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points });
     if (remains) BEHAVIOURS[foe.kind].destroyed?.(foe, this);
   }
