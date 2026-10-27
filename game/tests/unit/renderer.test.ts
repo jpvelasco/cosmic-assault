@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REBAKE_DELAY_MS } from '../../src/render/layout';
-import { DRIFT, ION_REACH } from '../../src/render/palette';
+import { DRIFT, ION_REACH, paletteFor } from '../../src/render/palette';
 import { ParticlePool } from '../../src/render/particles';
 import { QUALITY_LEVELS } from '../../src/render/quality';
 import { blinkHidden, createRenderer, type Renderer } from '../../src/render/renderer';
@@ -270,6 +270,25 @@ describe('createRenderer', () => {
       expect(drawn(baker.cached(foeKeys(DRIFT).drone))).toBe(0);
       expect(drawn(baker.cached('pickup|ionReach|rapidFire'))).toBe(1);
       expect(baker.cached('pickup|drift|rapidFire')).toBeUndefined();
+    });
+
+    it('rebuilds the palette-derived sprites on each step of a D3 to D4 to D5 switch', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { stub, world } = stubWorld();
+      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      const setScale = vi.spyOn(baker, 'setScale');
+      const ships: HTMLCanvasElement[] = [];
+      for (const id of ['crimsonNebula', 'voidRift', 'singularity'] as const) {
+        renderer.setPalette(id);
+        expect(renderer.palette).toBe(id);
+        drawFrame(world, 1);
+        const palette = paletteFor(id);
+        expect(drawsOf(baker.ship(palette).canvas), id).toHaveLength(1);
+        expect(baker.cached(foeKeys(palette).drone), id).toBeDefined();
+        ships.push(baker.ship(palette).canvas);
+      }
+      expect(setScale).toHaveBeenCalledTimes(3);
+      expect(new Set(ships).size).toBe(3);
     });
 
     it('draws the HUD bars in the new palette', () => {

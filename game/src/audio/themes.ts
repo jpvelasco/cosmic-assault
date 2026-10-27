@@ -71,6 +71,8 @@ const every = <T>(step: number, make: (beat: number, i: number) => T): T[] =>
 
 const NATURAL_MINOR = [0, 2, 3, 5, 7, 8, 10] as const;
 const MAJOR = [0, 2, 4, 5, 7, 9, 11] as const;
+const PHRYGIAN_DOMINANT = [0, 1, 4, 5, 7, 8, 10] as const;
+const HARMONIC_MINOR = [0, 2, 3, 5, 7, 8, 11] as const;
 
 /** Calm: Am F C G at 96 bpm, an eighth-note arpeggio over two long bass notes and soft off-beat hats. */
 const DRIFT_THEME: MusicTheme = {
@@ -124,6 +126,89 @@ const ION_REACH_THEME: MusicTheme = {
   },
 };
 
+/**
+ * Tense: D Eb Gm Cm at 116 bpm in D Phrygian dominant. A restless eighth-note arpeggio over a galloping bass, with the
+ * hats ticking between the beats.
+ */
+const CRIMSON_NEBULA_THEME: MusicTheme = {
+  id: 'crimsonNebula',
+  bpm: 116,
+  key: { tonic: 2, scale: PHRYGIAN_DOMINANT },
+  chords: [
+    { bass: 38, tones: [57, 62, 66] },
+    { bass: 39, tones: [58, 63, 67] },
+    { bass: 43, tones: [58, 62, 67] },
+    { bass: 36, tones: [55, 60, 63] },
+  ],
+  patterns: {
+    arp: { step: 0.5, shape: [0, 2, 1, 3, 2, 1, 3, 2], lift: OCTAVE, accentEvery: 2, accent: 0.7, soft: 0.45 },
+    bass: [
+      { beat: 0, duration: 0.75, velocity: 0.85, lift: 0 },
+      { beat: 0.75, duration: 0.25, velocity: 0.5, lift: 0 },
+      { beat: 1.5, duration: 0.5, velocity: 0.6, lift: 0 },
+      { beat: 2, duration: 0.75, velocity: 0.8, lift: 0 },
+      { beat: 2.75, duration: 0.25, velocity: 0.5, lift: 0 },
+      { beat: 3.5, duration: 0.5, velocity: 0.6, lift: OCTAVE },
+    ],
+    hats: [
+      ...[0.5, 1.5, 2.5, 3.5].map((beat) => ({ beat, duration: 0.1, velocity: 0.5 })),
+      { beat: 3.75, duration: 0.08, velocity: 0.3 },
+    ],
+    pad: 0.7,
+  },
+};
+
+/**
+ * Eerie and sparse: Bbm Gb Db Ab at 100 bpm in B flat minor. A slow quarter-note arpeggio and one long bass note a
+ * bar, under a wide pad that stacks its tones a fifth and a minor sixth apart.
+ */
+const VOID_RIFT_THEME: MusicTheme = {
+  id: 'voidRift',
+  bpm: 100,
+  key: { tonic: 10, scale: NATURAL_MINOR },
+  chords: [
+    { bass: 34, tones: [58, 65, 73] },
+    { bass: 30, tones: [58, 66, 73] },
+    { bass: 37, tones: [60, 65, 73] },
+    { bass: 32, tones: [60, 68, 75] },
+  ],
+  patterns: {
+    arp: { step: 1, shape: [0, 2, 1, 3], lift: OCTAVE, accentEvery: 2, accent: 0.55, soft: 0.35 },
+    bass: [{ beat: 0, duration: 3.5, velocity: 0.7, lift: 0 }],
+    hats: [1.5, 3.5].map((beat) => ({ beat, duration: 0.1, velocity: 0.3 })),
+    pad: 0.9,
+  },
+};
+
+/**
+ * Driving: Em C Am B at 124 bpm in E harmonic minor, the B major chord leaning back into the loop. A sixteenth-note
+ * arpeggio over a pushing bass, with the hats running off the beat.
+ */
+const SINGULARITY_THEME: MusicTheme = {
+  id: 'singularity',
+  bpm: 124,
+  key: { tonic: 4, scale: HARMONIC_MINOR },
+  chords: [
+    { bass: 40, tones: [55, 59, 64] },
+    { bass: 36, tones: [55, 60, 64] },
+    { bass: 33, tones: [57, 60, 64] },
+    { bass: 35, tones: [59, 63, 66] },
+  ],
+  patterns: {
+    arp: { step: 0.25, shape: [0, 1, 2, 3, 2, 1, 3, 2, 0, 1, 2, 3, 3, 2, 1, 2], lift: OCTAVE, accentEvery: 4, accent: 0.7, soft: 0.4 },
+    bass: [
+      { beat: 0, duration: 0.5, velocity: 0.85, lift: 0 },
+      { beat: 0.75, duration: 0.25, velocity: 0.6, lift: 0 },
+      { beat: 1.5, duration: 0.5, velocity: 0.7, lift: 0 },
+      { beat: 2, duration: 0.5, velocity: 0.8, lift: 0 },
+      { beat: 2.75, duration: 0.25, velocity: 0.6, lift: 0 },
+      { beat: 3.5, duration: 0.5, velocity: 0.7, lift: OCTAVE },
+    ],
+    hats: [0.5, 0.75, 1.5, 1.75, 2.5, 2.75, 3.5, 3.75].map((beat, i) => ({ beat, duration: 0.07, velocity: i % 2 === 0 ? 0.5 : 0.3 })),
+    pad: 0.6,
+  },
+};
+
 /** The bass hits on every eighth with an octave pop on the second half of beats 2 and 4. */
 const DRIVING_BASS: readonly BassHit[] = every(0.5, (beat, i) => ({
   beat,
@@ -152,6 +237,12 @@ export const THEMES: Readonly<Record<ThemeId, MusicTheme>> = {
   ionReach: ION_REACH_THEME,
   driftBoss: bossVariant(DRIFT_THEME, 'driftBoss', 112),
   ionReachBoss: bossVariant(ION_REACH_THEME, 'ionReachBoss', 126),
+  crimsonNebula: CRIMSON_NEBULA_THEME,
+  voidRift: VOID_RIFT_THEME,
+  singularity: SINGULARITY_THEME,
+  crimsonNebulaBoss: bossVariant(CRIMSON_NEBULA_THEME, 'crimsonNebulaBoss', 132),
+  voidRiftBoss: bossVariant(VOID_RIFT_THEME, 'voidRiftBoss', 112),
+  singularityBoss: bossVariant(SINGULARITY_THEME, 'singularityBoss', 140),
 };
 
 export const THEME_IDS = Object.keys(THEMES) as readonly ThemeId[];

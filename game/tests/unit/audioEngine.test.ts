@@ -938,7 +938,9 @@ describe('music themes', () => {
       ['1-1', 'drift'],
       ['2-1', 'ionReach'],
       ['2-5', 'ionReach'],
-      ['3-2', 'drift'],
+      ['3-2', 'crimsonNebula'],
+      ['4-1', 'voidRift'],
+      ['5-3', 'singularity'],
     ] as const)('takes galaxy %s\'s theme, %s, as it starts', (id, theme) => {
       const e = engine();
       e.handle([start(id)]);
@@ -955,6 +957,18 @@ describe('music themes', () => {
       expect(e.theme).toBe('ionReach');
       e.handle([start('1-6'), INTRO]);
       expect(e.theme).toBe('driftBoss');
+    });
+
+    it.each([
+      ['3-6', 'crimsonNebula'],
+      ['4-6', 'voidRift'],
+      ['5-6', 'singularity'],
+    ] as const)('plays %s\'s boss variant of %s from its intro', (id, theme) => {
+      const e = engine();
+      e.handle([start(id)]);
+      expect(e.theme).toBe(theme);
+      e.handle([INTRO]);
+      expect(e.theme).toBe(`${theme}Boss`);
     });
 
     it('keeps the boss variant through a pause, and plays the last-played Dimension\'s plain theme on every menu', () => {

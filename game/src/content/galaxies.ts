@@ -11,13 +11,13 @@ export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   5: 'Singularity',
 };
 
-/** How each Dimension looks and sounds. The Dimensions after Ion Reach keep the Drift's until M6 gives them their own. */
+/** How each Dimension looks and sounds. */
 const LOOKS: Readonly<Record<Dimension, { readonly palette: PaletteId; readonly theme: MusicThemeId }>> = {
   1: { palette: 'drift', theme: 'drift' },
   2: { palette: 'ionReach', theme: 'ionReach' },
-  3: { palette: 'drift', theme: 'drift' },
-  4: { palette: 'drift', theme: 'drift' },
-  5: { palette: 'drift', theme: 'drift' },
+  3: { palette: 'crimsonNebula', theme: 'crimsonNebula' },
+  4: { palette: 'voidRift', theme: 'voidRift' },
+  5: { palette: 'singularity', theme: 'singularity' },
 };
 
 type Ramps = Readonly<Record<ThreatKind, KindRamp>>;

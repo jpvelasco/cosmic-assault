@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { foeKeys } from '../../src/render/foePass';
-import { DRIFT, ION_REACH } from '../../src/render/palette';
+import { DRIFT, ION_REACH, PALETTE_IDS, paletteFor, type Palette } from '../../src/render/palette';
 import {
   craterLayout,
   createSpriteBaker,
@@ -230,6 +230,17 @@ describe('createSpriteBaker', () => {
     expect(baker.shot(ION_REACH)).not.toBe(baker.shot(DRIFT));
     expect(baker.flame(ION_REACH, 16)).not.toBe(baker.flame(DRIFT, 16));
     expect(baker.ship(ION_REACH)).toBe(baker.ship(ION_REACH));
+  });
+
+  it('bakes distinct sprites in all five palettes', () => {
+    const baker = createSpriteBaker();
+    baker.setScale(1, 1);
+    const all = PALETTE_IDS.map(paletteFor);
+    const a = rock(5);
+    for (const bake of [(p: Palette) => baker.ship(p), (p: Palette) => baker.shot(p), (p: Palette) => baker.flame(p, 16), (p: Palette) => baker.asteroid(a, p)]) {
+      expect(new Set(all.map(bake)).size).toBe(all.length);
+    }
+    expect(new Set(all.flatMap((p) => Object.values(foeKeys(p)))).size).toBe(all.length * Object.keys(foeKeys(DRIFT)).length);
   });
 
   it('keys the foe sprites by palette too', () => {
