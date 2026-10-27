@@ -21,8 +21,23 @@ export function zoneClearance(field: Field, zone: ZoneBox, x: number, y: number)
   return dx > 0 || dy > 0 ? Math.hypot(Math.max(dx, 0), Math.max(dy, 0)) : Math.max(dx, dy);
 }
 
-/** Random places a zone tries before it gives up on that zone and the event shows one fewer. */
-const TRIES = 32;
+/** Random places a zone tries, its largest side shrinking toward the smallest as it goes, before it searches a grid. */
+const TRIES = 64;
+/** The step of that grid, in field units: it finds a spot for a smallest zone wherever one fits. */
+const GRID_STEP = 10;
+
+/** Whether two zone-shaped boxes overlap. */
+export const boxesOverlap = (a: ZoneBox, b: ZoneBox): boolean => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
+
+/** The `DANGER_ZONE.keepOuts` corners of `field`, as boxes. */
+export function zoneKeepOutBoxes(field: Field): ZoneBox[] {
+  return DANGER_ZONE.keepOuts.map(({ corner, width, height }) => ({
+    x: corner.endsWith('Left') ? width / 2 : field.width - width / 2,
+    y: corner.startsWith('top') ? height / 2 : field.height - height / 2,
+    w: width,
+    h: height,
+  }));
+}
 
 interface Zone extends ZoneState {
   stage: HazardState['stage'];
@@ -30,9 +45,6 @@ interface Zone extends ZoneState {
   y: number;
   remaining: number;
 }
-
-/** Whether two zones overlap. */
-const overlap = (a: ZoneBox, b: ZoneBox): boolean => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
 
 /**
  * A galaxy's danger zones, an event at a time: each shows one zone per intensity (at most two), rectangles 120 to 220
@@ -106,16 +118,30 @@ export class DangerZones implements Hazard {
     }
   }
 
-  /** A zone of random size somewhere inside the field clear of the keep-outs and of `placed`, or null if none fits in `TRIES`. */
+  /**
+   * A zone somewhere inside the field clear of the keep-out circles, the HUD and thumb corners and `placed`: of random
+   * size at a random spot, tried `TRIES` times with its largest side shrinking toward the smallest, else the first
+   * spot on a grid where a smallest zone fits (on a crowded 4:3 field with the ship in a clear spot), else null.
+   */
   private place(event: GalaxyEvent, elapsed: number, field: Field, placed: readonly Zone[]): Zone | null {
     const [low, high] = DANGER_ZONE.side;
     const keepOuts = this.keepOuts(field);
+    const corners = zoneKeepOutBoxes(field);
+    const clear = (box: ZoneBox): boolean =>
+      !keepOuts.some((c) => zoneClearance(field, box, c.x, c.y) < c.r) && !corners.some((c) => boxesOverlap(box, c)) && !placed.some((other) => boxesOverlap(box, other));
+    const zone = (box: ZoneBox): Zone => ({ id: this.nextId(), type: 'dangerZone', stage: 'warning', intensity: event.intensity, remaining: event.at - elapsed, ...box });
     for (let i = 0; i < TRIES; i++) {
-      const w = this.rng.range(low, high);
-      const h = this.rng.range(low, high);
+      const top = high - ((high - low) * i) / TRIES;
+      const w = this.rng.range(low, top);
+      const h = this.rng.range(low, top);
       const box = { x: this.rng.range(w / 2, field.width - w / 2), y: this.rng.range(h / 2, field.height - h / 2), w, h };
-      if (keepOuts.some((c) => zoneClearance(field, box, c.x, c.y) < c.r) || placed.some((other) => overlap(box, other))) continue;
-      return { id: this.nextId(), type: 'dangerZone', stage: 'warning', intensity: event.intensity, remaining: event.at - elapsed, ...box };
+      if (clear(box)) return zone(box);
+    }
+    for (let y = low / 2; y <= field.height - low / 2; y += GRID_STEP) {
+      for (let x = low / 2; x <= field.width - low / 2; x += GRID_STEP) {
+        const box = { x, y, w: low, h: low };
+        if (clear(box)) return zone(box);
+      }
     }
     return null;
   }

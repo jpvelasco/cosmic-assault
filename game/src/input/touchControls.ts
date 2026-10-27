@@ -10,8 +10,31 @@ const inset = (side: 'top' | 'left' | 'right' | 'bottom', px: number): string =>
   `max(${String(px)}px, env(safe-area-inset-${side}))`;
 const STICK_EDGE_PX = 35;
 const FIRE_EDGE_PX = 20;
+const PAUSE_EDGE_PX = 16;
 const TOUCH_CSS =
   'pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent';
+
+/** A box in CSS px, from the viewport's top-left corner. */
+export interface CssBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Where the joystick, FIRE and pause sit in a `cssWidth` by `cssHeight` viewport with no safe-area insets, as the
+ * stylesheet below places them: the joystick bottom left and FIRE bottom right, or swapped when `leftHanded`, and pause
+ * top right.
+ */
+export function touchControlBoxes(cssWidth: number, cssHeight: number, leftHanded: boolean): Readonly<Record<'stick' | 'fire' | 'pause', CssBox>> {
+  const corner = (size: number, edge: number, right: boolean): CssBox => ({ x: right ? cssWidth - edge - size : edge, y: cssHeight - edge - size, width: size, height: size });
+  return {
+    stick: corner(BASE_SIZE_PX, STICK_EDGE_PX, leftHanded),
+    fire: corner(FIRE_SIZE_PX, FIRE_EDGE_PX, !leftHanded),
+    pause: { x: cssWidth - PAUSE_EDGE_PX - PAUSE_SIZE_PX, y: PAUSE_EDGE_PX, width: PAUSE_SIZE_PX, height: PAUSE_SIZE_PX },
+  };
+}
 
 export interface TouchControls {
   /** Current drag, or null while the joystick is released. */
@@ -101,7 +124,7 @@ function trackSinglePointer(el: HTMLElement, handlers: PointerHandlers): Pointer
 const BASE_CSS = `position:absolute;bottom:${inset('bottom', STICK_EDGE_PX)};width:${String(BASE_SIZE_PX)}px;height:${String(BASE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
 const HANDLE_CSS = `position:absolute;left:50%;top:50%;width:${String(HANDLE_SIZE_PX)}px;height:${String(HANDLE_SIZE_PX)}px;margin:-${String(HANDLE_SIZE_PX / 2)}px 0 0 -${String(HANDLE_SIZE_PX / 2)}px;border-radius:50%;pointer-events:none`;
 const FIRE_CSS = `position:absolute;bottom:${inset('bottom', FIRE_EDGE_PX)};width:${String(FIRE_SIZE_PX)}px;height:${String(FIRE_SIZE_PX)}px;box-sizing:border-box;border-radius:50%;border-width:2px;display:flex;align-items:center;justify-content:center;${TOUCH_CSS}`;
-const PAUSE_CSS = `position:absolute;top:${inset('top', 16)};right:${inset('right', 16)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
+const PAUSE_CSS = `position:absolute;top:${inset('top', PAUSE_EDGE_PX)};right:${inset('right', PAUSE_EDGE_PX)};width:${String(PAUSE_SIZE_PX)}px;height:${String(PAUSE_SIZE_PX)}px;box-sizing:border-box;padding:0;border-radius:50%;border-width:2px;${TOUCH_CSS}`;
 const LAYER_CSS = 'position:fixed;inset:0;pointer-events:none;z-index:var(--layer-touch)';
 
 /** Anchors `el` to one side of the screen, clearing the other. */

@@ -6,7 +6,7 @@ import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS, W
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
-import { zoneClearance } from '../../src/sim/hazards/dangerZone';
+import { boxesOverlap, zoneClearance, zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
 import type { HazardState, ZoneState } from '../../src/sim/hazards/hazard';
 import { HazardField } from '../../src/sim/hazards/hazardField';
 import { createRng } from '../../src/sim/rng';
@@ -126,7 +126,7 @@ describe('danger zones', () => {
     expect(struck.every(Boolean)).toBe(true);
   });
 
-  it('warns on the very step the zone before it ends, so back-to-back zones keep their whole telegraph (Task 1 N-2)', () => {
+  it('warns on the very step the zone before it ends, so back-to-back zones keep their whole telegraph', () => {
     const { log } = play([zone(20), zone(20 + SECONDS + TELEGRAPH)], { seconds: 45 });
     const firstEnd = ofType(log, 'zoneEnd')[0]?.elapsed ?? 0;
     const secondWarning = ofType(log, 'zoneWarning')[1]?.elapsed ?? 0;
@@ -165,7 +165,8 @@ describe('danger zones', () => {
     ['16:9', FIELD],
     ['21:9', FIELD_219],
   ])('placement keep-outs at %s', (_name, field) => {
-    it('never puts a zone within 150 of the field\'s centre, or within the safe radius of the ship as it warns', () => {
+    it('never puts a zone within 150 of the field\'s centre, within the safe radius of the ship as it warns, or over a HUD or thumb corner', () => {
+      const corners = zoneKeepOutBoxes(field);
       const ships: (readonly [number, number])[] = [];
       for (let i = 0; i <= 6; i++) for (let j = 0; j <= 4; j++) ships.push([(i / 6) * field.width, (j / 4) * field.height]);
       let zones = 0;
@@ -177,6 +178,7 @@ describe('danger zones', () => {
             zones++;
             expect(zoneClearance(field, event, field.width / 2, field.height / 2), `ship (${String(x)}, ${String(y)}) seed ${String(seed)}`).toBeGreaterThanOrEqual(150);
             expect(zoneClearance(field, event, x, y), `ship (${String(x)}, ${String(y)}) seed ${String(seed)}`).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
+            for (const corner of corners) expect(boxesOverlap(event, corner), `${JSON.stringify(event)} over ${JSON.stringify(corner)}`).toBe(false);
           }
         }
       }

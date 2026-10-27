@@ -18,8 +18,30 @@ export const HAZARD_RULES: Readonly<Record<HazardType, HazardRule>> = {
   blackHole: { telegraph: 3, seconds: 75, from: 5 },
 };
 
-/** A danger zone event shows one zone per intensity, at most `maxZones`, each side from `side[0]` to `side[1]` units long. */
-export const DANGER_ZONE = { maxZones: 2, side: [120, 220] } as const;
+/** A rectangle at one corner of the field, `width` by `height` field units. */
+export interface CornerKeepOut {
+  readonly corner: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * A danger zone event shows one zone per intensity, at most `maxZones`, each side from `side[0]` to `side[1]` units
+ * long. No zone covers a `keepOuts` corner: the HUD's pills at the top (the score, the lives and every pickup pill on
+ * the left; the galaxy, its timer and a phone's pause button on the right) and the bottom corners where a phone's
+ * joystick and FIRE sit, in either hand. They are sized for the largest of these, a phone in landscape at 21:9 with
+ * every pill showing, and hold on every device, so a seed places its zones alike everywhere.
+ */
+export const DANGER_ZONE: { readonly maxZones: 2; readonly side: readonly [number, number]; readonly keepOuts: readonly CornerKeepOut[] } = {
+  maxZones: 2,
+  side: [120, 220],
+  keepOuts: [
+    { corner: 'topLeft', width: 820, height: 180 },
+    { corner: 'topRight', width: 360, height: 160 },
+    { corner: 'bottomLeft', width: 300, height: 395 },
+    { corner: 'bottomRight', width: 300, height: 395 },
+  ],
+};
 
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };
