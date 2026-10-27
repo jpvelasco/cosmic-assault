@@ -4,6 +4,7 @@ import { createFieldPen } from '../../src/render/fieldPen';
 import { DRIFT } from '../../src/render/palette';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
+import { bossView } from '../helpers/bossView';
 
 interface Draw {
   readonly image: unknown;
@@ -61,7 +62,7 @@ const fakeCanvas = (): unknown => {
   return { width: 0, height: 0, getContext: () => ctx };
 };
 
-const boss = (over: Partial<BossView> = {}): BossView => ({ id: 'sentinel', x: 640, y: 200, px: 600, py: 200, radius: 70, hp: 20, maxHp: 20, phase: 1, state: 'fighting', windup: null, active: null, vulnerable: true, parts: [], facing: Math.PI / 2, target: null, ...over });
+const boss = (over: Partial<BossView> = {}): BossView => bossView({ y: 200, px: 600, ...over });
 const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600 };
 
 describe('createBossPass', () => {

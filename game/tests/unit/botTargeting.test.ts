@@ -9,6 +9,7 @@ import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Foe } from '../../src/sim/foes/foe';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
+import { bossView } from '../helpers/bossView';
 import { SCENE_FIELD, sceneView, stillRock } from '../helpers/botScene';
 
 function foe(kind: FoeKind, x: number, y: number): Foe {
@@ -21,8 +22,7 @@ function part(x: number, y: number, hp: number): BossPart {
 
 /** A boss whose behaviour names `target` as where a shot does harm, its core open to harm just when there is one. */
 function boss(target: Point | null, state: BossView['state'] = 'fighting', parts: readonly BossPart[] = []): BossView {
-  const vulnerable = target !== null;
-  return { id: 'sentinel', x: 640, y: 100, px: 640, py: 100, radius: 70, hp: 20, maxHp: 20, phase: 1, state, windup: null, active: null, vulnerable, parts, facing: Math.PI / 2, target };
+  return bossView({ state, vulnerable: target !== null, parts, target });
 }
 
 const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0, wraps: true });
