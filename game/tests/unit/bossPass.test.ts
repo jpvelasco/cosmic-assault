@@ -296,6 +296,89 @@ describe('createBossPass', () => {
     });
   });
 
+  describe('the Hive Carrier', () => {
+    const DOWN = Math.PI / 2;
+    const carrier = (over: Partial<BossView> = {}): BossView => boss({ id: 'hiveCarrier', radius: 100, hp: 70, maxHp: 70, vulnerable: false, facing: DOWN, ...over });
+    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
+    /** The bearing a draw is turned to, from its transform, as |cos|: 0 straight down the field. */
+    const turn = (d: Draw | undefined): number => Math.abs((d?.a ?? Number.NaN) / (d?.scale ?? Number.NaN));
+
+    it('draws its hull and both shut door leaves, turned the way it faces, and no bay light while shut', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(carrier(), 1, LOOK);
+      const keys = keysOf(custom);
+      expect(keys).toEqual(expect.arrayContaining(['boss|hiveCarrier|hull|100', 'boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100']));
+      expect(keys).not.toContain('boss|hiveCarrier|bay|100');
+      expect(keys).not.toContain('boss|core|100');
+      for (const key of ['boss|hiveCarrier|hull|100', 'boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100']) expect(turn(drawOf(key, custom)), key).toBeCloseTo(0, 9);
+      custom.mockClear();
+      pass.draw(carrier({ facing: 0 }), 1, LOOK);
+      expect(turn(drawOf('boss|hiveCarrier|hull|100', custom))).toBeCloseTo(1, 9);
+    });
+
+    it('slides its doors apart over 0.3 s once its hangar opens, baring a glowing bay, and shut again after', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const open = carrier({ vulnerable: true });
+      pass.advance(0.15, open);
+      pass.draw(open, 1, LOOK);
+      const half = turn(drawOf('boss|hiveCarrier|door|1|100', custom));
+      const halfLit = drawOf('boss|hiveCarrier|bay|100', custom)?.alpha ?? 0;
+      pass.advance(0.3, open);
+      pass.draw(open, 1, LOOK);
+      const wide = turn(drawOf('boss|hiveCarrier|door|1|100', custom));
+      const wideLit = drawOf('boss|hiveCarrier|bay|100', custom)?.alpha ?? 0;
+      expect(half).toBeCloseTo(Math.sin(0.25), 6);
+      expect(wide).toBeCloseTo(Math.sin(0.5), 6);
+      expect(turn(drawOf('boss|hiveCarrier|door|-1|100', custom))).toBeCloseTo(Math.sin(0.5), 6);
+      expect(halfLit).toBeGreaterThan(0);
+      expect(wideLit).toBeGreaterThan(halfLit);
+      const shut = carrier();
+      pass.advance(0.3, shut);
+      custom.mockClear();
+      pass.draw(shut, 1, LOOK);
+      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+      expect(turn(drawOf('boss|hiveCarrier|door|1|100', custom))).toBeCloseTo(0, 9);
+    });
+
+    it('keeps its doors shut outside the fight, and shuts them for a new fight', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.advance(1, carrier({ vulnerable: true, state: 'dying' }));
+      pass.draw(carrier({ vulnerable: true, state: 'dying' }), 1, LOOK);
+      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+      pass.advance(1, carrier({ vulnerable: true }));
+      pass.handle([{ type: 'bossIntro', id: 'hiveCarrier' }]);
+      custom.mockClear();
+      pass.draw(carrier({ vulnerable: true }), 1, LOOK);
+      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+      pass.advance(1, carrier({ vulnerable: true }));
+      pass.reset();
+      custom.mockClear();
+      pass.draw(carrier({ vulnerable: true }), 1, LOOK);
+      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+    });
+
+    it('holds the bay light steady under reduced motion', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const open = carrier({ vulnerable: true });
+      const still = { ...LOOK, still: true };
+      const alphas: number[] = [];
+      pass.advance(0.5, open);
+      for (let i = 0; i < 4; i++) {
+        pass.advance(0.07, open);
+        pass.draw(open, 1, still);
+        alphas.push(drawOf('boss|hiveCarrier|bay|100', custom)?.alpha ?? 0);
+      }
+      expect(new Set(alphas).size).toBe(1);
+      expect(alphas[0]).toBe(1);
+    });
+
+    it('rings its launch, broadside and retreat windups', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      for (const windup of ['launch', 'broadside', 'retreat'] as const) pass.draw(carrier({ windup }), 1, LOOK);
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|ring|launch|100', 'boss|ring|broadside|100', 'boss|ring|retreat|100']));
+    });
+  });
+
   it('forgets the last fight on reset', () => {
     pass.handle([{ type: 'bossHit', x: 640, y: 200, hp: 19 }]);
     pass.reset();

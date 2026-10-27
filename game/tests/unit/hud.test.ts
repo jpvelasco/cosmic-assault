@@ -313,6 +313,14 @@ describe('createHud', () => {
     expect(hud.pill('boss')).toBeNull();
   });
 
+  it('names the Hive Carrier on its HP bar in 2-★', () => {
+    const hud = createHud(DRIFT);
+    const { ctx, texts } = fakeContext();
+    hud.resize(1280, 720);
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: { hp: 40 } }), 0);
+    expect(texts).toContain('HIVE CARRIER');
+  });
+
   it('shows the combo pill only while the multiplier is above 1, beside the lives', () => {
     const hud = createHud(DRIFT);
     const { ctx, texts } = fakeContext();

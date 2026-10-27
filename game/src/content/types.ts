@@ -25,10 +25,10 @@ export type FoeKind = 'splitter' | 'drone';
 export type ThreatKind = RockKind | FoeKind;
 
 /** The bosses so far: the Monolith guards Dimension 1; the M4 placeholder Sentinel stands in for the rest. */
-export type BossId = 'sentinel' | 'monolith';
+export type BossId = 'sentinel' | 'monolith' | 'hiveCarrier';
 
 /** The moves a boss draws on: the Sentinel's, then the Monolith's. */
-export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse';
+export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat';
 
 /**
  * How likely a kind is to be picked: `base` up to tier `from`, then rising by `step` per tier past it, never above

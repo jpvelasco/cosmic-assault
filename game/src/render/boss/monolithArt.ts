@@ -1,7 +1,7 @@
 import { TAU } from '../../sim/math';
 import { mix, rgba } from '../color';
 import type { Palette } from '../palette';
-import { addStops, craterLayout, paintCraters, paintGlow, strokePath, tracePath, type Point } from '../sprites';
+import { addStops, craterLayout, paintCraters, paintGlow, scaled, strokePath, tracePath, type Point } from '../sprites';
 
 const WHITE = '#ffffff';
 const BLACK = '#000000';
@@ -44,10 +44,6 @@ const SHARD: readonly Point[] = [
 function stone(p: Palette): readonly [string, string, string] {
   const [, mid, shade] = p.rock;
   return [mix(mid, SLATE_LIT, 0.45), mix(shade, SLATE, 0.45), mix(shade, BLACK, 0.7)];
-}
-
-function scaled(points: readonly Point[], r: number): Point[] {
-  return points.map((p) => ({ x: p.x * r, y: p.y * r }));
 }
 
 function traceLine(ctx: CanvasRenderingContext2D, points: readonly Point[], r: number): void {

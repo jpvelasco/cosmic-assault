@@ -6,6 +6,7 @@ import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../co
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
 import type { BossFactory, BossSetup, BossView } from '../boss/behaviour';
 import { BossRunner, clearSpot, DYING_SECONDS } from '../boss/bossRunner';
+import { createHiveCarrier } from '../boss/hiveCarrier';
 import { createMonolith } from '../boss/monolith';
 import { SENTINEL } from '../boss/sentinel';
 import { ASTEROID, PLAYER } from '../config';
@@ -36,7 +37,7 @@ const KIND_SIZE: Readonly<Record<RockKind, AsteroidSize>> = { large: 0, medium: 
  */
 const SHOWER_SIZE: AsteroidSize = 3;
 /** How each boss fights, made afresh for each fight. */
-const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossFactory>> = { monolith: createMonolith, sentinel: () => SENTINEL };
+const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossFactory>> = { monolith: createMonolith, hiveCarrier: createHiveCarrier, sentinel: () => SENTINEL };
 /** Points for beating a boss, per Dimension, before the combo multiplier. */
 const BOSS_KILL_POINTS = 1000;
 

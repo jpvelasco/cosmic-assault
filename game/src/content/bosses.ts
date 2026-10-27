@@ -15,7 +15,7 @@ export interface BossDef {
 
 const HP_PER_DIMENSION = 6;
 
-/** The boss roster: the Monolith guards 1-★, and M4's Sentinel stands in for the bosses still to come. */
+/** The boss roster: the Monolith guards 1-★ and the Hive Carrier 2-★, and M4's Sentinel stands in for the bosses still to come. */
 export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   monolith: {
     id: 'monolith',
@@ -24,6 +24,14 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
     radius: 90,
     phases: [['shardVolley'], ['shardVolley', 'quake'], ['quake', 'shardVolley', 'pulse']],
     rest: [2.0, 1.5, 1.0],
+  },
+  hiveCarrier: {
+    id: 'hiveCarrier',
+    name: 'Hive Carrier',
+    hp: 70,
+    radius: 100,
+    phases: [['launch', 'broadside'], ['launch', 'retreat', 'broadside'], ['launch', 'broadside', 'launch', 'retreat']],
+    rest: [2.2, 1.6, 1.2],
   },
   sentinel: {
     id: 'sentinel',

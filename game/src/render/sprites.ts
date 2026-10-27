@@ -184,6 +184,11 @@ export function shapeFingerprint(a: Readonly<Asteroid>): string {
   return (hash >>> 0).toString(16);
 }
 
+/** `points` laid out at radius 1, scaled out to radius `r`, for a bake. */
+export function scaled(points: readonly Point[], r: number): Point[] {
+  return points.map((p) => ({ x: p.x * r, y: p.y * r }));
+}
+
 /** Begins a closed path through `points`. */
 export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
   ctx.beginPath();

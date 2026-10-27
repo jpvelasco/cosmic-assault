@@ -4,6 +4,7 @@ import { DYING_SECONDS } from '../sim/boss/bossRunner';
 import type { SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { radial, type BossDrawer, type BossFrame, type BossLook, type DrawerFactory } from './boss/drawer';
+import { hiveCarrierDrawer } from './boss/hiveCarrier';
 import { monolithDrawer } from './boss/monolith';
 import { sentinelDrawer } from './boss/sentinel';
 import { mix, rgba } from './color';
@@ -35,7 +36,7 @@ export interface BossPass {
 }
 
 /** Each boss's look. */
-const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer };
+const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer };
 
 const WHITE = '#ffffff';
 /** The core shows white while the flash is above this, the share of BOSS_FLASH_SECONDS left after HIT_FLASH_SECONDS. */
@@ -74,7 +75,7 @@ function paintRing(ctx: CanvasRenderingContext2D, r: number, color: string): voi
 }
 
 /** Every attack, once: the `satisfies` makes a new one fail to compile until it is listed. */
-const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0 } as const satisfies Record<AttackId, 0>;
+const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0 } as const satisfies Record<AttackId, 0>;
 const ATTACK_IDS = Object.keys(ATTACK_ID_SET) as AttackId[];
 
 /** A record of `make(id)` for every attack. */
@@ -96,7 +97,16 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
   const kit = { ctx, pen, baker, palette };
   const drawers = Object.fromEntries(Object.entries(DRAWERS).map(([id, make]) => [id, make(kit)])) as Record<BossId, BossDrawer>;
   const allDrawers = Object.values(drawers);
-  const ringColors: Readonly<Record<AttackId, string>> = { shardRing: palette.shot, lunge: palette.ring, shardVolley: palette.accent[0], quake: palette.ring, pulse: palette.accent[2] };
+  const ringColors: Readonly<Record<AttackId, string>> = {
+    shardRing: palette.shot,
+    lunge: palette.ring,
+    shardVolley: palette.accent[0],
+    quake: palette.ring,
+    pulse: palette.accent[2],
+    launch: palette.accent[0],
+    broadside: palette.ring,
+    retreat: palette.accent[2],
+  };
   /** The radius the rings are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;
   let rings = ringKeys(radius);
