@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRng, deriveSeed, hashString, mulberry32 } from '../../src/sim/rng';
+import { createRng, deriveSeed, hashString, mulberry32, weightedIndex } from '../../src/sim/rng';
 
 const DRAWS = 10_000;
 
@@ -176,5 +176,29 @@ describe('deriveSeed', () => {
     expect(Number.isInteger(seed)).toBe(true);
     expect(seed).toBeGreaterThanOrEqual(0);
     expect(seed).toBeLessThanOrEqual(0xffffffff);
+  });
+});
+
+describe('weightedIndex', () => {
+  it('picks in proportion to the weights, in order', () => {
+    expect(weightedIndex([1, 3], 0)).toBe(0);
+    expect(weightedIndex([1, 3], 0.24)).toBe(0);
+    expect(weightedIndex([1, 3], 0.26)).toBe(1);
+    expect(weightedIndex([1, 3], 0.999)).toBe(1);
+  });
+
+  it('never picks a weight of 0 or less, even at the edges of the roll', () => {
+    expect(weightedIndex([0, 2, 0], 0)).toBe(1);
+    expect(weightedIndex([0, 2, 0], 0.999)).toBe(1);
+    expect(weightedIndex([2, -1, 0], 0.999)).toBe(0);
+  });
+
+  it('falls back to the last weight above 0 when float residue leaves the roll unspent', () => {
+    expect(weightedIndex([0.1, 0.2, 0], 1)).toBe(1);
+  });
+
+  it('gives -1 when no weight is above 0', () => {
+    expect(weightedIndex([], 0.5)).toBe(-1);
+    expect(weightedIndex([0, 0], 0.5)).toBe(-1);
   });
 });

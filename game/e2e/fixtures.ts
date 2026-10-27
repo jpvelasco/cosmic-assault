@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
-import type { GalaxyId } from '../src/content/types';
+import type { GalaxyId, PickupId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
@@ -158,6 +158,33 @@ export function gameState(page: Page): Promise<CosmicAssaultTestState> {
   });
 }
 
+/** Drops a pickup onto the ship at the next step (see `grantPickup` in src/testApi.d.ts); step once to collect it. */
+export function grantPickup(page: Page, kind: PickupId): Promise<void> {
+  return page.evaluate((k) => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.grantPickup(k);
+  }, kind);
+}
+
+/** Restarts the frame stats, warm-up included (see `restartFrameStats` in src/testApi.d.ts). */
+export function restartFrameStats(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.restartFrameStats();
+  });
+}
+
+/** Lands `shots` shots on the boss where they do harm (see `damageBoss` in src/testApi.d.ts); the page throws if none can. */
+export function damageBoss(page: Page, shots: number): Promise<void> {
+  return page.evaluate((n) => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.damageBoss(n);
+  }, shots);
+}
+
 /** The ship in the current run; fails if no run is in play (title and menu screens). */
 export async function shipState(page: Page): Promise<CosmicAssaultTestShip> {
   const { ship } = await gameState(page);
@@ -178,6 +205,13 @@ export function speed({ vx, vy }: CosmicAssaultTestShip): number {
 export function openGameOverRun(page: Page): Promise<void> {
   return openGame(page, { seed: seedFor('one-life-death'), lives: 1, galaxy: GAME_OVER_GALAXY });
 }
+
+/**
+ * Shots `damageBoss` lands to beat any boss: each goes where it does harm, so this must cover the shots that break a
+ * shielded boss's parts as well as its HP (the Monolith's: up to `SHARD_COUNTS[1] - EXPOSED_AT` shards of `SHARD_HP`
+ * before its core is bare, then its `bossHp`).
+ */
+export const KILL_SHOTS = 100;
 
 /** Opens BOSS_GALAXY in Free play with the 'boss-fight' seed, whose idle ship lives to the boss fight. */
 export function openBossGame(page: Page): Promise<void> {

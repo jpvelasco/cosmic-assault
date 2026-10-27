@@ -6,8 +6,8 @@ import { MAX_WEAPON_TIER, PICKUP, PLAYER } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { TAU, TIME_EPSILON } from '../math';
-import type { Rng } from '../rng';
-import { rescale, wrapPosition } from '../wrap';
+import { weightedIndex, type Rng } from '../rng';
+import { rescalePose, wrapPosition } from '../wrap';
 
 /** A pickup on the field: it drifts, and the ship collects it by touching it. */
 export interface Pickup {
@@ -47,17 +47,7 @@ function weightOf(kind: PickupId, { lastLife, weaponTier }: DropContext): number
  */
 export function chooseKind(pool: readonly PickupId[], rng: Rng, context: DropContext): PickupId | null {
   const draw = rng.next();
-  const weights = pool.map((kind) => weightOf(kind, context));
-  let roll = draw * weights.reduce((sum, weight) => sum + weight, 0);
-  let last: PickupId | null = null;
-  for (const [i, kind] of pool.entries()) {
-    const weight = weights[i] ?? 0;
-    if (weight <= 0) continue;
-    last = kind;
-    roll -= weight;
-    if (roll < 0) break;
-  }
-  return last;
+  return pool[weightedIndex(pool.map((kind) => weightOf(kind, context)), draw)] ?? null;
 }
 
 /** The pickups on a galaxy's field: what a kill drops from `pool`, and what drifts, expires or is collected. */
@@ -123,13 +113,14 @@ export class PickupField {
     this.list.length = kept;
   }
 
+  /** Expires every pickup on the field at once, reporting each, as the warp starts. */
+  expireAll(events: SimEvent[]): void {
+    for (const p of this.list) events.push({ type: 'pickupExpired', id: p.id });
+    this.list.length = 0;
+  }
+
   /** Stretches every pickup's place to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void {
-    for (const p of this.list) {
-      p.x = rescale(p.x, old.width, field.width);
-      p.y = rescale(p.y, old.height, field.height);
-      p.px = rescale(p.px, old.width, field.width);
-      p.py = rescale(p.py, old.height, field.height);
-    }
+    for (const p of this.list) rescalePose(p, old, field);
   }
 }

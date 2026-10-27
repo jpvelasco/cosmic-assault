@@ -344,8 +344,11 @@ describe('createRenderer', () => {
       const { world } = stubWorld();
       const white = breakRock(world);
       drawFrame(world, 1);
-      // The break's shake moves the scene down, not sideways, in its first instant.
-      expect(drawsOf(white).map((call) => call.e)).toEqual([300]);
+      // The break's shake moves the scene down, not sideways, in its first instant; the upright flash lands on whole
+      // device pixels, within half a pixel of the break.
+      const [flash, ...others] = drawsOf(white);
+      expect(others).toHaveLength(0);
+      expect(Math.abs((flash?.e ?? Number.NaN) - 300)).toBeLessThanOrEqual(0.5);
       advanceFrames(world, 3);
       drawFrame(world, 1);
       expect(drawsOf(white)).toHaveLength(1);

@@ -5,14 +5,30 @@ import { EFFECT_SECONDS, PICKUP_IDS, PICKUPS } from '../../src/content/pickups';
 import { FOES } from '../../src/content/foes';
 import { WELL_SECONDS, WELL_TELEGRAPH_SECONDS } from '../../src/content/hazards';
 import type { GalaxyDef, GalaxyId, PickupId, ThreatKind } from '../../src/content/types';
-import { eventSeconds, showerSeconds } from '../../src/content/curves';
-import { lullStart } from '../../src/content/pacingRules';
+import { eventSeconds, kindProbability, showerSeconds } from '../../src/content/curves';
+import { lullStart, OPENING_SECONDS } from '../../src/content/pacingRules';
+import { STEP_SECONDS } from '../../src/sim/config';
+import { GalaxyDirector, REFERENCE_AREA } from '../../src/sim/galaxy/director';
+import { createRng } from '../../src/sim/rng';
 import { phaseAt } from '../../src/sim/galaxy/pacing';
 import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
 import type { GalaxyEvent } from '../../src/content/types';
 
 const KINDS: readonly ThreatKind[] = ['large', 'medium', 'small', 'splitter', 'drone'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
+
+/** The kinds the director picks from in `galaxy`'s opening, over many seeds. */
+function openingOffers(galaxy: GalaxyDef): Set<ThreatKind> {
+  const kinds = new Set<ThreatKind>();
+  for (let seed = 1; seed <= 20; seed++) {
+    const director = new GalaxyDirector(galaxy, createRng(seed), REFERENCE_AREA);
+    for (let t = 0; t < OPENING_SECONDS - 0.1; t += STEP_SECONDS) {
+      const order = director.step(STEP_SECONDS, { elapsed: t, onFieldCost: 0, mercy: 1 });
+      if (order !== null) kinds.add(order.kind);
+    }
+  }
+  return kinds;
+}
 
 describe('the galaxy table', () => {
   it('holds 30 galaxies in order, five Dimensions of six', () => {
@@ -171,7 +187,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('shares three ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, and all five kinds', () => {
+  it('shares four ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, and a boss\'s field', () => {
     const rocks = {
       large: { from: 0, base: 0.6, step: 0, max: 0.6 },
       medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
@@ -179,20 +195,33 @@ describe('the galaxy table', () => {
     };
     const none = { from: 0, base: 0, step: 0, max: 0 };
     const splitter = { from: 0.4, base: 0.15, step: 0.08, max: 0.35 };
-    const drone = { from: 1, base: 0.2, step: 0.08, max: 0.45 };
+    const drone = { from: 1, base: 0.15, step: 0.3, max: 0.45 };
     expect(galaxyById('1-1').kinds).toEqual({ ...rocks, splitter: none, drone: none });
     expect(galaxyById('1-3').kinds).toEqual({ ...rocks, splitter, drone: none });
-    expect(galaxyById('2-1').kinds).toEqual({ ...rocks, splitter, drone });
-    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(3);
+    expect(galaxyById('2-1').kinds).toEqual({ ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone });
+    for (const id of ['1-6', '2-6', '5-6'] as const) expect(galaxyById(id).kinds, id).toEqual({ ...rocks, large: none, splitter: none, drone: none });
+    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(4);
   });
 
-  it('brings in splitters from 1-3 and drones from Ion Reach, and gives neither to a galaxy before that', () => {
+  it('brings in splitters from 1-3 and drones from Ion Reach, gives neither to a galaxy before that, and none to a boss galaxy', () => {
     for (const g of GALAXIES) {
       const splitters = g.kinds.splitter.max > 0;
       const drones = g.kinds.drone.max > 0;
-      expect(splitters, g.id).toBe((g.dimension === 1 && g.index >= 3) || g.dimension === 2);
-      expect(drones, g.id).toBe(g.dimension === 2);
+      const survival = g.kind === 'survival';
+      expect(splitters, g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || g.dimension === 2));
+      expect(drones, g.id).toBe(survival && g.dimension === 2);
     }
+  });
+
+  it('holds a ramp at its base below `from`, climbs by `step` past it up to `max`, and keeps a kind out of the opening only while `from` is not 0', () => {
+    const small = galaxyById('1-1').kinds.small;
+    expect(small.from).toBeGreaterThan(tierOf(galaxyById('1-1')));
+    expect(kindProbability(small, tierOf(galaxyById('1-1')))).toBe(small.base);
+    expect(kindProbability(small, small.from + 2)).toBeCloseTo(small.base + 2 * small.step, 10);
+    expect(kindProbability(small, 100)).toBe(small.max);
+    // Below `from`, a kind is still picked at its base once the opening is over; in the opening it is not picked at all.
+    expect(openingOffers(galaxyById('1-1'))).toEqual(new Set(['large', 'medium']));
+    expect(openingOffers(galaxyById('2-3'))).toEqual(new Set(['large', 'medium']));
   });
 
   it('never ramps a foe in before its Dimension', () => {
@@ -202,9 +231,9 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('prices splitters 3 and drones 1.5, 2 HP and 1 HP, and groups drones 3 to 5', () => {
+  it('prices splitters 3 and drones 1, 2 HP and 1 HP, and groups drones 3 to 5', () => {
     expect(FOES.splitter).toMatchObject({ radius: 30, hp: 2, cost: 3, group: [1, 1] });
-    expect(FOES.drone).toMatchObject({ hp: 1, cost: 1.5, speed: 120, points: 100, group: [3, 5] });
+    expect(FOES.drone).toMatchObject({ hp: 1, cost: 1, speed: 110, points: 100, group: [3, 5] });
   });
 
   it('gives each Dimension one palette and one music theme, Ion Reach its own and the rest the Drift\'s until M6', () => {

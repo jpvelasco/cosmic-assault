@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import type { AttackId } from '../../src/content/types';
-import { BossRunner, MIN_WINDUP_SECONDS, type AttackSpec, type BossBehaviour } from '../../src/sim/boss/bossRunner';
+import { BossRunner, MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
+import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { createRng } from '../../src/sim/rng';
@@ -174,7 +175,7 @@ describe('BossRunner attacks', () => {
     const first = windups[0];
     if (first === undefined) throw new Error('expected an attack within 12 s');
     const startIndex = Math.round(first.at / STEP_SECONDS) - 1;
-    const windupSteps = Math.round(SENTINEL.attacks[first.event.attack].windup / STEP_SECONDS);
+    const windupSteps = Math.round(SENTINEL.attacks[first.event.attack as keyof typeof SENTINEL.attacks].windup / STEP_SECONDS);
     const before = rocksAt[startIndex - 1];
     for (let i = startIndex; i < startIndex + windupSteps - 1; i++) expect(rocksAt[i], `step ${String(i)}`).toBe(before);
     expect(rocksAt.at(-1)).toBeGreaterThan(before ?? 0);

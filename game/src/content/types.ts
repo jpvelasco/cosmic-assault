@@ -24,15 +24,16 @@ export type FoeKind = 'splitter' | 'drone';
 /** Everything the director can spawn from its threat budget. */
 export type ThreatKind = RockKind | FoeKind;
 
-/** M5 widens this to one boss per Dimension. */
-export type BossId = 'sentinel';
+/** The bosses so far: the Monolith guards Dimension 1 and the Hive Carrier Dimension 2; the M4 placeholder Sentinel stands in for the rest. */
+export type BossId = 'sentinel' | 'monolith' | 'hiveCarrier';
 
-/** The moves a boss draws on; M5 adds the rest of the roster's. */
-export type AttackId = 'shardRing' | 'lunge';
+/** The moves a boss draws on: the Sentinel's, then the Monolith's, then the Hive Carrier's. */
+export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat';
 
 /**
- * How likely a kind is to be picked: `base` up to tier `from`, then rising by `step` per tier past it, never above
- * `max`. `from` is not a grace period: a kind that must not appear before some tier needs a `base` of 0.
+ * How likely a kind is to be picked at tier `t`: `base` while `t` is at or below `from`, then `base + (t - from) * step`
+ * past it, never above `max`. `from` is not a grace period: a kind that must not appear before some tier needs a `base`
+ * of 0. The one place `from` keeps a kind out is a galaxy's opening, which offers only the kinds whose `from` is 0.
  */
 export interface KindRamp {
   readonly from: number;

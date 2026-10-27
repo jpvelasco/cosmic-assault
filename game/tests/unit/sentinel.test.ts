@@ -179,8 +179,9 @@ type GalaxyWorld = { world: World; log: SimEvent[]; times: number[] };
 
 const HOME = bossHome(BOSS_FIELD);
 
+/** A galaxy whose director never spawns, guarded by the Sentinel (1-★ itself has the Monolith). */
 function calm(id: GalaxyId): GalaxyDef {
-  return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
+  return { ...galaxyById(id), kinds: MUTED_KINDS, events: [], boss: 'sentinel' };
 }
 
 function bossWorld(id: GalaxyId, opts: Partial<WorldOptions> = {}, mode: GalaxyMode = 'rank'): GalaxyWorld {

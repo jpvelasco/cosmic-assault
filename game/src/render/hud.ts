@@ -14,11 +14,12 @@ import { SHIP_HULL } from './sprites';
 
 export type { HudRect } from './hudShapes';
 
-/** Safe-area insets in CSS px. The HUD sits at the top, so the bottom inset never matters. */
+/** Safe-area insets in CSS px. Only the boss bar sits at the bottom, so the bottom inset may be left out as 0. */
 export interface Insets {
   readonly top: number;
   readonly right: number;
   readonly left: number;
+  readonly bottom?: number;
 }
 
 /** A box anchored to the viewport's top-right corner, `width` from the right edge and `height` from the top. */
@@ -146,6 +147,7 @@ export function createHud(initial: Palette): Hud {
   const chevronView: { -readonly [K in keyof ChevronView]: ChevronView[K] } = { width: 0, height: 0, insets: NO_BOUNDS.insets, scale: 1 };
   let bounds = NO_BOUNDS;
   let cssWidth = 0;
+  let cssHeight = 0;
   let scale = 1;
   let labelFont = '';
   let valueFont = '';
@@ -238,20 +240,17 @@ export function createHud(initial: Palette): Hud {
     }
   }
 
-  /** Top centre, between the score and galaxy pills; below every other pill where that row is too narrow. */
-  function layoutBoss(left: number, top: number): void {
+  /**
+   * Bottom centre, inside the safe area: every boss fights in the upper part of the field, and a bar at the top sat over
+   * the Hive Carrier's hull on its row.
+   */
+  function layoutBoss(left: number): void {
     const s = scale;
-    const gap = PILL_GAP * s;
-    const want = bossBarWidth(cssWidth, s);
-    const minX = score.x + score.width + gap;
-    const maxX = galaxy.y === top ? galaxy.x - gap : rightPillEdge(cssWidth, top, EDGE * s, bounds, gap);
-    if (maxX - minX >= BOSS_MIN_W * s) {
-      const width = Math.min(want, maxX - minX);
-      Object.assign(boss, { x: clamp((cssWidth - width) / 2, minX, maxX - width), y: top, width, height: PILL_H * s });
-    } else {
-      const y = Math.max(bottom(lives), bottom(galaxy), shown.timer ? bottom(timer) : 0) + LIVES_GAP * s;
-      Object.assign(boss, { x: left, y, width: Math.min(want, rightPillEdge(cssWidth, y, EDGE * s, bounds, gap) - left), height: PILL_H * s });
-    }
+    const edge = EDGE * s;
+    const right = cssWidth - Math.max(edge, bounds.insets.right);
+    const width = Math.max(BOSS_MIN_W * s, Math.min(bossBarWidth(cssWidth, s), right - left));
+    const height = PILL_H * s;
+    Object.assign(boss, { x: clamp((cssWidth - width) / 2, left, right - width), y: cssHeight - Math.max(edge, bounds.insets.bottom ?? 0) - height, width, height });
     placeHpTrack(boss, bossName.width, s, hpTrack);
   }
 
@@ -265,7 +264,7 @@ export function createHud(initial: Palette): Hud {
     layoutLevel(left, top);
     Object.assign(combo, { x: shown.lives ? lives.x + lives.width + LIVES_GAP * s : left, y: lives.y, width: comboText.width + 2 * COMBO_PAD * s, height: LIVES_H * s });
     layoutPickups(left);
-    if (shown.boss) layoutBoss(left, top);
+    if (shown.boss) layoutBoss(left);
     rects = HUD_PILLS.filter((id) => shown[id]).map((id) => boxes[id]);
     timerFill = across(ctx, timer, palette.accent[0], palette.accent[2]);
     comboFill = across(ctx, combo, palette.accent[1], palette.accent[2]);
@@ -337,6 +336,7 @@ export function createHud(initial: Palette): Hud {
   return {
     resize(width, height) {
       cssWidth = width;
+      cssHeight = height;
       scale = hudScale(height);
       Object.assign(chevronView, { width, height, scale });
       labelFont = `800 ${String(9 * scale)}px ${ROUNDED}`;

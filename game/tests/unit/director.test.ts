@@ -50,8 +50,8 @@ function run(
 }
 
 describe('THREAT_COST', () => {
-  it('prices large 4, medium 2, small 1, splitter 3 and drone 1.5, the foes from content', () => {
-    expect(THREAT_COST).toEqual({ large: 4, medium: 2, small: 1, splitter: 3, drone: 1.5 });
+  it('prices large 4, medium 2, small 1, splitter 3 and drone 1, the foes from content', () => {
+    expect(THREAT_COST).toEqual({ large: 4, medium: 2, small: 1, splitter: 3, drone: 1 });
     expect(THREAT_COST.splitter).toBe(FOES.splitter.cost);
     expect(THREAT_COST.drone).toBe(FOES.drone.cost);
   });

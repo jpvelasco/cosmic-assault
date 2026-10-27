@@ -65,6 +65,8 @@ export interface Spawner {
   scoreKill(base: number): number;
   /** The ship has just lost a life. */
   shipLost?(): void;
+  /** The ship has just respawned at the field's centre, still invulnerable; a ruleset may move it somewhere safer. */
+  respawned?(ship: Ship): void;
   /** A shot has just broken `rock`, after the kill is scored. */
   rockKilled?(rock: Readonly<Asteroid>): void;
 }

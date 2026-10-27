@@ -8,7 +8,7 @@ export interface SafeAreaProbe {
 
 const PROBE_CSS =
   'position:absolute;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
-  'padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)';
+  'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
 
 const px = (value: string): number => Number.parseFloat(value) || 0;
 
@@ -20,7 +20,7 @@ export function createSafeAreaProbe(root: HTMLElement): SafeAreaProbe {
   return {
     read() {
       const style = getComputedStyle(probe);
-      return { top: px(style.paddingTop), right: px(style.paddingRight), left: px(style.paddingLeft) };
+      return { top: px(style.paddingTop), right: px(style.paddingRight), bottom: px(style.paddingBottom), left: px(style.paddingLeft) };
     },
     dispose() {
       probe.remove();

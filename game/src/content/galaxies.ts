@@ -24,7 +24,7 @@ type Ramps = Readonly<Record<ThreatKind, KindRamp>>;
 
 const ABSENT: KindRamp = { from: 0, base: 0, step: 0, max: 0 };
 
-/** Initial values; M5 balance tunes them. Every galaxy shares one of the three tables below. */
+/** Tuned against the bots' difficulty targets (tests/balance). Every galaxy shares one of the four tables below. */
 const ROCKS: Ramps = {
   large: { from: 0, base: 0.6, step: 0, max: 0.6 },
   medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
@@ -33,19 +33,23 @@ const ROCKS: Ramps = {
   drone: ABSENT,
 };
 const SPLITTERS: Ramps = { ...ROCKS, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.35 } };
-const SWARMS: Ramps = { ...SPLITTERS, drone: { from: 1, base: 0.2, step: 0.08, max: 0.45 } };
+/** Ion Reach trades some of the large rocks, and their fragments, for drones that come more often galaxy by galaxy. */
+const SWARMS: Ramps = { ...SPLITTERS, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, drone: { from: 1, base: 0.15, step: 0.3, max: 0.45 } };
+/** A boss galaxy brings no large rocks and no foes but the boss's own, so its fight is not fought among fragments. */
+const BOSS_FIELD: Ramps = { ...ROCKS, large: ABSENT };
 
 /**
- * Splitters join from 1-3 and drones from Ion Reach, which keeps the splitters. The Dimensions after it keep their
- * rocks until their own foes are made (M6).
+ * Splitters join from 1-3 and drones from Ion Reach, which keeps the splitters; a boss galaxy has neither. The
+ * Dimensions after it keep their rocks until their own foes are made (M6).
  */
 function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
+  if (index === 6) return BOSS_FIELD;
   if (dimension === 1) return index >= 3 ? SPLITTERS : ROCKS;
   return dimension === 2 ? SWARMS : ROCKS;
 }
 
-/** M5 replaces this per Dimension. */
-const PLACEHOLDER_BOSS: BossId = 'sentinel';
+/** Each Dimension's boss; the M4 Sentinel holds the later ones until they get their own. */
+const BOSS_OF: Readonly<Record<Dimension, BossId>> = { 1: 'monolith', 2: 'hiveCarrier', 3: 'sentinel', 4: 'sentinel', 5: 'sentinel' };
 
 /** When, as a share of the duration, a galaxy's showers fall: one, or two with the second at 60%. */
 const SHOWER_SHARES: Readonly<Record<1 | 2, readonly number[]>> = { 1: [0.45], 2: [0.3, 0.6] };
@@ -64,9 +68,9 @@ function showers(dimension: Dimension, index: GalaxyIndex, duration: number): Ga
 /** Ion Reach's gravity wells by galaxy index: when one starts, and how hard it pulls. Each ends before the lull. */
 const WELLS: Readonly<Partial<Record<GalaxyIndex, readonly [at: number, intensity: GalaxyEvent['intensity']]>>> = {
   2: [25, 1],
-  3: [28, 1],
-  4: [46, 2],
-  5: [46, 2],
+  3: [25, 1],
+  4: [46, 1],
+  5: [46, 1],
 };
 
 function wells(dimension: Dimension, index: GalaxyIndex): GalaxyEvent[] {
@@ -91,7 +95,7 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     kinds: rampsFor(dimension, index),
     events: boss ? [] : [...showers(dimension, index, duration), ...wells(dimension, index)].sort((a, b) => a.at - b.at),
     pickups: poolFor(dimension),
-    boss: boss ? PLACEHOLDER_BOSS : null,
+    boss: boss ? BOSS_OF[dimension] : null,
     ...LOOKS[dimension],
   };
 }

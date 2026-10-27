@@ -61,6 +61,28 @@ describe('createBossAnnouncer', () => {
     expect(el?.textContent).toBe('Sentinel down');
   });
 
+  it('says when the boss\'s core is laid bare and shielded again, and nothing for its parts or deflected shots', () => {
+    const announcer = createBossAnnouncer(root);
+    const el = made[0];
+    announcer.handle([{ type: 'bossIntro', id: 'sentinel' }]);
+    announcer.handle([{ type: 'bossPartHit', part: 0, x: 0, y: 0, hp: 1 }, { type: 'bossPartBroken', part: 0, x: 0, y: 0 }, { type: 'bossDeflected', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Sentinel approaches');
+    announcer.handle([{ type: 'bossExposed', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Sentinel\'s core is exposed');
+    announcer.handle([{ type: 'bossShielded', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Sentinel\'s core is shielded again');
+  });
+
+  it('says when the Hive Carrier\'s hangar opens and closes', () => {
+    const announcer = createBossAnnouncer(root);
+    const el = made[0];
+    announcer.handle([{ type: 'bossIntro', id: 'hiveCarrier' }]);
+    announcer.handle([{ type: 'hangarOpen', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Hive Carrier\'s hangar is open');
+    announcer.handle([{ type: 'hangarClose', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Hive Carrier\'s hangar is closed');
+  });
+
   it('clears its text as a galaxy starts, so a retry announces the same boss again', () => {
     const announcer = createBossAnnouncer(root);
     const el = made[0];

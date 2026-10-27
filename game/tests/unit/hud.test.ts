@@ -6,9 +6,16 @@ import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { galaxyById } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, type TimedPickupId } from '../../src/content/pickups';
 import type { GalaxyId } from '../../src/content/types';
-import type { BossView } from '../../src/sim/boss/bossRunner';
+import type { BossView } from '../../src/sim/boss/behaviour';
 import type { ShowerState } from '../../src/sim/galaxy/showers';
 import { World } from '../../src/sim/world';
+import { BOSSES } from '../../src/content/bosses';
+import { HIVE_HOME_SHARE } from '../../src/sim/boss/hiveCarrier';
+import { bossHome, clearSpot } from '../../src/sim/boss/bossRunner';
+import { ORBIT_RADIUS, SHARD_RADIUS } from '../../src/sim/boss/monolith';
+import { ASTEROID, PLAYER } from '../../src/sim/config';
+import { fieldForViewport } from '../../src/sim/field';
+import { layoutFor } from '../../src/render/layout';
 
 const NONE: HudBounds = { insets: { top: 0, right: 0, left: 0 }, topRight: null };
 
@@ -307,10 +314,18 @@ describe('createHud', () => {
     hud.draw(ctx, galaxyWorld({ galaxy: '1-6', timeLeft: 0, boss: { hp: 12 } }), 0);
     expect(hud.pill('timer')).toBeNull();
     expect(hud.pill('boss')).not.toBeNull();
-    expect(texts).toContain('SENTINEL');
+    expect(texts).toContain('MONOLITH');
     // Once it is down the bar goes too, as the ship warps out.
     hud.draw(ctx, galaxyWorld({ galaxy: '1-6', timeLeft: 0, boss: { hp: 0, state: 'down' } }), 0);
     expect(hud.pill('boss')).toBeNull();
+  });
+
+  it('names the Hive Carrier on its HP bar in 2-★', () => {
+    const hud = createHud(DRIFT);
+    const { ctx, texts } = fakeContext();
+    hud.resize(1280, 720);
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: { hp: 40 } }), 0);
+    expect(texts).toContain('HIVE CARRIER');
   });
 
   it('shows the combo pill only while the multiplier is above 1, beside the lives', () => {
@@ -339,7 +354,7 @@ describe('createHud', () => {
   });
 
   it.each([
-    ['an 844×390 phone, under its pause button and notch', 844, 390, { insets: { top: 0, right: 44, left: 44 }, topRight: { width: 76, height: 76 } }],
+    ['an 844×390 phone, under its pause button and notch, over its home indicator', 844, 390, { insets: { top: 0, right: 44, left: 44, bottom: 21 }, topRight: { width: 76, height: 76 } }],
     ['a 1280×720 screen', 1280, 720, NONE],
     ['a 568×320 phone, under its pause button', 568, 320, { ...NONE, topRight: { width: 76, height: 76 } }],
   ] as const)('keeps every pill apart with the boss bar up on %s', (_name, width, height, bounds) => {
@@ -354,15 +369,49 @@ describe('createHud', () => {
     expectClearLayout(hud.rects, width, height, corner);
   });
 
-  it('centres the boss bar at the top when the row has room', () => {
+  it.each([
+    ['an 844×390 phone with a home indicator', 844, 390, { insets: { top: 0, right: 44, left: 44, bottom: 21 }, topRight: { width: 76, height: 76 } }],
+    ['a 1280×720 screen', 1280, 720, NONE],
+  ] as const)('keeps a ship respawning in a boss fight clear of the boss bar on %s', (_name, width, height, bounds) => {
+    const hud = createHud(DRIFT);
+    const { ctx } = fakeContext();
+    hud.resize(width, height);
+    hud.setBounds(bounds);
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: {} }), 0);
+    const bar = hud.pill('boss');
+    if (bar === null) throw new Error('expected the boss bar');
+    const field = fieldForViewport(width, height);
+    const layout = layoutFor(width, height, field, 1);
+    const homes = [
+      { core: bossHome(field), reach: ORBIT_RADIUS + SHARD_RADIUS },
+      { core: { x: field.width / 2, y: field.height * HIVE_HOME_SHARE }, reach: BOSSES.hiveCarrier.radius },
+    ];
+    for (const { core, reach } of homes) {
+      const spot = clearSpot(core, reach + PLAYER.radius + ASTEROID.safeRadius, field);
+      // The ship as drawn: its centre on screen, and its radius grown by the small-screen sprite scale.
+      const x = layout.fieldX + spot.x * layout.scale;
+      const y = layout.fieldY + spot.y * layout.scale;
+      const r = PLAYER.radius * layout.scale * layout.visual.ship;
+      const dx = Math.max(bar.x - x, 0, x - (bar.x + bar.width));
+      const dy = Math.max(bar.y - y, 0, y - (bar.y + bar.height));
+      expect(Math.hypot(dx, dy), `respawn at ${String(x)}, ${String(y)} against ${JSON.stringify(bar)}`).toBeGreaterThan(r);
+    }
+  });
+
+  it('centres the boss bar at the bottom, clear of a boss in the top of the field and inside the safe area', () => {
     const hud = createHud(DRIFT);
     const { ctx } = fakeContext();
     hud.resize(1280, 720);
-    hud.draw(ctx, galaxyWorld({ galaxy: '1-6', timeLeft: 0, boss: {} }), 0);
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: {} }), 0);
     const boss = hud.pill('boss');
     if (boss === null) throw new Error('expected the boss bar');
-    expect(boss.y).toBe(hud.pill('score')?.y);
     expect(boss.x + boss.width / 2).toBeCloseTo(640);
+    expect(boss.y + boss.height).toBeCloseTo(720 - 12 * hudScale(720));
+    // The Hive Carrier's row, hull and all, stays above it.
+    expect(boss.y).toBeGreaterThan(720 * HIVE_HOME_SHARE + BOSSES.hiveCarrier.radius);
+    hud.setBounds({ insets: { top: 0, right: 0, left: 0, bottom: 34 }, topRight: null });
+    hud.draw(ctx, galaxyWorld({ galaxy: '2-6', timeLeft: 0, boss: {} }), 0);
+    expect(boss.y + boss.height).toBeCloseTo(720 - 34);
   });
 
   it('keeps every pill apart mid-galaxy with a combo going, on a phone and a desktop', () => {
@@ -428,7 +477,7 @@ describe('createHud', () => {
     });
 
     it.each([
-      ['an 844×390 phone, under its pause button and notch', 844, 390, { insets: { top: 0, right: 44, left: 44 }, topRight: { width: 76, height: 76 } }],
+      ['an 844×390 phone, under its pause button and notch, over its home indicator', 844, 390, { insets: { top: 0, right: 44, left: 44, bottom: 21 }, topRight: { width: 76, height: 76 } }],
       ['a 1280×720 screen', 1280, 720, NONE],
       ['a 568×320 phone, under its pause button', 568, 320, { ...NONE, topRight: { width: 76, height: 76 } }],
     ] as const)('keeps three pickup pills, the Shield and the boss bar apart on %s', (_name, width, height, bounds) => {

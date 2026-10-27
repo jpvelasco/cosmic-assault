@@ -12,7 +12,7 @@ const FIXED_SCALE: Readonly<Record<Exclude<Phase, 'build'>, number>> = {
   lull: 0.3,
   surge: 1.2,
   warp: 0,
-  boss: 0.25,
+  boss: 0.15,
 };
 
 /** A boss galaxy is all opening for its approach, then `boss`; a survival galaxy runs opening, build, lull, surge, warp. */

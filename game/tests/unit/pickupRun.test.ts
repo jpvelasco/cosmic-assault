@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, PickupId, WeaponTier } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
+import { bossTarget } from '../../src/sim/boss/bossRunner';
 import { PICKUP, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -145,7 +146,8 @@ describe('a kill drops a pickup', () => {
   it('does not drop for a beaten boss', () => {
     const w = galaxyWorld({ seed: seedDropping('shield'), galaxy: calm('1-6') });
     const log = play(w, 23);
-    while (w.boss?.state === 'fighting') w['run']?.hitBoss(w.boss.x, w.boss.y, 1);
+    const target = () => (w.boss === null ? null : bossTarget(w.boss));
+    for (let t = target(); t !== null; t = target()) w['run']?.hitBoss(t.x, t.y, 1);
     log.push(...play(w, 3));
     expect(w.boss?.hp).toBe(0);
     expect(ofType(log, 'bossDown')).toHaveLength(1);
@@ -262,6 +264,37 @@ describe('collecting a pickup', () => {
     expect(w.effects.doubleShot).toBe(12);
     expect(ofType(w.step(STEP_SECONDS, FIRE), 'shot')).toHaveLength(2);
     expect(play(w, 12)).toContainEqual({ type: 'effectEnded', kind: 'doubleShot' });
+  });
+});
+
+describe('pickups and the warp', () => {
+  /** Puts a pickup of `kind` at (x, y), standing still with its full time to live, as a kill's drop would be. */
+  function place(w: World, kind: PickupId, x: number, y: number): number {
+    const field = w['run']?.['pickupField'];
+    if (field === undefined) throw new Error('not a galaxy run');
+    const id = 900 + field.list.length;
+    field.list.push({ id, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: PICKUP.lifespan });
+    return id;
+  }
+
+  it('expires every pickup on the field as the warp starts, reporting each', () => {
+    const w = galaxyWorld({ galaxy: { ...calm('2-1'), duration: 2 }, initialShip: SHOOTER });
+    play(w, 1);
+    const ids = [place(w, 'weaponCore', 900, 100), place(w, 'shield', 1000, 600)];
+    const warp = stepUntil(w, NO_CONTROLS, (events) => events.some((e) => e.type === 'warpOut'));
+    expect(ofType(warp, 'pickupExpired').map((e) => e.id)).toEqual(ids);
+    expect(w.pickups).toEqual([]);
+  });
+
+  it('collects nothing once the warp has started, so the tier the clear reported is the one carried', () => {
+    const w = galaxyWorld({ galaxy: { ...calm('2-1'), duration: 2 }, mode: 'rank', initialShip: SHOOTER });
+    const cleared = ofType(stepUntil(w, NO_CONTROLS, (events) => events.some((e) => e.type === 'galaxyCleared')), 'galaxyCleared');
+    expect(cleared).toHaveLength(1);
+    place(w, 'weaponCore', w.ship.x, w.ship.y);
+    const during = play(w, 2);
+    expect(w.status).toBe('cleared');
+    expect(ofType(during, 'pickupCollected')).toEqual([]);
+    expect(w.weaponTier).toBe(0);
   });
 });
 

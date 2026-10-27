@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { E2eHooks } from '../../src/app/e2eHooks';
 import type { App } from '../../src/app/game';
 import { galaxyById } from '../../src/content/galaxies';
 import { defaultSave } from '../../src/meta/save';
@@ -11,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }) {
+function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }, hooks: E2eHooks = {}) {
   const fakeWindow: { __COSMIC_ASSAULT_TEST_API__?: CosmicAssaultTestApi } = {};
   vi.stubGlobal('window', fakeWindow);
   const app = {
@@ -30,7 +31,7 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
     log: { size: 0 },
     fullscreen: false,
   } as unknown as App;
-  exposeTestBridge(app, {});
+  exposeTestBridge(app, hooks);
   const api = fakeWindow.__COSMIC_ASSAULT_TEST_API__;
   if (api === undefined) throw new Error('the bridge must be set');
   return api;
@@ -75,5 +76,41 @@ describe('the test bridge pickup state', () => {
     (api.getState().effects as Record<string, number>)['doubleShot'] = 99;
     expect(world.effects.doubleShot).toBe(12);
     expect(api.getState().effects.doubleShot).toBe(12);
+  });
+});
+
+describe('the test bridge boss view', () => {
+  const bossWorld = (id: '1-6' | '2-6'): World => new World({ seed: 1, field: { width: 1280, height: 720 }, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode: 'free' } });
+
+  it('is null before the boss arrives and outside a boss galaxy', () => {
+    expect(bridgeFor(null).getState().boss).toBeNull();
+    expect(bridgeFor(bossWorld('1-6')).getState().boss).toBeNull();
+  });
+
+  it('shows the Monolith shielded by its live shards, as plain data', () => {
+    const world = bossWorld('1-6');
+    const approach = galaxyById('1-6').duration + STEP_SECONDS;
+    for (let t = 0; t < approach; t += STEP_SECONDS) world.step(STEP_SECONDS, NO_CONTROLS);
+    const boss = bridgeFor(world).getState().boss;
+    expect(boss).toMatchObject({ id: 'monolith', state: 'intro', vulnerable: false, windup: null, active: null });
+    expect(boss?.liveParts).toBeGreaterThanOrEqual(8);
+    expect(boss?.hp).toBe(boss?.maxHp);
+    expect(Object.keys(boss ?? {}).sort()).toEqual(['active', 'hp', 'id', 'liveParts', 'maxHp', 'phase', 'state', 'target', 'vulnerable', 'windup']);
+  });
+});
+
+describe('the test bridge event counts and pickup grant', () => {
+  it('copies the hooks\' event tally, and is empty before any step', () => {
+    expect(bridgeFor(null).getState().events).toEqual({});
+    const counts = { bossDeflected: 2 };
+    const state = bridgeFor(null, undefined, { e2eEventCounts: counts }).getState();
+    expect(state.events).toEqual({ bossDeflected: 2 });
+    expect(state.events).not.toBe(counts);
+  });
+
+  it('hands grantPickup to the hook', () => {
+    const e2eGrantPickup = vi.fn();
+    bridgeFor(null, undefined, { e2eGrantPickup }).grantPickup('shield');
+    expect(e2eGrantPickup).toHaveBeenCalledWith('shield');
   });
 });

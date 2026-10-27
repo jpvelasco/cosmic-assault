@@ -46,7 +46,7 @@ describe('pressureScale', () => {
     expect(pressureScale(d1, 80)).toBe(1.2);
     expect(pressureScale(d1, 90)).toBe(0);
     expect(pressureScale(boss, 10)).toBe(0.5);
-    expect(pressureScale(boss, 25)).toBe(0.25);
+    expect(pressureScale(boss, 25)).toBe(0.15);
   });
 
   it('ramps the build linearly from 0.6 to 1 across its span', () => {

@@ -27,6 +27,19 @@ describe('hitStopFor', () => {
     expect(hitStopFor({ type: 'wellStart', id: 1 })).toBe(0);
   });
 
+  it('freezes 80 ms as a boss core is laid bare, and not for its parts cracking, breaking or shots glancing off', () => {
+    expect(hitStopFor({ type: 'bossExposed', x: 0, y: 0 })).toBe(0.08);
+    expect(hitStopFor({ type: 'bossShielded', x: 0, y: 0 })).toBe(0);
+    expect(hitStopFor({ type: 'bossPartHit', part: 0, x: 0, y: 0, hp: 1 })).toBe(0);
+    expect(hitStopFor({ type: 'bossPartBroken', part: 0, x: 0, y: 0 })).toBe(0);
+    expect(hitStopFor({ type: 'bossDeflected', x: 0, y: 0 })).toBe(0);
+  });
+
+  it('never freezes as a hangar opens or closes, which happens after every drone launch', () => {
+    expect(hitStopFor({ type: 'hangarOpen', x: 0, y: 0 })).toBe(0);
+    expect(hitStopFor({ type: 'hangarClose', x: 0, y: 0 })).toBe(0);
+  });
+
   it('never freezes for a large rock the warp clears for 0 points', () => {
     expect(hitStopFor(destroyed(0, 0))).toBe(0);
   });

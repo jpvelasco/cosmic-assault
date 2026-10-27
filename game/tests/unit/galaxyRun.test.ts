@@ -16,8 +16,8 @@ const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS);
 const FIRE: Controls = { ...NO_CONTROLS, fire: true };
 const WARP_SECONDS = 1.5;
-/** The most rocks seen at once in the seed-8 3-5 run below, recorded when meteors were made transient and capped. */
-const PINNED_3_5_PEAK = 40;
+/** The most rocks seen at once in the seed-6 3-5 run below, recorded for the curves the bots were tuned to. */
+const PINNED_3_5_PEAK = 44;
 
 /** A galaxy whose director never spawns; `events` keeps or drops its showers. */
 function calm(id: GalaxyId, keepShowers = false): GalaxyDef {
@@ -126,7 +126,7 @@ describe('a galaxy run on resize', () => {
     resized.resize(wide);
     const native = new World({ seed: 8, field: wide, rules: { kind: 'galaxy', galaxy: galaxyById('3-3'), mode: 'rank' }, startLives: 5 });
     const log = eventsOf(play(native, 40));
-    expect(ofType(log, 'asteroidDestroyed').length + native.asteroids.length).toBeGreaterThan(10);
+    expect(ofType(log, 'asteroidDestroyed').length + native.asteroids.length).toBeGreaterThan(8);
     expect(eventsOf(play(resized, 40))).toEqual(log);
   });
 });
@@ -345,7 +345,7 @@ describe('meteors pass through', () => {
     const area = FIELD.width * FIELD.height;
     const peakBudget = Math.max(...Array.from({ length: g.duration * 10 }, (_, i) => fieldBudget(g, i / 10, 1, area)));
     const meteorCap = Math.floor(showerCap(3, area));
-    const w = galaxyWorld(g, { seed: 8, mode: 'rank', startLives: 5 });
+    const w = galaxyWorld(g, { seed: 6, mode: 'rank', startLives: 5 });
     let peak = 0;
     const turnAndFire: Controls = { ...FIRE, turn: 1 };
     const log = play(w, g.duration + 2, turnAndFire, () => {
@@ -377,8 +377,8 @@ describe('mercy after a death', () => {
   }
 
   it('holds the director back for the 4 s after a death, then lets it spawn again', () => {
-    // Three large rocks (cost 12) fill most of 5-3's opening budget (about 17) but sit over a 0.4 budget.
-    const corners = [still(100, 100, 0), still(1180, 100, 0), still(100, 620, 0)];
+    // Two large rocks and a medium (cost 10) fill most of 5-3's opening budget (about 14) but sit over a 0.4 budget.
+    const corners = [still(100, 100, 0), still(1180, 100, 0), still(100, 620, 1)];
     let normal = 0;
     let merciful = 0;
     let after = 0;

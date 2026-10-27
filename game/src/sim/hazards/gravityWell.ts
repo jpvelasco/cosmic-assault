@@ -4,7 +4,7 @@ import { WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH, WELL_TE
 import type { GalaxyEvent } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import { TIME_EPSILON } from '../math';
+import { nudge, TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import type { Foe } from '../foes/foe';
 import { rescale } from '../wrap';
@@ -139,14 +139,6 @@ function pullBody(well: Current, body: Pullable, dt: number): void {
   const dy = well.y - body.y;
   const distance = Math.hypot(dx, dy);
   if (distance === 0) return;
-  const before = Math.hypot(body.vx, body.vy);
   const push = (wellAcceleration(distance, well.intensity) * dt) / distance;
-  body.vx += dx * push;
-  body.vy += dy * push;
-  const limit = Math.max(before, WELL_SPEED_CAP);
-  const after = Math.hypot(body.vx, body.vy);
-  if (after > limit) {
-    body.vx *= limit / after;
-    body.vy *= limit / after;
-  }
+  nudge(body, dx * push, dy * push, WELL_SPEED_CAP);
 }

@@ -69,7 +69,7 @@ describe('FoePool', () => {
       const foe = pool.acquire(kind, 1);
       if (foe !== null) pool.add(foe);
     }
-    expect(pool.cost).toBe(3 + 1.5 + 1.5);
+    expect(pool.cost).toBe(3 + 1 + 1);
   });
 });
 
@@ -285,7 +285,7 @@ describe('drone', () => {
     expect(r.foes.list).toHaveLength(2);
   });
 
-  it('keeps a swarm of 5 chasing a circling ship at least 16 units apart once 2 s have passed (Ruling R14)', () => {
+  it('keeps a swarm of 5 chasing a circling ship at least 16 units apart once 2 s have passed, never stacking into one', () => {
     const r = rig({ field: FIELD_43, shipX: 820, shipY: 360 });
     r.foes.spawn('drone', 5, 1);
     const drones = r.foes.list;
@@ -412,11 +412,11 @@ describe('FoeField', () => {
     expect(r.foes.list.every((f) => made.has(f))).toBe(true);
   });
 
-  it('sums its cost: 3 for a splitter and 1.5 for each drone', () => {
+  it('sums its cost: 3 for a splitter and 1 for each drone', () => {
     const r = rig();
     r.foes.spawn('splitter', 1, 1);
     r.foes.spawn('drone', 4, 1);
-    expect(r.foes.cost).toBe(3 + 4 * 1.5);
+    expect(r.foes.cost).toBe(3 + 4 * 1);
   });
 
   it('clears every foe for 0 points, with no fragments and no kill', () => {

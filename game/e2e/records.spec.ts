@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import type { RankEntry } from '../src/meta/rankBoard';
 import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
-import { clickPastGuard, expect, expectMode, fastForward, openBossGame, openFreshGame, seedSave, test } from './fixtures';
+import { clickPastGuard, expect, expectMode, fastForward, KILL_SHOTS, openBossGame, openFreshGame, seedSave, test } from './fixtures';
 import { TO_BOSS_FIGHT_SECONDS } from './seeds';
 
 const openChip = (page: Page) => page.getByTestId('records-open');
@@ -101,7 +101,7 @@ test('a phone taps from a won galaxy\'s results card to the map, and back to the
   await page.getByTestId('play').tap();
   await expectMode(page, 'playing');
   await fastForward(page, TO_BOSS_FIGHT_SECONDS);
-  await page.evaluate(() => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(100));
+  await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_SHOTS);
   await fastForward(page, STEP_SECONDS);
   await expectMode(page, 'results');
 

@@ -107,3 +107,20 @@ export function createRng(seed: number): Rng {
     },
   };
 }
+
+/**
+ * The index a `draw` from 0 to 1 picks from `weights`, each in proportion to its weight and in order, never one of 0
+ * or less; when float residue leaves the roll unspent, the last weight above 0. -1 if none is above 0. It draws
+ * nothing itself, so the caller decides when its stream is drawn.
+ */
+export function weightedIndex(weights: readonly number[], draw: number): number {
+  let roll = draw * weights.reduce((sum, weight) => sum + weight, 0);
+  let last = -1;
+  for (const [i, weight] of weights.entries()) {
+    if (weight <= 0) continue;
+    last = i;
+    roll -= weight;
+    if (roll < 0) break;
+  }
+  return last;
+}

@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/sw",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:balance": "vitest run -c vitest.balance.config.ts",
     "test:e2e": "playwright test --project=chromium-desktop --project=mobile-landscape --project=release-smoke",
     "test:perf": "playwright test --project=perf",
     "check:base": "node scripts/check-base.mjs",

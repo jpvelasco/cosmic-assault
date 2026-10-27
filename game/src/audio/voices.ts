@@ -278,6 +278,42 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
   wellClose: (bed, out, t) => {
     tone(bed, out, { type: 'sine', from: 50, to: 170, start: t, duration: 0.5, peak: 0.16, attack: 0.05 });
   },
+  // A shot glancing off a shielded core: a dry metallic tick, quiet, as held fire makes many.
+  deflect: (bed, out, t) => {
+    tone(bed, out, { type: 'triangle', from: 2600, to: 1900, start: t, duration: 0.05, peak: 0.05 });
+  },
+  // A boss's part cracking: a heavy stone knock, lower than a foe's crack.
+  partCrack: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'bandpass', from: 1500, to: 600, q: 1.2, start: t, duration: 0.1, peak: 0.24 });
+    tone(bed, out, { type: 'triangle', from: 200, to: 110, start: t, duration: 0.12, peak: 0.18 });
+  },
+  // A boss's part breaking off: a small boom under a gravelly crunch.
+  partBreak: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomSmall);
+    noiseBurst(bed, out, { filter: 'bandpass', from: 1200, to: 300, q: 0.8, start: t, duration: 0.3, peak: 0.2 });
+  },
+  // The core laid bare: a bright fifth swelling upward over a shimmer.
+  coreExposed: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 330, to: 660, start: t, duration: 0.6, peak: 0.14, attack: 0.08 });
+    tone(bed, out, { type: 'triangle', from: 495, to: 990, start: t + 0.04, duration: 0.6, peak: 0.08, attack: 0.08 });
+    noiseBurst(bed, out, { filter: 'highpass', from: 4000, to: 7000, start: t, duration: 0.5, peak: 0.05 });
+  },
+  // The core shielded again: a shutter falling closed onto a low thud.
+  coreShielded: (bed, out, t) => {
+    tone(bed, out, { type: 'square', from: 520, to: 200, start: t, duration: 0.28, peak: 0.07 });
+    tone(bed, out, { type: 'sine', from: 140, to: 60, start: t + 0.2, duration: 0.25, peak: 0.22 });
+  },
+  // A hangar opening: a hydraulic hiss under a servo whine climbing as the doors part.
+  hangarOpen: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'highpass', from: 1800, to: 5200, start: t, duration: 0.4, peak: 0.08 });
+    tone(bed, out, { type: 'sawtooth', from: 160, to: 420, start: t, duration: 0.42, peak: 0.05, attack: 0.05 });
+  },
+  // A hangar closing: the servo winding down onto a heavy latch.
+  hangarClose: (bed, out, t) => {
+    tone(bed, out, { type: 'sawtooth', from: 380, to: 150, start: t, duration: 0.3, peak: 0.05 });
+    noiseBurst(bed, out, { filter: 'lowpass', from: 900, to: 200, start: t + 0.26, duration: 0.12, peak: 0.2 });
+    tone(bed, out, { type: 'sine', from: 110, to: 55, start: t + 0.26, duration: 0.18, peak: 0.2 });
+  },
 };
 
 /** A sound that plays until it is stopped. */

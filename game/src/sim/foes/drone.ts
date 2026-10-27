@@ -2,7 +2,7 @@ import { DRONE_SEPARATION, DRONE_TURN_RATE, FOES } from '../../content/foes';
 import { edgeLength, edgePoint, oppositeEdge, EDGE_COUNT, type Edge } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU } from '../math';
+import { turnBetween } from '../math';
 import { wrapDelta, wrapPosition } from '../wrap';
 import type { Foe, FoeBehaviour } from './foe';
 import type { Ship } from '../ship';
@@ -11,13 +11,6 @@ import type { Rng } from '../rng';
 const { radius: RADIUS, speed: SPEED } = FOES.drone;
 /** Centre to centre along the edge: a clear gap of a radius between neighbours. */
 const SPACING = RADIUS * 3;
-
-/** The signed turn from heading `from` to `to`, in (-π, π]. */
-function turnBetween(from: number, to: number): number {
-  const turn = (to - from) % TAU;
-  if (turn > Math.PI) return turn - TAU;
-  return turn <= -Math.PI ? turn + TAU : turn;
-}
 
 /**
  * The push away from the drones crowding `foe`, in seek units: each neighbour within `DRONE_SEPARATION.radius` adds a
@@ -64,8 +57,8 @@ function pickLine(rng: Rng, count: number, field: Field, ship: Readonly<Ship>): 
 
 /**
  * A small craft that hunts the ship at a constant speed, turning toward it at a limited rate, so a wide circle or a
- * sharp turn of your own sheds it. It steers clear of the drones beside it as it seeks (Ruling R14), so a swarm
- * stays a swarm rather than one stacked drone. It arrives in a line along one edge. Gravity wells do not pull it: its
+ * sharp turn of your own sheds it. It steers clear of the drones beside it as it seeks (`DRONE_SEPARATION`), so a
+ * swarm stays a swarm of separate drones rather than stacking into one. It arrives in a line along one edge. Gravity wells do not pull it: its
  * speed is its own, and a nudge would break both that and the turn limit that makes it fair.
  */
 export const DRONE: FoeBehaviour = {

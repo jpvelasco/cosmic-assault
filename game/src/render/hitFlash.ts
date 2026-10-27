@@ -1,5 +1,6 @@
 import type { FoeKind } from '../content/types';
 import { isWarpClear, type SimEvent } from '../sim/events';
+import { smoothstep } from '../sim/math';
 import type { SpriteBaker } from './sprites';
 
 /** How long a hit object shows white. */
@@ -105,7 +106,7 @@ export function createHitFlash(baker: Pick<SpriteBaker, 'whiteRock'>): HitFlash 
     get shipScale() {
       if (squashAge >= SQUASH_SECONDS) return 1;
       const t = squashAge / SQUASH_SECONDS;
-      return SQUASH_SCALE + (1 - SQUASH_SCALE) * t * t * (3 - 2 * t);
+      return SQUASH_SCALE + smoothstep(t, 1 - SQUASH_SCALE);
     },
     reset() {
       rocks.length = 0;

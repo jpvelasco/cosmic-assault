@@ -32,10 +32,11 @@ export interface SpriteBaker {
    */
   flame(palette: Palette, length: number): Sprite;
   /**
-   * Art painted by `paint` in field units around its centre, spanning ±`half` on each axis, cached under `key` (by
-   * convention `kind|name|size`). Make `paint` once rather than per frame: it runs only on a miss.
+   * Art painted by `paint` in field units around its centre, spanning ±`half` across and ±`halfH` (`half` unless given)
+   * down, cached under `key` (by convention `kind|name|size`). Make `paint` once rather than per frame: it runs only on
+   * a miss.
    */
-  custom(key: string, half: number, paint: (ctx: CanvasRenderingContext2D) => void): Sprite;
+  custom(key: string, half: number, paint: (ctx: CanvasRenderingContext2D) => void, halfH?: number): Sprite;
   /**
    * Device pixels per field unit are `pixelsPerUnit × dpr`. `visual` draws the ship, flame, rocks and shots
    * larger than their field size (a sprite's `halfW`/`halfH` then report the drawn size); glows take their
@@ -184,6 +185,11 @@ export function shapeFingerprint(a: Readonly<Asteroid>): string {
   return (hash >>> 0).toString(16);
 }
 
+/** `points` laid out at radius 1, scaled out to radius `r`, for a bake. */
+export function scaled(points: readonly Point[], r: number): Point[] {
+  return points.map((p) => ({ x: p.x * r, y: p.y * r }));
+}
+
 /** Begins a closed path through `points`. */
 export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
   ctx.beginPath();
@@ -269,7 +275,7 @@ function paintAsteroid(ctx: CanvasRenderingContext2D, a: Readonly<Asteroid>, p: 
 }
 
 /** Dark pits with a lit lower lip, as the light falls from the upper left onto the far wall. */
-function paintCraters(ctx: CanvasRenderingContext2D, craters: readonly Crater[], p: Palette): void {
+export function paintCraters(ctx: CanvasRenderingContext2D, craters: readonly Crater[], p: Palette): void {
   const pit = rgba(mix(p.rock[2], '#000000', 0.45), 0.48);
   const lip = rgba(mix(p.rock[0], WHITE, 0.35), 0.2);
   for (const c of craters) {
@@ -517,8 +523,8 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
         )
       );
     },
-    custom(key, half, paint) {
-      return cache.get(key)?.sprite ?? store(key, bake(half, half, 1, paint));
+    custom(key, half, paint, halfH = half) {
+      return cache.get(key)?.sprite ?? store(key, bake(half, halfH, 1, paint));
     },
     setScale(nextPixelsPerUnit, nextDpr, nextVisual = UNIT_VISUAL) {
       requirePositive('pixelsPerUnit', nextPixelsPerUnit);

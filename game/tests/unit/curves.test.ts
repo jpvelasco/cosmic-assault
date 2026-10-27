@@ -15,35 +15,35 @@ describe('spawnInterval', () => {
 });
 
 describe('threatBudget', () => {
-  it('grows from 8 by 6 per tier', () => {
-    expect(threatBudget(0)).toBe(8);
-    expect(threatBudget(2.5)).toBe(23);
-    expect(threatBudget(5)).toBe(38);
+  it('grows from 12 by 3.5 per tier', () => {
+    expect(threatBudget(0)).toBe(12);
+    expect(threatBudget(2.5)).toBe(20.75);
+    expect(threatBudget(5)).toBe(29.5);
   });
 
-  it('stays within 8 to 40', () => {
-    expect(threatBudget(-1)).toBe(8);
+  it('stays within 12 to 40', () => {
+    expect(threatBudget(-1)).toBe(12);
     expect(threatBudget(10)).toBe(40);
   });
 });
 
 describe('rockSpeedMultiplier', () => {
-  it('adds 8% per tier', () => {
+  it('adds 5% per tier', () => {
     expect(rockSpeedMultiplier(0)).toBe(1);
-    expect(rockSpeedMultiplier(2.5)).toBeCloseTo(1.2, 10);
-    expect(rockSpeedMultiplier(5)).toBeCloseTo(1.4, 10);
+    expect(rockSpeedMultiplier(2.5)).toBeCloseTo(1.125, 10);
+    expect(rockSpeedMultiplier(5)).toBeCloseTo(1.25, 10);
   });
 
   it('stays within the tiers the game has', () => {
     expect(rockSpeedMultiplier(-2)).toBe(1);
-    expect(rockSpeedMultiplier(50)).toBeCloseTo(1.4, 10);
+    expect(rockSpeedMultiplier(50)).toBeCloseTo(1.25, 10);
   });
 });
 
 describe('kindProbability', () => {
   const ramp = { from: 1, base: 0.1, step: 0.05, max: 0.4 };
 
-  it('holds the base until the ramp starts, then climbs by step per tier', () => {
+  it('holds the base below `from`, then climbs by step per tier past it, up to max', () => {
     expect(kindProbability(ramp, 0)).toBeCloseTo(0.1, 10);
     expect(kindProbability(ramp, 1)).toBeCloseTo(0.1, 10);
     expect(kindProbability(ramp, 2.5)).toBeCloseTo(0.175, 10);
@@ -60,13 +60,14 @@ describe('kindProbability', () => {
 });
 
 describe('sawtooth', () => {
-  it('eases the first galaxy of every Dimension after the first to 0.85', () => {
+  it('eases the first galaxy of every Dimension, the first included, to 0.85', () => {
+    expect(sawtooth({ index: 1, dimension: 1 })).toBe(0.85);
     expect(sawtooth({ index: 1, dimension: 2 })).toBe(0.85);
     expect(sawtooth({ index: 1, dimension: 5 })).toBe(0.85);
   });
 
   it('leaves everything else at 1', () => {
-    expect(sawtooth({ index: 1, dimension: 1 })).toBe(1);
+    expect(sawtooth({ index: 2, dimension: 1 })).toBe(1);
     expect(sawtooth({ index: 2, dimension: 2 })).toBe(1);
     expect(sawtooth({ index: 6, dimension: 5 })).toBe(1);
   });

@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const SIM_PURITY_MESSAGE = 'sim/, content/ and meta/ must be deterministic and DOM-free: use the injected Rng and dt instead';
+const SIM_PURITY_MESSAGE = 'sim/, content/, meta/ and bot/ must be deterministic and DOM-free: use the injected Rng and dt instead';
 
 export default defineConfig(
   { ignores: ['dist', 'dist-e2e', 'playwright-report', 'test-results'] },
@@ -16,7 +16,7 @@ export default defineConfig(
     },
   },
   {
-    files: ['src/sim/**/*.ts', 'src/content/**/*.ts', 'src/meta/**/*.ts'],
+    files: ['src/sim/**/*.ts', 'src/content/**/*.ts', 'src/meta/**/*.ts', 'src/bot/**/*.ts'],
     rules: {
       'no-restricted-globals': [
         'error',
@@ -64,6 +64,22 @@ export default defineConfig(
             {
               group: ['**/sim/**', '**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**', '**/platform/**'],
               message: 'content/ is plain data that sim/ builds on: move shared rules into content/ instead of importing sim/ or any DOM folder',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/bot/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/render/**', '**/ui/**', '**/app/**', '**/audio/**', '**/input/**', '**/platform/**'],
+              message: 'Bots play headless: they read the sim and content and answer with Controls, so move what they need out of the DOM folders',
             },
           ],
         },

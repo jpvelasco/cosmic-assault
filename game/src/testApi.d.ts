@@ -9,6 +9,25 @@ interface CosmicAssaultTestShip {
   readonly invulnerable: boolean;
 }
 
+/** The boss in the galaxy in play, once its approach is over. */
+interface CosmicAssaultTestBoss {
+  readonly id: import('./content/types').BossId;
+  readonly state: import('./sim/boss/behaviour').BossState;
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly phase: import('./sim/boss/behaviour').BossPhase;
+  /** The attack being telegraphed, else null. */
+  readonly windup: import('./content/types').AttackId | null;
+  /** The attack running, else null. */
+  readonly active: import('./content/types').AttackId | null;
+  /** Whether a blow on its core can hurt it now: false while its shards shield it, and while a hangar is shut. */
+  readonly vulnerable: boolean;
+  /** Its shards or other parts still alive. */
+  readonly liveParts: number;
+  /** Where a shot does harm now, or null if nowhere does. */
+  readonly target: { readonly x: number; readonly y: number } | null;
+}
+
 /** A box in CSS px from the viewport's top left. */
 interface CosmicAssaultTestRect {
   readonly x: number;
@@ -39,6 +58,10 @@ interface CosmicAssaultTestState {
   readonly foes: readonly { readonly id: number; readonly kind: import('./content/types').FoeKind; readonly x: number; readonly y: number }[];
   /** The gravity well being telegraphed or pulling (at most one), with the seconds until it starts or ends; empty when there is none. */
   readonly wells: readonly { readonly id: number; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number }[];
+  /** The boss once its approach is over; null before then and outside a boss galaxy. */
+  readonly boss: CosmicAssaultTestBoss | null;
+  /** How many sim events of each type the run in play has produced (a shot fired, a boss shot deflected, a hangar opened ...), from its first step. */
+  readonly events: Readonly<Partial<Record<import('./sim/events').SimEvent['type'], number>>>;
   /** The timed effects running (doubleShot, rapidFire, spreadLaser, shield), each with its seconds left; one that is off is absent. */
   readonly effects: Readonly<Partial<Record<import('./content/pickups').TimedPickupId, number>>>;
   /** The weapon tier, 0–3; 0 outside a run. */
@@ -53,7 +76,7 @@ interface CosmicAssaultTestState {
   readonly visualScale: { readonly ship: number; readonly rock: number; readonly shot: number; readonly effect: number };
   /** The quality level in force: index into the ladder (0 high … 3 lowest) and its name. */
   readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest' };
-  /** Frame times of the current run in ms, less its first 3 s; zeros until a run is past that. */
+  /** Frame times of the current run in ms, less its first 3 s (or since `restartFrameStats`, less 3 s); zeros until past that. */
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
@@ -82,10 +105,19 @@ interface CosmicAssaultTestApi {
    */
   fastForward(seconds: number): void;
   /**
-   * Takes `damage` hit points off the boss, as that many shots would; the blow that empties it kills it, and the next
-   * step ends the galaxy, warping out while the boss dies. Throws unless a boss is fighting (not in its intro, dying or down).
+   * Lands `damage` shots on the boss, each where it does harm (`bossTarget`): the core, or while the core is shielded a
+   * live part, or the Hive Carrier's open hangar, so a shielded boss takes fewer than `damage` hit points. The blow that
+   * empties it kills it, and the next step ends the galaxy, warping out while the boss dies. Throws unless a boss is
+   * fighting (not in its intro, dying or down) and some shot can hurt it now.
    */
   damageBoss(damage: number): void;
+  /**
+   * Drops a pickup of `kind` onto the ship at the next step, where it is announced (the first-drop callout), collected
+   * and counted like a kill's drop. Throws outside a galaxy run.
+   */
+  grantPickup(kind: import('./content/types').PickupId): void;
+  /** Restarts `frameStats` as a run start does, its 3 s warm-up included, leaving the run and the quality level alone. */
+  restartFrameStats(): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }

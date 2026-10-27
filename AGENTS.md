@@ -22,9 +22,14 @@
   Chromium; run it after editing the SVG and commit the PNGs), and `find-seeds`
   (re-picks an e2e seed: every seed a Playwright spec depends on is listed with its
   claim in `game/e2e/seeds.ts`, a unit test guards each claim, and a failing guard
-  prints the `npm run find-seeds -- <claim>` command to run). Dev builds also
+  prints the `npm run find-seeds -- <claim>` command to run; a new seed gets a
+  table entry plus a claim check in `game/tests/helpers/seedClaims.ts`). Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
-  also fails if an e2e hook (frame, fast-forward, boss damage) reaches `dist/`.
+  also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
+  tally, frame-stats restart) reaches `dist/`. Each hook lives in
+  `app/e2eHooks.ts`, is set only under
+  `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
+  and a case in `tests/unit/checkNoBridge.test.ts`; a new hook needs all three.
   `?galaxy=` jumps straight into a level (see `app/seed.ts`). A run started with `?galaxy=`,
   `?seed=` or `?lives=` never writes the save.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
@@ -41,7 +46,66 @@
   cards (title, mode select, the level map and level select, results and game
   over, pause, settings, records, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
-  crash guard and the local log; `sw/` is the service worker itself.
+  crash guard and the local log; `sw/` is the service worker itself; `bot/`
+  holds the headless bots and their level runner (`run.ts`), used by tests and
+  never shipped to players.
+  - `bot/` is pure like `sim/` (ESLint enforces it: no DOM, clock or `Math.random`). A bot reads
+    a `BotView` (the World's state, refilled in place) and returns controls; it
+    never changes the World. There are three profiles: `statue` sends no input
+    (the baseline of what a level does to an idle ship), `casual` is a
+    handicapped player (late reactions, a wobbling aim, dodges only some
+    threats), and `expert` is the full pilot, which the casual wraps. `createBot`
+    gives each run its own random stream, derived from the run's seed with
+    `deriveSeed(seed, 'bot')`; a bot draws from nothing else, so a bot run
+    replays exactly and never shifts a sim stream. A change to the expert changes
+    what the casual does, so rerun the balance suites after either.
+  - Pickups and weapon tiers (`sim/pickups/`, `content/pickups.ts`): a kill can
+    drop a pickup, with a chance that follows the level's difficulty and a pool
+    of kinds that widens by set; the `'pickups'` stream decides both. A
+    `Loadout` holds the weapon tier (0 to 3; one kind raises it, and a Rank death
+    lowers it by one) and the timed effects, each with a clock; collecting a
+    running kind refreshes it and never stacks. `volley.ts` composes the ship's
+    barrels from the tier and the running effects, and effects only ever add
+    shots or shorten the fire interval. A protective pickup absorbs one hit.
+    The HUD shows a pill with a countdown for each running timed effect
+    (`render/hudPickups.ts`). Which kinds the player has collected is saved
+    (`seenPickups`) and decided in `app/pickupNotices.ts`, because the sim
+    knows nothing of what the player has seen: a kind's first drop is announced
+    once, and collecting it ends the callout for good.
+  - Foes and hazards: `content/foes.ts` and `content/hazards.ts` hold their
+    stats and schedules as typed data; `sim/foes/` has one behaviour per foe
+    kind over a pooled `Foe` (never hold one across steps), and `FoeField` owns
+    the pool, spawning, hits and rams. The director spends foes from the same
+    threat budget as rocks, by cost. Foe motion draws from the `'foes'` stream
+    and hazards from `'hazards'`. A gravity well (`sim/hazards/`) is scheduled
+    by a level event, telegraphed, then pulling; each foe kind says whether a
+    well pulls it. Foes and wells are drawn by `render/foePass.ts` and
+    `render/hazardPass.ts`; a well holds still under reduced motion.
+  - A boss is three pieces, and a new one needs all of them. Its definition in
+    `content/bosses.ts` gives hit points, radius, the attacks of each phase and
+    the rests between them. Its behaviour in `sim/boss/` implements
+    `BossBehaviour` (`behaviour.ts`): an `AttackSpec` for every attack its phases
+    name, each with a telegraph of at least `MIN_WINDUP_SECONDS`; and optionally
+    its drift, parts, `vulnerable`, `hurtsAt` and `target` (where a shot does
+    harm), its exposure events and a per-step hook. A factory builds it afresh
+    for each fight, drawing only from the fight's `'boss'` stream, and
+    `GalaxyRun` registers it. `BossRunner` owns what every boss shares (intro,
+    phases, windups, dying) and publishes one `BossView` updated in place, which
+    the renderer, the bots and the e2e bridge read; a boss never touches the
+    renderer. Its look in `render/boss/` implements `BossDrawer` (`drawer.ts`):
+    a glow and a `body`, with optional underglow, `advance`, `handle` and
+    `reset`; the boss pass draws what every boss shares (windup rings,
+    shockwave, hit flash) and looks the drawer up by boss id. A drawer bakes its
+    sprites by key and allocates nothing per frame. Cover a new boss with unit
+    tests for its behaviour and drawer, a bot kill-rate case in
+    `game/tests/balance/`, and an e2e spec that fights it through the bridge's
+    `boss` state and `damageBoss`.
+  - Ship controls (input, thrust, fire, turn, the volley and the frame loop)
+    are tested with real input, never with bridge shortcuts: change any of them
+    only with `e2e/keyboard.spec.ts` (every thrust, fire and turn chord, in both
+    directions, on arrows and WASD, plus Space, Shift, Z and X) and the touch and
+    gamepad specs passing, and add a chord case for any new binding. A held
+    turn key always turns the ship.
   - Game key handling stands down while a form control has focus
     (`input/keyEvent.ts`), so sliders and radios keep their keys. `F` requests
     full screen synchronously in its keydown handler, because Safari and
@@ -57,7 +121,11 @@
   - `render/` draws from interpolated sim poses. Sprites are baked once into a
     bounded LRU cache (`spriteCache.ts`, `sprites.ts`); glows are baked or
     additive sprites. Never set `shadowBlur` (ESLint bans it) or a canvas
-    `filter` per frame. Effects (`effects.ts`) drive a pooled particle system,
+    `filter` per frame. `fieldPen.ts` lands an upright sprite drawn at its baked
+    size on whole device pixels, which a CPU-rasterized canvas copies several
+    times faster than a resampled one; `turnedSprite.ts` turns a big sprite once
+    onto its own canvas and draws that upright until its angle moves its corners
+    half a pixel. Effects (`effects.ts`) drive a pooled particle system,
     shake and flash, and honour `prefers-reduced-motion`.
   - `render/quality.ts` steps through `QUALITY_LEVELS` from measured frame
     time with hysteresis, judged against the display's own frame interval as
@@ -112,9 +180,14 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    from `game/`; install Chromium first with `npx playwright install chromium`.
    Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
    4318 (release), clear of Vite's default preview port. `npm run test:perf`
-   (the report-only `perf` project: 4x CPU slowdown, writes
-   `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
-   non-required `perf` job. For changes to
+   (the report-only `perf` project: 4x CPU slowdown, a busy field and a boss
+   fight, both written to `game/test-results/perf.json`) is not part of
+   `test:e2e`; CI runs it as the
+   non-required `perf` job. `npm run test:balance` runs the slow many-seed bot
+   suites in `game/tests/balance/` (boss kill rates and clear rates against the
+   targets in `targets.ts`), which `npm test` leaves out; run it after any change
+   to level content, difficulty curves, pacing, boss stats or the bots, and
+   before changing a target; CI runs it as the non-required `balance` job. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
@@ -155,8 +228,9 @@ and `tests/test-results/` and are ignored by Git.
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
   `website/`. Job `deploy` runs only on pushes to `main`, and only after both
   `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.
-  Job `perf` builds both bundles and runs `npm run test:perf`; it is not a
-  required check and does not gate deployment.
+  Job `perf` builds both bundles and runs `npm run test:perf`, and job `balance`
+  runs `npm run test:balance`; neither is a required check, and neither gates
+  deployment.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.
