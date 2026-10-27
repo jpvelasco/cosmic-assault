@@ -96,9 +96,8 @@ const ringKeys = (radius: number, palette: PaletteId): Record<AttackId, string> 
  * Draws the boss from baked sprites (no `shadowBlur`): what every boss shares (a glow, a closing ring while an attack
  * winds up, a shockwave as it pulses, an aim line as it winds up a dive, and a white flash on each hit, the core's
  * silhouette for 60 ms with a glow that lingers), and its body through its own drawer (`render/boss/`), looked up by its
- * id. The boss fades in through the
- * intro and out, whitening, as it dies. Sprite keys and painters are made once per radius, so a frame of drawing builds
- * no strings or closures.
+ * id. The boss fades in through the intro and out, whitening, as it dies. Sprite keys and painters are made once per
+ * radius, so a frame of drawing builds no strings or closures.
  */
 export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, baker: SpriteBaker, palette: Palette): BossPass {
   const kit = { ctx, pen, baker, palette };

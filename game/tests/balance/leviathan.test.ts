@@ -8,7 +8,7 @@ import { BALANCE_SEEDS } from '../helpers/botRuns';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const GALAXY = galaxyById('4-6');
-/** The expert must beat the Leviathan within this long of its arrival (Task 8's initial target, tuned in Task 11). */
+/** The expert's target kill time, an initial value: it must beat the Leviathan within this long of its arrival. */
 const KILL_SECONDS = 150;
 /** Forty runs of each bot take minutes on a loaded host. */
 const TIMEOUT_MS = 600_000;

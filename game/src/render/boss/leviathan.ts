@@ -102,9 +102,9 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
     const pulse = look.still ? 1 : 0.75 + 0.25 * Math.sin(time * TAU * RING_PULSE_HZ);
     pen.field();
     ctx.globalAlpha = shown * (boss.windup === 'coil' ? pulse : RING_RUNNING_ALPHA);
-    for (const [style, width] of ringPasses) {
-      ctx.strokeStyle = style;
-      ctx.lineWidth = width;
+    for (const pass of ringPasses) {
+      ctx.strokeStyle = pass[0];
+      ctx.lineWidth = pass[1];
       ctx.beginPath();
       ctx.arc(coilX, coilY, COIL_RADIUS, opening + half, opening + TAU - half);
       ctx.stroke();

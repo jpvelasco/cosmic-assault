@@ -79,7 +79,7 @@ export function tailOf(parts: readonly Readonly<BossPart>[]): number {
   return -1;
 }
 
-/** The head's own pose, the next swim point and the nearest-point probe; reused. */
+/** A scratch point for the swim path's points and the nearest-point search; reused. */
 const spot: Point = { x: 0, y: 0 };
 
 /**
@@ -190,7 +190,8 @@ class Leviathan implements BossBehaviour {
         this.headX = boss.x;
         this.headY = boss.y;
       } else {
-        // It goes active this step, and its run moves the head from the next: from where the head held.
+        // It goes active this step, and its run moves the head from the next: from where the head held, not from the
+        // view the runner read after its drift, which may have clamped a head left past an edge by a coil.
         this.striking = true;
         ctx.fromX = this.headX;
         ctx.fromY = this.headY;

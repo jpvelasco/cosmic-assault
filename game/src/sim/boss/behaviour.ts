@@ -77,7 +77,11 @@ export interface AttackContext {
   /** Where the ship was when the windup began. */
   aimX: number;
   aimY: number;
-  /** Where the core was when the attack went active. */
+  /**
+   * Where the core was when the attack went active, as the runner read it after its drift. A behaviour that owns its
+   * core's pose, and so overrides that drift, may set it again from its own step on the attack's first active step,
+   * before the attack's run first reads it.
+   */
   fromX: number;
   fromY: number;
   /**
