@@ -1,5 +1,6 @@
 import { clamp } from '../content/curves';
 import { MINE } from '../content/foes';
+import { WARP_RIFT } from '../content/hazards';
 import type { AttackId } from '../content/types';
 import { radialShove } from '../sim/boss/attacks';
 import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
@@ -7,7 +8,7 @@ import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import type { Foe } from '../sim/foes/foe';
 import { zoneClearance } from '../sim/hazards/dangerZone';
-import type { HazardState, ZoneState } from '../sim/hazards/hazard';
+import type { HazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
 import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
@@ -50,6 +51,8 @@ const BOSS_ROCK_ALLOWANCE = 35;
 const ARM_CLEARANCE = 20;
 /** It keeps out of a danger zone that is active, or that will be within this many seconds. */
 const ZONE_LEAD_SECONDS = 1;
+/** It keeps this far clear of a warp rift's mouth, beyond the rim the ship may touch, and so never passes through one. */
+const MOUTH_CLEARANCE = 20;
 /** It goes for a pickup this near that will not expire on the way. */
 const PICKUP_REACH = 450;
 const PICKUP_MIN_SECONDS = 1;
@@ -86,6 +89,10 @@ function foeReach(foe: Readonly<Foe>): number {
 /** Whether `hazard` is a danger zone to keep out of now: active, or starting within `ZONE_LEAD_SECONDS`. */
 const zoneToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<ZoneState> =>
   hazard.type === 'dangerZone' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
+
+/** Whether a warp rift is to be kept clear of now: open, or opening within `ZONE_LEAD_SECONDS`. */
+const riftToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<RiftState> =>
+  hazard.type === 'warpRift' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
 
 /** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
 function splitterAhead(view: Readonly<BotView>): boolean {
@@ -388,13 +395,23 @@ export class Pilot {
     // Bolts pass out of the field and never wrap: one is judged where it really flies, not across the seam.
     for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id), 0, false);
     this.zones.length = 0;
-    for (const hazard of view.hazards) if (zoneToAvoid(hazard)) this.zones.push(hazard);
+    for (const hazard of view.hazards) {
+      if (zoneToAvoid(hazard)) this.zones.push(hazard);
+      else if (riftToAvoid(hazard)) this.addMouths(view, hazard);
+    }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
     for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
     const threat = this.strikeThreat;
     if (threat?.kind === 'lane') this.addLane(view, boss, threat.reach);
     else if (threat?.ring !== undefined) this.addRing(view, boss, threat.ring, threat.reach);
+  }
+
+  /** Both mouths of a warp rift, as circles the ship keeps out of: a body that touches one is carried through it. */
+  private addMouths(view: Readonly<BotView>, rift: Readonly<RiftState>): void {
+    const reach = WARP_RIFT.radius + MOUTH_CLEARANCE;
+    this.addThreat(view, rift.x, rift.y, 0, 0, reach, false);
+    this.addThreat(view, rift.toX, rift.toY, 0, 0, reach, false);
   }
 
   /**

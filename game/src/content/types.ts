@@ -29,8 +29,11 @@ export type WeaponTier = 0 | 1 | 2 | 3;
 /** The rocks a galaxy spawns. */
 export type RockKind = 'large' | 'medium' | 'small';
 
-/** The foes a galaxy spawns: a rock that breaks into fast fragments, a seeking swarm, a gunship that circles and fires, and a mine. */
-export type FoeKind = 'splitter' | 'drone' | 'gunship' | 'mine';
+/**
+ * The foes a galaxy spawns: a rock that breaks into fast fragments, a seeking swarm, a gunship that circles and fires, a
+ * mine, a phaser that blinks about and an armoured rock that deflects shots from its plates.
+ */
+export type FoeKind = 'splitter' | 'drone' | 'gunship' | 'mine' | 'phaser' | 'armoured';
 
 /** Everything the director can spawn from its threat budget. */
 export type ThreatKind = RockKind | FoeKind;

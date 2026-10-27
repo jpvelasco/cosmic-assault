@@ -92,7 +92,7 @@ describe("the expert's prediction of a hazard's pull", () => {
   function simPull(world: World): { x: number; y: number } {
     const hazards = world['run']?.['hazards'] as HazardField;
     const ship = { ...world.ship };
-    hazards.move(STEP_SECONDS, ship, [], []);
+    hazards.move(STEP_SECONDS, ship, [], [], []);
     return { x: (ship.vx - world.ship.vx) / STEP_SECONDS, y: (ship.vy - world.ship.vy) / STEP_SECONDS };
   }
 

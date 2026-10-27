@@ -6,7 +6,7 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
+import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
 import type { GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 import type { AttackId } from '../../src/content/types';
@@ -17,7 +17,11 @@ import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, figh
 
 const SEEDS = [1, 2, 3];
 /** The hazards an event shows: one, or for a danger zone one per intensity, at most two. */
-const shown = (e: GalaxyEvent): HazardType[] => (e.type === 'meteorShower' ? [] : Array<HazardType>(e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : 1).fill(e.type));
+const shown = (e: GalaxyEvent): HazardType[] => {
+  if (e.type === 'meteorShower') return [];
+  const pairs = e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : e.type === 'warpRift' ? Math.min(e.intensity, WARP_RIFT.maxPairs) : 1;
+  return Array<HazardType>(pairs).fill(e.type);
+};
 /** Every galaxy that schedules a hazard, with the hazards it shows. */
 const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap(shown) })).filter((g) => g.hazards.length > 0);
 /** Whole galaxies played by the expert take seconds apiece. */
@@ -40,7 +44,7 @@ describe('auditTelegraphs', () => {
   });
 
   it('audits every galaxy that schedules a hazard, and only hazards it audits are scheduled', () => {
-    expect(HAZARD_GALAXIES.map((g) => g.id)).toEqual(['2-2', '2-3', '2-4', '2-5', '3-2', '3-3', '3-4', '3-5']);
+    expect(HAZARD_GALAXIES.map((g) => g.id)).toEqual(['2-2', '2-3', '2-4', '2-5', '3-2', '3-3', '3-4', '3-5', '4-2', '4-3', '4-4', '4-5']);
     for (const g of HAZARD_GALAXIES) for (const type of g.hazards) expect(HAZARD_TELEGRAPHS[type], `${g.id} ${type}`).toBeDefined();
   });
 

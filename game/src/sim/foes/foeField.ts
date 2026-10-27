@@ -8,18 +8,29 @@ import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 import { overlapsAcrossWrap, rescalePose } from '../wrap';
 import type { Bolts } from './bolts';
+import { ARMOURED_BEHAVIOUR } from './armoured';
 import { DRONE } from './drone';
 import { FoePool, type Foe, type FoeBehaviour, type FoeWorld } from './foe';
 import { GUNSHIP_BEHAVIOUR } from './gunship';
 import { MINE_BEHAVIOUR } from './mine';
+import { PHASER_BEHAVIOUR } from './phaser';
 import { SPLITTER } from './splitter';
 
 /** The most foes on the field at once; a spawn beyond it is dropped. A boss's drones share the pool. */
 export const FOE_CAPACITY = 64;
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 
-const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = { splitter: SPLITTER, drone: DRONE, gunship: GUNSHIP_BEHAVIOUR, mine: MINE_BEHAVIOUR };
+const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = {
+  splitter: SPLITTER,
+  drone: DRONE,
+  gunship: GUNSHIP_BEHAVIOUR,
+  mine: MINE_BEHAVIOUR,
+  phaser: PHASER_BEHAVIOUR,
+  armoured: ARMOURED_BEHAVIOUR,
+};
 const NONE_STRUCK: readonly number[] = Object.freeze([]);
+/** What `hit` returns for a shot an armoured foe turned aside: it is spent, and it struck nothing. */
+export const FOE_DEFLECTED = -2;
 
 /** What the galaxy run adds to a foe's death. */
 export interface FoeHooks {
@@ -146,10 +157,17 @@ export class FoeField implements FoeWorld, BossFoes {
     this.pool.sweep();
   }
 
-  /** A shot at (x, y) has reached a foe not in `struck`, if it overlaps one: it deals 1 damage. Returns the foe's id, or -1 for none. */
+  /**
+   * A shot at (x, y) has reached a foe not in `struck`, if it overlaps one: it deals 1 damage, or, if the foe's armour
+   * turns it aside, is spent with `foeDeflected` (`FOE_DEFLECTED`). Returns the foe's id, or -1 for none.
+   */
   hit(x: number, y: number, radius: number, struck: readonly number[] = NONE_STRUCK): number {
     const foe = this.overlapping(x, y, radius, struck);
     if (foe === null) return -1;
+    if (BEHAVIOURS[foe.kind].deflects?.(foe, x, y) === true) {
+      this.arena.events.push({ type: 'foeDeflected', id: foe.id, x, y });
+      return FOE_DEFLECTED;
+    }
     foe.hp -= 1;
     if (foe.hp > 0) {
       this.arena.events.push({ type: 'foeHit', id: foe.id, x: foe.x, y: foe.y, hp: foe.hp });

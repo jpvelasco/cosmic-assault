@@ -34,7 +34,7 @@ function play(events: readonly GalaxyEvent[], opts: { seed?: number; field?: Fie
   for (let i = 1; i <= Math.round(seconds / DT); i++) {
     const t = i * DT;
     out.length = 0;
-    hazards.move(DT, ship, [], []);
+    hazards.move(DT, ship, [], [], []);
     hazards.step(t, field, out);
     for (const event of out) log.push({ elapsed: t, event: { ...event } });
     each?.(hazards, t);

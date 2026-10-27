@@ -56,6 +56,13 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
   bossPhase: { type: 'bossPhase', phase: 2 },
   bossDown: { type: 'bossDown', id: 'sentinel' },
   bossDeflected: { type: 'bossDeflected', x: 0, y: 0 },
+  foeDeflected: { type: 'foeDeflected', id: 1, x: 0, y: 0 },
+  phaserWarn: { type: 'phaserWarn', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  phaserBlink: { type: 'phaserBlink', id: 1, x: 0, y: 0 },
+  riftWarning: { type: 'riftWarning', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  riftOpen: { type: 'riftOpen', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  riftClose: { type: 'riftClose', id: 1 },
+  riftJump: { type: 'riftJump', id: 1, x: 0, y: 0, toX: 1, toY: 1, ship: true },
   bossPartHit: { type: 'bossPartHit', part: 0, x: 0, y: 0, hp: 1 },
   bossPartBroken: { type: 'bossPartBroken', part: 0, x: 0, y: 0 },
   bossExposed: { type: 'bossExposed', x: 0, y: 0 },
@@ -126,7 +133,7 @@ describe('sfxFor', () => {
   });
 
   it('caps the swarm buzz, deflections and boss bolts at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2, bossBolt: 1 });
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
@@ -140,10 +147,23 @@ describe('sfxFor', () => {
     expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe('wellClose');
   });
 
-  it('keeps a repulsion field silent until it has sounds of its own: it never borrows the well\'s', () => {
-    expect(sfxFor({ type: 'wellWarning', id: 1, kind: 'repulsionField', x: 0, y: 0, at: 30 })).toBeNull();
-    expect(sfxFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
-    expect(sfxFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
+  it('gives a repulsion field sounds of its own: a warning, an opening and a close, and no hum (the well\'s hum is never borrowed)', () => {
+    expect(nameOf({ type: 'wellWarning', id: 1, kind: 'repulsionField', x: 0, y: 0, at: 30 })).toBe('repulseWarn');
+    expect(nameOf({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBe('repulseOpen');
+    expect(nameOf({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBe('repulseClose');
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
+  });
+
+  it('gives a phaser its warning and blink, a foe\'s deflected shot the deflect tick, and a warp rift its warning, opening, passage and close; a rock or foe through a rift is silent', () => {
+    expect(nameOf({ type: 'phaserWarn', id: 1, x: 0, y: 0, toX: 1, toY: 1 })).toBe('phaserWarn');
+    expect(nameOf({ type: 'phaserBlink', id: 1, x: 0, y: 0 })).toBe('phaserBlink');
+    expect(nameOf({ type: 'foeDeflected', id: 1, x: 0, y: 0 })).toBe('armourDeflect');
+    expect(nameOf({ type: 'riftWarning', id: 1, x: 0, y: 0, toX: 1, toY: 1 })).toBe('riftWarn');
+    expect(nameOf({ type: 'riftOpen', id: 1, x: 0, y: 0, toX: 1, toY: 1 })).toBe('riftOpen');
+    expect(nameOf({ type: 'riftJump', id: 1, x: 0, y: 0, toX: 1, toY: 1, ship: true })).toBe('riftJump');
+    expect(nameOf({ type: 'riftJump', id: 1, x: 0, y: 0, toX: 1, toY: 1, ship: false })).toBeNull();
+    expect(nameOf({ type: 'riftClose', id: 1 })).toBe('riftClose');
   });
 
   it('gives the pickups a drop, a collect, an expiry, an effect running out and the Shield breaking', () => {
@@ -161,8 +181,9 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'combo', multiplier: 1 })).toBeNull();
   });
 
-  it('keeps a blast silent until it has a sound of its own: what it destroys still booms', () => {
-    expect(nameOf({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBeNull();
+  it('gives a blast a sound of its own, a large boom under a crackle, for a Field Bomb and a Nova alike', () => {
+    expect(nameOf({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBe('blast');
+    expect(nameOf({ type: 'blast', kind: 'fieldBomb', x: 0, y: 0, radius: 220 })).toBe('blast');
   });
 
   it('ticks as a gunship winds up, zaps as a foe fires a bolt, chirps as a mine arms, booms as it blasts, and stings as a zone warns', () => {

@@ -1,9 +1,10 @@
 import { clamp } from '../content/curves';
-import { HAZARD_RULES } from '../content/hazards';
+import { HAZARD_RULES, WARP_RIFT } from '../content/hazards';
 import type { Field } from '../sim/field';
-import type { HazardState, PointHazardState, ZoneState } from '../sim/hazards/hazard';
+import type { HazardState, PointHazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
 import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
+import type { FieldPen } from './fieldPen';
 import type { Palette } from './palette';
 import type { SceneLook, Stamp } from './scene';
 import { strokePath, type Sprite, type SpriteBaker } from './sprites';
@@ -12,14 +13,26 @@ export interface HazardPass {
   /**
    * The hazards in play. A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls,
    * a glow, three arcs swirling round it (held still and breathing under reduced motion) and a dark lens at its heart.
-   * A lethal danger zone: filled, hatched and outlined solid in the hostile hue (its warning is `drawWarnings`'). The
-   * other hazards are drawn once they are made. Expects `source-over`, which it
-   * leaves as it found it, with alpha 1.
+   * A repulsion field: a warning ring growing outward, then ripples spreading out from its heart. A warp rift, once
+   * open: a swirl at each mouth linked by a dashed arc. A lethal danger zone: filled, hatched and outlined solid in the
+   * hostile hue (its warning is `drawWarnings`'). Expects `source-over`, which it leaves as it found it, with alpha 1.
    */
   drawHazards(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
-  /** The danger zones' warnings, drawn over the rocks and foes so nothing hides one. */
+  /** The danger zones' and warp rifts' warnings, drawn over the rocks and foes so nothing hides one. */
   drawWarnings(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
 }
+
+/** A repulsion field: its ripples, one a third of a cycle behind the next, spread out from it over this many seconds. */
+const { telegraph: REPULSE_TELEGRAPH_SECONDS, seconds: REPULSE_SECONDS } = HAZARD_RULES.repulsionField;
+const RIPPLES = 3;
+const RIPPLE_SECONDS = 1.6;
+/** A warp rift: its mouths are the well's swirl at this share of its size, and linked by a dashed arc that marches. */
+const { telegraph: RIFT_TELEGRAPH_SECONDS, seconds: RIFT_SECONDS } = HAZARD_RULES.warpRift;
+const RIFT_RADIUS = WARP_RIFT.radius;
+const RIFT_LINK_DASH: readonly number[] = [8, 6];
+const RIFT_LINK_MARCH = 40;
+const RIFT_LINK_WIDTH = 2;
+const RIFT_LINK_BOW = 0.18;
 
 const WHITE = '#ffffff';
 const { telegraph: WELL_TELEGRAPH_SECONDS, seconds: WELL_SECONDS } = HAZARD_RULES.gravityWell;
@@ -129,6 +142,23 @@ function paintArc(ctx: CanvasRenderingContext2D, r: number, sweep: number, width
   }
 }
 
+/** A dashed ring: a warp rift's warning, drawn at `r` in `color`. */
+function paintDashedRing(ctx: CanvasRenderingContext2D, r: number, color: string): void {
+  ctx.setLineDash([9, 7]);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  strokePath(ctx, rgba(color, 0.85), 2.5);
+  ctx.setLineDash([]);
+}
+
+/** A ring that ripples outward from a repulsion field: a soft band with a bright rim. */
+function paintRipple(ctx: CanvasRenderingContext2D, r: number, color: string): void {
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  strokePath(ctx, rgba(color, 0.3), 7);
+  strokePath(ctx, mix(color, WHITE, 0.45), 1.8);
+}
+
 /** The dark lens at the well's heart, with a thin bright photon ring at its rim. */
 function paintHorizon(ctx: CanvasRenderingContext2D, r: number, rim: string): void {
   const inner = HORIZON * r;
@@ -156,9 +186,17 @@ function paintOutline(ctx: CanvasRenderingContext2D, r: number, color: string): 
   }
 }
 
+/**
+ * How strongly an active hazard of `seconds` in all, with `remaining` to go, is drawn: building up as it starts, fading
+ * as it ends.
+ */
+function presenceOf(remaining: number, seconds: number): number {
+  return Math.min(clamp((seconds - remaining) / FADE_IN_SECONDS, 0, 1), clamp(remaining / FADE_OUT_SECONDS, 0, 1));
+}
+
 /** How strongly an active well with `remaining` seconds to go is drawn: swirling up as it starts, fading as it ends. */
 export function wellPresence(remaining: number): number {
-  return Math.min(clamp((WELL_SECONDS - remaining) / FADE_IN_SECONDS, 0, 1), clamp(remaining / FADE_OUT_SECONDS, 0, 1));
+  return presenceOf(remaining, WELL_SECONDS);
 }
 
 /** The drawn size of a well of `intensity`, as a share of the baked sprites. */
@@ -168,7 +206,7 @@ const sizeOf = (intensity: number): number => (1 + INTENSITY_GROWTH * (intensity
  * The gravity well from baked sprites only (no per-frame gradients, no `shadowBlur`): an additive glow and three
  * comet arcs turned a little each frame, over which sits the dark lens. Keys and painters are made once per palette.
  */
-export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker: SpriteBaker, palette: Palette): HazardPass {
+export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, stamp: Stamp, baker: SpriteBaker, palette: Palette): HazardPass {
   const [cyan, violet] = palette.accent;
   const arcColors = [mix(cyan, WHITE, 0.3), cyan, violet];
   const arcs = ARCS.map(({ reach, sweep, width, rate, phase }, i) => ({
@@ -188,10 +226,12 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
     paintOutline(c, BAKED_RADIUS, mix(violet, WHITE, 0.35));
   };
   const half = BAKED_RADIUS + SPRITE_PAD;
+  const mouthA = { x: 0, y: 0 };
+  const mouthB = { x: 0, y: 0 };
 
-  /** Draws `sprite` at the well, `size` of its baked size, turned by `angle`. */
-  function put(sprite: Sprite, well: Readonly<PointHazardState>, size: number, angle: number, field: Field): void {
-    stamp(sprite, well.x, well.y, Math.cos(angle) * size, Math.sin(angle) * size, sprite.halfW * size, field);
+  /** Draws `sprite` at (x, y), `size` of its baked size, turned by `angle`. */
+  function put(sprite: Sprite, at: Readonly<{ x: number; y: number }>, size: number, angle: number, field: Field): void {
+    stamp(sprite, at.x, at.y, Math.cos(angle) * size, Math.sin(angle) * size, sprite.halfW * size, field);
   }
 
   function drawWarning(well: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
@@ -213,6 +253,105 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
     for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), well, size * (0.92 + 0.08 * shown), (still ? 0 : time * arc.rate) + arc.phase, field);
     ctx.globalCompositeOperation = 'source-over';
     if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), well, size * shown, 0, field);
+  }
+
+  const rippleKey = `repulse|${palette.id}|ripple`;
+  const repulseOutlineKey = `repulse|${palette.id}|outline`;
+  const paintRippleNow = (c: CanvasRenderingContext2D): void => {
+    paintRipple(c, BAKED_RADIUS, cyan);
+  };
+  const paintRepulseOutlineNow = (c: CanvasRenderingContext2D): void => {
+    paintOutline(c, BAKED_RADIUS, cyan);
+  };
+  /** A rift's mouths reuse the well's arcs, horizon and glow at this share of their size. */
+  const MOUTH_SCALE = (RIFT_RADIUS * 1.6) / BAKED_RADIUS;
+  const riftOutlineKey = `rift|${palette.id}|outline`;
+  const paintRiftOutlineNow = (c: CanvasRenderingContext2D): void => {
+    paintDashedRing(c, BAKED_RADIUS, violet);
+  };
+
+  /** A repulsion field: a glow and ripples spreading out from it, a warning ring growing outward as it comes due. */
+  function drawRepulsionWarning(force: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
+    const due = clamp(1 - force.remaining / REPULSE_TELEGRAPH_SECONDS, 0, 1);
+    const size = sizeOf(force.intensity) * (still ? 1 : 0.5 + 0.5 * due);
+    ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(time * TAU * OUTLINE_PULSE_HZ));
+    put(baker.custom(repulseOutlineKey, half, paintRepulseOutlineNow), force, size, 0, field);
+  }
+
+  function drawRepulsion(force: Readonly<PointHazardState>, field: Field, { glow, time, still }: SceneLook): void {
+    const shown = presenceOf(force.remaining, REPULSE_SECONDS);
+    const size = sizeOf(force.intensity);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = GLOW_ALPHA * glow * shown * 0.6;
+    put(baker.glow(cyan, GLOW_DIAMETER), force, size, 0, field);
+    for (let k = 0; k < RIPPLES; k++) {
+      // Each ripple spreads from the field's heart to its full reach, fading as it goes; still, they hold their places.
+      const phase = still ? k / RIPPLES : ((time / RIPPLE_SECONDS + k / RIPPLES) % 1);
+      ctx.globalAlpha = shown * (1 - phase) * 0.9;
+      put(baker.custom(rippleKey, half, paintRippleNow), force, size * (0.15 + 0.85 * phase), 0, field);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  /** A warp rift's warning: a dashed ring over each mouth, pulsing faster as the rift comes due. */
+  function drawRiftWarning(rift: Readonly<RiftState>, field: Field, { time, still }: SceneLook): void {
+    const due = 1 - clamp(rift.remaining / RIFT_TELEGRAPH_SECONDS, 0, 1);
+    ctx.globalAlpha = still ? 0.6 : 0.35 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * (OUTLINE_PULSE_HZ + 2 * due)));
+    for (const mouth of mouthsOf(rift)) put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouth, MOUTH_SCALE, 0, field);
+    drawLink(rift, time, still, 0.35);
+  }
+
+  /** A warp rift open: each mouth a swirl of the well's arcs over a dark lens, the two linked by a dashed arc. */
+  function drawRiftOpen(rift: Readonly<RiftState>, field: Field, { glow, time, still }: SceneLook): void {
+    const shown = presenceOf(rift.remaining, RIFT_SECONDS);
+    const breath = still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * (0.5 + 0.5 * Math.sin(time * TAU * STILL_PULSE_HZ)) : 1;
+    const [a, b] = mouthsOf(rift);
+    drawLink(rift, time, still, shown * breath);
+    for (const [mouth, turn] of [
+      [a, 1],
+      [b, -1],
+    ] as const) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = GLOW_ALPHA * glow * shown * breath;
+      put(baker.glow(violet, GLOW_DIAMETER), mouth, MOUTH_SCALE, 0, field);
+      ctx.globalAlpha = shown * breath;
+      for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), mouth, MOUTH_SCALE, (still ? 0 : turn * time * arc.rate) + arc.phase, field);
+      ctx.globalCompositeOperation = 'source-over';
+      if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), mouth, MOUTH_SCALE * shown, 0, field);
+    }
+  }
+
+  /** The two mouths of a warp rift, as the points they sit at. */
+  function mouthsOf(rift: Readonly<RiftState>): readonly [{ x: number; y: number }, { x: number; y: number }] {
+    mouthA.x = rift.x;
+    mouthA.y = rift.y;
+    mouthB.x = rift.toX;
+    mouthB.y = rift.toY;
+    return [mouthA, mouthB];
+  }
+
+  /** The dashed arc between a rift's mouths, bowed a little to one side and marching toward the far mouth. */
+  function drawLink(rift: Readonly<RiftState>, time: number, still: boolean, alpha: number): void {
+    if (alpha <= 0) return;
+    pen.field();
+    const mx = (rift.x + rift.toX) / 2;
+    const my = (rift.y + rift.toY) / 2;
+    const bow = RIFT_LINK_BOW * Math.hypot(rift.toX - rift.x, rift.toY - rift.y);
+    const nx = -(rift.toY - rift.y);
+    const ny = rift.toX - rift.x;
+    const length = Math.hypot(nx, ny) || 1;
+    ctx.beginPath();
+    ctx.moveTo(rift.x, rift.y);
+    ctx.quadraticCurveTo(mx + (nx / length) * bow * 2, my + (ny / length) * bow * 2, rift.toX, rift.toY);
+    ctx.setLineDash([...RIFT_LINK_DASH]);
+    ctx.lineDashOffset = still ? 0 : -time * RIFT_LINK_MARCH;
+    ctx.lineWidth = RIFT_LINK_WIDTH;
+    ctx.strokeStyle = violet;
+    ctx.globalAlpha = alpha;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 1;
   }
 
   const zoneColor = palette.hostile;
@@ -254,11 +393,18 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
         if (hazard.type === 'dangerZone') {
           if (hazard.stage === 'active') drawZone(hazard, field, look);
         } else if (hazard.type === 'gravityWell') (hazard.stage === 'warning' ? drawWarning : drawActive)(hazard, field, look);
+        else if (hazard.type === 'repulsionField') {
+          if (hazard.stage === 'warning') drawRepulsionWarning(hazard, field, look);
+          else drawRepulsion(hazard, field, look);
+        } else if (hazard.type === 'warpRift' && hazard.stage === 'active') drawRiftOpen(hazard, field, look);
         ctx.globalAlpha = 1;
       }
     },
     drawWarnings(hazards, field, look) {
-      for (const hazard of hazards) if (hazard.type === 'dangerZone' && hazard.stage === 'warning') drawZone(hazard, field, look);
+      for (const hazard of hazards) {
+        if (hazard.type === 'dangerZone' && hazard.stage === 'warning') drawZone(hazard, field, look);
+        else if (hazard.type === 'warpRift' && hazard.stage === 'warning') drawRiftWarning(hazard, field, look);
+      }
       ctx.globalAlpha = 1;
     },
   };

@@ -196,8 +196,8 @@ describe('foes in other rules', () => {
     expect(w.foes).toEqual([]);
   });
 
-  it('never appear in 1-1, 1-2 or the Dimensions past Crimson Nebula, which keep their rocks until their own foes are made', () => {
-    for (const id of ['1-1', '1-2', '4-1', '5-5'] as const) {
+  it('never appear in 1-1, 1-2 or Singularity, which keeps its rocks until its own foes are made', () => {
+    for (const id of ['1-1', '1-2', '5-1', '5-5'] as const) {
       const w = new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode: 'rank' }, startLives: 5 });
       for (let i = 0; i < 40 * 120 && w.status === 'playing'; i++) expect(ofType(step(w), 'foeSpawned'), id).toEqual([]);
     }

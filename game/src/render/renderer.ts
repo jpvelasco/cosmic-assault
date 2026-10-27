@@ -19,6 +19,7 @@ import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layo
 import { DRIFT, paletteFor, type Palette } from './palette';
 import { createParticlePass } from './particlePass';
 import { createPickupPass } from './pickupPass';
+import { createWingmanPass } from './wingmanPass';
 import type { SceneLook } from './scene';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
@@ -183,8 +184,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     boss: createBossPass(ctx, pen, baker, p),
     bolt: createBoltPass(ctx, stamp, baker, p),
     foe: createFoePass(ctx, pen, stamp, baker, p),
-    hazard: createHazardPass(ctx, stamp, baker, p),
+    hazard: createHazardPass(ctx, pen, stamp, baker, p),
     pickup: createPickupPass(ctx, stamp, baker, p),
+    wingman: createWingmanPass(ctx, stamp, baker, p),
   });
   let passes = passesFor(palette);
 
@@ -311,6 +313,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
+    passes.wingman.draw(world, alpha, field, scene);
     particlePass.drawBursts(visual.effect);
   }
 

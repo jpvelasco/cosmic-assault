@@ -41,7 +41,7 @@ interface HazardBase {
 
 /** A hazard round a point: a force field, a rift or a hole. */
 export interface PointHazardState extends HazardBase {
-  readonly type: Exclude<HazardType, 'dangerZone'>;
+  readonly type: Exclude<HazardType, 'dangerZone' | 'warpRift'>;
 }
 
 /** A danger zone: the `w` by `h` rectangle centred on (x, y), lethal to touch once active. */
@@ -51,7 +51,14 @@ export interface ZoneState extends HazardBase {
   readonly h: number;
 }
 
-export type HazardState = PointHazardState | ZoneState;
+/** A warp rift: a pair of mouths, the one at (x, y) and the one at (toX, toY), which bodies pass between once open. */
+export interface RiftState extends HazardBase {
+  readonly type: 'warpRift';
+  readonly toX: number;
+  readonly toY: number;
+}
+
+export type HazardState = PointHazardState | ZoneState | RiftState;
 
 /**
  * One type of hazard, running every event of that type in a galaxy. It is harmless while it warns. The optional
@@ -70,8 +77,8 @@ export interface Hazard {
   pull?(dt: number, bodies: Bodies): void;
   /** True when a ship of radius `r` at (x, y) touches a lethal part of it. */
   strikes?(x: number, y: number, r: number): boolean;
-  /** Moves or removes bodies once the pulls are applied. */
-  carry?(bodies: Bodies): void;
+  /** Moves or removes bodies once the pulls are applied, pushing what it did into `out`. */
+  carry?(bodies: Bodies, out: SimEvent[]): void;
   /** Where a respawning ship must come back while it is active, or null for the default. */
   respawnPoint?(): Readonly<{ x: number; y: number }> | null;
   /** Stretches its places to the new field, like the World's other entities. */

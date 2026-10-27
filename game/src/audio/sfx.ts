@@ -50,6 +50,17 @@ export const SFX_NAMES = [
   'gunshipDown',
   'mineDown',
   'bossBolt',
+  'phaserWarn',
+  'phaserBlink',
+  'riftWarn',
+  'riftOpen',
+  'riftJump',
+  'riftClose',
+  'repulseWarn',
+  'repulseOpen',
+  'repulseClose',
+  'blast',
+  'armourDeflect',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -73,10 +84,16 @@ const FANFARE: SfxCue = { name: 'cleared', delay: FANFARE_DELAY_SECONDS };
 /** Asteroid sizes 0 (large) to 3 (tiny) in order. */
 const BOOM_BY_SIZE = ['boomLarge', 'boomMedium', 'boomSmall', 'boomTiny'] as const satisfies readonly SfxName[];
 
-/** A killed foe's death: the splitter breaks like a rock that cracks apart, a drone goes down with a zap, a gunship with a heavier one, a mine with a pop. */
-const DEATH_BY_FOE = { splitter: 'splitterBreak', drone: 'droneDown', gunship: 'gunshipDown', mine: 'mineDown' } as const satisfies Readonly<Record<FoeKind, SfxName>>;
-/** A drone group arrives with a buzz; the others arrive unheard, a gunship's windup and a mine's ring being their warnings. */
-const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm', gunship: null, mine: null } as const satisfies Readonly<Record<FoeKind, SfxName | null>>;
+/**
+ * A killed foe's death: the splitter breaks like a rock that cracks apart, a drone goes down with a zap, a gunship with a
+ * heavier one, a mine with a pop, a phaser with a zap and an armoured rock like a splitter.
+ */
+const DEATH_BY_FOE = { splitter: 'splitterBreak', drone: 'droneDown', gunship: 'gunshipDown', mine: 'mineDown', phaser: 'droneDown', armoured: 'splitterBreak' } as const satisfies Readonly<Record<FoeKind, SfxName>>;
+/**
+ * A drone group arrives with a buzz; the others arrive unheard, a gunship's windup, a mine's ring and a phaser's warning
+ * being their warnings.
+ */
+const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm', gunship: null, mine: null, phaser: null, armoured: null } as const satisfies Readonly<Record<FoeKind, SfxName | null>>;
 
 /**
  * The most times a sound starts in one frame; the rest are dropped. Held fire plus a hit-stop catch-up would stack shot
@@ -84,17 +101,20 @@ const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm', gunship: null, min
  * glancing off a shielded core is heard as one tick. Foes' bolts are heard two at a time, and a boss's volley of bolts, a
  * dozen at once, as one zap.
  */
-export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2, bossBolt: 1 };
+export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1 };
 
 /** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
 export function isBossKill(events: readonly SimEvent[]): boolean {
   return events.some((event) => event.type === 'bossDown');
 }
 
-/** Each force field's warning, start and end sounds (one with sounds also hums while active); a repulsion field is silent until it has its own. */
-const FORCE_SOUNDS: Readonly<Record<ForceKind, { readonly warn: SfxName; readonly open: SfxName; readonly close: SfxName } | null>> = {
-  gravityWell: { warn: 'wellWarn', open: 'wellOpen', close: 'wellClose' },
-  repulsionField: null,
+/**
+ * Each force field's warning, start and end sounds, and whether it hums while it is active: a gravity well hums, a
+ * repulsion field has its own sounds and no hum.
+ */
+const FORCE_SOUNDS: Readonly<Record<ForceKind, { readonly warn: SfxName; readonly open: SfxName; readonly close: SfxName; readonly hum: boolean }>> = {
+  gravityWell: { warn: 'wellWarn', open: 'wellOpen', close: 'wellClose', hum: true },
+  repulsionField: { warn: 'repulseWarn', open: 'repulseOpen', close: 'repulseClose', hum: false },
 };
 
 /** The sound an event makes, or null for a silent one; the cleared galaxy's fanfare belongs to its results card instead. */
@@ -141,11 +161,28 @@ function soundOf(event: SimEvent): SfxName | null {
       return 'showerWhoosh';
     // A well also hums while it pulls: see `humFor`.
     case 'wellWarning':
-      return FORCE_SOUNDS[event.kind]?.warn ?? null;
+      return FORCE_SOUNDS[event.kind].warn;
     case 'wellStart':
-      return FORCE_SOUNDS[event.kind]?.open ?? null;
+      return FORCE_SOUNDS[event.kind].open;
     case 'wellEnd':
-      return FORCE_SOUNDS[event.kind]?.close ?? null;
+      return FORCE_SOUNDS[event.kind].close;
+    case 'foeDeflected':
+      return 'armourDeflect';
+    case 'phaserWarn':
+      return 'phaserWarn';
+    case 'phaserBlink':
+      return 'phaserBlink';
+    case 'riftWarning':
+      return 'riftWarn';
+    case 'riftOpen':
+      return 'riftOpen';
+    case 'riftClose':
+      return 'riftClose';
+    // Only a body that is the ship is heard: a rock or foe passing through a rift is silent.
+    case 'riftJump':
+      return event.ship ? 'riftJump' : null;
+    case 'blast':
+      return 'blast';
     case 'foeWindup':
       return 'windupTick';
     // Each source of bolt has its own voice: a foe's zaps, a boss's (a dozen at once in a volley) zaps more quietly.
@@ -182,9 +219,7 @@ function soundOf(event: SimEvent): SfxName | null {
     case 'bossDown':
       return 'bossDown';
     // A meteor leaving is not an event to the player, and a shower ending needs no fanfare. The clear's fanfare is
-    // cued by its results card (`screenCue`). A blast is heard in the booms of what it destroys until it has a sound of
-    // its own; a zone's start and end are heard as its hum.
-    case 'blast':
+    // cued by its results card (`screenCue`). A zone's start and end are heard as its hum.
     case 'zoneStart':
     case 'zoneEnd':
     case 'asteroidLeft':
@@ -217,9 +252,9 @@ export function humFor(event: SimEvent): HumChange | null {
   switch (event.type) {
     // Only a force field with sounds of its own hums: a silent one leaves the hum be.
     case 'wellStart':
-      return FORCE_SOUNDS[event.kind] === null ? null : HUM_CHANGES.wellOn;
+      return FORCE_SOUNDS[event.kind].hum ? HUM_CHANGES.wellOn : null;
     case 'wellEnd':
-      return FORCE_SOUNDS[event.kind] === null ? null : HUM_CHANGES.wellOff;
+      return FORCE_SOUNDS[event.kind].hum ? HUM_CHANGES.wellOff : null;
     case 'zoneStart':
       return HUM_CHANGES.zoneOn;
     case 'zoneEnd':

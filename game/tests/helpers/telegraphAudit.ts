@@ -1,4 +1,4 @@
-import { GUNSHIP, MINE } from '../../src/content/foes';
+import { GUNSHIP, MINE, PHASER } from '../../src/content/foes';
 import { HAZARD_RULES } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, FoeKind, HazardType } from '../../src/content/types';
@@ -39,6 +39,7 @@ export const HAZARD_TELEGRAPHS: Readonly<Partial<Record<HazardType, HazardTelegr
   gravityWell: { warning: 'wellWarning', start: 'wellStart' },
   repulsionField: { warning: 'wellWarning', start: 'wellStart' },
   dangerZone: { warning: 'zoneWarning', start: 'zoneStart' },
+  warpRift: { warning: 'riftWarning', start: 'riftOpen' },
 };
 
 const AUDITED = Object.entries(HAZARD_TELEGRAPHS) as [HazardType, HazardTelegraph][];
@@ -217,6 +218,8 @@ export const FOE_TELEGRAPHS: Readonly<Record<FoeKind, FoeTelegraph | null>> = {
   drone: null,
   gunship: { warning: 'foeWindup', harm: 'boltFired', minimum: Math.max(MIN_WINDUP_SECONDS, GUNSHIP.windup) },
   mine: { warning: 'mineArmed', harm: 'mineBlast', minimum: Math.max(MIN_WINDUP_SECONDS, MINE.fuse) },
+  phaser: { warning: 'phaserWarn', harm: 'phaserBlink', minimum: Math.max(MIN_WINDUP_SECONDS, PHASER.warn) },
+  armoured: null,
 };
 
 /** A foe's harm and the warning it was paired with by the foe's id. */
@@ -232,6 +235,7 @@ export interface FoeAttackPair {
 function foeHarm(event: SimEvent): { readonly kind: FoeKind; readonly foe: number } | null {
   if (event.type === 'boltFired') return event.source === 'boss' ? null : { kind: event.source, foe: event.owner };
   if (event.type === 'mineBlast') return { kind: 'mine', foe: event.id };
+  if (event.type === 'phaserBlink') return { kind: 'phaser', foe: event.id };
   return null;
 }
 

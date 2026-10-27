@@ -351,6 +351,59 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
     tone(bed, out, { type: 'square', from: 1100, to: 280, start: t, duration: 0.09, peak: 0.045 });
     noiseBurst(bed, out, { filter: 'highpass', from: 3000, to: 1500, start: t, duration: 0.06, peak: 0.05 });
   },
+  // A shot turned aside by armour: a short bright clink, higher than a boss's shield tick.
+  armourDeflect: (bed, out, t) => {
+    tone(bed, out, { type: 'triangle', from: 2200, to: 1500, start: t, duration: 0.08, peak: 0.07 });
+    tone(bed, out, { type: 'sine', from: 3300, to: 3000, start: t, duration: 0.05, peak: 0.03 });
+  },
+  // A phaser charging: two quick rising chirps, bright and unsteady.
+  phaserWarn: (bed, out, t) => {
+    for (const start of [t, t + 0.22]) tone(bed, out, { type: 'triangle', from: 900, to: 1400, start, duration: 0.18, peak: 0.08, attack: 0.02 });
+  },
+  // A phaser blinking: a bright ping that drops away into a short zap.
+  phaserBlink: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 1700, to: 600, start: t, duration: 0.12, peak: 0.1 });
+    noiseBurst(bed, out, { filter: 'highpass', from: 4000, to: 2500, start: t, duration: 0.05, peak: 0.05 });
+  },
+  // A warp rift forming: a low wavering throb, rising as it settles.
+  riftWarn: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 180, to: 260, start: t, duration: 0.45, peak: 0.14, attack: 0.1 });
+    noiseBurst(bed, out, { filter: 'bandpass', from: 800, to: 1600, q: 1.5, start: t, duration: 0.45, peak: 0.05 });
+  },
+  // A warp rift opening: a whoosh of air as the mouths part.
+  riftOpen: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'bandpass', from: 400, to: 2600, q: 1, start: t, duration: 0.5, peak: 0.12 });
+    tone(bed, out, { type: 'sine', from: 300, to: 900, start: t, duration: 0.5, peak: 0.08, attack: 0.05 });
+  },
+  // A body passing through a rift: a quick swoosh, falling.
+  riftJump: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'bandpass', from: 2600, to: 500, q: 0.9, start: t, duration: 0.22, peak: 0.14 });
+    tone(bed, out, { type: 'triangle', from: 1200, to: 300, start: t, duration: 0.2, peak: 0.08 });
+  },
+  // A warp rift closing: the whoosh drawn back and a soft thud.
+  riftClose: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 900, to: 200, start: t, duration: 0.4, peak: 0.1 });
+    noiseBurst(bed, out, { filter: 'lowpass', from: 1200, to: 300, start: t + 0.3, duration: 0.12, peak: 0.12 });
+  },
+  // A repulsion field forming: a low note pushed out, then back, as a ripple.
+  repulseWarn: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 360, to: 180, start: t, duration: 0.3, peak: 0.1, attack: 0.02 });
+    tone(bed, out, { type: 'sine', from: 180, to: 360, start: t + 0.3, duration: 0.3, peak: 0.1 });
+  },
+  // A repulsion field pushing out: a broad outward whoomp.
+  repulseOpen: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'bandpass', from: 200, to: 900, q: 0.8, start: t, duration: 0.5, peak: 0.14 });
+    tone(bed, out, { type: 'sine', from: 90, to: 220, start: t, duration: 0.5, peak: 0.14, attack: 0.05 });
+  },
+  // A repulsion field going: the push falling away.
+  repulseClose: (bed, out, t) => {
+    tone(bed, out, { type: 'sine', from: 220, to: 60, start: t, duration: 0.35, peak: 0.12 });
+  },
+  // A Field Bomb or a Nova going off: a large boom under a rushing crackle.
+  blast: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomLarge);
+    noiseBurst(bed, out, { filter: 'bandpass', from: 1600, to: 200, q: 0.8, start: t, duration: 0.5, peak: 0.2 });
+  },
 };
 
 /** A sound that plays until it is stopped. */

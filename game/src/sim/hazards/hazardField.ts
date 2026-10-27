@@ -13,12 +13,14 @@ import { DangerZones } from './dangerZone';
 import { ForceField } from './forceField';
 import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
+import { WarpRifts } from './warpRift';
 
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
   gravityWell: (setup) => new ForceField('gravityWell', FORCE_SIGN.gravityWell, setup),
   repulsionField: (setup) => new ForceField('repulsionField', FORCE_SIGN.repulsionField, setup),
   dangerZone: (setup) => new DangerZones(setup),
+  warpRift: (setup) => new WarpRifts(setup),
 };
 
 /** The stream a hazard type draws from: the gravity wells keep M5's `'hazards'`, so Ion Reach does not move. */
@@ -87,7 +89,7 @@ export class HazardField {
    * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
    * invulnerability spares the ship collisions, not physics.
    */
-  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[]): void {
+  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[]): void {
     const bodies = (this.bodies ??= { ship, rocks, foes });
     bodies.ship = ship;
     bodies.rocks = rocks;
@@ -95,7 +97,7 @@ export class HazardField {
     for (const hazard of this.hazards) hazard.pull?.(dt, bodies);
     const pull = shipPullAt(this.list, ship.x, ship.y, dt, this.shipPull);
     if (pull.x !== 0 || pull.y !== 0) nudge(ship, pull.x, pull.y, WELL_SPEED_CAP);
-    for (const hazard of this.hazards) hazard.carry?.(bodies);
+    for (const hazard of this.hazards) hazard.carry?.(bodies, out);
   }
 
   /** True when a ship of radius `r` at (x, y) touches a lethal hazard. */

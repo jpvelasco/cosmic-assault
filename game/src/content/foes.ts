@@ -24,6 +24,8 @@ export const FOES: Readonly<Record<FoeKind, FoeDef>> = {
   drone: { from: 2, radius: 12, hp: 1, cost: 1, points: 100, speed: 110, group: [3, 5], pulled: false },
   gunship: { from: 3, radius: 18, hp: 3, cost: 4, points: 250, speed: 80, group: [1, 1], pulled: false },
   mine: { from: 3, radius: 12, hp: 1, cost: 2, points: 150, speed: 25, group: [1, 2], pulled: true },
+  phaser: { from: 4, radius: 16, hp: 2, cost: 2.5, points: 200, speed: 90, group: [1, 2], pulled: false },
+  armoured: { from: 4, radius: 42, hp: 3, cost: 4, points: 300, speed: 60, group: [1, 1], pulled: true },
 };
 
 /** Radians per second a drone can turn toward the ship. */
@@ -55,6 +57,28 @@ export const GUNSHIP = {
  * `blastRadius`. It drifts in no nearer the ship than the safe radius plus `armRadius`.
  */
 export const MINE = { armRadius: 110, fuse: 0.6, blastRadius: 80 } as const;
+/**
+ * How a phaser blinks: every `every` ± `everyJitter` seconds it shows its warning for `warn` seconds, a flash at its
+ * origin and an outline where it will blink to, `range` units off (and at least `inset` inside the field's edges). It
+ * seeks the ship at its speed and turn rate, keeping `separation` from the phasers beside it, as a drone does.
+ */
+export const PHASER = {
+  every: 3,
+  everyJitter: 0.5,
+  warn: 0.5,
+  range: [180, 300],
+  inset: 40,
+  /** A ship this near where it would blink holds it back: the phaser warns again rather than blink onto the ship. */
+  clear: 40,
+  tries: 16,
+  turnRate: 1.8,
+  separation: { radius: 36, weight: 2 },
+} as const;
+/**
+ * How an armoured rock fights: its soft arc is `softArc` radians either side of its facing, and a shot that strikes
+ * outside it is spent with no harm. It spins at most `spin` rad/s, and breaks into `shards` small rocks.
+ */
+export const ARMOURED = { softArc: (50 * Math.PI) / 180, spin: 0.35, shards: 2 } as const;
 /** A broken splitter leaves this many tiny fragments, each this many times as fast as a tiny rock. */
 export const SPLITTER_FRAGMENTS = 3;
 export const FRAGMENT_SPEED_MULTIPLIER = 1.6;

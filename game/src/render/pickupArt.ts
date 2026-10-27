@@ -61,6 +61,8 @@ const RING_Y = 0.2;
 /** A dart, point to the right, at the end of the curve a seeking shot flies. */
 const DART = [0.98, -0.28, 0.18, -0.78, 0.36, -0.28, 0.18, 0.22];
 const BURST = [0, -1, 0.22, -0.53, 0.71, -0.71, 0.53, -0.22, 1, 0, 0.53, 0.22, 0.71, 0.71, 0.22, 0.53, 0, 1, -0.22, 0.53, -0.71, 0.71, -0.53, 0.22, -1, 0, -0.53, -0.22, -0.71, -0.71, -0.22, -0.53];
+/** A four-pointed spark at a fuse's end. */
+const SPARK = [0, -1, 0.26, -0.26, 1, 0, 0.26, 0.26, 0, 1, -0.26, 0.26, -1, 0, -0.26, -0.26];
 const HOURGLASS = [-0.7, -1, 0.7, -1, 0.12, 0, 0.7, 1, -0.7, 1, -0.12, 0];
 const LEAD = [-0.2, -1, 0.3, 0.6, -0.7, 0.6];
 const WING = [0.55, -0.4, 0.9, 0.9, 0.2, 0.9];
@@ -115,15 +117,18 @@ const GLYPHS: Readonly<Record<PickupId, Glyph>> = {
     ctx.stroke();
     polygon(ctx, x, y, r, DART);
   },
-  // A ring round a core: a blast around the ship.
+  // A bomb with a lit fuse: a solid round body, and a spark at the end of a fuse.
   fieldBomb: (ctx, x, y, r) => {
     ctx.beginPath();
-    ctx.arc(x, y, 0.75 * r, 0, Math.PI * 2);
-    ctx.lineWidth = 0.25 * r;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x, y, 0.3 * r, 0, Math.PI * 2);
+    ctx.arc(x - 0.2 * r, y + 0.22 * r, 0.6 * r, 0, Math.PI * 2);
     ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + 0.1 * r, y - 0.05 * r);
+    ctx.quadraticCurveTo(x + 0.45 * r, y - 0.55 * r, x + 0.72 * r, y - 0.66 * r);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 0.18 * r;
+    ctx.stroke();
+    polygon(ctx, x + 0.8 * r, y - 0.78 * r, 0.42 * r, SPARK);
   },
   // A ship with a smaller one off its wing.
   wingman: (ctx, x, y, r) => {

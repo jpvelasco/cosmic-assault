@@ -1,4 +1,5 @@
 import { FOES, MINE } from '../content/foes';
+import { WARP_RIFT } from '../content/hazards';
 import type { FoeKind } from '../content/types';
 import { ASTEROID, PICKUP } from '../sim/config';
 import { isWarpClear, type SimEvent } from '../sim/events';
@@ -82,9 +83,25 @@ const EXPOSED_BURST: Counts = { shards: 0, sparks: 18, rings: 2, smoke: 0, shake
 /** The core shielded again: one ring closing the opening. */
 const SHIELDED_BURST: Counts = { shards: 0, sparks: 6, rings: 1, smoke: 0, shake: 0, flash: 0 };
 /** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one (the sounds in sfx.ts match). */
-const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2], gunship: ASTEROID_BURSTS[1], mine: ASTEROID_BURSTS[2] };
+const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = {
+  splitter: ASTEROID_BURSTS[1],
+  drone: ASTEROID_BURSTS[2],
+  gunship: ASTEROID_BURSTS[1],
+  mine: ASTEROID_BURSTS[2],
+  phaser: ASTEROID_BURSTS[2],
+  armoured: ASTEROID_BURSTS[1],
+};
 /** A mine going off: rings out to its blast reach, sparks and smoke, a shake and a flash in the hostile hue. */
 const MINE_BLAST_BURST: Counts = { shards: 0, sparks: 22, rings: 2, smoke: 4, shake: 5, flash: 0.25 };
+/** A blast going off: two rings out to its reach, sparks and a hard shake, in the ring colour. */
+const BLAST_BURST: Counts = { shards: 0, sparks: 20, rings: 2, smoke: 0, shake: 8, flash: 0.25 };
+/** A phaser blinking: a spray of sparks and a ring where it lands. */
+const PHASER_BLINK_BURST: Counts = { shards: 0, sparks: 10, rings: 1, smoke: 0, shake: 0, flash: 0 };
+/** A ship passing through a warp rift: a ring at the mouth and a spray of sparks; a rock or foe passing is only a few sparks. */
+const RIFT_SHIP_BURST: Counts = { shards: 0, sparks: 12, rings: 1, smoke: 0, shake: 0, flash: 0.1 };
+const RIFT_BODY_BURST: Counts = { shards: 0, sparks: 3, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** The first ring of a burst is 1.6 times its origin's radius, so a blast's origin is its radius over this. */
+const BLAST_RING_SCALE = 1.6;
 /** A bolt leaving its muzzle: a couple of sparks. */
 const MUZZLE_BURST: Counts = { shards: 0, sparks: 3, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A pickup dropping or being collected: a ring and a spray of sparks in its colour, no shake. */
@@ -120,7 +137,14 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'foeHit':
       return writeBurst(into, HIT_BURST, palette.shot);
     case 'bossDeflected':
+    case 'foeDeflected':
       return writeBurst(into, DEFLECT_BURST, palette.spark);
+    case 'phaserBlink':
+      return writeBurst(into, PHASER_BLINK_BURST, palette.accent[0]);
+    case 'riftJump':
+      return writeBurst(into, event.ship ? RIFT_SHIP_BURST : RIFT_BODY_BURST, palette.accent[1]);
+    case 'blast':
+      return writeBurst(into, BLAST_BURST, palette.ring);
     case 'bossPartBroken':
       return writeBurst(into, PART_BREAK_BURST, palette.ring);
     case 'bossExposed':
@@ -139,10 +163,13 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
       return writeBurst(into, MINE_BLAST_BURST, palette.hostile);
     case 'boltFired':
       return writeBurst(into, MUZZLE_BURST, palette.hostile);
-    // The hangar's doors and the light inside are the drawer's to show; a blast shows in the bursts of what it destroys.
-    // A gunship's aim, a mine's arming and a zone are the foe and hazard passes' to show.
-    case 'blast':
+    // The hangar's doors and the light inside are the drawer's to show. A gunship's aim, a mine's arming, a phaser's
+    // warning, a zone, a rift's mouths and a repulsion field are the foe and hazard passes' to show.
     case 'foeWindup':
+    case 'phaserWarn':
+    case 'riftWarning':
+    case 'riftOpen':
+    case 'riftClose':
     case 'mineArmed':
     case 'zoneWarning':
     case 'zoneStart':
@@ -305,7 +332,15 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         return writeOrigin(origin, event.x, event.y, MINE.blastRadius / 2, emitter.palette.hostile);
       case 'boltFired':
         return writeOrigin(origin, event.x, event.y, 0, emitter.palette.hostile);
+      // A blast's first ring reaches its edge: rings are drawn at 1.6 and 2.1 times the origin's radius.
       case 'blast':
+        return writeOrigin(origin, event.x, event.y, event.radius / BLAST_RING_SCALE, emitter.palette.ring);
+      case 'foeDeflected':
+        return writeOrigin(origin, event.x, event.y, 0, null);
+      case 'phaserBlink':
+        return writeOrigin(origin, event.x, event.y, FOES.phaser.radius, emitter.palette.accent[0]);
+      case 'riftJump':
+        return writeOrigin(origin, event.x, event.y, WARP_RIFT.radius, emitter.palette.accent[1]);
       case 'foeWindup':
       case 'mineArmed':
       case 'zoneWarning':
@@ -332,6 +367,10 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'wellWarning':
       case 'wellStart':
       case 'wellEnd':
+      case 'phaserWarn':
+      case 'riftWarning':
+      case 'riftOpen':
+      case 'riftClose':
         return null;
     }
   };

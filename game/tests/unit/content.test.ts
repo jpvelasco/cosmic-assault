@@ -75,10 +75,10 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.duration).toBe(20);
   });
 
-  it('keeps every event inside the window from 20 s in to 25 s before the end', () => {
+  it('keeps every event inside the window from 15 s in (Void Rift\'s 4-5 opens its rift at 15 s) to 25 s before the end', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
-        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(20);
+        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(15);
         expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);
       }
   });
@@ -258,7 +258,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('shares five ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, and a boss\'s field', () => {
+  it('shares six ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, Void Rift\'s phasers and armour, and a boss\'s field', () => {
     const rocks = {
       large: { from: 0, base: 0.6, step: 0, max: 0.6 },
       medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
@@ -267,24 +267,33 @@ describe('the galaxy table', () => {
     const none = { from: 0, base: 0, step: 0, max: 0 };
     const splitter = { from: 0.4, base: 0.15, step: 0.08, max: 0.35 };
     const drone = { from: 1, base: 0.15, step: 0.3, max: 0.45 };
-    const foesNone = { splitter: none, drone: none, gunship: none, mine: none };
-    const swarms = { ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone, gunship: none, mine: none };
+    const foesNone = { splitter: none, drone: none, gunship: none, mine: none, phaser: none, armoured: none };
+    const swarms = { ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone, gunship: none, mine: none, phaser: none, armoured: none };
     expect(galaxyById('1-1').kinds).toEqual({ ...rocks, ...foesNone });
     expect(galaxyById('1-3').kinds).toEqual({ ...rocks, ...foesNone, splitter });
     expect(galaxyById('2-1').kinds).toEqual(swarms);
     expect(galaxyById('3-1').kinds).toEqual({ ...swarms, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.3 }, mine: { from: 2, base: 0, step: 0.3, max: 0.18 } });
+    expect(galaxyById('4-1').kinds).toEqual({
+      ...swarms,
+      gunship: { from: 2, base: 0.1, step: 0.2, max: 0.26 },
+      mine: { from: 2, base: 0, step: 0.3, max: 0.16 },
+      phaser: { from: 3, base: 0.12, step: 0.1, max: 0.3 },
+      armoured: { from: 3, base: 0.1, step: 0.1, max: 0.28 },
+    });
     for (const id of ['1-6', '2-6', '3-6', '5-6'] as const) expect(galaxyById(id).kinds, id).toEqual({ ...rocks, large: none, ...foesNone });
-    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(5);
+    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(6);
   });
 
-  it('brings in splitters from 1-3, drones from Ion Reach and gunships and mines in Crimson Nebula, which keeps Ion Reach\'s table; none before that, and none in a boss galaxy', () => {
+  it('brings in splitters from 1-3, drones from Ion Reach, gunships and mines in Crimson Nebula and phasers and armour in Void Rift, each keeping the table before it; none before that, and none in a boss galaxy', () => {
     for (const g of GALAXIES) {
       const survival = g.kind === 'survival';
       const has = (kind: ThreatKind): boolean => g.kinds[kind].max > 0;
-      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || g.dimension === 2 || g.dimension === 3));
-      expect(has('drone'), g.id).toBe(survival && (g.dimension === 2 || g.dimension === 3));
-      expect(has('gunship'), g.id).toBe(survival && g.dimension === 3);
-      expect(has('mine'), g.id).toBe(survival && g.dimension === 3);
+      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || (g.dimension >= 2 && g.dimension <= 4)));
+      expect(has('drone'), g.id).toBe(survival && g.dimension >= 2 && g.dimension <= 4);
+      expect(has('gunship'), g.id).toBe(survival && (g.dimension === 3 || g.dimension === 4));
+      expect(has('mine'), g.id).toBe(survival && (g.dimension === 3 || g.dimension === 4));
+      expect(has('phaser'), g.id).toBe(survival && g.dimension === 4);
+      expect(has('armoured'), g.id).toBe(survival && g.dimension === 4);
     }
   });
 
