@@ -123,6 +123,12 @@ export class PickupField {
     this.list.length = kept;
   }
 
+  /** Expires every pickup on the field at once, reporting each, as the warp starts. */
+  expireAll(events: SimEvent[]): void {
+    for (const p of this.list) events.push({ type: 'pickupExpired', id: p.id });
+    this.list.length = 0;
+  }
+
   /** Stretches every pickup's place to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void {
     for (const p of this.list) {

@@ -199,7 +199,8 @@ export class GalaxyRun implements Spawner {
     }
     const { events, ship } = this.arena;
     this.loadout.step(dt, events);
-    this.pickupField.step(dt, this.arena.field(), ship, this.takePickup, events);
+    // Nothing is collected once the warp starts: the clear has already reported the weapon tier the run carries on.
+    if (this.warpEndsAt === null) this.pickupField.step(dt, this.arena.field(), ship, this.takePickup, events);
   }
 
   /** The boss's HP has hit 0: it is dying, or down. */
@@ -377,7 +378,7 @@ export class GalaxyRun implements Spawner {
   }
 
   /**
-   * Clears every rock for 0 points and reports the clear: from here the ship cannot be hit and nothing scores, so
+   * Clears every rock and foe for 0 points, expires the pickups, and reports the clear: from here the ship cannot be hit and nothing scores, so
    * the outcome is final, and an app that records it now keeps the win even if the page closes during the warp.
    */
   private warpOut(elapsed: number, seconds: number): void {
@@ -387,6 +388,7 @@ export class GalaxyRun implements Spawner {
     for (const a of asteroids) events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points: 0 });
     asteroids.length = 0;
     this.foes.clear();
+    this.pickupField.expireAll(events);
     this.showers.stop();
     this.wells.stop();
     this.warpEndsAt = elapsed + seconds;
