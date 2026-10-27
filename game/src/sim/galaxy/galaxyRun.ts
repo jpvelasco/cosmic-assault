@@ -14,7 +14,7 @@ import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
 import type { HazardState } from '../hazards/hazard';
-import { HazardField, hazardStreamName } from '../hazards/hazardField';
+import { HazardField, hazardStreams } from '../hazards/hazardField';
 import { TIME_EPSILON } from '../math';
 import { Loadout } from '../pickups/effects';
 import { PickupField, type Pickup } from '../pickups/pickups';
@@ -51,14 +51,14 @@ export interface GalaxyStreams {
   readonly pickups: Rng;
   /** Foe behaviour: where they enter, their headings and their fragments. */
   readonly foes: Rng;
-  /** Each hazard type's own stream (`hazardStreamName`): where it sits, and what else it rolls. */
+  /** Each hazard type's own stream (`hazardStreamName`): where it sits, and what else it rolls. The same stream on every call. */
   readonly hazards: (type: HazardType) => Rng;
 }
 
 /** The streams of a run with `seed`. */
 export function galaxyStreams(seed: number): GalaxyStreams {
   const stream = (name: string): Rng => createRng(deriveSeed(seed, name));
-  return { director: stream('director'), boss: stream('boss'), pickups: stream('pickups'), foes: stream('foes'), hazards: (type) => stream(hazardStreamName(type)) };
+  return { director: stream('director'), boss: stream('boss'), pickups: stream('pickups'), foes: stream('foes'), hazards: hazardStreams(seed) };
 }
 
 const areaOf = (field: Field): number => field.width * field.height;
@@ -105,7 +105,7 @@ export class GalaxyRun implements Spawner {
     this.pickupField = new PickupField(galaxy.pickups, tierOf(galaxy), streams.pickups);
     this.director = new GalaxyDirector(galaxy, streams.director, areaOf(arena.field()));
     this.showers = new Showers(galaxy.events, streams.director);
-    this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId(), arena.ship);
+    this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId());
     this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
   }

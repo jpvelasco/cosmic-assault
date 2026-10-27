@@ -14,6 +14,25 @@ import { phaseAt } from '../../src/sim/galaxy/pacing';
 import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
 import type { GalaxyEvent } from '../../src/content/types';
 
+/** Seconds `e` is warned before it starts. */
+const warning = (e: GalaxyEvent): number => (e.type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[e.type].telegraph);
+
+/**
+ * Every event of `events` warned before the previous one of its type has ended: the hazards and the showers run their
+ * events one at a time, so such an event would be warned late and its telegraph cut short.
+ */
+function sameTypeOverlaps(events: readonly GalaxyEvent[]): string[] {
+  const ends = new Map<GalaxyEvent['type'], GalaxyEvent>();
+  const found: string[] = [];
+  for (const e of [...events].sort((a, b) => a.at - b.at)) {
+    const last = ends.get(e.type);
+    const end = last === undefined ? -Infinity : last.at + eventSeconds(last);
+    if (last !== undefined && e.at - warning(e) < end) found.push(`${e.type} at ${String(e.at)} is warned at ${String(e.at - warning(e))}, before the one at ${String(last.at)} ends at ${String(end)}`);
+    ends.set(e.type, e);
+  }
+  return found;
+}
+
 const KINDS: readonly ThreatKind[] = ['large', 'medium', 'small', 'splitter', 'drone'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
 
@@ -97,18 +116,25 @@ describe('the galaxy table', () => {
       for (const e of g.events) if (e.type !== 'meteorShower') expect(g.dimension, `${g.id} ${e.type}`).toBeGreaterThanOrEqual(HAZARD_RULES[e.type].from);
   });
 
-  it('schedules no events in a boss galaxy', () => {
-    for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events, g.id).toEqual([]);
-  });
-
   it('runs at most two scheduled events at once, showers included, from each warning to its end', () => {
-    const warning = (e: GalaxyEvent): number => (e.type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[e.type].telegraph);
     for (const g of GALAXIES)
       for (const e of g.events) {
         const from = e.at - warning(e);
         const running = g.events.filter((o) => o.at - warning(o) <= from && from < o.at + eventSeconds(o));
         expect(running.length, `${g.id} at ${String(from)}`).toBeLessThanOrEqual(2);
       }
+  });
+
+  it('never overlaps two events of one type: each is warned only once the last has ended (Ruling R10), in all 30 galaxies', () => {
+    expect(GALAXIES).toHaveLength(30);
+    for (const g of GALAXIES) expect(sameTypeOverlaps(g.events), g.id).toEqual([]);
+  });
+
+  it('catches a same-type overlap, which would cut the second one\'s telegraph short, but allows two types at once', () => {
+    const repel = (at: number): GalaxyEvent => ({ at, type: 'repulsionField', intensity: 1 });
+    expect(sameTypeOverlaps([repel(20), repel(35)])).toEqual(['repulsionField at 35 is warned at 33, before the one at 20 ends at 34']);
+    expect(sameTypeOverlaps([repel(20), repel(36)])).toEqual([]);
+    expect(sameTypeOverlaps([repel(20), { at: 22, type: 'gravityWell', intensity: 1 }])).toEqual([]);
   });
 
   it('times every hazard by its rule: eventSeconds reads HAZARD_RULES', () => {

@@ -1,5 +1,5 @@
 import { eventsOfType } from '../../content/curves';
-import { FORCE_SIGN, MAX_SHIP_PULL, WELL_SPEED_CAP } from '../../content/hazards';
+import { FORCE_SIGN, WELL_SPEED_CAP } from '../../content/hazards';
 import type { GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
@@ -7,10 +7,11 @@ import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
-import type { Rng } from '../rng';
+import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
 import { ForceField } from './forceField';
 import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
+import { shipPullAt } from './shipPull';
 
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
@@ -20,6 +21,16 @@ export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory
 
 /** The stream a hazard type draws from: the gravity wells keep M5's `'hazards'`, so Ion Reach does not move. */
 export const hazardStreamName = (type: HazardType): string => (type === 'gravityWell' ? 'hazards' : `hazards:${type}`);
+
+/** The hazard streams of a run with `seed`: each type's made on first ask and the same one after, so none is drawn twice over. */
+export function hazardStreams(seed: number): (type: HazardType) => Rng {
+  const made = new Map<HazardType, Rng>();
+  return (type) => {
+    let rng = made.get(type);
+    if (rng === undefined) made.set(type, (rng = createRng(deriveSeed(seed, hazardStreamName(type)))));
+    return rng;
+  };
+}
 
 /** How far round the field's centre, where the ship starts and respawns, placed hazards keep out. */
 const CENTRE_KEEP_OUT = 150;
@@ -33,21 +44,21 @@ export class HazardField {
   private readonly hazards: Hazard[] = [];
   private readonly list: HazardState[] = [];
   private readonly shipPull = { x: 0, y: 0 };
-  /** Made on the first move and refilled on every other, so moving bodies costs no allocation. */
+  /** Made on the first move and refilled on every other, so moving bodies costs no allocation. Its ship is the one the keep-outs avoid. */
   private bodies: { -readonly [K in keyof Bodies]: Bodies[K] } | null = null;
+  /** The keep-outs, refilled in place from three reused circles. */
   private readonly circles: Circle[] = [];
+  private readonly slots: { x: number; y: number; r: number }[] = [0, 1, 2].map(() => ({ x: 0, y: 0, r: 0 }));
 
   /**
    * @param events the galaxy's events; its showers are left to the director
    * @param stream the stream each hazard type draws from (`hazardStreamName`)
    * @param nextId hands out an id for each hazard
-   * @param ship the ship, which the placed hazards keep clear of
    */
   constructor(
     events: readonly GalaxyEvent[],
     stream: (type: HazardType) => Rng,
     nextId: () => number,
-    private readonly ship: Readonly<Ship>,
     factories: Readonly<Partial<Record<HazardType, HazardFactory>>> = HAZARD_FACTORIES,
   ) {
     const keepOuts = (field: Field): readonly Circle[] => this.keepOuts(field);
@@ -69,21 +80,19 @@ export class HazardField {
     this.refill();
   }
 
-  /** Applies every hazard's pull, the ship's summed and capped into one nudge, then lets them carry bodies. */
+  /**
+   * Applies every hazard's pull to the rocks and foes, nudges the ship once by `shipPullAt` (summed, capped), then lets
+   * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
+   * invulnerability spares the ship collisions, not physics (Ruling R11).
+   */
   move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[]): void {
     const bodies = (this.bodies ??= { ship, rocks, foes });
     bodies.ship = ship;
     bodies.rocks = rocks;
     bodies.foes = foes;
-    const { shipPull } = this;
-    shipPull.x = 0;
-    shipPull.y = 0;
-    for (const hazard of this.hazards) hazard.pull?.(dt, bodies, shipPull);
-    const pull = Math.hypot(shipPull.x, shipPull.y);
-    if (pull > 0) {
-      const scale = Math.min(1, (MAX_SHIP_PULL * dt) / pull);
-      nudge(ship, shipPull.x * scale, shipPull.y * scale, WELL_SPEED_CAP);
-    }
+    for (const hazard of this.hazards) hazard.pull?.(dt, bodies);
+    const pull = shipPullAt(this.list, ship.x, ship.y, dt, this.shipPull);
+    if (pull.x !== 0 || pull.y !== 0) nudge(ship, pull.x, pull.y, WELL_SPEED_CAP);
     for (const hazard of this.hazards) hazard.carry?.(bodies);
   }
 
@@ -102,15 +111,28 @@ export class HazardField {
     return null;
   }
 
-  /** The circles placed hazards keep out of: the field's centre, any respawn point and the ship's safe radius. */
+  /**
+   * The circles placed hazards keep out of: the field's centre, any respawn point and the safe radius of the ship
+   * last moved (none before the first move). A live view, refilled by each call.
+   */
   keepOuts(field: Field): readonly Circle[] {
-    const { circles, ship } = this;
+    const { circles } = this;
     circles.length = 0;
-    circles.push({ x: field.width / 2, y: field.height / 2, r: CENTRE_KEEP_OUT });
+    this.keepOut(field.width / 2, field.height / 2, CENTRE_KEEP_OUT);
     const spot = this.respawnPoint();
-    if (spot !== null) circles.push({ x: spot.x, y: spot.y, r: ASTEROID.safeRadius });
-    circles.push({ x: ship.x, y: ship.y, r: ASTEROID.safeRadius });
+    if (spot !== null) this.keepOut(spot.x, spot.y, ASTEROID.safeRadius);
+    const ship = this.bodies?.ship;
+    if (ship !== undefined) this.keepOut(ship.x, ship.y, ASTEROID.safeRadius);
     return circles;
+  }
+
+  private keepOut(x: number, y: number, r: number): void {
+    const slot = this.slots[this.circles.length];
+    if (slot === undefined) throw new Error('HazardField keeps out at most 3 circles: add a slot for the new one');
+    slot.x = x;
+    slot.y = y;
+    slot.r = r;
+    this.circles.push(slot);
   }
 
   resize(old: Field, field: Field): void {

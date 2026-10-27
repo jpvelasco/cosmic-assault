@@ -5,7 +5,8 @@ import type { Field } from './field';
 import { TIME_EPSILON } from './math';
 import type { Rng } from './rng';
 import type { GalaxyMode } from './scoring';
-import type { Ship } from './ship';
+import { respawnShip, type Ship } from './ship';
+import { placePose } from './wrap';
 
 export const MIN_PRACTICE_LEVEL = 1;
 export const MAX_PRACTICE_LEVEL = 7;
@@ -72,6 +73,13 @@ export interface Spawner {
   respawnPoint?(): Readonly<{ x: number; y: number }> | null;
   /** A shot has just broken `rock`, after the kill is scored. */
   rockKilled?(rock: Readonly<Asteroid>): void;
+}
+
+/** Brings a lost ship back: at the field's centre, invulnerable, then wherever `rules` would rather have it. */
+export function respawn(ship: Ship, field: Field, rules: Spawner): void {
+  respawnShip(ship, field);
+  const spot = rules.respawnPoint?.() ?? null;
+  if (spot !== null) placePose(ship, spot);
 }
 
 /** Today's practice: a timed spawn, a minimum on the field, rock sizes and speeds by level. */

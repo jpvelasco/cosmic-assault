@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
+import { runGalaxy } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
-import { World } from '../../src/sim/world';
+import { World, type WorldStatus } from '../../src/sim/world';
 import { practiceScript } from './practiceLog';
 
 /** The galaxies whose play the digests pin: every one of Dimensions 1 and 2. */
@@ -44,17 +45,57 @@ export function playScripted(id: GalaxyId, seed: number, onStep: (world: World, 
   return world;
 }
 
-/** The sha-256 of `playScripted(id, seed)`: every event, tagged with its step, then the final score, lives and status. */
-export function galaxyDigest(id: GalaxyId, seed: number): string {
-  const hash = createHash('sha256');
-  const world = playScripted(id, seed, (_world, events, step) => {
-    for (const event of events) hash.update(`${String(step)} ${canonicalEvent(event)}\n`);
+/**
+ * Plays `id` on seed `seed` with the expert bot, as the balance suite does, to the run's end (it clears every D1–D2
+ * galaxy), handing each step's events to `onStep`, and returns the World.
+ */
+export function playExpert(id: GalaxyId, seed: number, onStep: (world: World, events: readonly SimEvent[], step: number) => void): World {
+  let last = null as World | null;
+  let step = 0;
+  runGalaxy({
+    galaxy: galaxyById(id),
+    seed,
+    profile: 'expert',
+    onStep: (world, _controls, events) => {
+      last = world;
+      onStep(world, events, step++);
+    },
   });
-  hash.update(`end score=${String(world.score)} lives=${String(world.lives)} status=${world.status} elapsed=${String(world.elapsed)}\n`);
-  return hash.digest('hex');
+  if (last === null) throw new Error(`the expert's run of ${id} on seed ${String(seed)} took no step`);
+  return last;
 }
 
-/** Every digest, keyed `'<galaxy> seed <n>'`. */
-export function galaxyDigests(): Record<string, string> {
-  return Object.fromEntries(DIGEST_GALAXIES.flatMap((id) => DIGEST_SEEDS.map((seed) => [`${id} seed ${String(seed)}`, galaxyDigest(id, seed)])));
+/** The two inputs the digests are played under: the fixed schedule, and the expert bot, which plays every galaxy to its end. */
+export const DIGEST_INPUTS = { scripted: playScripted, expert: playExpert } as const;
+export type DigestInput = keyof typeof DIGEST_INPUTS;
+
+export interface DigestRun {
+  /** The sha-256 of every event, tagged with its step, then the final score, lives, status and elapsed time. */
+  readonly digest: string;
+  readonly status: WorldStatus;
+  /** Every event type the run logged, for the tests that keep the digests' coverage from eroding. */
+  readonly types: ReadonlySet<SimEvent['type']>;
 }
+
+export function digestRun(input: DigestInput, id: GalaxyId, seed: number): DigestRun {
+  const hash = createHash('sha256');
+  const types = new Set<SimEvent['type']>();
+  const world = DIGEST_INPUTS[input](id, seed, (_world, events, step) => {
+    for (const event of events) {
+      types.add(event.type);
+      hash.update(`${String(step)} ${canonicalEvent(event)}\n`);
+    }
+  });
+  hash.update(`end score=${String(world.score)} lives=${String(world.lives)} status=${world.status} elapsed=${String(world.elapsed)}\n`);
+  return { digest: hash.digest('hex'), status: world.status, types };
+}
+
+export const digestKey = (id: GalaxyId, seed: number): string => `${id} seed ${String(seed)}`;
+
+/** Every run under `input`, keyed `'<galaxy> seed <n>'`. */
+export function digestRuns(input: DigestInput): Record<string, DigestRun> {
+  return Object.fromEntries(DIGEST_GALAXIES.flatMap((id) => DIGEST_SEEDS.map((seed) => [digestKey(id, seed), digestRun(input, id, seed)])));
+}
+
+/** Just the digests of `digestRuns(input)`, as the fixture holds them. */
+export const digestsOf = (runs: Readonly<Record<string, DigestRun>>): Record<string, string> => Object.fromEntries(Object.entries(runs).map(([key, run]) => [key, run.digest]));

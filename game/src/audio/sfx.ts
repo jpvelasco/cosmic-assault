@@ -1,5 +1,5 @@
 import type { Screen } from '../app/flow';
-import type { FoeKind } from '../content/types';
+import type { FoeKind, ForceKind } from '../content/types';
 import { isWarpClear, type SimEvent } from '../sim/events';
 
 /** Every sound effect, in the order voices.ts defines them. */
@@ -82,6 +82,12 @@ export function isBossKill(events: readonly SimEvent[]): boolean {
   return events.some((event) => event.type === 'bossDown');
 }
 
+/** Each force field's warning, start and end sounds, and whether it hums while active; a repulsion field is silent until it has its own. */
+const FORCE_SOUNDS: Readonly<Record<ForceKind, { readonly warn: SfxName; readonly open: SfxName; readonly close: SfxName } | null>> = {
+  gravityWell: { warn: 'wellWarn', open: 'wellOpen', close: 'wellClose' },
+  repulsionField: null,
+};
+
 /** The sound an event makes, or null for a silent one; the cleared galaxy's fanfare belongs to its results card instead. */
 function soundOf(event: SimEvent): SfxName | null {
   switch (event.type) {
@@ -126,11 +132,11 @@ function soundOf(event: SimEvent): SfxName | null {
       return 'showerWhoosh';
     // A well also hums while it pulls: see `humFor`.
     case 'wellWarning':
-      return 'wellWarn';
+      return FORCE_SOUNDS[event.kind]?.warn ?? null;
     case 'wellStart':
-      return 'wellOpen';
+      return FORCE_SOUNDS[event.kind]?.open ?? null;
     case 'wellEnd':
-      return 'wellClose';
+      return FORCE_SOUNDS[event.kind]?.close ?? null;
     case 'pickupDropped':
       return 'pickupDrop';
     case 'pickupCollected':
@@ -170,9 +176,11 @@ function soundOf(event: SimEvent): SfxName | null {
  */
 export function humFor(event: SimEvent): boolean | null {
   switch (event.type) {
+    // Only a force field with sounds of its own hums: a silent one leaves the hum be.
     case 'wellStart':
-      return true;
+      return FORCE_SOUNDS[event.kind] === null ? null : true;
     case 'wellEnd':
+      return FORCE_SOUNDS[event.kind] === null ? null : false;
     case 'warpOut':
     case 'gameOver':
     case 'galaxyStart':

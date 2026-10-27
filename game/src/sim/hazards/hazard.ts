@@ -20,15 +20,6 @@ export interface Circle {
   readonly r: number;
 }
 
-/**
- * The velocity change every hazard's pull adds to the ship over one step, summed. Hazards add to it and never nudge
- * the ship themselves: the field applies the sum once, capped at `MAX_SHIP_PULL`, so stacked hazards cannot trap it.
- */
-export interface ShipPull {
-  x: number;
-  y: number;
-}
-
 /** What a hazard can act on: the ship and the World's own rock list, and the foes. */
 export interface Bodies {
   readonly ship: Ship;
@@ -58,8 +49,11 @@ export interface Hazard {
   readonly states: readonly HazardState[];
   /** Advances to `elapsed` seconds into the galaxy, pushing its warnings, starts and ends into `out`. */
   step(elapsed: number, field: Field, out: SimEvent[]): void;
-  /** Nudges `bodies` by `dt` seconds of its pull, adding the ship's share to `shipPull` instead of moving the ship. */
-  pull?(dt: number, bodies: Bodies, shipPull: ShipPull): void;
+  /**
+   * Nudges the rocks and foes in `bodies` by `dt` seconds of its pull. It never moves the ship: the ship's pull comes
+   * from every hazard's state through `shipPullAt`, summed and capped, which a hazard that pulls the ship joins.
+   */
+  pull?(dt: number, bodies: Bodies): void;
   /** True when a ship of radius `r` at (x, y) touches a lethal part of it. */
   strikes?(x: number, y: number, r: number): boolean;
   /** Moves or removes bodies once the pulls are applied. */

@@ -130,6 +130,12 @@ describe('sfxFor', () => {
     expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe('wellClose');
   });
 
+  it('keeps a repulsion field silent until it has sounds of its own: it never borrows the well\'s', () => {
+    expect(sfxFor({ type: 'wellWarning', id: 1, kind: 'repulsionField', x: 0, y: 0, at: 30 })).toBeNull();
+    expect(sfxFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
+    expect(sfxFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
+  });
+
   it('gives the pickups a drop, a collect, an expiry, an effect running out and the Shield breaking', () => {
     expect(['pickupDropped', 'pickupCollected', 'pickupExpired', 'effectEnded', 'shieldBroken'].map((type) => nameOf(CONTENT_EVENTS[type as ContentEvent]))).toEqual([
       'pickupDrop',
@@ -192,6 +198,11 @@ describe('humFor', () => {
   it('starts the gravity well hum as a well starts pulling and stops it as it lets go', () => {
     expect(humFor({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toBe(true);
     expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe(false);
+  });
+
+  it('leaves the hum be for a repulsion field, so its end never cuts a well\'s hum', () => {
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
   });
 
   it('stops it when the galaxy ends with the well still pulling, and when a new one starts', () => {

@@ -8,7 +8,7 @@ import type { Foe } from '../foes/foe';
 import { nudge, TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import { rescale } from '../wrap';
-import type { Hazard, HazardSetup, HazardState, Pullable, ShipPull } from './hazard';
+import type { Hazard, HazardSetup, HazardState, Pullable } from './hazard';
 
 /** Where, inside the field, a force field may be drawn, as shares of its width and height: clear of the edges, so it is felt. */
 const PLACE_BAND = [0.25, 0.75] as const;
@@ -31,9 +31,8 @@ export function forceShare(sign: 1 | -1, distance: number, intensity: number, dt
   return distance === 0 ? 0 : (sign * wellAcceleration(distance, intensity) * dt) / distance;
 }
 
-/** What a force field acts on: it reads the ship's place, and nudges the rocks and the foes it pulls. */
+/** What a force field nudges: the rocks, and the foes it pulls. Its pull on the ship is `shipPullAt`'s. */
 interface ForceBodies {
-  readonly ship: Readonly<Pullable>;
   readonly rocks: readonly Pullable[];
   readonly foes: readonly Foe[];
 }
@@ -49,8 +48,8 @@ interface Current extends HazardState {
 /**
  * A galaxy's gravity wells (sign +1) or repulsion fields (sign -1), in order: drawn as a warning for their telegraph,
  * then pulling (or pushing) for their length. The force is an external nudge to the velocity of the rocks and the
- * foes it pulls; the ship's share goes to the field's capped `ShipPull`. It never touches `stepShip`, whose
- * arithmetic the parity traces pin.
+ * foes it pulls; the ship's is `shipPullAt`'s, summed with every other hazard's and capped. It never touches
+ * `stepShip`, whose arithmetic the parity traces pin.
  */
 export class ForceField implements Hazard {
   private readonly events: readonly GalaxyEvent[];
@@ -95,15 +94,10 @@ export class ForceField implements Hazard {
     }
   }
 
-  /** Nudges the rocks and the foes it pulls by `dt` seconds of the active field, and adds the ship's share to `shipPull`. */
-  pull(dt: number, { ship, rocks, foes }: ForceBodies, shipPull: ShipPull): void {
+  /** Nudges the rocks and the foes it pulls by `dt` seconds of the active field. */
+  pull(dt: number, { rocks, foes }: ForceBodies): void {
     const well = this.current[0];
     if (well?.stage !== 'active') return;
-    const dx = well.x - ship.x;
-    const dy = well.y - ship.y;
-    const push = forceShare(this.sign, Math.hypot(dx, dy), well.intensity, dt);
-    shipPull.x += dx * push;
-    shipPull.y += dy * push;
     for (const rock of rocks) this.pullBody(well, rock, dt);
     for (const foe of foes) if (FOES[foe.kind].pulled) this.pullBody(well, foe, dt);
   }

@@ -1,11 +1,10 @@
 import { clamp } from '../content/curves';
-import { FORCE_SIGN, isForceKind } from '../content/hazards';
 import type { AttackId } from '../content/types';
 import type { BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
 import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
-import { forceShare } from '../sim/hazards/forceField';
+import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
 import { wrapDelta } from '../sim/wrap';
@@ -160,6 +159,8 @@ export class Pilot {
   /** The predicted ship's velocity, and a shove on it; reused. */
   private readonly motion = { vx: 0, vy: 0 };
   private readonly shove: Point = { x: 0, y: 0 };
+  /** The hazards' predicted pull on the ship, refilled per prediction. */
+  private readonly pull: ShipPull = { x: 0, y: 0 };
 
   constructor(options: PilotOptions) {
     this.rng = options.rng;
@@ -454,14 +455,10 @@ export class Pilot {
     const drag = Math.pow(heading === null ? COAST_DRAG : THRUST_DRAG, 60 * SAMPLE_SECONDS);
     let ax = heading === null ? 0 : Math.cos(heading) * PLAYER.thrust;
     let ay = heading === null ? 0 : Math.sin(heading) * PLAYER.thrust;
-    for (const hazard of hazards) {
-      if (hazard.stage !== 'active' || !isForceKind(hazard.type)) continue;
-      const dx = hazard.x - ship.x;
-      const dy = hazard.y - ship.y;
-      const pull = forceShare(FORCE_SIGN[hazard.type], Math.hypot(dx, dy), hazard.intensity);
-      ax += dx * pull;
-      ay += dy * pull;
-    }
+    // The hazards' pull, summed and capped exactly as the sim applies it, as an acceleration.
+    const pull = shipPullAt(hazards, ship.x, ship.y, 1, this.pull);
+    ax += pull.x;
+    ay += pull.y;
     const { motion, shove } = this;
     motion.vx = ship.vx;
     motion.vy = ship.vy;

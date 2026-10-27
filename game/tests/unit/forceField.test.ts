@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { eventSeconds } from '../../src/content/curves';
+import { eventSeconds, eventsOfType } from '../../src/content/curves';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import { HAZARD_RULES, WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH } from '../../src/content/hazards';
 import { lullStart, LULL_SECONDS } from '../../src/content/pacingRules';
 import type { FoeKind, GalaxyDef, GalaxyEvent } from '../../src/content/types';
-import { eventsOfType } from '../../src/content/curves';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { FoePool, type Foe } from '../../src/sim/foes/foe';
 import { ForceField, wellAcceleration } from '../../src/sim/hazards/forceField';
-import type { HazardState, Pullable, ShipPull } from '../../src/sim/hazards/hazard';
+import type { HazardState, Pullable } from '../../src/sim/hazards/hazard';
+import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
 import { createRng } from '../../src/sim/rng';
 import { rescale } from '../../src/sim/wrap';
 import { World } from '../../src/sim/world';
@@ -38,16 +38,12 @@ function forceField(events: readonly GalaxyEvent[], seed = 1, kind: 'gravityWell
   return new ForceField(kind, kind === 'gravityWell' ? 1 : -1, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [] });
 }
 
-/** For the old one-argument tests: `wells(...).wells` is the gravity wells of a schedule. */
-const wells = (events: readonly GalaxyEvent[], seed = 1): { wells: ForceField } => ({ wells: forceField(events, seed) });
-
 const stateOf = (w: ForceField): HazardState | null => w.states[0] ?? null;
 
-/** Pulls `rocks` and `foes` one step, and the ship at `ship` into a fresh accumulator, which it returns. */
+/** Pulls `rocks` and `foes` one step, and returns the field's pull on a ship at `ship`, as the hazard field applies it. */
 function pull(w: ForceField, dt: number, rocks: readonly Pullable[], foes: readonly Foe[] = [], ship: Pullable = body(-1e6, -1e6)): ShipPull {
-  const shipPull = { x: 0, y: 0 };
-  w.pull(dt, { ship, rocks, foes }, shipPull);
-  return shipPull;
+  w.pull(dt, { rocks, foes });
+  return shipPullAt(w.states, ship.x, ship.y, dt, { x: 0, y: 0 });
 }
 
 interface Beat {
@@ -105,7 +101,7 @@ describe('wellAcceleration', () => {
 
 describe('ForceField schedule', () => {
   it('draws a well 2 s ahead, then starts it on time and ends it 14 s later, with matching ids', () => {
-    const { wells: w } = wells([well(WELL_AT)]);
+    const w = forceField([well(WELL_AT)]);
     const log = trace(w, 40);
     expect(log.map((b) => b.event.type)).toEqual(['wellWarning', 'wellStart', 'wellEnd']);
     const [warning, start, end] = log;
@@ -120,7 +116,7 @@ describe('ForceField schedule', () => {
   });
 
   it('does not pull during its warning, and draws it where it will be', () => {
-    const { wells: w } = wells([well(WELL_AT)]);
+    const w = forceField([well(WELL_AT)]);
     const log = trace(w, WELL_AT - 1);
     expect(stateOf(w)).toMatchObject({ stage: 'warning' });
     const warning = log[0]?.event;
@@ -135,7 +131,7 @@ describe('ForceField schedule', () => {
 
   it('places the well inside the field, clear of its edges, from the hazards stream alone', () => {
     for (let seed = 1; seed <= 50; seed++) {
-      const log = trace(wells([well(WELL_AT)], seed).wells, 19);
+      const log = trace(forceField([well(WELL_AT)], seed), 19);
       const warning = log[0]?.event;
       if (warning?.type !== 'wellWarning') throw new Error('expected a warning');
       expect(warning.x).toBeGreaterThanOrEqual(FIELD.width * 0.25);
@@ -143,19 +139,19 @@ describe('ForceField schedule', () => {
       expect(warning.y).toBeGreaterThanOrEqual(FIELD.height * 0.25);
       expect(warning.y).toBeLessThanOrEqual(FIELD.height * 0.75);
     }
-    const place = (seed: number): SimEvent | undefined => trace(wells([well(WELL_AT)], seed).wells, 19)[0]?.event;
+    const place = (seed: number): SimEvent | undefined => trace(forceField([well(WELL_AT)], seed), 19)[0]?.event;
     expect(place(4)).toEqual(place(4));
     expect(place(4)).not.toEqual(place(5));
   });
 
   it('runs a galaxy\'s wells in turn and ignores its showers', () => {
     const events: GalaxyEvent[] = [{ at: 10, type: 'meteorShower', intensity: 1 }, well(25), well(45)];
-    const log = trace(wells(events).wells, 70);
+    const log = trace(forceField(events), 70);
     expect(log.map((b) => b.event.type)).toEqual(['wellWarning', 'wellStart', 'wellEnd', 'wellWarning', 'wellStart', 'wellEnd']);
   });
 
   it('stops at once and silently when the galaxy ends', () => {
-    const { wells: w } = wells([well(WELL_AT), well(60)]);
+    const w = forceField([well(WELL_AT), well(60)]);
     trace(w, WELL_AT + 3);
     expect(stateOf(w)).toMatchObject({ stage: 'active' });
     w.stop();
@@ -171,7 +167,7 @@ describe('ForceField schedule', () => {
   it('never lets a well fall in the lull: every well of every galaxy has ended by the time the lull starts', () => {
     let checked = 0;
     for (const g of GALAXIES) {
-      const log = trace(wells(g.events).wells, g.duration);
+      const log = trace(forceField(g.events), g.duration);
       for (const { event, elapsed } of log) {
         if (event.type !== 'wellStart' && event.type !== 'wellEnd') continue;
         checked++;
@@ -186,7 +182,7 @@ describe('ForceField schedule', () => {
 
 describe('ForceField pull', () => {
   function active(intensity: GalaxyEvent['intensity'] = 2) {
-    const { wells: w } = wells([well(WELL_AT, intensity)]);
+    const w = forceField([well(WELL_AT, intensity)]);
     const log = trace(w, WELL_AT + 0.5);
     const warning = log[0]?.event;
     if (warning?.type !== 'wellWarning') throw new Error('expected a warning');
