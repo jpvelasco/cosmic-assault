@@ -120,6 +120,8 @@ export interface FightStep {
   readonly active: AttackId | null;
   readonly windup?: number | null;
   readonly made: Readonly<Record<Exclude<AttackHarm, 'active'>, number>>;
+  /** How far each of the boss's parts lies from its core after the step, NaN for a broken one; none if absent. */
+  readonly parts?: readonly number[];
 }
 
 /** What the recorder reads of a fight after each step: a World, or a runner on a stub arena. */
@@ -139,6 +141,8 @@ export interface AttackPair {
   readonly minimum: number;
   active: number | null;
   readonly harm: Set<AttackHarm>;
+  /** How far each part lay from the core as the windup began. */
+  readonly parts: readonly number[];
 }
 
 /** Records each step of a boss fight for `auditAttacks`: call it after every step. */
@@ -164,26 +168,38 @@ export function fightRecorder(): { readonly steps: FightStep[]; record(fight: Fi
         active: boss?.active ?? null,
         windup: boss?.threat?.windup ?? null,
         made: { rocks: fresh(fight.asteroids), foes: fresh(fight.foes), bolts: fresh(fight.bolts) },
+        parts: boss?.parts.map((part) => (part.hp > 0 ? Math.hypot(part.x - boss.x, part.y - boss.y) : Number.NaN)) ?? [],
       });
     },
   };
 }
 
+/** Throws, naming the part, if one of `parts` lies at a different distance from the core than it did as `pair` was warned. */
+function holdParts(pair: AttackPair, elapsed: number, parts: readonly number[]): void {
+  parts.forEach((distance, i) => {
+    const from = pair.parts[i] ?? Number.NaN;
+    if (Number.isNaN(distance) || Number.isNaN(from) || Math.abs(distance - from) <= SLACK) return;
+    throw new Error(`${pair.attack} warned at ${seconds(pair.warned)} moved part ${String(i)} from ${from.toFixed(1)} to ${distance.toFixed(1)} from the core at ${seconds(elapsed)}, before its windup ended: hold the parts still until the attack goes active`);
+  });
+}
+
 /**
  * Pairs each boss attack with its `bossWindup`, and checks it went active, and that every rock, foe and bolt it made
  * appeared, no sooner than its own declared windup after the warning (and never under `MIN_WINDUP_SECONDS`), and that
- * it made only the harm `harms` names for it. Returns the attacks in the order they were warned; throws, naming the
- * attack, at the first that breaks the rule.
+ * it made only the harm `harms` names for it, and that no live part moved toward or away from the core before it went
+ * active. Returns the attacks in the order they were warned; throws, naming the attack, at the first that breaks the
+ * rule.
  */
 export function auditAttacks(steps: readonly FightStep[], harms: Readonly<Record<AttackId, AttackHarm>> = ATTACK_TELEGRAPHS): AttackPair[] {
   const pairs: AttackPair[] = [];
   let current: AttackPair | null = null;
   const early = (pair: AttackPair, elapsed: number, what: string): Error =>
     new Error(`${pair.attack} warned at ${seconds(pair.warned)} ${what} at ${seconds(elapsed)}, under its ${seconds(pair.minimum)} windup: lengthen its windup, or make nothing before it ends`);
-  for (const { elapsed, events, active, windup, made } of steps) {
+  for (const { elapsed, events, active, windup, made, parts = [] } of steps) {
+    if (current !== null && current.active === null && active !== current.attack) holdParts(current, elapsed, parts);
     for (const event of events) {
       if (event.type !== 'bossWindup') continue;
-      current = { attack: event.attack, warned: elapsed, minimum: Math.max(MIN_WINDUP_SECONDS, windup ?? 0), active: null, harm: new Set() };
+      current = { attack: event.attack, warned: elapsed, minimum: Math.max(MIN_WINDUP_SECONDS, windup ?? 0), active: null, harm: new Set(), parts };
       pairs.push(current);
     }
     if (current !== null && active === current.attack && current.active === null) {

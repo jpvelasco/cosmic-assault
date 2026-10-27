@@ -189,6 +189,14 @@ describe('auditAttacks', () => {
     expect(auditAttacks([log[0] as FightStep, step(2.2, { windup: 1.2, made: { rocks: 4, foes: 0, bolts: 0 } })])[0]?.minimum).toBe(1.2);
   });
 
+  it('fails a part moved toward or away from the core before the windup ends, naming it, and lets it move once active', () => {
+    expect(() => auditAttacks([step(1, { events: [windup('quake')], parts: [100, 50] }), step(1.2, { parts: [100, 60] })])).toThrow(/^quake .*moved part 1 from 50\.0 to 60\.0/);
+    const moving = [step(1, { events: [windup('pulse')], parts: [100] }), step(1.5, { active: 'pulse', parts: [200] }), step(1.6, { active: 'pulse', parts: [300] })];
+    expect(auditAttacks(moving).map((p) => p.active)).toEqual([1.5]);
+    // A part broken or grown back meanwhile has not moved.
+    expect(() => auditAttacks([step(1, { events: [windup('quake')], parts: [100, Number.NaN] }), step(1.2, { parts: [Number.NaN, 70] })])).not.toThrow();
+  });
+
   it('fails attack-made bodies with no attack warned, and harm an attack is not listed for', () => {
     expect(() => auditAttacks([step(1, { made: { rocks: 0, foes: 0, bolts: 2 } })])).toThrow(/no attack warned/);
     expect(() => auditAttacks([step(1, { events: [windup('quake')] }), step(2, { made: { rocks: 0, foes: 0, bolts: 2 } })])).toThrow(/quake made bolts/);
