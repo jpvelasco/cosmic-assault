@@ -106,6 +106,11 @@ export function blinkHidden(elapsed: number): boolean {
   return Math.floor(elapsed * BLINK_HZ * 2) % 2 === 1;
 }
 
+/** True while the ship is drawn hidden: invulnerable and in the hidden half of its blink. The ship and its Wingman share this. */
+export function shipHidden(world: Pick<World, 'ship' | 'elapsed'>): boolean {
+  return world.ship.invulnerable && blinkHidden(world.elapsed);
+}
+
 export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts = {}): Renderer {
   const ctx = get2dContext(canvas);
   let palette: Palette = DRIFT;
@@ -251,7 +256,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const { x, y } = pose;
     // The Shield's ring (and its crack, as the hit that broke it starts the blink) shows through the blink.
     passes.pickup.drawShield(world.effects.shield, x, y, field, scene);
-    if (ship.invulnerable && blinkHidden(world.elapsed)) return;
+    if (shipHidden(world)) return;
     // The squash scales the hull and its flame, not the glow: the pen's turn (cos, sin) carries a scale too.
     const squash = effects.reducedMotion ? 1 : hitFlash.shipScale;
     const cos = Math.cos(pose.angle) * squash;
@@ -314,7 +319,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
     // The Wingman flies with the ship, so it blinks hidden with it while the ship is invulnerable and in its hidden half.
-    if (!(world.ship.invulnerable && blinkHidden(world.elapsed))) passes.wingman.draw(world, alpha, field, scene);
+    if (!shipHidden(world)) passes.wingman.draw(world, alpha, field, scene);
     particlePass.drawBursts(visual.effect);
   }
 
