@@ -1,8 +1,11 @@
 import { clamp } from '../content/curves';
-import type { BossView } from '../sim/boss/behaviour';
+import type { AttackId } from '../content/types';
+import type { BossView, Point } from '../sim/boss/behaviour';
+import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
+import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import { wellAcceleration } from '../sim/hazards/gravityWell';
-import { TAU, turnBetween } from '../sim/math';
+import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
 import { wrapDelta } from '../sim/wrap';
 import { copyIntent, Hands, idleIntent, type Intent } from './hands';
@@ -34,6 +37,8 @@ const SPLITTER_SAFE = 200;
 const HOLD_FIRE_ARC = 0.35;
 /** A boss's core sends its attacks out from close by, so the pilot keeps this much farther from it too. */
 const CORE_MARGIN = 40;
+/** A boss's own rocks fly straight and never wrap, so the pilot lets them pass this much closer than the field's. */
+const BOSS_ROCK_SLACK = 35;
 /** It goes for a pickup this near that will not expire on the way. */
 const PICKUP_REACH = 450;
 const PICKUP_MIN_SECONDS = 1;
@@ -45,6 +50,21 @@ const THINK_STEPS = 2;
 const COAST_DRAG = PLAYER.dragPerFrame60;
 const THRUST_DRAG = Math.min(COAST_DRAG + STICK.maxDragReliefFactor * (1 - COAST_DRAG), STICK.maxDrag);
 const IDLE: Readonly<Intent> = Object.freeze(idleIntent());
+/**
+ * Attacks that send the core, or its parts, at where the ship was as their windup began, and how far either side of
+ * that line they reach: the pilot keeps out of the lane while the attack lasts.
+ */
+const LANE_REACH: Readonly<Partial<Record<AttackId, (boss: Readonly<BossView>) => number>>> = {
+  lunge: (boss) => boss.radius,
+  shardVolley: () => VOLLEY_REACH,
+};
+/** Out of this range of a boss's core, across the field, the pilot closes in, to this far out from it the way it faces. */
+const ENGAGE_RANGE = 420;
+const STANDOFF = 300;
+/** How far inside the field's edges it keeps its station. */
+const STATION_INSET = 60;
+/** How near the lead its nose must be for it to fire at a boss. */
+const BOSS_FIRE_ARC = 0.2;
 
 /** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
 function splitterAhead(view: Readonly<BotView>): boolean {
@@ -95,17 +115,23 @@ export class Pilot {
   /** Where the ship would be at each sample, relative to now. */
   private readonly sx = new Float64Array(SAMPLES + 1);
   private readonly sy = new Float64Array(SAMPLES + 1);
-  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0 };
+  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0, wraps: true };
   private readonly last = idleIntent();
   private inDanger = false;
   private dodging = true;
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
-  /** Where the ship was as the boss's current attack began its windup; armed while that attack lasts. */
-  private strikeArmed = false;
+  /** The boss's current attack, and when and where the ship was as its windup began; null between attacks. */
+  private strike: AttackId | null = null;
+  private strikeAt = 0;
   private strikeX = 0;
   private strikeY = 0;
+  /** Seconds until a boss's shove lands, from now; infinite when none is coming. */
+  private shoveIn = Infinity;
+  /** The predicted ship's velocity, and a shove on it; reused. */
+  private readonly motion = { vx: 0, vy: 0 };
+  private readonly shove: Point = { x: 0, y: 0 };
 
   constructor(options: PilotOptions) {
     this.rng = options.rng;
@@ -129,7 +155,7 @@ export class Pilot {
     }
     const aim = this.aimHeading(view);
     this.gatherThreats(view);
-    out.fire = !splitterAhead(view);
+    out.fire = aim !== null && this.mayFire(view, aim);
     out.heading = aim;
     out.thrust = false;
     this.predict(view, null);
@@ -137,7 +163,16 @@ export class Pilot {
       this.dodge(view, aim ?? view.ship.angle, out);
       return;
     }
-    this.seekPickup(view, out);
+    if (!this.seekPickup(view, out)) this.closeIn(view, out);
+  }
+
+  /**
+   * Whether to fire with its lead at `aim`: not into a splitter in its face, and at a boss only with its nose on the
+   * lead, so that no shot is spent on the hull.
+   */
+  private mayFire(view: Readonly<BotView>, aim: number): boolean {
+    if (splitterAhead(view)) return false;
+    return this.target.wraps || Math.abs(turnBetween(view.ship.angle, aim)) < BOSS_FIRE_ARC;
   }
 
   /** Whether coasting is in danger, from the last `predict`; it rolls whether to dodge as each danger starts. */
@@ -166,22 +201,42 @@ export class Pilot {
     }
   }
 
-  /** Steers for the nearest pickup in reach if thrusting that way is safe; leaves `out` aiming otherwise. */
-  private seekPickup(view: Readonly<BotView>, out: Intent): void {
+  /** Steers for the nearest pickup in reach if thrusting that way is safe, and says whether it does; leaves `out` aiming otherwise. */
+  private seekPickup(view: Readonly<BotView>, out: Intent): boolean {
     const { ship, field } = view;
     let nearest = PICKUP_REACH;
-    let heading: number | null = null;
+    let goal: Readonly<Point> | null = null;
     for (const pickup of view.pickups) {
       const distance = wrappedDistance(ship, pickup, field);
       if (distance >= nearest || pickup.expiresIn < PICKUP_MIN_SECONDS) continue;
       nearest = distance;
-      heading = Math.atan2(wrapDelta(pickup.y - ship.y, field.height), wrapDelta(pickup.x - ship.x, field.width));
+      goal = pickup;
     }
-    if (heading === null) return;
+    return goal !== null && this.steer(view, goal.x, goal.y, out);
+  }
+
+  /**
+   * Out of range of a boss in the fight, across the field, steers for a station `STANDOFF` out from its core the way it
+   * faces, kept inside the field: in front of a weak point that turns to face the ship, and near enough for every shot
+   * to reach it without coming round the wrap.
+   */
+  private closeIn(view: Readonly<BotView>, out: Intent): void {
+    const { ship, field, boss } = view;
+    if (boss?.state !== 'fighting' || Math.hypot(boss.x - ship.x, boss.y - ship.y) <= ENGAGE_RANGE) return;
+    const x = clamp(boss.x + Math.cos(boss.facing) * STANDOFF, STATION_INSET, field.width - STATION_INSET);
+    const y = clamp(boss.y + Math.sin(boss.facing) * STANDOFF, STATION_INSET, field.height - STATION_INSET);
+    this.steer(view, x, y, out);
+  }
+
+  /** Thrusts toward (x, y) by the shortest way if that is safe, and says whether it does; leaves `out` alone otherwise. */
+  private steer(view: Readonly<BotView>, x: number, y: number, out: Intent): boolean {
+    const { ship, field } = view;
+    const heading = Math.atan2(wrapDelta(y - ship.y, field.height), wrapDelta(x - ship.x, field.width));
     this.predict(view, heading);
-    if (this.least < CALM) return;
+    if (this.least < CALM) return false;
     out.heading = heading;
     out.thrust = true;
+    return true;
   }
 
   /** The heading that leads the chosen target, plus any wobble; null with nothing to shoot. */
@@ -194,16 +249,22 @@ export class Pilot {
     return leadHeading(view, this.target) + this.wobble;
   }
 
-  /** Arms the strike point as a boss attack's windup begins, where the ship is then, and disarms it once the attack is over. */
+  /**
+   * Notes a boss attack as its windup begins, with when and where the ship is then, and forgets it once the attack is
+   * over; and while a pulse winds up, when its shove will land.
+   */
   private trackStrike(view: Readonly<BotView>): void {
     const boss = view.boss;
-    if (boss === null || (boss.windup === null && boss.active === null)) {
-      this.strikeArmed = false;
-    } else if (!this.strikeArmed) {
-      this.strikeArmed = true;
+    const attack = boss === null ? null : (boss.windup ?? boss.active);
+    if (attack === null) {
+      this.strike = null;
+    } else if (this.strike === null) {
+      this.strike = attack;
+      this.strikeAt = view.elapsed;
       this.strikeX = view.ship.x;
       this.strikeY = view.ship.y;
     }
+    this.shoveIn = boss?.windup === 'pulse' ? Math.max(0, this.strikeAt + MONOLITH_WINDUPS.pulse - view.elapsed) : Infinity;
   }
 
   /** Lists every threat that could come near the ship over the look-ahead, relative to it. */
@@ -211,25 +272,28 @@ export class Pilot {
     this.count = 0;
     const { ship, boss } = view;
     this.harmlessFor = ship.invulnerable ? ship.invulnerableFor : 0;
-    for (const rock of view.asteroids) this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false);
+    for (const rock of view.asteroids) {
+      const slack = boss !== null && rock.transient === true ? BOSS_ROCK_SLACK : 0;
+      this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius - slack, false);
+    }
     for (const foe of view.foes) {
       if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false);
     }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
     for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
-    if (this.strikeArmed) this.addLane(view, boss);
+    const laneReach = this.strike === null ? undefined : LANE_REACH[this.strike];
+    if (laneReach !== undefined) this.addLane(view, boss, laneReach(boss));
   }
 
   /**
-   * The lane from the core to the strike point, as circles the core's size no more than a radius apart: a telegraphed
-   * attack may send the core charging down it. A boss never leaves the field, so neither does the lane's end.
+   * The lane from the core to the strike point, as circles `radius` across no more than a radius apart: a telegraphed
+   * attack may send the core, or its shards, down it. A boss never leaves the field, so neither does the lane's end.
    */
-  private addLane(view: Readonly<BotView>, boss: Readonly<BossView>): void {
+  private addLane(view: Readonly<BotView>, boss: Readonly<BossView>, radius: number): void {
     const { field } = view;
-    const { radius } = boss;
-    const dx = clamp(this.strikeX, radius, field.width - radius) - boss.x;
-    const dy = clamp(this.strikeY, radius, field.height - radius) - boss.y;
+    const dx = clamp(this.strikeX, boss.radius, field.width - boss.radius) - boss.x;
+    const dy = clamp(this.strikeY, boss.radius, field.height - boss.radius) - boss.y;
     const circles = Math.max(1, Math.ceil(Math.hypot(dx, dy) / radius));
     for (let i = 1; i <= circles; i++) this.addThreat(view, boss.x + (dx * i) / circles, boss.y + (dy * i) / circles, 0, 0, radius, true);
   }
@@ -283,9 +347,12 @@ export class Pilot {
     this.mean = total / SAMPLES;
   }
 
-  /** Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap and a well's pull. */
+  /**
+   * Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap, a well's pull
+   * and a boss's coming shove.
+   */
   private predictShip(view: Readonly<BotView>, heading: number | null): void {
-    const { ship, well } = view;
+    const { ship, well, boss } = view;
     const drag = Math.pow(heading === null ? COAST_DRAG : THRUST_DRAG, 60 * SAMPLE_SECONDS);
     let ax = heading === null ? 0 : Math.cos(heading) * PLAYER.thrust;
     let ay = heading === null ? 0 : Math.sin(heading) * PLAYER.thrust;
@@ -297,17 +364,25 @@ export class Pilot {
       ax += dx * pull;
       ay += dy * pull;
     }
-    let { vx, vy } = ship;
+    const { motion, shove } = this;
+    motion.vx = ship.vx;
+    motion.vy = ship.vy;
     let x = 0;
     let y = 0;
     for (let k = 1; k <= SAMPLES; k++) {
-      vx = vx * drag + ax * SAMPLE_SECONDS;
-      vy = vy * drag + ay * SAMPLE_SECONDS;
+      if (boss !== null && this.shoveIn < k * SAMPLE_SECONDS && this.shoveIn >= (k - 1) * SAMPLE_SECONDS) {
+        pulseShove(boss, ship.x + x, ship.y + y, shove);
+        nudge(motion, shove.x, shove.y, MAX_SHOVE_SPEED);
+      }
+      let vx = motion.vx * drag + ax * SAMPLE_SECONDS;
+      let vy = motion.vy * drag + ay * SAMPLE_SECONDS;
       const speed = Math.hypot(vx, vy);
       if (speed > PLAYER.maxSpeed) {
         vx *= PLAYER.maxSpeed / speed;
         vy *= PLAYER.maxSpeed / speed;
       }
+      motion.vx = vx;
+      motion.vy = vy;
       x += vx * SAMPLE_SECONDS;
       y += vy * SAMPLE_SECONDS;
       this.sx[k] = x;

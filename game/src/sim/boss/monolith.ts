@@ -2,7 +2,7 @@ import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
 import { TAU } from '../math';
 import { rockRing } from './attacks';
-import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from './behaviour';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView, Point } from './behaviour';
 import { bossHome } from './bossRunner';
 
 /** How many shards it starts with, least and most. */
@@ -29,6 +29,8 @@ const VOLLEY_SECONDS = 1.8;
 const VOLLEY_SPREAD = 46;
 /** How far past the aim the shards fly before they turn back. */
 const VOLLEY_OVERSHOOT = 70;
+/** How far either side of its line of flight a volley's shards reach. */
+export const VOLLEY_REACH = VOLLEY_SPREAD + SHARD_RADIUS;
 
 /** Rocks in a quake's ring, by phase (it quakes only from phase 2). */
 const QUAKE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 8, 2: 8, 3: 10 };
@@ -44,7 +46,7 @@ const PULSE_REACH = 320;
 export type MonolithAttack = 'shardVolley' | 'quake' | 'pulse';
 
 /** The Monolith's windups, in seconds. */
-const MONOLITH_WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 0.6, quake: 0.8, pulse: 0.5 };
+export const MONOLITH_WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 0.6, quake: 0.8, pulse: 0.5 };
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
@@ -186,18 +188,35 @@ class Monolith implements BossBehaviour {
   }
 }
 
-/** Shoves the ship straight away from the core once, hardest at its rim and fading to nothing 320 units beyond it. */
+/**
+ * Writes into `out`, and returns, the pulse's shove on a ship at (x, y): straight away from the core, hardest at its rim
+ * and fading to nothing 320 units beyond it; none on a ship at its very centre.
+ */
+export function pulseShove(boss: Readonly<Pick<BossView, 'x' | 'y' | 'radius'>>, x: number, y: number, out: Point): Point {
+  const dx = x - boss.x;
+  const dy = y - boss.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0) {
+    out.x = 0;
+    out.y = 0;
+    return out;
+  }
+  const speed = PULSE_SPEED * clamp(1 - (distance - boss.radius) / PULSE_REACH, 0, 1);
+  out.x = (dx / distance) * speed;
+  out.y = (dy / distance) * speed;
+  return out;
+}
+
+/** The shove a pulse asks for; one point, reused. */
+const shove: Point = { x: 0, y: 0 };
+
+/** Shoves the ship away from the core once, as `pulseShove` says. */
 function pulse(ctx: AttackContext): void {
   if (ctx.age !== 0) return;
-  const { boss } = ctx;
   const { ship } = ctx.arena;
-  const dx = ship.x - boss.x;
-  const dy = ship.y - boss.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance === 0) return;
-  const speed = PULSE_SPEED * clamp(1 - (distance - boss.radius) / PULSE_REACH, 0, 1);
-  ctx.shoveX = (dx / distance) * speed;
-  ctx.shoveY = (dy / distance) * speed;
+  pulseShove(ctx.boss, ship.x, ship.y, shove);
+  ctx.shoveX = shove.x;
+  ctx.shoveY = shove.y;
 }
 
 /** The Monolith's behaviour, with its attacks spelled out. */
