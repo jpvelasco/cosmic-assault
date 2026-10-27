@@ -9,9 +9,6 @@ import type { Arena } from '../rules';
 import { rescale } from '../wrap';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
 
-// The contract lives in ./behaviour; this re-export serves the bot branch until it is rebased onto it, then goes.
-export type { AttackContext, AttackSpec, BossBehaviour, BossFactory, BossFoes, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
-
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
 export const MIN_WINDUP_SECONDS = 0.35;
 /** How long a beaten boss takes to die; the renderer fades it over this. */

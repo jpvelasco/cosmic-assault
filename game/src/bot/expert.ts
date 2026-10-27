@@ -1,5 +1,5 @@
 import { clamp } from '../content/curves';
-import type { BossView } from '../sim/boss/bossRunner';
+import type { BossView } from '../sim/boss/behaviour';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import { wellAcceleration } from '../sim/hazards/gravityWell';
 import { TAU, turnBetween } from '../sim/math';

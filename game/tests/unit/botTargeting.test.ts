@@ -4,7 +4,7 @@ import { chooseTarget, leadHeading, type Target } from '../../src/bot/targeting'
 import { createView, readView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { FoeKind } from '../../src/content/types';
-import type { BossPart, BossView } from '../../src/sim/boss/bossRunner';
+import type { BossView, Point } from '../../src/sim/boss/behaviour';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Foe } from '../../src/sim/foes/foe';
 import { createRng } from '../../src/sim/rng';
@@ -15,12 +15,10 @@ function foe(kind: FoeKind, x: number, y: number): Foe {
   return { id: 0, kind, x, y, vx: 0, vy: 0, px: x, py: y, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 };
 }
 
-function part(x: number, y: number, hp: number): BossPart {
-  return { x, y, px: x, py: y, radius: 20, hp, maxHp: 3 };
-}
-
-function boss(vulnerable: boolean, parts: readonly BossPart[], state: BossView['state'] = 'fighting'): BossView {
-  return { id: 'sentinel', x: 640, y: 100, px: 640, py: 100, radius: 70, hp: 20, maxHp: 20, phase: 1, state, windup: null, active: null, vulnerable, parts };
+/** A boss whose behaviour names `target` as where a shot does harm. */
+function boss(target: Point | null, state: BossView['state'] = 'fighting'): BossView {
+  const vulnerable = target !== null;
+  return { id: 'sentinel', x: 640, y: 100, px: 640, py: 100, radius: 70, hp: 20, maxHp: 20, phase: 1, state, windup: null, active: null, vulnerable, parts: [], facing: Math.PI / 2, target };
 }
 
 const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0 });
@@ -43,13 +41,13 @@ describe('bot targeting', () => {
     expect(chosen(view)).toMatchObject({ x: 740, y: 360 });
   });
 
-  it("aims at a boss's core while it can be hurt, else at a live part, and at none of it outside the fight", () => {
+  it('aims where its boss says a shot does harm, off the core included, and at none of it outside the fight', () => {
     const view = sceneView();
-    view.boss = boss(true, []);
-    expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
-    view.boss = boss(false, [part(300, 100, 0), part(900, 120, 2)]);
-    expect(chosen(view)).toMatchObject({ x: 900, y: 120 });
-    view.boss = boss(true, [], 'intro');
+    view.boss = boss({ x: 640, y: 160 });
+    expect(chosen(view)).toMatchObject({ x: 640, y: 160 });
+    view.boss = boss(null);
+    expect(chosen(view)).toBeNull();
+    view.boss = boss({ x: 640, y: 100 }, 'intro');
     expect(chosen(view)).toBeNull();
   });
 
