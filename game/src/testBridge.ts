@@ -92,6 +92,9 @@ export function exposeTestBridge(app: App, hooks: E2eHooks): void {
     grantPickup(kind) {
       hooks.e2eGrantPickup?.(kind);
     },
+    restartFrameStats() {
+      hooks.e2eRestartFrameStats?.();
+    },
     crash() {
       hooks.e2eBeforeFrame = () => {
         hooks.e2eBeforeFrame = undefined;

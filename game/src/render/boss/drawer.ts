@@ -2,7 +2,7 @@ import type { BossView } from '../../sim/boss/behaviour';
 import type { SimEvent } from '../../sim/events';
 import type { FieldPen } from '../fieldPen';
 import type { Palette } from '../palette';
-import type { SpriteBaker } from '../sprites';
+import type { Sprite, SpriteBaker } from '../sprites';
 
 /** What the boss is drawn with this frame: the quality's glow strength, reduced motion, and where the ship is. */
 export interface BossLook {
@@ -64,10 +64,15 @@ export function radial(ctx: CanvasRenderingContext2D, x: number, y: number, r0: 
   return gradient;
 }
 
-/** Blits a core's sprite baked under `key`, or its white silhouette while `tinted`, at the pen's place. */
-export function blitCore({ pen, baker }: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): void {
+/** A core's sprite baked under `key`, or its white silhouette while `tinted`. */
+export function coreSprite({ baker }: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): Sprite {
   const core = baker.custom(key, half, paint);
-  pen.blit(tinted ? (baker.white(key) ?? core) : core);
+  return tinted ? (baker.white(key) ?? core) : core;
+}
+
+/** Blits `coreSprite` at the pen's place. */
+export function blitCore(kit: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): void {
+  kit.pen.blit(coreSprite(kit, key, half, paint, tinted));
 }
 
 /** Room around a core's rim for its stroke. */

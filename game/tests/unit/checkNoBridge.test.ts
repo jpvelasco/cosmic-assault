@@ -12,8 +12,9 @@ const FAST_FORWARD = 'e2e.e2eFastForward = (s) => s';
 const DAMAGE_BOSS = 'e2e.e2eDamageBoss = (n) => n';
 const GRANT_PICKUP = 'e2e.e2eGrantPickup = (k) => k';
 const EVENT_TALLY = 'e2e.e2eEvents = (e) => e';
-const ALL_HOOKS = `${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${EVENT_TALLY}`;
-const PASSED = 'e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant and event-tally hooks';
+const RESTART_STATS = 'e2e.e2eRestartFrameStats = () => 0';
+const ALL_HOOKS = `${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${EVENT_TALLY};${RESTART_STATS}`;
+const PASSED = 'e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant, event-tally and frame-stats-restart hooks';
 
 /** Writes `files` (relative path → contents) into a fresh temp build directory. */
 function writeDist(files: Record<string, string>): string {
@@ -133,8 +134,9 @@ describe('check-no-bridge: the boss-damage hook', { timeout: SPAWN_TIMEOUT_MS },
 });
 
 describe.each([
-  { name: 'pickup-grant', mark: 'e2eGrantPickup', carrier: GRANT_PICKUP, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${EVENT_TALLY}` },
-  { name: 'event-tally', mark: 'e2eEvents', carrier: EVENT_TALLY, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP}` },
+  { name: 'pickup-grant', mark: 'e2eGrantPickup', carrier: GRANT_PICKUP, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${EVENT_TALLY};${RESTART_STATS}` },
+  { name: 'event-tally', mark: 'e2eEvents', carrier: EVENT_TALLY, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${RESTART_STATS}` },
+  { name: 'frame-stats-restart', mark: 'e2eRestartFrameStats', carrier: RESTART_STATS, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${EVENT_TALLY}` },
 ])('check-no-bridge: the $name hook', ({ name, mark, carrier, others }) => {
   it('fails a release build that carries it', { timeout: SPAWN_TIMEOUT_MS }, () => {
     const dist = writeDist({ 'assets/index.js': carrier });

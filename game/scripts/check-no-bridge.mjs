@@ -12,6 +12,7 @@ const MARKS = [
   { text: 'e2eDamageBoss', what: 'the e2e boss-damage hook', owner: 'src/app/e2eHooks.ts' },
   { text: 'e2eGrantPickup', what: 'the e2e pickup-grant hook', owner: 'src/app/e2eHooks.ts' },
   { text: 'e2eEvents', what: 'the e2e event-tally hook', owner: 'src/app/e2eHooks.ts' },
+  { text: 'e2eRestartFrameStats', what: 'the e2e frame-stats-restart hook', owner: 'src/app/e2eHooks.ts' },
 ];
 
 const e2e = process.argv[2] === '--e2e';
@@ -42,4 +43,4 @@ if (problems.length > 0) {
   for (const problem of problems) console.error(problem);
   process.exit(1);
 }
-console.log(`e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant and event-tally hooks ${e2e ? 'present' : 'absent'}`);
+console.log(`e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant, event-tally and frame-stats-restart hooks ${e2e ? 'present' : 'absent'}`);

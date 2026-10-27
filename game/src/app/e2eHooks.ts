@@ -28,6 +28,8 @@ export interface E2eHooks {
   e2eEvents?: ((events: readonly SimEvent[], world: World) => void) | undefined;
   /** The events of the run in play by type, from its first step; a new run starts a new count. Undefined before any step. */
   e2eEventCounts?: EventCounts | undefined;
+  /** Set by `installE2eHooks`: restarts the run's frame stats, warm-up included, so a measure can skip a settling stretch. */
+  e2eRestartFrameStats?: (() => void) | undefined;
 }
 
 export interface E2eHookDeps {
@@ -37,11 +39,13 @@ export interface E2eHookDeps {
   controls(): Controls;
   /** Asks for the canvas to be drawn on the next frame. */
   redraw(): void;
+  /** Forgets the frame times measured so far, warm-up included. */
+  restartFrameStats(): void;
 }
 
 /**
- * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally), in an e2e build only: a release build
- * compiles this to nothing, which `check:no-bridge` proves by finding no hook name in `dist/`.
+ * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally, frame-stats restart), in an e2e build only:
+ * a release build compiles this to nothing, which `check:no-bridge` proves by finding no hook name in `dist/`.
  */
 export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): void {
   if (import.meta.env.MODE !== 'e2e' || e2e === undefined) return;
@@ -82,6 +86,9 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
       field.list.push({ id, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: PICKUP.lifespan });
       galaxy['arena'].events.push({ type: 'pickupDropped', id, kind, x, y });
     };
+  };
+  e2e.e2eRestartFrameStats = () => {
+    deps.restartFrameStats();
   };
   let counted: World | null = null;
   e2e.e2eEvents = (events, world) => {

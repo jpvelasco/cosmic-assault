@@ -167,6 +167,15 @@ export function grantPickup(page: Page, kind: PickupId): Promise<void> {
   }, kind);
 }
 
+/** Restarts the frame stats, warm-up included (see `restartFrameStats` in src/testApi.d.ts). */
+export function restartFrameStats(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.restartFrameStats();
+  });
+}
+
 /** Lands `shots` shots on the boss where they do harm (see `damageBoss` in src/testApi.d.ts); the page throws if none can. */
 export function damageBoss(page: Page, shots: number): Promise<void> {
   return page.evaluate((n) => {

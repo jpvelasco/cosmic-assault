@@ -45,6 +45,8 @@ const ENTRIES = [
   { seed: 12, claim: 'ion-reach-hazards', galaxy: ION_REACH_GALAXY },
   // The perf spec measures frame time, not an outcome; this seed pins a busy field so every run spawns the same rocks.
   { seed: 3, claim: 'busy-field', galaxy: PERF_GALAXY },
+  // The perf spec's boss scene: skipped to the Hive Carrier's fight, a ship firing and turning keeps it fighting.
+  { seed: 2, claim: 'carrier-fight', galaxy: CARRIER_GALAXY },
 ] as const satisfies readonly { readonly seed: number; readonly claim: string; readonly galaxy: GalaxyId }[];
 
 /** A claim a seed in the table makes. */
@@ -74,6 +76,21 @@ export function seedFor(claim: ClaimId): number {
 
 /** Sim seconds into a boss galaxy by which its boss is fighting: the approach, the intro, and half a second. */
 export const TO_BOSS_FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 0.5;
+
+/** Seconds the perf spec measures the busy field, holding fire and a left turn. */
+export const PERF_HOLD_SECONDS = 20;
+
+/**
+ * Seconds the perf spec plays a scene it skips into before measuring it: long enough for the quality level, which
+ * starts each run at the top, to step down to what the scene needs, as it would have in the play skipped.
+ */
+export const PERF_SETTLE_SECONDS = 7;
+
+/** Seconds the perf spec measures the boss fight: shorter than PERF_HOLD_SECONDS, as the fight takes lives fast. */
+export const PERF_FIGHT_HOLD_SECONDS = 15;
+
+/** The `?lives=` the perf spec's boss fight plays with, the most a run allows, so its ship outlasts the measure. */
+export const PERF_FIGHT_LIVES = 5;
 
 /** Sim seconds the Hive Carrier spec holds fire at the shut hangar: its first launch comes 3.2 s into the fight, so this leaves slack. */
 export const HULL_FIRE_SECONDS = 1;

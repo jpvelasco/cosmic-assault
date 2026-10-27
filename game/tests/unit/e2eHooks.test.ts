@@ -19,7 +19,7 @@ afterEach(() => {
 const worldOf = (): World => new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById('1-1'), mode: 'free' } });
 
 /** Hooks installed over `world`, with `step` driving it the way the run controller does: its events go to the tally. */
-function hooksFor(world: World | null): { hooks: E2eHooks; step: () => readonly SimEvent[] } {
+function hooksFor(world: World | null, restartFrameStats: () => void = () => undefined): { hooks: E2eHooks; step: () => readonly SimEvent[] } {
   const hooks: E2eHooks = {};
   const step = (): readonly SimEvent[] => {
     if (world === null) return [];
@@ -27,7 +27,7 @@ function hooksFor(world: World | null): { hooks: E2eHooks; step: () => readonly 
     hooks.e2eEvents?.(events, world);
     return events;
   };
-  installE2eHooks(hooks, { run: { world, step: () => void step() }, mode: () => 'playing', controls: () => NO_CONTROLS, redraw: () => undefined });
+  installE2eHooks(hooks, { run: { world, step: () => void step() }, mode: () => 'playing', controls: () => NO_CONTROLS, redraw: () => undefined, restartFrameStats });
   return { hooks, step };
 }
 
@@ -97,6 +97,18 @@ describe('the e2e event tally', () => {
     hooks.e2eEvents?.(first.step(STEP_SECONDS, NO_CONTROLS), first);
     expect(hooks.e2eEventCounts).toEqual({ galaxyStart: 1 });
     hooks.e2eEvents?.(second.step(STEP_SECONDS, NO_CONTROLS), second);
+    expect(hooks.e2eEventCounts).toEqual({ galaxyStart: 1 });
+  });
+});
+
+describe('the e2e frame-stats restart', () => {
+  it('restarts the frame stats, warm-up and all, leaving the run alone', () => {
+    const world = worldOf();
+    const restart = vi.fn();
+    const { hooks, step } = hooksFor(world, restart);
+    step();
+    hooks.e2eRestartFrameStats?.();
+    expect(restart).toHaveBeenCalledTimes(1);
     expect(hooks.e2eEventCounts).toEqual({ galaxyStart: 1 });
   });
 });

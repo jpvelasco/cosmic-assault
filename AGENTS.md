@@ -26,7 +26,8 @@
   table entry plus a claim check in `game/tests/helpers/seedClaims.ts`). Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
-  tally) reaches `dist/`. Each hook lives in `app/e2eHooks.ts`, is set only under
+  tally, frame-stats restart) reaches `dist/`. Each hook lives in
+  `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
   and a case in `tests/unit/checkNoBridge.test.ts`; a new hook needs all three.
   `?galaxy=` jumps straight into a level (see `app/seed.ts`). A run started with `?galaxy=`,
@@ -120,7 +121,11 @@
   - `render/` draws from interpolated sim poses. Sprites are baked once into a
     bounded LRU cache (`spriteCache.ts`, `sprites.ts`); glows are baked or
     additive sprites. Never set `shadowBlur` (ESLint bans it) or a canvas
-    `filter` per frame. Effects (`effects.ts`) drive a pooled particle system,
+    `filter` per frame. `fieldPen.ts` lands an upright sprite drawn at its baked
+    size on whole device pixels, which a CPU-rasterized canvas copies several
+    times faster than a resampled one; `turnedSprite.ts` turns a big sprite once
+    onto its own canvas and draws that upright until its angle moves its corners
+    half a pixel. Effects (`effects.ts`) drive a pooled particle system,
     shake and flash, and honour `prefers-reduced-motion`.
   - `render/quality.ts` steps through `QUALITY_LEVELS` from measured frame
     time with hysteresis, judged against the display's own frame interval as
@@ -175,8 +180,9 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    from `game/`; install Chromium first with `npx playwright install chromium`.
    Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
    4318 (release), clear of Vite's default preview port. `npm run test:perf`
-   (the report-only `perf` project: 4x CPU slowdown, writes
-   `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
+   (the report-only `perf` project: 4x CPU slowdown, a busy field and a boss
+   fight, both written to `game/test-results/perf.json`) is not part of
+   `test:e2e`; CI runs it as the
    non-required `perf` job. `npm run test:balance` runs the slow many-seed bot
    suites in `game/tests/balance/` (boss kill rates and clear rates against the
    targets in `targets.ts`), which `npm test` leaves out; run it after any change

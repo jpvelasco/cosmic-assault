@@ -17,9 +17,10 @@ interface Draw {
   readonly alpha: number;
 }
 
-/** A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force. */
-function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
+/** A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force, to `sink`. */
+function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
   const draws: Draw[] = [];
+  const log = sink ?? ((draw: Draw) => draws.push(draw));
   let a = 1;
   let b = 0;
   let e = 0;
@@ -39,7 +40,9 @@ function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, a, scale: Math.hypot(a, b), e, f, alpha });
+            return (image: unknown) => {
+              log({ image, a, scale: Math.hypot(a, b), e, f, alpha });
+            };
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
@@ -57,9 +60,13 @@ function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
   return { ctx, draws };
 }
 
+/** Draws onto offscreen canvases (bakes, and the Hive Carrier's turned hull), each with the canvas it lands on. */
+let offscreen: (Draw & { readonly target: unknown })[] = [];
+
 const fakeCanvas = (): unknown => {
-  const { ctx } = fakeContext();
-  return { width: 0, height: 0, getContext: () => ctx };
+  const canvas = { width: 0, height: 0, getContext: () => ctx };
+  const { ctx } = fakeContext((draw) => offscreen.push({ ...draw, target: canvas }));
+  return canvas;
 };
 
 const boss = (over: Partial<BossView> = {}): BossView => bossView({ y: 200, px: 600, ...over });
@@ -72,6 +79,7 @@ describe('createBossPass', () => {
 
   beforeEach(() => {
     vi.stubGlobal('document', { createElement: fakeCanvas });
+    offscreen = [];
     baker = createSpriteBaker();
     const fake = fakeContext();
     draws = fake.draws;
@@ -304,17 +312,66 @@ describe('createBossPass', () => {
     /** The bearing a draw is turned to, from its transform, as |cos|: 0 straight down the field. */
     const turn = (d: Draw | undefined): number => Math.abs((d?.a ?? Number.NaN) / (d?.scale ?? Number.NaN));
 
-    it('draws its hull and both shut door leaves, turned the way it faces, and no bay light while shut', () => {
+    const HULL = 'boss|hiveCarrier|hull|100';
+    const SHUT = 'boss|hiveCarrier|hullShut|100';
+    const DOORS = ['boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100'] as const;
+    const BAY = 'boss|hiveCarrier|bay|100';
+    const area = (d: Draw | undefined): number => {
+      const image = d?.image as { width: number; height: number } | undefined;
+      return (image?.width ?? Number.NaN) * (image?.height ?? Number.NaN);
+    };
+
+    /** How the hull baked under `key` was last turned onto its own canvas, and every draw of that canvas onto the field. */
+    const hullDraws = (key: string, spy: Parameters<typeof drawOf>[1]): { turned: Draw | undefined; shown: Draw[] } => {
+      const index = spy.mock.calls.findIndex(([k]) => k === key);
+      const source = (spy.mock.results[index]?.value as { canvas: unknown } | undefined)?.canvas;
+      const turned = offscreen.findLast((d) => d.image === source);
+      return { turned, shown: draws.filter((d) => turned !== undefined && d.image === turned.target) };
+    };
+
+    it('draws a shut hangar as one hull sprite with its doors folded in, turned the way it faces, and no bay light', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(carrier(), 1, LOOK);
       const keys = keysOf(custom);
-      expect(keys).toEqual(expect.arrayContaining(['boss|hiveCarrier|hull|100', 'boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100']));
-      expect(keys).not.toContain('boss|hiveCarrier|bay|100');
+      expect(keys).toEqual([SHUT]);
       expect(keys).not.toContain('boss|core|100');
-      for (const key of ['boss|hiveCarrier|hull|100', 'boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100']) expect(turn(drawOf(key, custom)), key).toBeCloseTo(0, 9);
+      const { turned, shown } = hullDraws(SHUT, custom);
+      expect(turn(turned)).toBeCloseTo(0, 9);
+      expect(shown).toHaveLength(1);
+      expect(turn(shown[0])).toBe(1);
       custom.mockClear();
       pass.draw(carrier({ facing: 0 }), 1, LOOK);
-      expect(turn(drawOf('boss|hiveCarrier|hull|100', custom))).toBeCloseTo(1, 9);
+      expect(turn(hullDraws(SHUT, custom).turned)).toBeCloseTo(1, 9);
+    });
+
+    it('turns the hull again only once its angle has moved its corners half a device pixel, and the parts follow it', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const open = carrier({ vulnerable: true });
+      pass.advance(0.15, open);
+      pass.draw(open, 1, LOOK);
+      const turns = offscreen.length;
+      const nudged = carrier({ vulnerable: true, facing: DOWN + 0.001 });
+      pass.draw(nudged, 1, LOOK);
+      expect(offscreen).toHaveLength(turns);
+      expect(turn(drawOf(DOORS[0], custom))).toBeCloseTo(Math.sin(0.25), 9);
+      pass.draw(carrier({ vulnerable: true, facing: DOWN + 0.05 }), 1, LOOK);
+      expect(offscreen.length).toBeGreaterThan(turns);
+      expect(turn(drawOf(DOORS[0], custom))).toBeCloseTo(Math.sin(0.3), 9);
+    });
+
+    it('bakes the door leaves and the bay light on their own bounds, a fraction of the hull\'s, and draws them out at the hangar', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const open = carrier({ vulnerable: true });
+      pass.advance(0.15, open);
+      pass.draw(open, 1, LOOK);
+      const { turned: hull, shown: [onField] } = hullDraws(HULL, custom);
+      for (const key of DOORS) {
+        const door = drawOf(key, custom);
+        expect(area(door), key).toBeLessThan(area(hull) / 8);
+        expect(Math.hypot((door?.e ?? 0) - (onField?.e ?? 0), (door?.f ?? 0) - (onField?.f ?? 0)), key).toBeGreaterThan(50);
+      }
+      expect(area(drawOf(BAY, custom))).toBeLessThan(area(hull) / 3);
+      expect(keysOf(custom)).not.toContain(SHUT);
     });
 
     it('slides its doors apart over 0.3 s once its hangar opens, baring a glowing bay, and shut again after', () => {
@@ -322,40 +379,39 @@ describe('createBossPass', () => {
       const open = carrier({ vulnerable: true });
       pass.advance(0.15, open);
       pass.draw(open, 1, LOOK);
-      const half = turn(drawOf('boss|hiveCarrier|door|1|100', custom));
-      const halfLit = drawOf('boss|hiveCarrier|bay|100', custom)?.alpha ?? 0;
+      const half = turn(drawOf(DOORS[0], custom));
+      const halfLit = drawOf(BAY, custom)?.alpha ?? 0;
       pass.advance(0.3, open);
       pass.draw(open, 1, LOOK);
-      const wide = turn(drawOf('boss|hiveCarrier|door|1|100', custom));
-      const wideLit = drawOf('boss|hiveCarrier|bay|100', custom)?.alpha ?? 0;
+      const wide = turn(drawOf(DOORS[0], custom));
+      const wideLit = drawOf(BAY, custom)?.alpha ?? 0;
       expect(half).toBeCloseTo(Math.sin(0.25), 6);
       expect(wide).toBeCloseTo(Math.sin(0.5), 6);
-      expect(turn(drawOf('boss|hiveCarrier|door|-1|100', custom))).toBeCloseTo(Math.sin(0.5), 6);
+      expect(turn(drawOf(DOORS[1], custom))).toBeCloseTo(Math.sin(0.5), 6);
       expect(halfLit).toBeGreaterThan(0);
       expect(wideLit).toBeGreaterThan(halfLit);
       const shut = carrier();
       pass.advance(0.3, shut);
       custom.mockClear();
       pass.draw(shut, 1, LOOK);
-      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
-      expect(turn(drawOf('boss|hiveCarrier|door|1|100', custom))).toBeCloseTo(0, 9);
+      expect(keysOf(custom)).toEqual([SHUT]);
     });
 
     it('keeps its doors shut outside the fight, and shuts them for a new fight', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.advance(1, carrier({ vulnerable: true, state: 'dying' }));
       pass.draw(carrier({ vulnerable: true, state: 'dying' }), 1, LOOK);
-      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+      expect(keysOf(custom)).not.toContain(BAY);
       pass.advance(1, carrier({ vulnerable: true }));
       pass.handle([{ type: 'bossIntro', id: 'hiveCarrier' }]);
       custom.mockClear();
       pass.draw(carrier({ vulnerable: true }), 1, LOOK);
-      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+      expect(keysOf(custom)).not.toContain(BAY);
       pass.advance(1, carrier({ vulnerable: true }));
       pass.reset();
       custom.mockClear();
       pass.draw(carrier({ vulnerable: true }), 1, LOOK);
-      expect(keysOf(custom)).not.toContain('boss|hiveCarrier|bay|100');
+      expect(keysOf(custom)).not.toContain(BAY);
     });
 
     it('holds the bay light steady under reduced motion', () => {
@@ -367,7 +423,7 @@ describe('createBossPass', () => {
       for (let i = 0; i < 4; i++) {
         pass.advance(0.07, open);
         pass.draw(open, 1, still);
-        alphas.push(drawOf('boss|hiveCarrier|bay|100', custom)?.alpha ?? 0);
+        alphas.push(drawOf(BAY, custom)?.alpha ?? 0);
       }
       expect(new Set(alphas).size).toBe(1);
       expect(alphas[0]).toBe(1);

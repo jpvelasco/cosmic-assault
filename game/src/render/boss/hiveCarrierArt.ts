@@ -15,8 +15,14 @@ export const HIVE_ART_REACH = 1.03;
 /** The hangar bay's inner and outer edge, as shares of the radius. */
 const BAY_INNER = 0.62;
 const BAY_OUTER = 0.95;
-/** The door leaves' rim sits a touch proud of the bay. */
+/** The door leaves' rim sits a touch proud of the bay, and their inner edge a touch inside it. */
 const DOOR_OUTER = 0.98;
+const DOOR_INNER = BAY_INNER - 0.03;
+/** How far a door leaf's strokes reach past its edges: half its leading edge's width, with room for the rim's mitred corners. */
+const DOOR_EDGE = 0.02;
+/** The open bay's hot spot: how far out along the hangar it sits, and how far its light reaches. */
+const BAY_LIGHT_AT = 0.8;
+const BAY_LIGHT_REACH = 0.35;
 /** Bands across a door leaf's rim, every other one striped. */
 const HAZARD_STRIPES = 6;
 
@@ -112,7 +118,7 @@ export function paintHiveHull(ctx: CanvasRenderingContext2D, r: number, p: Palet
 /** One leaf of the hangar doors, from the bay's middle (bearing 0) to `side` times its half-arc: pale armour with hazard stripes. */
 export function paintHiveDoor(ctx: CanvasRenderingContext2D, r: number, p: Palette, side: 1 | -1): void {
   const [from, to] = side === 1 ? [0, HANGAR_HALF_ARC] : [-HANGAR_HALF_ARC, 0];
-  const [inner, outer] = [(BAY_INNER - 0.03) * r, DOOR_OUTER * r];
+  const [inner, outer] = [DOOR_INNER * r, DOOR_OUTER * r];
   sector(ctx, from, to, inner, outer);
   ctx.fillStyle = addStops(ctx.createLinearGradient(inner, 0, outer, 0), [mix(PLATE, PLATE_LIT, 0.35), mix(PLATE_LIT, WHITE, 0.15)], [0, 1]);
   ctx.fill();
@@ -142,5 +148,35 @@ export function paintHiveBay(ctx: CanvasRenderingContext2D, r: number, p: Palett
   sector(ctx, -HANGAR_HALF_ARC, HANGAR_HALF_ARC, BAY_INNER * r, BAY_OUTER * r);
   ctx.fillStyle = addStops(ctx.createRadialGradient(0.78 * r, 0, 0, 0.78 * r, 0, 0.45 * r), [mix(hot, WHITE, 0.7), rgba(hot, 0.85), rgba(hot, 0.25)], [0, 0.45, 1]);
   ctx.fill();
-  paintGlow(ctx, hot, 0.8 * r, 0, 0.35 * r, 0.9);
+  paintGlow(ctx, hot, BAY_LIGHT_AT * r, 0, BAY_LIGHT_REACH * r, 0.9);
+}
+
+/** A box in the hull's own frame, hangar along +x, in field units: its centre and its half-width and half-height. */
+export interface ArtBox {
+  readonly x: number;
+  readonly y: number;
+  readonly halfW: number;
+  readonly halfH: number;
+}
+
+const box = (left: number, right: number, top: number, bottom: number): ArtBox => ({ x: (left + right) / 2, y: (top + bottom) / 2, halfW: (right - left) / 2, halfH: (bottom - top) / 2 });
+
+/**
+ * The bounds of the bay light and of each door leaf, shut, on a hull of radius `r`, `pad` wider all round: each is baked
+ * on its own bounds rather than the whole hull's, so an open hangar fills a fraction of the pixels. The bay light stops
+ * where the hull's art does, as it did when it was baked on the hull's bounds.
+ */
+export function hiveArtBoxes(r: number, pad: number): Readonly<Record<'bay' | 'doorUp' | 'doorDown', ArtBox>> {
+  const sin = Math.sin(HANGAR_HALF_ARC);
+  const cos = Math.cos(HANGAR_HALF_ARC);
+  const bayHalf = BAY_OUTER * sin * r + pad;
+  const doorLeft = (DOOR_INNER * cos - DOOR_EDGE) * r - pad;
+  const doorRight = (DOOR_OUTER + DOOR_EDGE) * r + pad;
+  const doorNear = DOOR_EDGE * r + pad;
+  const doorFar = (DOOR_OUTER * sin + DOOR_EDGE) * r + pad;
+  return {
+    bay: box(Math.min(BAY_INNER * cos, BAY_LIGHT_AT - BAY_LIGHT_REACH) * r - pad, HIVE_ART_REACH * r + pad, -bayHalf, bayHalf),
+    doorUp: box(doorLeft, doorRight, -doorNear, doorFar),
+    doorDown: box(doorLeft, doorRight, -doorFar, doorNear),
+  };
 }

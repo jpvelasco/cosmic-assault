@@ -412,6 +412,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     redraw: () => {
       redrawPending = true;
     },
+    restartFrameStats: () => {
+      monitor.reset();
+    },
   });
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */

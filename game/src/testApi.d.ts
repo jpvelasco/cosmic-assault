@@ -76,7 +76,7 @@ interface CosmicAssaultTestState {
   readonly visualScale: { readonly ship: number; readonly rock: number; readonly shot: number; readonly effect: number };
   /** The quality level in force: index into the ladder (0 high … 3 lowest) and its name. */
   readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest' };
-  /** Frame times of the current run in ms, less its first 3 s; zeros until a run is past that. */
+  /** Frame times of the current run in ms, less its first 3 s (or since `restartFrameStats`, less 3 s); zeros until past that. */
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
@@ -116,6 +116,8 @@ interface CosmicAssaultTestApi {
    * and counted like a kill's drop. Throws outside a galaxy run.
    */
   grantPickup(kind: import('./content/types').PickupId): void;
+  /** Restarts `frameStats` as a run start does, its 3 s warm-up included, leaving the run and the quality level alone. */
+  restartFrameStats(): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }
