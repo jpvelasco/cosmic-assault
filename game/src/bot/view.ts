@@ -48,5 +48,6 @@ export function readView(world: WorldReadout, view: BotView): BotView {
 
 /** A view of `world` as it stands; refill it with `readView` after every step. */
 export function createView(world: WorldReadout): BotView {
-  return readView(world, {} as BotView);
+  const { field, status, elapsed, ship, asteroids, foes, pickups, boss, well } = world;
+  return { field, status, elapsed, ship, asteroids, foes, pickups, boss, well };
 }

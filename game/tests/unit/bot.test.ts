@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runGalaxy, type BotProfile } from '../../src/bot/run';
+import { runGalaxy, type BotProfile, type RunOptions } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
@@ -57,6 +57,25 @@ describe('bots', () => {
     const replayed: SimEvent[] = [];
     for (const controls of sent) replayed.push(...replay.step(STEP_SECONDS, controls).map((e) => ({ ...e })));
     expect(sent.some((c) => c.fire)).toBe(true);
+    expect(replayed).toEqual(events);
+    expect(replay.score).toBe(result.score);
+  });
+
+  it('replays a boss fight exactly: the expert against the Sentinel on 3-6, from the same seed and from its own controls', () => {
+    const galaxy = galaxyById('3-6');
+    const sent: Controls[] = [];
+    const events: SimEvent[] = [];
+    const run = (onStep?: RunOptions['onStep']) => runGalaxy({ galaxy, seed: 1, profile: 'expert', maxSeconds: 80, ...(onStep === undefined ? {} : { onStep }) });
+    const result = run((_world, controls, stepEvents) => {
+      sent.push(copyControls(controls));
+      events.push(...stepEvents.map((e) => ({ ...e })));
+    });
+    expect(result.bossKillTime).toBeGreaterThan(0);
+    expect(events.some((e) => e.type === 'bossWindup' && e.attack === 'lunge')).toBe(true);
+    expect(run()).toEqual(result);
+    const replay = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' } });
+    const replayed: SimEvent[] = [];
+    for (const controls of sent) replayed.push(...replay.step(STEP_SECONDS, controls).map((e) => ({ ...e })));
     expect(replayed).toEqual(events);
     expect(replay.score).toBe(result.score);
   });

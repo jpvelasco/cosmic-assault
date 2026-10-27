@@ -61,7 +61,7 @@ function splitterAhead(view: Readonly<BotView>): boolean {
 export interface PilotOptions {
   /** The bot's own stream: the only randomness a pilot draws. */
   readonly rng: Rng;
-  /** The chance it dodges a danger at all, rolled once as each danger starts; at 1 it always dodges and draws nothing. */
+  /** The chance it dodges at all, rolled once as each danger episode starts; at 1 it always dodges and draws nothing. */
   readonly dodgeChance?: number;
   /** Radians its aim strays either way, redrawn every half second; at 0 it aims true and draws nothing. */
   readonly aimWobble?: number;

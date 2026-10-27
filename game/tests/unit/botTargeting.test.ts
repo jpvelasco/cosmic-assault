@@ -9,22 +9,7 @@ import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Foe } from '../../src/sim/foes/foe';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
-
-const FIELD = { width: 1280, height: 720 };
-const SHIP = { x: 640, y: 360 };
-
-function calmView(rocks: readonly { x: number; y: number }[] = []): BotView {
-  const galaxy = { ...galaxyById('2-4'), kinds: MUTED_KINDS, events: [] };
-  const world = new World({
-    seed: 1,
-    field: FIELD,
-    rules: { kind: 'galaxy', galaxy, mode: 'free' },
-    initialShip: { ...SHIP, angle: 0 },
-    initialAsteroids: rocks.map(({ x, y }) => ({ x, y, size: 3, angle: 0, speedMultiplier: 0 })),
-  });
-  return createView(world);
-}
+import { SCENE_FIELD, sceneView, stillRock } from '../helpers/botScene';
 
 function foe(kind: FoeKind, x: number, y: number): Foe {
   return { id: 0, kind, x, y, vx: 0, vy: 0, px: x, py: y, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 };
@@ -47,11 +32,11 @@ function chosen(view: BotView): Target | null {
 
 describe('bot targeting', () => {
   it('chooses nothing on an empty field', () => {
-    expect(chosen(calmView())).toBeNull();
+    expect(chosen(sceneView())).toBeNull();
   });
 
   it('shoots a drone before a nearer rock, and a near rock before a far splitter', () => {
-    const view = calmView([{ x: 740, y: 360 }]);
+    const view = sceneView([stillRock(740, 360)]);
     view.foes = [foe('drone', 640, 660)];
     expect(chosen(view)).toMatchObject({ x: 640, y: 660 });
     view.foes = [foe('splitter', 1100, 360)];
@@ -59,7 +44,7 @@ describe('bot targeting', () => {
   });
 
   it("aims at a boss's core while it can be hurt, else at a live part, and at none of it outside the fight", () => {
-    const view = calmView();
+    const view = sceneView();
     view.boss = boss(true, []);
     expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
     view.boss = boss(false, [part(300, 100, 0), part(900, 120, 2)]);
@@ -69,7 +54,7 @@ describe('bot targeting', () => {
   });
 
   it('leads a crossing target so a shot meets it, and aims across the wrap', () => {
-    const view = calmView();
+    const view = sceneView();
     const crossing = { x: 640 + 450, y: 360, vx: 0, vy: 225 };
     const heading = leadHeading(view, crossing);
     const t = 450 / (PLAYER.projectileSpeed * Math.cos(heading));
@@ -83,7 +68,7 @@ describe('bot targeting', () => {
 describe('the casual bot', () => {
   it('acts 0.3 s late: its first decisions send nothing', () => {
     const galaxy = galaxyById('1-1');
-    const world = new World({ seed: 2, field: FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' } });
+    const world = new World({ seed: 2, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' } });
     const bot = createCasual(createRng(1));
     const view = createView(world);
     const delay = Math.round(REACTION_SECONDS / STEP_SECONDS);
