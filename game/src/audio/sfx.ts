@@ -82,7 +82,7 @@ export function isBossKill(events: readonly SimEvent[]): boolean {
   return events.some((event) => event.type === 'bossDown');
 }
 
-/** Each force field's warning, start and end sounds, and whether it hums while active; a repulsion field is silent until it has its own. */
+/** Each force field's warning, start and end sounds (one with sounds also hums while active); a repulsion field is silent until it has its own. */
 const FORCE_SOUNDS: Readonly<Record<ForceKind, { readonly warn: SfxName; readonly open: SfxName; readonly close: SfxName } | null>> = {
   gravityWell: { warn: 'wellWarn', open: 'wellOpen', close: 'wellClose' },
   repulsionField: null,

@@ -26,8 +26,8 @@ export const hazardStreamName = (type: HazardType): string => (type === 'gravity
 export function hazardStreams(seed: number): (type: HazardType) => Rng {
   const made = new Map<HazardType, Rng>();
   return (type) => {
-    let rng = made.get(type);
-    if (rng === undefined) made.set(type, (rng = createRng(deriveSeed(seed, hazardStreamName(type)))));
+    const rng = made.get(type) ?? createRng(deriveSeed(seed, hazardStreamName(type)));
+    made.set(type, rng);
     return rng;
   };
 }
