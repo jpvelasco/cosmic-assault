@@ -63,7 +63,9 @@ function hullPoint(boss: Readonly<BossView>, ahead: number, across: number, out:
 /** Where the next drone or rock forms; one point, reused. */
 const spot: Point = { x: 0, y: 0 };
 
-const inField = ({ x, y }: Readonly<Point>, field: Field): boolean => x >= 0 && x <= field.width && y >= 0 && y <= field.height;
+/** Whether something may form at `at`: inside `field`, and at least `clearance` from `ship`. */
+const clearSlot = ({ x, y }: Readonly<Point>, field: Field, ship: Readonly<Point>, clearance: number): boolean =>
+  x >= 0 && x <= field.width && y >= 0 && y <= field.height && Math.hypot(x - ship.x, y - ship.y) >= clearance;
 
 /**
  * The Hive Carrier, Dimension 2's boss: a carrier hull cruising along a row high in the field, turning its hangar
@@ -145,7 +147,7 @@ class HiveCarrier implements BossBehaviour {
     const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;
     for (let i = 0; i < count; i++) {
       const at = hullPoint(boss, mouth, lane(i, count, LAUNCH_SPACING), spot);
-      if (!inField(at, field) || Math.hypot(at.x - ship.x, at.y - ship.y) < ASTEROID.safeRadius) continue;
+      if (!clearSlot(at, field, ship, ASTEROID.safeRadius)) continue;
       if (!this.foes.launch('drone', at.x, at.y, boss.facing + lane(i, count, LAUNCH_FAN))) return;
     }
   }
@@ -160,7 +162,7 @@ function broadside(ctx: AttackContext): void {
   const ahead = boss.radius + ASTEROID.radii[BROADSIDE_SIZE];
   for (let i = 0; i < count; i++) {
     const at = hullPoint(boss, ahead, lane(i, count, BROADSIDE_SPACING), spot);
-    if (inField(at, field) && Math.hypot(at.x - ship.x, at.y - ship.y) >= BROADSIDE_CLEARANCE) transientRock(ctx, at.x, at.y, BROADSIDE_SIZE, boss.facing, BROADSIDE_SPEED);
+    if (clearSlot(at, field, ship, BROADSIDE_CLEARANCE)) transientRock(ctx, at.x, at.y, BROADSIDE_SIZE, boss.facing, BROADSIDE_SPEED);
   }
 }
 
