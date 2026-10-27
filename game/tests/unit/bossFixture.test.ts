@@ -295,13 +295,18 @@ describe('a boss in its galaxy', () => {
       if (b !== null) Object.assign(ship, { x: b.x, y: b.y + 90, angle: -Math.PI / 2, invulnerable: true, invulnerableFor: 100 });
       return { ...NO_CONTROLS, fire: true };
     };
-    playWorld(g, 3, belowTheCore, () => {
+    playWorld(g, 3, belowTheCore, (events) => {
       const hp = boss?.hp ?? 0;
       expect(previous - hp, 'one shot, one damage').toBe(consumedBy());
+      // Checked on the step the hit lands, so the core's drift since has no say in it.
+      for (const h of events) {
+        if (h.type !== 'bossHit') continue;
+        expect(Math.hypot(h.x - (boss?.x ?? 0), h.y - (boss?.y ?? 0)), 'a hit lands at the core').toBeLessThan((boss?.radius ?? 0) + PROJECTILE.radius + 5);
+      }
       lost += previous - hp;
       previous = hp;
     });
-    expect(lost).toBeGreaterThanOrEqual(1);
+    expect(lost).toBeGreaterThanOrEqual(3);
     const hits = ofType(g.log, 'bossHit');
     // The log also holds any hit from before the window opened.
     expect(hits.map((h) => h.hp)).toEqual(Array.from({ length: 76 - (boss?.hp ?? 0) }, (_, i) => 75 - i));

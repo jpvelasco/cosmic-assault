@@ -1,14 +1,12 @@
 import type { PaletteId } from '../../content/types';
 import { launchSlot, launchSlotsFor } from '../../sim/boss/attacks';
 import type { BossPart, BossView, Point } from '../../sim/boss/behaviour';
-import { ECLIPSE_REACH, ECLIPSE_WAVES } from '../../sim/boss/eclipse';
+import { ECLIPSE_REACH, ECLIPSE_WAVES, GROW_SECONDS } from '../../sim/boss/eclipse';
 import { TAU } from '../../sim/math';
 import { blitCore, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { ECLIPSE_ART_REACH, paintCoronaShard, paintEclipseCore, paintSpoke, paintWarnRing } from './eclipseArt';
 import { PartClocks } from './partClocks';
 
-/** How long a regrown shard takes to grow to full size. */
-const GROW_SECONDS = 0.4;
 /** Warnings pulse at this rate unless held still. */
 const WARN_PULSE_HZ = 5;
 /** How bright a warning starts as its windup begins, as a share of full: bright enough to read from the first frame. */
@@ -126,7 +124,8 @@ export const eclipseDrawer: DrawerFactory = (kit) => {
     } else if (boss.windup === 'launch') {
       // The slots the launch will form its drones in, against the ship as the frame shows it.
       const wave = ECLIPSE_WAVES[boss.phase];
-      Object.assign(ship, { x: frame.look.aimX, y: frame.look.aimY });
+      ship.x = frame.look.aimX;
+      ship.y = frame.look.aimY;
       for (const mark of launchSlotsFor(boss, frame.look.field, ship, wave, wave, marks)) {
         launchSlot(boss, mark, wave, slot);
         warn(mouthKey, paintMouth, MOUTH_RADIUS * 2, slot.x, slot.y, size, 0, strength);

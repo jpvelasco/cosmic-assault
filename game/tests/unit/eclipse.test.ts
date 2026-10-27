@@ -190,6 +190,30 @@ describe('the Eclipse corona', () => {
     expect(regrown, 'the fight regrew shards to check').toBeGreaterThanOrEqual(3);
   });
 
+  it('skips the broken slot a ship sits on when its regrowth falls due, and grows the next clear one', () => {
+    const clearance = ECLIPSE_CORONA.growClearance;
+    expect(clearance, 'the corona declares its grow clearance').toBeDefined();
+    const rig = fighting(9);
+    breakUntil(rig.r, 4);
+    // Just before the regrowth is due, the ship takes the first broken slot.
+    runFor(stepper(rig), rig.arena, ECLIPSE_CORONA.regrowSeconds - 0.05);
+    const first = rig.r.view.parts.findIndex((p) => p.hp <= 0);
+    expect(first).toBeGreaterThanOrEqual(0);
+    Object.assign(rig.arena.ship, { x: rig.r.view.parts[first]?.x, y: rig.r.view.parts[first]?.y });
+    const before = rig.r.view.parts.map((p) => p.hp);
+    // Steps on until the regrowth falls due and a shard grows back, the ship still on the slot it left empty.
+    const grownNow = () => rig.r.view.parts.some((p, i) => (before[i] ?? 0) <= 0 && p.hp > 0);
+    for (let step = 0; step < 1 / STEP_SECONDS && !grownNow(); step++) {
+      stepper(rig)(STEP_SECONDS, rig.arena);
+      expect(rig.r.view.parts[first]?.hp, 'the slot the ship is on stays empty').toBe(0);
+    }
+    const { parts } = rig.r.view;
+    const grown = parts.map((_, i) => i).filter((i) => (before[i] ?? 0) <= 0 && (parts[i]?.hp ?? 0) > 0);
+    expect(grown, 'exactly one shard grows, on a slot other than the ship\'s').toHaveLength(1);
+    const grownPart = parts[grown[0] ?? -1];
+    expect(Math.hypot((grownPart?.x ?? 0) - rig.arena.ship.x, (grownPart?.y ?? 0) - rig.arena.ship.y)).toBeGreaterThanOrEqual(clearance ?? Infinity);
+  });
+
   it('carries no armour on any shard, so every blow on one breaks it', () => {
     const rig = fighting(11);
     for (const part of rig.r.view.parts) expect(part.armoured).toBe(false);

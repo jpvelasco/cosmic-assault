@@ -1,4 +1,5 @@
 import type { AsteroidSize } from '../asteroid';
+import { PLAYER } from '../config';
 import { dashAttack, launchDrones, pulseAttack, rockRingAttack, turnToward, turretVolleyAttack } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup } from './behaviour';
 import { ShardOrbit, type ShardOrbitOptions, type VolleyShape } from './shardOrbit';
@@ -19,11 +20,17 @@ export const ECLIPSE_REACH = CORONA_ORBIT + CORONA_RADIUS;
 /** Its shard volley: four shards out past the aim and back in 1.6 s, in lanes 40 apart, turning 90 past it. */
 export const ECLIPSE_VOLLEY: VolleyShape = { shards: 4, seconds: 1.6, spread: 40, overshoot: 90 };
 
+/** Seconds a regrown shard takes to grow to full size: the renderer eases it in over these. */
+export const GROW_SECONDS = 0.4;
+/** The corona's orbit speed, radians per second, and the core's drift, units per second. */
+const ORBIT_SPEED = 0.5;
+const DRIFT_SPEED = 12;
 /**
- * How far from the ship a regrowing shard's slot must lie: the shard's own radius and the ship's, plus what the orbit
- * sweeps past in the 0.4 s a shard takes to grow in, so a shard never forms on a ship that holds still.
+ * How far from the ship a regrowing shard's slot must lie, so a shard never forms in touch with a ship that holds still:
+ * the shard's and the ship's radii, plus how far the slot moves across the grow-in, as the orbit and the core's drift
+ * carry it. The slot moves at the orbit's speed about the core, and the core drifts along with it.
  */
-const GROW_CLEARANCE = 46;
+const GROW_CLEARANCE = CORONA_RADIUS + PLAYER.radius + GROW_SECONDS * (ORBIT_SPEED * CORONA_ORBIT + DRIFT_SPEED);
 
 /** The corona, as a `ShardOrbit` sets it up. Its shards hold inside the field when a volley throws them. */
 export const ECLIPSE_CORONA: ShardOrbitOptions = {
@@ -31,7 +38,7 @@ export const ECLIPSE_CORONA: ShardOrbitOptions = {
   hp: CORONA_HP,
   radius: CORONA_RADIUS,
   orbit: CORONA_ORBIT,
-  speed: 0.5,
+  speed: ORBIT_SPEED,
   exposedAt: EXPOSED_AT,
   regrowSeconds: REGROW_SECONDS,
   regrowCap: REGROW_CAP,
@@ -58,7 +65,6 @@ const PULSE_SPEED = 280;
 const PULSE_REACH = 340;
 /** How fast the core turns to face the ship, radians per second. */
 const TURN_RATE = 0.6;
-const DRIFT_SPEED = 12;
 
 /** The Eclipse's windups, in seconds. */
 const WINDUPS = { shardVolley: 1.2, quake: 0.8, pulse: 0.6, launch: 0.7, turretVolley: 0.6, dive: 0.8 } as const;
