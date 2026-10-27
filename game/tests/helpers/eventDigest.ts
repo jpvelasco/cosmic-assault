@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { runGalaxy } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
@@ -99,3 +101,47 @@ export function digestRuns(input: DigestInput): Record<string, DigestRun> {
 
 /** Just the digests of `digestRuns(input)`, as the fixture holds them. */
 export const digestsOf = (runs: Readonly<Record<string, DigestRun>>): Record<string, string> => Object.fromEntries(Object.entries(runs).map(([key, run]) => [key, run.digest]));
+
+interface DigestFixture {
+  readonly recordedAt: string;
+  readonly digests: Readonly<Record<DigestInput, Readonly<Record<string, string>>>>;
+}
+
+const FIXTURE_URL = new URL('../fixtures/d1-d2-digests.json', import.meta.url);
+/** The expert plays 36 whole galaxies; a loaded CI runner needs more than Vitest's 5 s default. */
+const PLAY_TIMEOUT_MS = 120_000;
+
+/**
+ * Pins every D1–D2 run under `input` to the fixture, event for event, and hands the runs to `more` for that input's
+ * coverage tests. Recording is a ruling's call, never a fix for a failing digest: run the file with
+ * `RECORD_D1D2_DIGESTS='<ruling or commit>'` to rewrite `input`'s digests, leaving the other input's as they are.
+ */
+export function describeDigests(input: DigestInput, more: (runs: () => Readonly<Record<string, DigestRun>>) => void = () => undefined): void {
+  const fixture = JSON.parse(readFileSync(FIXTURE_URL, 'utf8')) as DigestFixture;
+  const recorded = fixture.digests[input];
+  let runs: Record<string, DigestRun> = {};
+
+  describe(`Dimensions 1 and 2 do not move under the ${input} input`, () => {
+    beforeAll(() => {
+      runs = digestRuns(input);
+      const label = process.env.RECORD_D1D2_DIGESTS;
+      if (label !== undefined && label !== '') {
+        const digests = { ...fixture.digests, [input]: digestsOf(runs) };
+        writeFileSync(FIXTURE_URL, `${JSON.stringify({ recordedAt: label, digests }, null, 2)}\n`);
+      }
+    }, PLAY_TIMEOUT_MS);
+
+    it('covers every D1–D2 galaxy on seeds 1–3', () => {
+      const keys = DIGEST_GALAXIES.flatMap((id) => DIGEST_SEEDS.map((seed) => digestKey(id, seed)));
+      expect(keys).toHaveLength(36);
+      expect(Object.keys(recorded)).toEqual(keys);
+      expect(Object.keys(runs)).toEqual(keys);
+    });
+
+    it.each(Object.keys(recorded))(`plays %s event for event as recorded at the M5 tip`, (key) => {
+      expect(runs[key]?.digest, `${input} ${key} moved: a change has altered D1–D2 play; find it, or get a ruling to re-record the digests`).toBe(recorded[key]);
+    });
+
+    more(() => runs);
+  });
+}
