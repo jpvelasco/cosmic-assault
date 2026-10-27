@@ -6,12 +6,14 @@ import type { AttackSpec, BossBehaviour, BossFactory, BossPart } from '../../src
 import { bossClearance } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
+import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
+import { createShip } from '../../src/sim/ship';
 import { BOSS_FIELD, runFor, stubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
@@ -48,10 +50,14 @@ function serpent(trail = TRAIL, driftSpeed = 60): BossBehaviour {
   };
 }
 
-const setupFor = (field: Field) => {
-  const arena = stubArena(undefined, field);
-  return { maxHp: 30, rng: createRng(3), rockSpeed: 1, field, foes: new FoeField(arena, createRng(2), { score: (b) => b, killed: () => undefined }), bolts: new Bolts(arena) };
-};
+const setupFor = (field: Field, arena = stubArena(undefined, field)) => ({
+  maxHp: 30,
+  rng: createRng(3),
+  rockSpeed: 1,
+  field,
+  foes: new FoeField(arena, createRng(2), { score: (b: number) => b, killed: () => undefined }),
+  bolts: new Bolts(arena),
+});
 
 describe('part-aware boss reach', () => {
   it('measures clearance from the core\'s reach and from every live part by its own radius', () => {
@@ -68,12 +74,18 @@ describe('part-aware boss reach', () => {
   it.each([
     { label: '4:3', aspect: MIN_ASPECT },
     { label: '21:9', aspect: MAX_ASPECT },
-  ])('keeps every body of every boss, as it arrives, clear of a ship parked at the centre at $label', ({ aspect }) => {
+  ])('keeps every body of every boss clear of a ship parked at the centre at $label, as it arrives and as its fight starts', ({ aspect }) => {
     const field = fieldAt(aspect);
+    const [cx, cy] = [field.width / 2, field.height / 2];
     for (const id of Object.keys(BOSS_BEHAVIOURS) as BossId[]) {
-      const setup = setupFor(field);
+      const arena = stubArena(createShip(cx, cy), field);
+      const setup = setupFor(field, arena);
       const runner = new BossRunner(BOSSES[id], BOSS_BEHAVIOURS[id](setup), setup);
-      expect(bossClearance(runner.view, runner.reach, field.width / 2, field.height / 2), id).toBeGreaterThan(PLAYER.radius);
+      expect(bossClearance(runner.view, runner.reach, cx, cy), `${id} as it arrives`).toBeGreaterThan(PLAYER.radius);
+      // Its intro, then the first step of the fight: a boss that moves through its intro must still leave the spot clear.
+      runFor((dt, a) => { if (runner.state === 'intro') runner.step(dt, a); }, arena, BOSS_INTRO_SECONDS + STEP_SECONDS);
+      expect(runner.state, id).toBe('fighting');
+      expect(bossClearance(runner.view, runner.reach, cx, cy), `${id} as its fight starts`).toBeGreaterThan(PLAYER.radius);
     }
     // The check sees a segment the core's reach does not: a serpent whose tail lies on the centre fails it.
     const tailOnCentre = new BossRunner(BOSSES.sentinel, serpent(field.height / 2 - field.height * 0.28), setupFor(field));
