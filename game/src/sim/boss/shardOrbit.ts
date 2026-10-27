@@ -94,7 +94,9 @@ export class ShardOrbit {
 
   /** The shard volley, telegraphed for `windup` s: lanes as wide as the spread plus a shard either side of its line. */
   volley(windup: number): AttackSpec {
-    return { windup, active: this.shape.seconds, run: (ctx) => { this.throwVolley(ctx); }, threat: { kind: 'lane', reach: this.shape.spread + this.options.radius } };
+    // The outermost lane sits half the lanes' span from the aim, a shard's radius beyond it.
+    const outer = ((this.shape.shards - 1) / 2) * this.shape.spread + this.options.radius;
+    return { windup, active: this.shape.seconds, run: (ctx) => { this.throwVolley(ctx); }, threat: { kind: 'lane', reach: outer } };
   }
 
   /** Turns the orbit, grows a shard back on a bare core, and puts every shard where it is: on its orbit or in flight. */

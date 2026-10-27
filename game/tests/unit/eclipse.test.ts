@@ -244,7 +244,7 @@ describe('the Eclipse moves', () => {
         if (threat !== null) seen[threat.attack] = threat;
       }
     }
-    expect(seen.shardVolley).toMatchObject({ kind: 'lane', reach: ECLIPSE_VOLLEY.spread + ECLIPSE_CORONA.radius });
+    expect(seen.shardVolley).toMatchObject({ kind: 'lane', reach: 74 });
     expect(seen.dive).toMatchObject({ kind: 'lane', reach: ECLIPSE_REACH });
     expect(seen.pulse).toMatchObject({ kind: 'shove' });
     expect(seen.turretVolley).toMatchObject({ kind: 'ring', reach: ECLIPSE_CORONA.radius, ring: { radius: ECLIPSE_CORONA.orbit, around: 'core' } });
