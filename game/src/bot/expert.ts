@@ -1,10 +1,11 @@
 import { clamp } from '../content/curves';
+import { FORCE_SIGN, isForceKind } from '../content/hazards';
 import type { AttackId } from '../content/types';
 import type { BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
 import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
-import { wellAcceleration } from '../sim/hazards/gravityWell';
+import { forceShare } from '../sim/hazards/forceField';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
 import { wrapDelta } from '../sim/wrap';
@@ -445,19 +446,19 @@ export class Pilot {
   }
 
   /**
-   * Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap, a well's pull
-   * and a boss's coming shove.
+   * Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap, the force
+   * fields' pull and a boss's coming shove.
    */
   private predictShip(view: Readonly<BotView>, heading: number | null): void {
-    const { ship, well, boss } = view;
+    const { ship, hazards, boss } = view;
     const drag = Math.pow(heading === null ? COAST_DRAG : THRUST_DRAG, 60 * SAMPLE_SECONDS);
     let ax = heading === null ? 0 : Math.cos(heading) * PLAYER.thrust;
     let ay = heading === null ? 0 : Math.sin(heading) * PLAYER.thrust;
-    if (well?.stage === 'active') {
-      const dx = well.x - ship.x;
-      const dy = well.y - ship.y;
-      const distance = Math.hypot(dx, dy);
-      const pull = distance === 0 ? 0 : wellAcceleration(distance, well.intensity) / distance;
+    for (const hazard of hazards) {
+      if (hazard.stage !== 'active' || !isForceKind(hazard.type)) continue;
+      const dx = hazard.x - ship.x;
+      const dy = hazard.y - ship.y;
+      const pull = forceShare(FORCE_SIGN[hazard.type], Math.hypot(dx, dy), hazard.intensity);
       ax += dx * pull;
       ay += dy * pull;
     }

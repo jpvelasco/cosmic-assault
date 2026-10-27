@@ -1,5 +1,5 @@
 import type { TimedPickupId } from '../content/pickups';
-import type { AttackId, BossId, FoeKind, GalaxyId, PickupId } from '../content/types';
+import type { AttackId, BossId, FoeKind, ForceKind, GalaxyId, PickupId } from '../content/types';
 import type { AsteroidSize } from './asteroid';
 import type { Stars } from './scoring';
 
@@ -64,10 +64,10 @@ export type SimEvent =
   | { type: 'foeHit'; id: number; x: number; y: number; hp: number }
   /** A foe is gone at (x, y): killed for `points`, or, for 0, rammed by the ship or cleared by the warp. */
   | { type: 'foeDestroyed'; id: number; kind: FoeKind; x: number; y: number; points: number }
-  /** A gravity well will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
-  | { type: 'wellWarning'; x: number; y: number; at: number }
-  | { type: 'wellStart'; id: number }
-  | { type: 'wellEnd'; id: number };
+  /** Force field `id` of `kind` (a gravity well or a repulsion field) will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
+  | { type: 'wellWarning'; id: number; kind: ForceKind; x: number; y: number; at: number }
+  | { type: 'wellStart'; id: number; kind: ForceKind }
+  | { type: 'wellEnd'; id: number; kind: ForceKind };
 
 /** A rock the warp cleared: destroyed for 0 points, which no kill scores. Its feedback is the warp's, not a kill's. */
 export function isWarpClear(event: SimEvent): boolean {

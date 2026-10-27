@@ -3,8 +3,8 @@ import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, PICKUP_IDS, PICKUPS } from '../../src/content/pickups';
 import { FOES } from '../../src/content/foes';
-import { WELL_SECONDS, WELL_TELEGRAPH_SECONDS } from '../../src/content/hazards';
-import type { GalaxyDef, GalaxyId, PickupId, ThreatKind } from '../../src/content/types';
+import { HAZARD_RULES } from '../../src/content/hazards';
+import type { GalaxyDef, GalaxyId, HazardType, PickupId, ThreatKind } from '../../src/content/types';
 import { eventSeconds, kindProbability, showerSeconds } from '../../src/content/curves';
 import { lullStart, OPENING_SECONDS } from '../../src/content/pacingRules';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -84,7 +84,7 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events).toEqual([]);
   });
 
-  it('keeps the lull clear: every shower and gravity well ends by the time the lull starts (ending exactly then is allowed)', () => {
+  it('keeps the lull clear: every shower and hazard ends by the time the lull starts (ending exactly then is allowed)', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
         expect(['lull', 'warp'], `${g.id} at ${String(e.at)}`).not.toContain(phaseAt(g, e.at));
@@ -92,14 +92,27 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('gives every event its full warning: the next one is not telegraphed until the last has ended', () => {
-    const warning = (e: GalaxyEvent): number => (e.type === 'gravityWell' ? WELL_TELEGRAPH_SECONDS : SHOWER_WARNING_SECONDS);
+  it('holds no hazard before the Dimension it belongs to', () => {
     for (const g of GALAXIES)
-      for (let i = 1; i < g.events.length; i++) {
-        const [prev, next] = [g.events[i - 1], g.events[i]];
-        if (prev === undefined || next === undefined) continue;
-        expect(next.at - warning(next), g.id).toBeGreaterThanOrEqual(prev.at + eventSeconds(prev));
+      for (const e of g.events) if (e.type !== 'meteorShower') expect(g.dimension, `${g.id} ${e.type}`).toBeGreaterThanOrEqual(HAZARD_RULES[e.type].from);
+  });
+
+  it('schedules no events in a boss galaxy', () => {
+    for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events, g.id).toEqual([]);
+  });
+
+  it('runs at most two scheduled events at once, showers included, from each warning to its end', () => {
+    const warning = (e: GalaxyEvent): number => (e.type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[e.type].telegraph);
+    for (const g of GALAXIES)
+      for (const e of g.events) {
+        const from = e.at - warning(e);
+        const running = g.events.filter((o) => o.at - warning(o) <= from && from < o.at + eventSeconds(o));
+        expect(running.length, `${g.id} at ${String(from)}`).toBeLessThanOrEqual(2);
       }
+  });
+
+  it('times every hazard by its rule: eventSeconds reads HAZARD_RULES', () => {
+    for (const type of Object.keys(HAZARD_RULES) as HazardType[]) expect(eventSeconds({ type, intensity: 2 }), type).toBe(HAZARD_RULES[type].seconds);
   });
 
   it('puts gravity wells in Ion Reach only, one a galaxy at most, 14 s long', () => {
@@ -107,7 +120,7 @@ describe('the galaxy table', () => {
     expect(wells.length).toBeGreaterThan(0);
     for (const { g, e } of wells) {
       expect(g.dimension, g.id).toBe(2);
-      expect(eventSeconds(e)).toBe(WELL_SECONDS);
+      expect(eventSeconds(e)).toBe(14);
     }
     for (const g of GALAXIES) expect(g.events.filter((e) => e.type === 'gravityWell').length, g.id).toBeLessThanOrEqual(1);
     expect(galaxyById('2-4').events.map((e) => e.type)).toEqual(['meteorShower', 'gravityWell', 'meteorShower']);

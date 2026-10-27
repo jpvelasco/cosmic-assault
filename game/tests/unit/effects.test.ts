@@ -65,7 +65,7 @@ describe('burstFor: foes', () => {
   });
 
   it('keeps arriving foes and the well events silent', () => {
-    for (const event of [{ type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 }, { type: 'wellWarning', x: 0, y: 0, at: 30 }, { type: 'wellStart', id: 1 }, { type: 'wellEnd', id: 1 }] as const) {
+    for (const event of [{ type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 }, { type: 'wellWarning', id: 1, kind: 'gravityWell', x: 0, y: 0, at: 30 }, { type: 'wellStart', id: 1, kind: 'gravityWell' }, { type: 'wellEnd', id: 1, kind: 'gravityWell' }] as const) {
       expect(burstFor(event, DRIFT)).toBeNull();
     }
   });

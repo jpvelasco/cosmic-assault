@@ -5,7 +5,6 @@ import { idleIntent } from '../../src/bot/hands';
 import { createView, readView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId } from '../../src/content/types';
-import { MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
 import type { BossView } from '../../src/sim/boss/behaviour';
 import { VOLLEY_REACH } from '../../src/sim/boss/monolith';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -18,7 +17,7 @@ import { World } from '../../src/sim/world';
 import type { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import type { Ship } from '../../src/sim/ship';
-import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock } from '../helpers/botScene';
 import { MUTED_KINDS } from '../helpers/mute';
 

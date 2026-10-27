@@ -7,7 +7,6 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, stubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
@@ -45,7 +44,7 @@ describe('clearSpot', () => {
 describe('respawning in a boss galaxy', () => {
   function fightingRun() {
     const arena = stubArena();
-    const run = new GalaxyRun(calm('1-6'), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: createRng(5) }, arena);
+    const run = new GalaxyRun(calm('1-6'), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena);
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.tick();
       run.beginStep();
@@ -63,11 +62,10 @@ describe('respawning in a boss galaxy', () => {
   ] as const)('puts a respawned ship clear of a core parked %s', (_name, x, y) => {
     const { run, boss } = fightingRun();
     Object.assign(boss, { x, y, px: x, py: y });
-    const ship = createShip(BOSS_FIELD.width / 2, BOSS_FIELD.height / 2);
-    run.respawned(ship);
-    expect(Math.hypot(ship.x - x, ship.y - y)).toBeGreaterThanOrEqual(MONOLITH_CLEARANCE);
-    expect(inside(ship, BOSS_FIELD)).toBe(true);
-    expect({ px: ship.px, py: ship.py }).toEqual({ px: ship.x, py: ship.y });
+    const spot = run.respawnPoint();
+    if (spot === null) throw new Error('a fighting boss should move the respawn');
+    expect(Math.hypot(spot.x - x, spot.y - y)).toBeGreaterThanOrEqual(MONOLITH_CLEARANCE);
+    expect(inside(spot, BOSS_FIELD)).toBe(true);
   });
 
   it('respawns an idle ship hit by the Monolith clear of it, and a survival galaxy\'s at the centre', () => {

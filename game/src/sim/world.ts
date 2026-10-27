@@ -11,14 +11,14 @@ import { GalaxyRun, galaxyStreams } from './galaxy/galaxyRun';
 import type { Phase } from './galaxy/pacing';
 import type { ShowerState } from './galaxy/showers';
 import type { Foe } from './foes/foe';
-import type { WellState } from './hazards/gravityWell';
+import type { HazardState } from './hazards/hazard';
 import type { Pickup } from './pickups/pickups';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
 import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
 import { makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
 import { removeFlagged, resetFlags } from './flagged';
-import { rescalePose } from './wrap';
+import { placePose, rescalePose } from './wrap';
 import { assertAsteroidPlacement, assertField, placeShip, resolveOptions, type WorldOptions } from './worldOptions';
 
 export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
@@ -45,6 +45,7 @@ const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = Object.freeze({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
 const NO_PICKUPS: readonly Pickup[] = Object.freeze([]);
 const NO_FOES: readonly Foe[] = Object.freeze([]);
+const NO_HAZARDS: readonly HazardState[] = Object.freeze([]);
 
 function assertDt(dt: number): void {
   if (!(dt > 0 && Number.isFinite(dt))) {
@@ -66,7 +67,7 @@ function assertDt(dt: number): void {
  * - 'boss': a boss fight's drift and attacks;
  * - 'pickups': whether a kill drops a pickup, and which;
  * - 'foes': foe behaviour once spawned: where they enter, how they head and where their fragments fly;
- * - 'hazards': where gravity wells sit.
+ * - 'hazards': where gravity wells sit; every other hazard type draws from its own 'hazards:<type>'.
  */
 export class World {
   private readonly level: number;
@@ -230,9 +231,9 @@ export class World {
     return this.run?.foeList ?? NO_FOES;
   }
 
-  /** The gravity well being telegraphed or pulling; null when there is none, and always in practice. */
-  get well(): Readonly<WellState> | null {
-    return this.run?.well ?? null;
+  /** The hazards being telegraphed or active; a live view, and always empty in practice. */
+  get hazards(): readonly Readonly<HazardState>[] {
+    return this.run?.hazardStates ?? NO_HAZARDS;
   }
 
   /** The meteor shower being telegraphed or falling, for the HUD warning; a live view. */
@@ -305,12 +306,8 @@ export class World {
       deaths: () => this.deathsValue,
       lives: () => this.livesValue,
       nextId: () => this.nextId(),
-      award: (points) => {
-        this.scoreValue += points;
-      },
-      setStatus: (status) => {
-        this.statusValue = status;
-      },
+      award: (points) => { this.scoreValue += points; },
+      setStatus: (status) => { this.statusValue = status; },
     };
   }
 
@@ -407,7 +404,8 @@ export class World {
       return false;
     }
     respawnShip(ship, this.currentField);
-    this.rules.respawned?.(ship);
+    const spot = this.rules.respawnPoint?.() ?? null;
+    if (spot !== null) placePose(ship, spot);
     return true;
   }
 

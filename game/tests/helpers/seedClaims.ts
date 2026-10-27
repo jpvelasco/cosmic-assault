@@ -109,7 +109,7 @@ function opensHangar(seed: number, galaxy: GalaxyId, field: Field): boolean {
 function seesIonReach(seed: number, galaxy: GalaxyId, field: Field): boolean {
   const world = newWorld(seed, field, galaxy, 'free');
   run(world, WELL_WARNING_SECONDS, () => world.status !== 'playing');
-  const stage = (): string | undefined => world.well?.stage;
+  const stage = (): string | undefined => world.hazards.find((h) => h.type === 'gravityWell')?.stage;
   if (stage() !== 'warning') return false;
   let bareSteps = 0;
   run(world, FIGHT_SLACK_SECONDS, () => {

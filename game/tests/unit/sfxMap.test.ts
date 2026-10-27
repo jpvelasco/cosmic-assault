@@ -28,9 +28,9 @@ const CONTENT_EVENTS: Readonly<Record<ContentEvent, SimEvent>> = {
   foeSpawned: { type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 },
   foeHit: { type: 'foeHit', id: 1, x: 0, y: 0, hp: 1 },
   foeDestroyed: { type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 100 },
-  wellWarning: { type: 'wellWarning', x: 0, y: 0, at: 30 },
-  wellStart: { type: 'wellStart', id: 1 },
-  wellEnd: { type: 'wellEnd', id: 1 },
+  wellWarning: { type: 'wellWarning', id: 1, kind: 'gravityWell', x: 0, y: 0, at: 30 },
+  wellStart: { type: 'wellStart', id: 1, kind: 'gravityWell' },
+  wellEnd: { type: 'wellEnd', id: 1, kind: 'gravityWell' },
 };
 
 const destroyed = (size: AsteroidSize, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 0, y: 0, size, points });
@@ -125,9 +125,9 @@ describe('sfxFor', () => {
   });
 
   it('gives a gravity well a warning, an opening and a closing of its own', () => {
-    expect(nameOf({ type: 'wellWarning', x: 0, y: 0, at: 30 })).toBe('wellWarn');
-    expect(nameOf({ type: 'wellStart', id: 1 })).toBe('wellOpen');
-    expect(nameOf({ type: 'wellEnd', id: 1 })).toBe('wellClose');
+    expect(nameOf({ type: 'wellWarning', id: 1, kind: 'gravityWell', x: 0, y: 0, at: 30 })).toBe('wellWarn');
+    expect(nameOf({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toBe('wellOpen');
+    expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe('wellClose');
   });
 
   it('gives the pickups a drop, a collect, an expiry, an effect running out and the Shield breaking', () => {
@@ -190,8 +190,8 @@ describe('screenCue', () => {
 
 describe('humFor', () => {
   it('starts the gravity well hum as a well starts pulling and stops it as it lets go', () => {
-    expect(humFor({ type: 'wellStart', id: 1 })).toBe(true);
-    expect(humFor({ type: 'wellEnd', id: 1 })).toBe(false);
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toBe(true);
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe(false);
   });
 
   it('stops it when the galaxy ends with the well still pulling, and when a new one starts', () => {

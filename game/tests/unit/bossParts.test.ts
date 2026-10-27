@@ -254,7 +254,7 @@ describe('GalaxyRun with a boss that has parts', () => {
   function probeRun(shove = 0): { arena: StubArena; run: GalaxyRun } {
     const arena = stubArena();
     const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
-    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: createRng(5) }, arena, 0, probes(shove));
+    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, probes(shove));
     return { arena, run };
   }
 

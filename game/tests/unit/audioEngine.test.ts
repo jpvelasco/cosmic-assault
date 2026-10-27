@@ -489,8 +489,8 @@ describe('sound effects', () => {
 });
 
 describe('the gravity well hum', () => {
-  const START: SimEvent = { type: 'wellStart', id: 1 };
-  const END: SimEvent = { type: 'wellEnd', id: 1 };
+  const START: SimEvent = { type: 'wellStart', id: 1, kind: 'gravityWell' };
+  const END: SimEvent = { type: 'wellEnd', id: 1, kind: 'gravityWell' };
   /** The hum's oscillators: the only ones in these tests started with no stop scheduled. */
   const looping = (): FakeNode[] => nodesOf('oscillator').filter((n) => n.stop.mock.calls.length === 0);
   const playingEngine = (): AudioEngine => {

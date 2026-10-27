@@ -45,9 +45,15 @@ export interface KindRamp {
 export interface GalaxyEvent {
   /** Seconds into the galaxy. */
   readonly at: number;
-  readonly type: 'meteorShower' | 'gravityWell';
+  readonly type: 'meteorShower' | 'gravityWell' | 'dangerZone' | 'repulsionField' | 'warpRift' | 'blackHole';
   readonly intensity: 1 | 2 | 3;
 }
+
+/** The scheduled events that are hazards, each run by its own module in `sim/hazards/`; showers are the director's. */
+export type HazardType = Exclude<GalaxyEvent['type'], 'meteorShower'>;
+
+/** The hazards that only push and pull: a gravity well draws bodies in, a repulsion field drives them out. */
+export type ForceKind = Extract<HazardType, 'gravityWell' | 'repulsionField'>;
 
 export interface GalaxyDef {
   readonly id: GalaxyId;

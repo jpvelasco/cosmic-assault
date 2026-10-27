@@ -141,7 +141,7 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
   function fight(make: (setup: BossSetup) => BossBehaviour): { arena: StubArena; run: GalaxyRun; boss: BossView } {
     const arena = stubArena();
     const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [], boss: 'sentinel' as const };
-    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: createRng(5) }, arena, 0, standIns(make));
+    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, standIns(make));
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.events.length = 0;
       arena.tick();

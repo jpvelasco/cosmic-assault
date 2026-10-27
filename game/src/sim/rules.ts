@@ -65,8 +65,11 @@ export interface Spawner {
   scoreKill(base: number): number;
   /** The ship has just lost a life. */
   shipLost?(): void;
-  /** The ship has just respawned at the field's centre, still invulnerable; a ruleset may move it somewhere safer. */
-  respawned?(ship: Ship): void;
+  /**
+   * Where the ship comes back once `respawnShip` has put it at the field's centre, invulnerable: somewhere safer, or
+   * null to stay there. The World moves its previous pose there too, so it is not drawn sweeping across the field.
+   */
+  respawnPoint?(): Readonly<{ x: number; y: number }> | null;
   /** A shot has just broken `rock`, after the kill is scored. */
   rockKilled?(rock: Readonly<Asteroid>): void;
 }

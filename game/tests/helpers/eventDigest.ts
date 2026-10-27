@@ -1,0 +1,60 @@
+import { createHash } from 'node:crypto';
+import { galaxyById } from '../../src/content/galaxies';
+import type { GalaxyId } from '../../src/content/types';
+import { STEP_SECONDS } from '../../src/sim/config';
+import type { SimEvent } from '../../src/sim/events';
+import { World } from '../../src/sim/world';
+import { practiceScript } from './practiceLog';
+
+/** The galaxies whose play the digests pin: every one of Dimensions 1 and 2. */
+export const DIGEST_GALAXIES: readonly GalaxyId[] = ['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '2-1', '2-2', '2-3', '2-4', '2-5', '2-6'];
+export const DIGEST_SEEDS: readonly number[] = [1, 2, 3];
+/** Longer than any D1–D2 galaxy lasts, so a run ends cleared or lost well before it. */
+const MAX_SECONDS = 240;
+const FIELD = { width: 1280, height: 720 };
+
+/**
+ * Fields added to an event since M5 that label it without changing what happens: a well event's hazard `kind`, which
+ * is always `'gravityWell'` in Dimensions 1–2, and a well warning's `id`, the id its `wellStart` already carries. The
+ * digest leaves them out, so it pins what happens, not how the events are labelled.
+ */
+const LABELS: Partial<Record<SimEvent['type'], readonly string[]>> = {
+  wellWarning: ['kind', 'id'],
+  wellStart: ['kind'],
+  wellEnd: ['kind'],
+};
+
+/** `event` as one line of text: its fields in key order, labels left out, numbers written exactly. */
+export function canonicalEvent(event: SimEvent): string {
+  const skip = LABELS[event.type] ?? [];
+  const fields = Object.entries(event).filter(([key]) => !skip.includes(key));
+  fields.sort(([a], [b]) => (a < b ? -1 : 1));
+  return fields.map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(' ');
+}
+
+/**
+ * Plays a Free play run of `id` on seed `seed` under the practice log's fixed input schedule until it is cleared or
+ * lost, handing each step's events to `onStep` (valid until the next step), and returns the World.
+ */
+export function playScripted(id: GalaxyId, seed: number, onStep: (world: World, events: readonly SimEvent[], step: number) => void): World {
+  const world = new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode: 'free' } });
+  for (let step = 0; step < MAX_SECONDS / STEP_SECONDS && world.status !== 'cleared' && world.status !== 'gameOver'; step++) {
+    onStep(world, world.step(STEP_SECONDS, practiceScript(step)), step);
+  }
+  return world;
+}
+
+/** The sha-256 of `playScripted(id, seed)`: every event, tagged with its step, then the final score, lives and status. */
+export function galaxyDigest(id: GalaxyId, seed: number): string {
+  const hash = createHash('sha256');
+  const world = playScripted(id, seed, (_world, events, step) => {
+    for (const event of events) hash.update(`${String(step)} ${canonicalEvent(event)}\n`);
+  });
+  hash.update(`end score=${String(world.score)} lives=${String(world.lives)} status=${world.status} elapsed=${String(world.elapsed)}\n`);
+  return hash.digest('hex');
+}
+
+/** Every digest, keyed `'<galaxy> seed <n>'`. */
+export function galaxyDigests(): Record<string, string> {
+  return Object.fromEntries(DIGEST_GALAXIES.flatMap((id) => DIGEST_SEEDS.map((seed) => [`${id} seed ${String(seed)}`, galaxyDigest(id, seed)])));
+}

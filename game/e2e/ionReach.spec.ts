@@ -10,21 +10,21 @@ test.describe(`Ion Reach ${ION_REACH_GALAXY}`, () => {
     await openGame(page, { seed: seedFor('ion-reach-hazards'), galaxy: ION_REACH_GALAXY });
     await page.keyboard.press('Space');
     await expectMode(page, 'playing');
-    expect(await gameState(page)).toMatchObject({ foes: [], wells: [] });
+    expect(await gameState(page)).toMatchObject({ foes: [], hazards: [] });
 
     await fastForward(page, WELL_WARNING_SECONDS);
     const warning = await gameState(page);
     expect(warning.screen).toBe('playing');
-    expect(warning.wells).toHaveLength(1);
-    expect(warning.wells[0]).toMatchObject({ stage: 'warning', intensity: WELL_INTENSITY });
-    expect(warning.wells[0]?.remaining).toBeGreaterThan(0);
-    expect(warning.wells[0]?.remaining).toBeLessThanOrEqual(2);
+    expect(warning.hazards).toHaveLength(1);
+    expect(warning.hazards[0]).toMatchObject({ type: 'gravityWell', stage: 'warning', intensity: WELL_INTENSITY });
+    expect(warning.hazards[0]?.remaining).toBeGreaterThan(0);
+    expect(warning.hazards[0]?.remaining).toBeLessThanOrEqual(2);
     expect(warning.foes.length).toBeGreaterThan(0);
     for (const foe of warning.foes) expect(['splitter', 'drone']).toContain(foe.kind);
 
     await fastForward(page, WELL_PULL_SECONDS);
     const active = await gameState(page);
-    expect(active.wells[0]).toMatchObject({ id: warning.wells[0]?.id, stage: 'active', x: warning.wells[0]?.x, y: warning.wells[0]?.y });
+    expect(active.hazards[0]).toMatchObject({ id: warning.hazards[0]?.id, stage: 'active', x: warning.hazards[0]?.x, y: warning.hazards[0]?.y });
   });
 
   test('a run puts the bridge palette and music theme to its Dimension\'s: Ion Reach in 2-1, the Drift in 1-1', { tag: '@desktop' }, async ({ page }) => {

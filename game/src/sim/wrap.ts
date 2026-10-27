@@ -15,6 +15,12 @@ export interface Pose {
   py: number;
 }
 
+/** Puts `body` at `spot` with its place a step ago there too, so it is drawn there and not sweeping across to it. */
+export function placePose(body: Pose, spot: Readonly<{ x: number; y: number }>): void {
+  body.x = body.px = spot.x;
+  body.y = body.py = spot.y;
+}
+
 /** Stretches `body`'s place and its place a step ago from field `old` to `field`, keeping their fractions of the wrap band. */
 export function rescalePose(body: Pose, old: Field, field: Field): void {
   body.x = rescale(body.x, old.width, field.width);

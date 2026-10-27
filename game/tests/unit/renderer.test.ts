@@ -14,7 +14,7 @@ import { galaxyById } from '../../src/content/galaxies';
 import { foeKeys } from '../../src/render/foePass';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
 import type { Foe } from '../../src/sim/foes/foe';
-import type { WellState } from '../../src/sim/hazards/gravityWell';
+import type { HazardState } from '../../src/sim/hazards/hazard';
 import type { Pickup } from '../../src/sim/pickups/pickups';
 import type { World, WorldStatus } from '../../src/sim/world';
 
@@ -94,7 +94,7 @@ interface Stub {
   ship: { x: number; y: number; px: number; py: number; angle: number; pangle: number; vx: number; vy: number; thrusting: boolean; invulnerable: boolean };
   asteroids: Asteroid[];
   foes: Foe[];
-  well: WellState | null;
+  hazards: HazardState[];
   pickups: Pickup[];
   effects: Record<TimedPickupId, number>;
 }
@@ -111,7 +111,7 @@ function stubWorld(): { stub: Stub; world: World } {
     ship: { x: 640, y: 360, px: 640, py: 360, angle: 0, pangle: 0, vx: 0, vy: 0, thrusting: false, invulnerable: false },
     asteroids: [rock],
     foes: [],
-    well: null,
+    hazards: [],
     pickups: [],
     effects: { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 },
   };
@@ -505,20 +505,20 @@ describe('createRenderer', () => {
     });
 
     describe('a gravity well', () => {
-      const well = (stage: 'warning' | 'active', remaining = 5): WellState => ({ id: 2, stage, x: 600, y: 300, intensity: 2, remaining });
+      const well = (stage: 'warning' | 'active', remaining = 5): HazardState[] => [{ id: 2, type: 'gravityWell', stage, x: 600, y: 300, intensity: 2, remaining }];
       const sprite = (name: string): HTMLCanvasElement | undefined => baker.cached(`well|drift|${name}`)?.canvas;
       const ARCS = ['arc0', 'arc1', 'arc2'] as const;
 
       it('is a faint outline alone while it is a warning, pulsing and closing in as it comes due', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
-        stub.well = well('warning', 2);
+        stub.hazards = well('warning', 2);
         drawFrame(world, 1);
         const early = drawsOf(sprite('outline'));
         expect(early.map((call) => call.e)).toEqual([600]);
         expect(early[0]?.alpha).toBeLessThan(0.7);
         for (const name of [...ARCS, 'horizon']) expect(sprite(name)).toBeUndefined();
-        stub.well = well('warning', 0.2);
+        stub.hazards = well('warning', 0.2);
         stub.elapsed = 0.3;
         drawFrame(world, 1);
         const late = drawsOf(sprite('outline'))[0];
@@ -529,7 +529,7 @@ describe('createRenderer', () => {
       it('swirls once it pulls: a glow, three arcs that turn with time, and the dark lens over them', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
-        stub.well = well('active');
+        stub.hazards = well('active');
         drawFrame(world, 1);
         expect(sprite('outline')).toBeUndefined();
         const order = canvas.draws.filter((call) => call.e !== 0 && call.e !== 640).map((call) => call.image);
@@ -546,7 +546,7 @@ describe('createRenderer', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
         renderer.effects.reducedMotion = true;
-        stub.well = well('active');
+        stub.hazards = well('active');
         const frames = [0, 0.35, 0.7, 1.05, 1.4].map((elapsed) => {
           stub.elapsed = elapsed;
           drawFrame(world, 1);
@@ -566,7 +566,7 @@ describe('createRenderer', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
         const arcAlpha = (remaining: number): number => {
-          stub.well = well('active', remaining);
+          stub.hazards = well('active', remaining);
           drawFrame(world, 1);
           return drawsOf(sprite('arc1'))[0]?.alpha ?? Number.NaN;
         };
@@ -580,6 +580,14 @@ describe('createRenderer', () => {
       it('is not drawn when there is none', () => {
         const { world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        for (const name of [...ARCS, 'horizon', 'outline']) expect(sprite(name)).toBeUndefined();
+      });
+
+      it('draws only gravity wells as wells: a repulsion field waits for its own look', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.hazards = well('active').map((h) => ({ ...h, type: 'repulsionField' }));
         drawFrame(world, 1);
         for (const name of [...ARCS, 'horizon', 'outline']) expect(sprite(name)).toBeUndefined();
       });

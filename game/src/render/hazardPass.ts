@@ -1,7 +1,7 @@
 import { clamp } from '../content/curves';
-import { WELL_SECONDS, WELL_TELEGRAPH_SECONDS } from '../content/hazards';
+import { HAZARD_RULES } from '../content/hazards';
 import type { Field } from '../sim/field';
-import type { WellState } from '../sim/hazards/gravityWell';
+import type { HazardState } from '../sim/hazards/hazard';
 import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
 import type { Palette } from './palette';
@@ -10,13 +10,15 @@ import { strokePath, type Sprite, type SpriteBaker } from './sprites';
 
 export interface HazardPass {
   /**
-   * A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls, a glow, three arcs
-   * swirling round it (held still and breathing under reduced motion) and a dark lens at its heart. Expects `source-over`, which it leaves as it found it, with alpha 1.
+   * The hazards in play. A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls,
+   * a glow, three arcs swirling round it (held still and breathing under reduced motion) and a dark lens at its heart.
+   * The other hazards are drawn once they are made. Expects `source-over`, which it leaves as it found it, with alpha 1.
    */
-  drawWell(well: Readonly<WellState> | null, field: Field, look: SceneLook): void;
+  drawHazards(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
 }
 
 const WHITE = '#ffffff';
+const { telegraph: WELL_TELEGRAPH_SECONDS, seconds: WELL_SECONDS } = HAZARD_RULES.gravityWell;
 /** The drawn radius of an intensity-1 well; its pull reaches the whole field and has no edge. Each intensity adds a share. */
 const WELL_RADIUS = 90;
 const INTENSITY_GROWTH = 0.2;
@@ -121,18 +123,18 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
   const half = BAKED_RADIUS + SPRITE_PAD;
 
   /** Draws `sprite` at the well, `size` of its baked size, turned by `angle`. */
-  function put(sprite: Sprite, well: Readonly<WellState>, size: number, angle: number, field: Field): void {
+  function put(sprite: Sprite, well: Readonly<HazardState>, size: number, angle: number, field: Field): void {
     stamp(sprite, well.x, well.y, Math.cos(angle) * size, Math.sin(angle) * size, sprite.halfW * size, field);
   }
 
-  function drawWarning(well: Readonly<WellState>, field: Field, { time, still }: SceneLook): void {
+  function drawWarning(well: Readonly<HazardState>, field: Field, { time, still }: SceneLook): void {
     const due = clamp(well.remaining / WELL_TELEGRAPH_SECONDS, 0, 1);
     const size = sizeOf(well.intensity) * (still ? 1 : 1 + OUTLINE_CLOSE * due);
     ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(time * TAU * OUTLINE_PULSE_HZ));
     put(baker.custom(outlineKey, half, paintOutlineNow), well, size, 0, field);
   }
 
-  function drawActive(well: Readonly<WellState>, field: Field, { glow, time, still }: SceneLook): void {
+  function drawActive(well: Readonly<HazardState>, field: Field, { glow, time, still }: SceneLook): void {
     const shown = wellPresence(well.remaining);
     const size = sizeOf(well.intensity);
     // Reduced motion freezes the swirl; a slow breath in its opacity still shows the well is pulling.
@@ -147,11 +149,13 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
   }
 
   return {
-    drawWell(well, field, look) {
-      if (well === null) return;
-      if (well.stage === 'warning') drawWarning(well, field, look);
-      else drawActive(well, field, look);
-      ctx.globalAlpha = 1;
+    drawHazards(hazards, field, look) {
+      for (const hazard of hazards) {
+        if (hazard.type !== 'gravityWell') continue;
+        if (hazard.stage === 'warning') drawWarning(hazard, field, look);
+        else drawActive(hazard, field, look);
+        ctx.globalAlpha = 1;
+      }
     },
   };
 }

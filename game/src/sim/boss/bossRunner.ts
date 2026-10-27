@@ -1,6 +1,6 @@
 import type { BossDef } from '../../content/bosses';
 import { clamp } from '../../content/curves';
-import { BOSS_INTRO_SECONDS } from '../../content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../content/pacingRules';
 import type { AttackId } from '../../content/types';
 import { circlesOverlap } from '../collision';
 import type { Field } from '../field';
@@ -9,8 +9,6 @@ import type { Arena } from '../rules';
 import { rescale, rescalePose } from '../wrap';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
 
-/** The shortest telegraph an attack may have: players need this long to see it coming. */
-export const MIN_WINDUP_SECONDS = 0.35;
 /** How long a beaten boss takes to die; the renderer fades it over this. */
 export const DYING_SECONDS = 2;
 /** Where a boss arrives, as a share of the field height from the top. */

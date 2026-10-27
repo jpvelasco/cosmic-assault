@@ -2,7 +2,7 @@ import { bossHp, BOSSES } from '../../content/bosses';
 import { rockSpeedMultiplier } from '../../content/curves';
 import { isFoeKind } from '../../content/foes';
 import { tierOf } from '../../content/galaxies';
-import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
+import type { BossId, GalaxyDef, HazardType, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
 import type { BossFactory, BossSetup, BossView } from '../boss/behaviour';
 import { BossRunner, clearSpot, DYING_SECONDS } from '../boss/bossRunner';
@@ -13,7 +13,8 @@ import { ASTEROID, PLAYER } from '../config';
 import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
-import { Wells, type WellState } from '../hazards/gravityWell';
+import type { HazardState } from '../hazards/hazard';
+import { HazardField, hazardStreamName } from '../hazards/hazardField';
 import { TIME_EPSILON } from '../math';
 import { Loadout } from '../pickups/effects';
 import { PickupField, type Pickup } from '../pickups/pickups';
@@ -50,21 +51,21 @@ export interface GalaxyStreams {
   readonly pickups: Rng;
   /** Foe behaviour: where they enter, their headings and their fragments. */
   readonly foes: Rng;
-  /** Where gravity wells sit. */
-  readonly hazards: Rng;
+  /** Each hazard type's own stream (`hazardStreamName`): where it sits, and what else it rolls. */
+  readonly hazards: (type: HazardType) => Rng;
 }
 
 /** The streams of a run with `seed`. */
 export function galaxyStreams(seed: number): GalaxyStreams {
   const stream = (name: string): Rng => createRng(deriveSeed(seed, name));
-  return { director: stream('director'), boss: stream('boss'), pickups: stream('pickups'), foes: stream('foes'), hazards: stream('hazards') };
+  return { director: stream('director'), boss: stream('boss'), pickups: stream('pickups'), foes: stream('foes'), hazards: (type) => stream(hazardStreamName(type)) };
 }
 
 const areaOf = (field: Field): number => field.width * field.height;
 
 /**
  * A timed galaxy: it opens on an empty field, the director meters rocks and foes into it from one threat budget, and
- * showers and gravity wells run on schedule. When the timer runs out the ship warps out, clearing the field and reporting the clear; the galaxy's
+ * showers and hazards run on schedule. When the timer runs out the ship warps out, clearing the field and reporting the clear; the galaxy's
  * status turns cleared 1.5 s later.
  * A boss galaxy has no clock to beat: once its approach ends its boss arrives, and the step its HP hits 0 warps out
  * instead. The boss dies over that warp, which lasts its 2 s of dying.
@@ -72,7 +73,7 @@ const areaOf = (field: Field): number => field.width * field.height;
 export class GalaxyRun implements Spawner {
   private readonly director: GalaxyDirector;
   private readonly showers: Showers;
-  private readonly wells: Wells;
+  private readonly hazards: HazardField;
   private readonly foes: FoeField;
   private readonly combo = new Combo();
   private readonly rockSpeed: number;
@@ -104,7 +105,7 @@ export class GalaxyRun implements Spawner {
     this.pickupField = new PickupField(galaxy.pickups, tierOf(galaxy), streams.pickups);
     this.director = new GalaxyDirector(galaxy, streams.director, areaOf(arena.field()));
     this.showers = new Showers(galaxy.events, streams.director);
-    this.wells = new Wells(galaxy.events, streams.hazards, () => arena.nextId());
+    this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId(), arena.ship);
     this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
   }
@@ -145,16 +146,16 @@ export class GalaxyRun implements Spawner {
     return this.foes.list;
   }
 
-  /** The gravity well being telegraphed or pulling, for the HUD and renderer; a live view. */
-  get well(): WellState | null {
-    return this.wells.state;
+  /** The hazards being telegraphed or active, for the HUD, the renderer and the bots; a live view. */
+  get hazardStates(): readonly HazardState[] {
+    return this.hazards.states;
   }
 
   resize(old: Field, field: Field): void {
     this.director.fieldArea = areaOf(field);
     this.pickupField.resize(old, field);
     this.foes.resize(old, field);
-    this.wells.resize(old, field);
+    this.hazards.resize(old, field);
     this.bossRunner?.resize(old, field);
   }
 
@@ -169,11 +170,11 @@ export class GalaxyRun implements Spawner {
   }
 
   /**
-   * The hazard path. A gravity well pulls by nudging the velocities of the ship, the rocks and the foes it pulls, and
-   * a boss's attack shoves the ship, here, after `stepShip` and before anything else moves; then the foes move.
+   * The hazard path. Hazards pull by nudging the velocities of the ship (capped, summed), the rocks and the foes they
+   * pull, and a boss's attack shoves the ship, here, after `stepShip` and before anything else moves; then the foes move.
    */
   moveOwn(dt: number, ship: Ship): void {
-    this.wells.pull(dt, ship, this.arena.asteroids, this.foes.list);
+    this.hazards.move(dt, ship, this.arena.asteroids, this.foes.list);
     this.bossRunner?.shove(ship);
     this.foes.step(dt);
   }
@@ -276,18 +277,16 @@ export class GalaxyRun implements Spawner {
     return this.foes.hit(x, y, radius);
   }
 
-  /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, or into a boss that is fighting. */
+  /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, a boss that is fighting, or a lethal hazard. */
   shipStruck(x: number, y: number, radius: number): boolean {
-    return this.foes.ram(x, y, radius) || this.touchesBoss(x, y, radius);
+    return this.foes.ram(x, y, radius) || this.touchesBoss(x, y, radius) || this.hazards.strikes(x, y, radius);
   }
 
-  /** A ship respawning while a boss is on the field comes back clear of its reach, not at the centre, where the boss may be. */
-  respawned(ship: Ship): void {
+  /** While a boss is on the field, a respawning ship comes back clear of its reach, not at the centre, where the boss may be; else where a hazard sends it, if one does. */
+  respawnPoint(): Readonly<{ x: number; y: number }> | null {
     const boss = this.bossRunner;
-    if (boss === null || boss.state === 'down') return;
-    const spot = clearSpot(boss.view, boss.reach + PLAYER.radius + ASTEROID.safeRadius, this.arena.field());
-    ship.x = ship.px = spot.x;
-    ship.y = ship.py = spot.y;
+    if (boss === null || boss.state === 'down') return this.hazards.respawnPoint();
+    return clearSpot(boss.view, boss.reach + PLAYER.radius + ASTEROID.safeRadius, this.arena.field());
   }
 
   /** The Shield takes a hit meant for the ship, if it has one; true means the hit is absorbed: no life is lost. */
@@ -317,7 +316,7 @@ export class GalaxyRun implements Spawner {
     const meteors = this.showers.step(elapsed, dt, areaOf(field), this.sweepField(), this.arena.events);
     const edge = this.showers.state?.edge;
     if (edge !== undefined) this.dropMeteors(meteors, edge, field);
-    this.wells.step(elapsed, field, this.arena.events);
+    this.hazards.step(elapsed, field, this.arena.events);
     this.context.onFieldCost += this.foes.cost;
     this.context.elapsed = elapsed;
     this.context.mercy = elapsed < this.mercyUntil ? MERCY : 1;
@@ -390,7 +389,7 @@ export class GalaxyRun implements Spawner {
     this.foes.clear();
     this.pickupField.expireAll(events);
     this.showers.stop();
-    this.wells.stop();
+    this.hazards.stop();
     this.warpEndsAt = elapsed + seconds;
     arena.setStatus('warping');
     const report = clearReport({ score: arena.score(), deaths: arena.deaths(), dimension: this.galaxy.dimension, mode: this.mode });

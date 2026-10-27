@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import type { AttackId } from '../../src/content/types';
-import { BossRunner, MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
+import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { STEP_SECONDS } from '../../src/sim/config';

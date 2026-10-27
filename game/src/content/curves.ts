@@ -1,4 +1,4 @@
-import { WELL_SECONDS } from './hazards';
+import { HAZARD_RULES } from './hazards';
 import type { GalaxyDef, GalaxyEvent, KindRamp } from './types';
 
 function finite(value: number, name: string): number {
@@ -37,9 +37,9 @@ export function showerSeconds(intensity: GalaxyEvent['intensity']): number {
   return Math.min(12, 6 + 3 * intensity);
 }
 
-/** Seconds `event` lasts after its warning. */
+/** Seconds `event` lasts after its warning: a shower's by its intensity, a hazard's by its rule. */
 export function eventSeconds({ type, intensity }: Pick<GalaxyEvent, 'type' | 'intensity'>): number {
-  return type === 'gravityWell' ? WELL_SECONDS : showerSeconds(intensity);
+  return type === 'meteorShower' ? showerSeconds(intensity) : HAZARD_RULES[type].seconds;
 }
 
 /** The events of a schedule that are of `type`, in order: each hazard runs only its own. */

@@ -295,7 +295,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawRockGlows(world, alpha, field, visual);
     particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
-    passes.hazard.drawWell(world.well, field, scene);
+    passes.hazard.drawHazards(world.hazards, field, scene);
     drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
     passes.foe.drawFoes(world.foes, alpha, field, scene);
