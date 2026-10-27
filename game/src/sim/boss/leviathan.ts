@@ -12,7 +12,7 @@ import { SerpentTrail } from './serpentTrail';
 /** Its body: segments of this radius and HP, each this far along the head's trail from the next. */
 export const SEGMENT_COUNT = 8;
 export const SEGMENT_RADIUS = 24;
-export const SEGMENT_HP = 4;
+export const SEGMENT_HP = 3;
 export const SEGMENT_GAP = 40;
 /** The trail notes the head each time it has moved this far, and holds enough of those points to reach past the tail. */
 export const TRAIL_STEP = 4;

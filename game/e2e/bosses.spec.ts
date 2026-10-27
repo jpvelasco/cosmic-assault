@@ -159,7 +159,7 @@ test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {
     // A shielded head offers the tail as the only place a shot does harm.
     expect(whole.target).not.toBeNull();
 
-    // Four blows break the tail, and the break takes its share off the head.
+    // Its HP in blows breaks the tail, and the break takes its share off the head.
     await damageBoss(page, SEGMENT_HP);
     expect(await bossOf(page)).toMatchObject({ liveParts: SEGMENT_COUNT - 1, hp: whole.maxHp - (BOSSES.leviathan.partBreakDamage ?? 0), vulnerable: false });
 

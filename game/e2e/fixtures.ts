@@ -226,7 +226,7 @@ export function openGameOverRun(page: Page): Promise<void> {
 /**
  * Shots `damageBoss` lands to beat any boss: each goes where it does harm, so this must cover the shots that break a
  * shielded boss's parts as well as its HP. The Monolith's are up to `SHARD_COUNTS[1] - EXPOSED_AT` shards of `SHARD_HP`
- * before its core is bare, then its `bossHp`; the Leviathan's, its 8 segments of 4 HP, then the 40 HP their breaks
+ * before its core is bare, then its `bossHp`; the Leviathan's, its 8 segments of 3 HP, then the 40 HP their breaks
  * leave of its 88.
  */
 export const KILL_SHOTS = 100;

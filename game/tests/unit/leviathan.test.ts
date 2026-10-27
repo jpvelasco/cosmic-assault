@@ -119,10 +119,10 @@ describe('the Leviathan definition', () => {
 });
 
 describe('the Leviathan body', () => {
-  it('is 8 segments of radius 24 and 4 HP, listed tail first, each 40 along the trail from the next', () => {
+  it('is 8 segments of radius 24 and 3 HP, listed tail first, each 40 along the trail from the next', () => {
     const { r } = rig();
     expect(segments(r)).toHaveLength(SEGMENT_COUNT);
-    expect([SEGMENT_COUNT, SEGMENT_RADIUS, SEGMENT_HP, SEGMENT_GAP]).toEqual([8, 24, 4, 40]);
+    expect([SEGMENT_COUNT, SEGMENT_RADIUS, SEGMENT_HP, SEGMENT_GAP]).toEqual([8, 24, 3, 40]);
     for (const part of segments(r)) expect(part).toMatchObject({ radius: SEGMENT_RADIUS, hp: SEGMENT_HP, maxHp: SEGMENT_HP });
     const chain = [...segments(r), r.view];
     for (let i = 0; i + 1 < chain.length; i++) {
@@ -427,8 +427,13 @@ describe('Leviathan attacks', () => {
 describe('a Leviathan coil near the field\'s edge', () => {
   /**
    * Where a ship parks, 60 in from each corner and from the middle of each edge, and the least share of the coil's steps
-   * the head spends on the field there. At an edge the nudge brings nearly the whole ring on; at a corner the ring
-   * overhangs two edges by 64 however it is nudged without passing over a still ship, so about half of it shows.
+   * the head spends on the field there.
+   *
+   * The ring's centre may move at most `COIL_NUDGE` (136) from the ship, so a ship that holds still stays 40 inside the
+   * ring, clear of the head. At an edge's middle that is nearly enough: a ship 60 from the top gets a centre 196 down,
+   * and the ring pokes 24 past the edge. At a corner it is not: the centre moves 136 along the diagonal, to about
+   * (156, 156), and the ring overhangs both walls by 64, about half its round. Keeping the whole ring on would take a
+   * centre 220 from both walls, 226 from the ship, so the ring would pass over a ship that held still.
    */
   const PARKED = [
     ['the top-left corner', { x: 60, y: 60 }, 0.4],
