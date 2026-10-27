@@ -52,7 +52,36 @@ function positions(seed: number, withThrust: boolean): number[][] {
 
 describe('burstFor: foes', () => {
   const hurt: SimEvent = { type: 'foeHit', id: 1, x: 10, y: 20, hp: 1 };
-  const slain = (kind: 'splitter' | 'drone', points = 100): SimEvent => ({ type: 'foeDestroyed', id: 1, kind, x: 10, y: 20, points });
+  const slain = (kind: 'splitter' | 'drone' | 'gunship' | 'mine', points = 100): SimEvent => ({ type: 'foeDestroyed', id: 1, kind, x: 10, y: 20, points });
+
+  it('bursts a gunship like a medium rock and a mine like a small one', () => {
+    expect(burstFor(slain('gunship', 250), DRIFT)).toEqual(burstFor(DESTROYED(1), DRIFT));
+    expect(burstFor(slain('mine', 150), DRIFT)).toEqual(burstFor(DESTROYED(2), DRIFT));
+  });
+
+  it("blasts a mine with rings, a shake and a flash in the palette's hostile hue, and sparks a bolt from its muzzle without a shake", () => {
+    const blast = burstFor({ type: 'mineBlast', id: 1, x: 10, y: 20, radius: 80 }, ION_REACH);
+    expect(blast).toMatchObject({ flashColor: ION_REACH.hostile });
+    expect(blast?.rings).toBeGreaterThanOrEqual(2);
+    expect(blast?.shake).toBeGreaterThan(0);
+    const muzzle = burstFor({ type: 'boltFired', id: 1, source: 'gunship', owner: 2, x: 0, y: 0, angle: 0 }, DRIFT);
+    expect(muzzle?.sparks).toBeGreaterThan(0);
+    expect(muzzle).toMatchObject({ shake: 0, flash: 0 });
+  });
+
+  it('leaves windups, arming and zones to the passes that draw them', () => {
+    for (const event of [{ type: 'foeWindup', id: 1, x: 0, y: 0, angle: 0 }, { type: 'mineArmed', id: 1, x: 0, y: 0 }, { type: 'zoneWarning', id: 1, x: 0, y: 0, w: 150, h: 150 }, { type: 'zoneStart', id: 1 }, { type: 'zoneEnd', id: 1 }] as const) {
+      expect(burstFor(event, DRIFT), event.type).toBeNull();
+    }
+  });
+
+  it("tints a mine blast's and a bolt's particles in the hostile hue", () => {
+    const pool = new ParticlePool(200);
+    const fx = createEffects(pool, 3, ION_REACH);
+    fx.handle([{ type: 'mineBlast', id: 1, x: 300, y: 200, radius: 80 }, { type: 'boltFired', id: 2, source: 'gunship', owner: 1, x: 100, y: 100, angle: 0 }], makeWorld());
+    const colours = new Set(allParticles(pool).filter((p) => p.kind !== 'smoke').map((p) => p.color));
+    expect(colours).toEqual(new Set([ION_REACH.hostile]));
+  });
 
   it('gives a foe hit the sparks of a boss hit, and a destroyed foe the burst of a rock of its weight', () => {
     expect(burstFor(hurt, DRIFT)).toEqual(burstFor({ type: 'bossHit', x: 0, y: 0, hp: 3 }, DRIFT));

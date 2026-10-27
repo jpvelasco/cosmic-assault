@@ -9,6 +9,7 @@ import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
+import { DangerZones } from './dangerZone';
 import { ForceField } from './forceField';
 import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
@@ -17,6 +18,7 @@ import { shipPullAt } from './shipPull';
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
   gravityWell: (setup) => new ForceField('gravityWell', FORCE_SIGN.gravityWell, setup),
   repulsionField: (setup) => new ForceField('repulsionField', FORCE_SIGN.repulsionField, setup),
+  dangerZone: (setup) => new DangerZones(setup),
 };
 
 /** The stream a hazard type draws from: the gravity wells keep M5's `'hazards'`, so Ion Reach does not move. */

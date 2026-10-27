@@ -1,7 +1,6 @@
 import type { BossPart, BossView, Point } from '../sim/boss/behaviour';
 import { bossTarget } from '../sim/boss/bossRules';
 import { PLAYER, PROJECTILE, STEP_SECONDS } from '../sim/config';
-import type { Field } from '../sim/field';
 import { wrapDelta } from '../sim/wrap';
 import type { BotView } from './view';
 
@@ -29,15 +28,14 @@ interface Posed extends Body {
   readonly py: number;
 }
 
-/** Extra effective distance, by kind, when choosing what to shoot: drones and the boss first, then splitters, then rocks. */
-const PRIORITY = { drone: 0, boss: 0, splitter: 150, rock: 350 } as const;
+/**
+ * Extra effective distance, by kind, when choosing what to shoot: drones, gunships, mines (shot from range, before the
+ * ship comes near their arm rings) and the boss first, then splitters, then rocks.
+ */
+const PRIORITY = { drone: 0, gunship: 0, mine: 0, boss: 0, splitter: 150, rock: 350 } as const;
 
 /** An offset `delta` along a side `size` long: across the wrap if that is shorter and `wraps`, else across the field. */
 const across = (delta: number, size: number, wraps: boolean): number => (wraps ? wrapDelta(delta, size) : delta);
-
-/** The distance from `from` to `to` across the wrap. */
-export const wrappedDistance = (from: Body, to: Body, field: Field): number =>
-  Math.hypot(wrapDelta(to.x - from.x, field.width), wrapDelta(to.y - from.y, field.height));
 
 /** Writes `body`, moving at (vx, vy), into `out` if its score beats `best`; returns the better score. */
 function offer(view: Readonly<BotView>, out: Target, best: number, body: Body, vx: number, vy: number, penalty: number, wraps: boolean): number {

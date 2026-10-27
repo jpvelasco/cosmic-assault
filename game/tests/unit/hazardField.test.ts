@@ -8,7 +8,7 @@ import type { Field } from '../../src/sim/field';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { galaxyStreams } from '../../src/sim/galaxy/streams';
 import { wellAcceleration } from '../../src/sim/hazards/forceField';
-import type { Hazard, HazardFactory, HazardSetup, HazardState } from '../../src/sim/hazards/hazard';
+import type { Hazard, HazardFactory, HazardSetup, HazardState, PointHazardState } from '../../src/sim/hazards/hazard';
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt } from '../../src/sim/hazards/shipPull';
 import { nudge } from '../../src/sim/math';
@@ -27,7 +27,7 @@ function standIn(overrides: Partial<Hazard> = {}): Hazard {
 }
 
 /** An active hazard state of `type` at (x, y). */
-const active = (type: HazardType, x: number, y: number, intensity: GalaxyEvent['intensity'] = 1, id = 1): HazardState => ({ id, type, stage: 'active', x, y, intensity, remaining: 5 });
+const active = (type: PointHazardState['type'], x: number, y: number, intensity: GalaxyEvent['intensity'] = 1, id = 1): HazardState => ({ id, type, stage: 'active', x, y, intensity, remaining: 5 });
 
 function field(events: readonly GalaxyEvent[], factories: Partial<Record<HazardType, HazardFactory>> = HAZARD_FACTORIES, seed = 1): HazardField {
   let last = 0;
@@ -111,7 +111,7 @@ describe('shipPullAt', () => {
   });
 
   it('ignores warnings, hazards that do not pull, and a ship at a field\'s very centre', () => {
-    const states: HazardState[] = [{ ...active('gravityWell', 650, 360), stage: 'warning' }, active('dangerZone', 650, 360), active('gravityWell', 600, 360)];
+    const states: HazardState[] = [{ ...active('gravityWell', 650, 360), stage: 'warning' }, { id: 3, type: 'dangerZone', stage: 'active', x: 650, y: 360, w: 150, h: 150, intensity: 1, remaining: 5 }, active('gravityWell', 600, 360)];
     expect(shipPullAt(states, 600, 360, DT, { x: 3, y: 4 })).toEqual({ x: 0, y: 0 });
   });
 });
@@ -127,8 +127,8 @@ describe('HazardField', () => {
     ]);
   });
 
-  it('builds force fields from the shared table: wells and repulsion fields', () => {
-    expect(Object.keys(HAZARD_FACTORIES).sort()).toEqual(['gravityWell', 'repulsionField']);
+  it('builds hazards from the shared table: wells, repulsion fields and danger zones', () => {
+    expect(Object.keys(HAZARD_FACTORIES).sort()).toEqual(['dangerZone', 'gravityWell', 'repulsionField']);
   });
 
   it('says what to do when a scheduled hazard has no factory yet', () => {

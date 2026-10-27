@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, INSTANT_PICKUPS, isTimed, PICKUP_IDS, PICKUPS, TIMED_PICKUPS } from '../../src/content/pickups';
-import { FOES } from '../../src/content/foes';
-import { HAZARD_RULES } from '../../src/content/hazards';
+import { FOES, GUNSHIP, MINE } from '../../src/content/foes';
+import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
 import type { GalaxyDef, GalaxyId, HazardType, PickupId, ThreatKind } from '../../src/content/types';
 import { eventSeconds, kindProbability, showerSeconds } from '../../src/content/curves';
 import { lullStart, OPENING_SECONDS } from '../../src/content/pacingRules';
@@ -33,7 +33,7 @@ function sameTypeOverlaps(events: readonly GalaxyEvent[]): string[] {
   return found;
 }
 
-const KINDS: readonly ThreatKind[] = ['large', 'medium', 'small', 'splitter', 'drone'];
+const KINDS: readonly ThreatKind[] = ['large', 'medium', 'small', 'splitter', 'drone', 'gunship', 'mine'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
 
 /** The kinds the director picks from in `galaxy`'s opening, over many seeds. */
@@ -258,7 +258,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('shares four ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, and a boss\'s field', () => {
+  it('shares five ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, and a boss\'s field', () => {
     const rocks = {
       large: { from: 0, base: 0.6, step: 0, max: 0.6 },
       medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
@@ -267,21 +267,38 @@ describe('the galaxy table', () => {
     const none = { from: 0, base: 0, step: 0, max: 0 };
     const splitter = { from: 0.4, base: 0.15, step: 0.08, max: 0.35 };
     const drone = { from: 1, base: 0.15, step: 0.3, max: 0.45 };
-    expect(galaxyById('1-1').kinds).toEqual({ ...rocks, splitter: none, drone: none });
-    expect(galaxyById('1-3').kinds).toEqual({ ...rocks, splitter, drone: none });
-    expect(galaxyById('2-1').kinds).toEqual({ ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone });
-    for (const id of ['1-6', '2-6', '5-6'] as const) expect(galaxyById(id).kinds, id).toEqual({ ...rocks, large: none, splitter: none, drone: none });
-    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(4);
+    const foesNone = { splitter: none, drone: none, gunship: none, mine: none };
+    const swarms = { ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone, gunship: none, mine: none };
+    expect(galaxyById('1-1').kinds).toEqual({ ...rocks, ...foesNone });
+    expect(galaxyById('1-3').kinds).toEqual({ ...rocks, ...foesNone, splitter });
+    expect(galaxyById('2-1').kinds).toEqual(swarms);
+    expect(galaxyById('3-1').kinds).toEqual({ ...swarms, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.3 }, mine: { from: 2, base: 0, step: 0.3, max: 0.18 } });
+    for (const id of ['1-6', '2-6', '3-6', '5-6'] as const) expect(galaxyById(id).kinds, id).toEqual({ ...rocks, large: none, ...foesNone });
+    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(5);
   });
 
-  it('brings in splitters from 1-3 and drones from Ion Reach, gives neither to a galaxy before that, and none to a boss galaxy', () => {
+  it('brings in splitters from 1-3, drones from Ion Reach and gunships and mines in Crimson Nebula, which keeps Ion Reach\'s table; none before that, and none in a boss galaxy', () => {
     for (const g of GALAXIES) {
-      const splitters = g.kinds.splitter.max > 0;
-      const drones = g.kinds.drone.max > 0;
       const survival = g.kind === 'survival';
-      expect(splitters, g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || g.dimension === 2));
-      expect(drones, g.id).toBe(survival && g.dimension === 2);
+      const has = (kind: ThreatKind): boolean => g.kinds[kind].max > 0;
+      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || g.dimension === 2 || g.dimension === 3));
+      expect(has('drone'), g.id).toBe(survival && (g.dimension === 2 || g.dimension === 3));
+      expect(has('gunship'), g.id).toBe(survival && g.dimension === 3);
+      expect(has('mine'), g.id).toBe(survival && g.dimension === 3);
     }
+  });
+
+  it('weighs gunships in at about 0.1 at 3-1, rising to 0.3 by 3-★, and mines in at about 0.06 at 3-2, none at 3-1, rising to 0.18', () => {
+    const weight = (id: GalaxyId, kind: ThreatKind): number => kindProbability(galaxyById(id).kinds[kind], tierOf(galaxyById(id)));
+    expect(weight('3-1', 'gunship')).toBeCloseTo(0.1, 10);
+    expect(kindProbability(galaxyById('3-5').kinds.gunship, tierOf(galaxyById('3-6')))).toBeCloseTo(0.3, 10);
+    for (const [from, to] of [['3-1', '3-2'], ['3-2', '3-3'], ['3-3', '3-4'], ['3-4', '3-5']] as const) expect(weight(to, 'gunship')).toBeGreaterThan(weight(from, 'gunship'));
+    expect(weight('3-1', 'mine')).toBe(0);
+    expect(weight('3-2', 'mine')).toBeCloseTo(0.06, 10);
+    expect(weight('3-4', 'mine')).toBeCloseTo(0.18, 10);
+    expect(weight('3-5', 'mine')).toBeCloseTo(0.18, 10);
+    // Neither is offered in a galaxy's opening: both ramps start past tier 0.
+    expect(openingOffers(galaxyById('3-3'))).toEqual(new Set(['large', 'medium']));
   });
 
   it('holds a ramp at its base below `from`, climbs by `step` past it up to `max`, and keeps a kind out of the opening only while `from` is not 0', () => {
@@ -297,7 +314,7 @@ describe('the galaxy table', () => {
 
   it('never ramps a foe in before its Dimension', () => {
     for (const g of GALAXIES)
-      for (const kind of ['splitter', 'drone'] as const) {
+      for (const kind of Object.keys(FOES) as (keyof typeof FOES)[]) {
         if (g.kinds[kind].max > 0) expect(g.dimension, `${g.id} ${kind}`).toBeGreaterThanOrEqual(FOES[kind].from);
       }
   });
@@ -305,6 +322,26 @@ describe('the galaxy table', () => {
   it('prices splitters 3 and drones 1, 2 HP and 1 HP, and groups drones 3 to 5', () => {
     expect(FOES.splitter).toMatchObject({ radius: 30, hp: 2, cost: 3, group: [1, 1] });
     expect(FOES.drone).toMatchObject({ hp: 1, cost: 1, speed: 110, points: 100, group: [3, 5] });
+  });
+
+  it('makes gunships and mines Crimson Nebula\'s: a 3 HP gunship alone, unpulled, and mines of 1 HP in ones and twos, pulled', () => {
+    expect(FOES.gunship).toEqual({ from: 3, radius: 18, hp: 3, cost: 4, points: 250, speed: 80, group: [1, 1], pulled: false });
+    expect(FOES.mine).toEqual({ from: 3, radius: 12, hp: 1, cost: 2, points: 150, speed: 25, group: [1, 2], pulled: true });
+    expect(GUNSHIP).toMatchObject({ orbit: [240, 300], cadence: 2.6, cadenceJitter: 0.4, windup: 0.5, maxLive: 4 });
+    expect(MINE).toMatchObject({ armRadius: 110, fuse: 0.6, blastRadius: 80 });
+  });
+
+  it('schedules Crimson Nebula\'s danger zones as the brief lays out, and no zone anywhere else', () => {
+    const zones = (id: GalaxyId): [number, number][] => galaxyById(id).events.filter((e) => e.type === 'dangerZone').map((e) => [e.at, e.intensity]);
+    expect(zones('3-1')).toEqual([]);
+    expect(zones('3-2')).toEqual([[30, 1]]);
+    expect(zones('3-3')).toEqual([[30, 1], [70, 1]]);
+    expect(zones('3-4')).toEqual([[20, 1], [50, 2]]);
+    expect(zones('3-5')).toEqual([[20, 2], [50, 2]]);
+    for (const g of GALAXIES.filter((x) => x.dimension !== 3)) expect(zones(g.id), g.id).toEqual([]);
+    // An event shows one zone per intensity, at most two, each 120 to 220 units a side.
+    for (const g of GALAXIES) for (const e of g.events) if (e.type === 'dangerZone') expect(e.intensity, g.id).toBeLessThanOrEqual(DANGER_ZONE.maxZones);
+    expect(DANGER_ZONE).toMatchObject({ maxZones: 2, side: [120, 220] });
   });
 
   it('gives each Dimension one palette and one music theme of its own, both named alike', () => {

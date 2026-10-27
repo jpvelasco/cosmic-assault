@@ -17,7 +17,7 @@ export const SCENE_SHIP = { x: 640, y: 360 };
 
 /** A hostile bolt `id` at (x, y) flying along `angle` at the default speed; `fromAttack` marks it a boss attack's. */
 export const flyingBolt = (id: number, x: number, y: number, angle: number, fromAttack = false): Bolt => ({
-  id, x, y, px: x, py: y, vx: Math.cos(angle) * BOLT.speed, vy: Math.sin(angle) * BOLT.speed, radius: BOLT.radius, age: 0, source: 'boss', fromAttack,
+  id, x, y, px: x, py: y, vx: Math.cos(angle) * BOLT.speed, vy: Math.sin(angle) * BOLT.speed, radius: BOLT.radius, age: 0, source: 'boss', owner: 0, fromAttack,
 });
 
 /** A tiny rock at rest at (x, y). */

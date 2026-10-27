@@ -174,9 +174,15 @@ export function radialBolts(ctx: AttackContext, parts: readonly Readonly<BossPar
  * was as the windup began; one bolt flies straight at it.
  */
 export function aimedBolts(ctx: AttackContext, from: Readonly<Point>, count: number, spread: number, speed: number = BOLT.speed): void {
-  const aim = Math.atan2(ctx.aimY - from.y, ctx.aimX - from.x);
-  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, aim + (count > 1 ? lane(i, count, spread / (count - 1)) : 0), speed);
+  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, fanBearing(from, ctx.aimX, ctx.aimY, i, count, spread), speed);
 }
+
+/**
+ * The bearing of bolt `i` of `count` fired from `from`, fanned evenly across `spread` radians about the bearing to
+ * (aimX, aimY); a lone bolt flies straight at it. Shared by the bosses' aimed bolts and the gunships.
+ */
+export const fanBearing = (from: Readonly<Point>, aimX: number, aimY: number, i: number, count: number, spread: number): number =>
+  Math.atan2(aimY - from.y, aimX - from.x) + (count > 1 ? lane(i, count, spread / (count - 1)) : 0);
 
 /** An attack telegraphed for `windup` s that fires `radialBolts` from `parts` (the behaviour's own, the same objects all fight) as it ends. */
 export const radialBoltsAttack = (windup: number, parts: readonly Readonly<BossPart>[], speed: number = BOLT.speed): AttackSpec => ({

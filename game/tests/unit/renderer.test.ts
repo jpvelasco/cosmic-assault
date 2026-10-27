@@ -12,9 +12,11 @@ import { visualScaleFor } from '../../src/render/visualScale';
 import { noEffects, type TimedPickupId } from '../../src/content/pickups';
 import { galaxyById } from '../../src/content/galaxies';
 import { boltKey } from '../../src/render/boltPass';
-import { foeKeys } from '../../src/render/foePass';
+import { foeKeys, mineMarkKeys } from '../../src/render/foePass';
+import { MINE } from '../../src/content/foes';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
 import type { Bolt } from '../../src/sim/foes/bolts';
+import { foeAt } from '../helpers/foeAt';
 import type { Foe } from '../../src/sim/foes/foe';
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import type { Pickup } from '../../src/sim/pickups/pickups';
@@ -43,6 +45,8 @@ interface FakeCanvas {
   readonly stops: string[];
   /** Arcs begun so far; the stars are the only thing drawn as arcs in the stub scene. */
   arcs: number;
+  /** Every point a line was drawn to, with the alpha then. */
+  readonly lines: { x: number; y: number; alpha: number }[];
   getContext(kind: string): unknown;
 }
 
@@ -54,7 +58,7 @@ function fakeCanvas(): FakeCanvas {
   let f = 0;
   let alpha = 1;
   let smoothing = true;
-  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, getContext: () => ctx };
+  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, lines: [], getContext: () => ctx };
   const gradient = { addColorStop: (_at: number, color: string) => fake.stops.push(color) };
   const ctx = new Proxy(
     {},
@@ -71,6 +75,8 @@ function fakeCanvas(): FakeCanvas {
             return (image: unknown) => draws.push({ image, a, e, f, alpha, smoothing });
           case 'arc':
             return () => fake.arcs++;
+          case 'lineTo':
+            return (x: number, y: number) => fake.lines.push({ x, y, alpha });
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
@@ -159,6 +165,7 @@ describe('createRenderer', () => {
 
   function drawFrame(world: World, alpha: number): void {
     canvas.draws.length = 0;
+    canvas.lines.length = 0;
     renderer.draw(world, alpha, 0);
   }
 
@@ -258,7 +265,7 @@ describe('createRenderer', () => {
     it('re-bakes the sky once, at once, and draws every sprite kind from the new palette', () => {
       renderer.resize(1280, 720, FIELD);
       const { stub, world } = stubWorld();
-      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false });
+      stub.foes.push(foeAt('drone', 400, 300, { id: 9 }));
       stub.pickups.push({ id: 3, kind: 'rapidFire', x: 700, y: 300, px: 700, py: 300, vx: 0, vy: 0, expiresIn: 9 });
       const setScale = vi.spyOn(baker, 'setScale');
       renderer.setPalette('ionReach');
@@ -279,7 +286,7 @@ describe('createRenderer', () => {
     it('draws a hostile bolt from its own baked capsule, keyed by the palette, and rebuilds it with the palette', () => {
       renderer.resize(1280, 720, FIELD);
       const { stub, world } = stubWorld();
-      stub.bolts.push({ id: 11, x: 500, y: 300, px: 498, py: 300, vx: 230, vy: 0, radius: 5, age: 0, source: 'boss', fromAttack: true });
+      stub.bolts.push({ id: 11, x: 500, y: 300, px: 498, py: 300, vx: 230, vy: 0, radius: 5, age: 0, source: 'boss', owner: 0, fromAttack: true });
       drawFrame(world, 1);
       expect(drawsOf(baker.cached(boltKey(DRIFT))?.canvas)).toHaveLength(1);
       renderer.setPalette('crimsonNebula');
@@ -290,7 +297,7 @@ describe('createRenderer', () => {
     it('rebuilds the palette-derived sprites on each step of a D3 to D4 to D5 switch', () => {
       renderer.resize(1280, 720, FIELD);
       const { stub, world } = stubWorld();
-      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false });
+      stub.foes.push(foeAt('drone', 400, 300, { id: 9 }));
       const setScale = vi.spyOn(baker, 'setScale');
       let previous = DRIFT;
       for (const id of ['crimsonNebula', 'voidRift', 'singularity'] as const) {
@@ -433,7 +440,7 @@ describe('createRenderer', () => {
 
     describe('foes', () => {
       const KEYS = foeKeys(DRIFT);
-      const drone = (): Foe => ({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false });
+      const drone = (): Foe => foeAt('drone', 400, 300, { id: 9 });
       const spawned: SimEvent = { type: 'foeSpawned', id: 9, kind: 'drone', x: 400, y: 300 };
       const hurt: SimEvent = { type: 'foeHit', id: 9, x: 400, y: 300, hp: 1 };
       const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };
@@ -535,6 +542,74 @@ describe('createRenderer', () => {
         renderer.resize(1280, 720, FIELD);
         drawFrame(world, 1);
         expect(drawsOf(white)).toHaveLength(0);
+      });
+    });
+
+    describe("Crimson Nebula's foes, bolts and zones", () => {
+      const CRIMSON = paletteFor('crimsonNebula');
+      const KEYS = foeKeys(CRIMSON);
+      const MARKS = mineMarkKeys(CRIMSON);
+      function crimsonWorld(): { stub: Stub; world: World } {
+        renderer.resize(1280, 720, FIELD);
+        renderer.setPalette('crimsonNebula');
+        return stubWorld();
+      }
+
+      it('draws a gunship from its wedge sprite, and its aim line to where it will fire only while it winds up', () => {
+        const { stub, world } = crimsonWorld();
+        const aim = { aimX: 700, aimY: 500 };
+        const aimLines = (): { x: number; y: number; alpha: number }[] => canvas.lines.filter((l) => l.x === aim.aimX && l.y === aim.aimY);
+        stub.foes.push(foeAt('gunship', 400, 300, { id: 5, ...aim }));
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached(KEYS.gunship)?.canvas)).toHaveLength(1);
+        expect(aimLines()).toEqual([]);
+        stub.foes[0] = foeAt('gunship', 400, 300, { id: 5, ...aim, charging: true, timer: 0.25 });
+        drawFrame(world, 1);
+        expect(aimLines()).toHaveLength(1);
+        const half = aimLines()[0]?.alpha ?? 0;
+        stub.foes[0] = foeAt('gunship', 400, 300, { id: 5, ...aim, charging: true, timer: 0.05 });
+        drawFrame(world, 1);
+        expect(aimLines()[0]?.alpha).toBeGreaterThan(half);
+      });
+
+      it("always shows a mine's arm ring at its true size, and its blast reach only once armed", () => {
+        const { stub, world } = crimsonWorld();
+        stub.foes.push(foeAt('mine', 500, 300, { id: 6 }));
+        drawFrame(world, 1);
+        const ring = baker.cached(MARKS.ring);
+        expect(drawsOf(ring?.canvas)).toHaveLength(1);
+        expect(drawsOf(ring?.canvas)[0]?.e).toBe(500);
+        // Gameplay sizes are never scaled up for small screens: the ring is the arm radius, plus its stroke.
+        expect(ring?.halfW).toBeGreaterThanOrEqual(MINE.armRadius);
+        expect(ring?.halfW).toBeLessThan(MINE.armRadius + 6);
+        expect(baker.cached(MARKS.blast)).toBeUndefined();
+        expect(drawsOf(baker.cached(KEYS.mine)?.canvas)).toHaveLength(1);
+        stub.foes[0] = foeAt('mine', 500, 300, { id: 6, charging: true, timer: 0.3 });
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached(MARKS.blast)?.canvas)).toHaveLength(1);
+      });
+
+      it('draws a danger zone dashed while it warns and filled once lethal, each from a sprite of its own size', () => {
+        const { stub, world } = crimsonWorld();
+        const zone = (stage: 'warning' | 'active'): HazardState => ({ id: 7, type: 'dangerZone', stage, x: 300, y: 200, w: 160, h: 140, intensity: 1, remaining: 1.5 });
+        stub.hazards = [zone('warning')];
+        drawFrame(world, 1);
+        const warning = baker.cached('zone|crimsonNebula|warning|160.0x140.0');
+        expect(drawsOf(warning?.canvas).map((call) => [call.e, call.f])).toEqual([[300, 200]]);
+        expect(warning?.halfH).toBeLessThan(warning?.halfW ?? 0);
+        stub.hazards = [zone('active')];
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached('zone|crimsonNebula|active|160.0x140.0')?.canvas)).toHaveLength(1);
+        expect(drawsOf(warning?.canvas)).toEqual([]);
+      });
+
+      it('restyles the bolts in the palette\'s hostile hue, and looks their glow up once a frame however many fly (Task 3 N-4)', () => {
+        const { stub, world } = crimsonWorld();
+        for (let i = 0; i < 5; i++) stub.bolts.push({ id: 20 + i, x: 300 + i * 40, y: 300, px: 300 + i * 40, py: 300, vx: 230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 5, fromAttack: false });
+        const glow = vi.spyOn(baker, 'glow');
+        drawFrame(world, 1);
+        expect(glow.mock.calls.filter(([color]) => color === CRIMSON.hostile)).toHaveLength(1);
+        expect(drawsOf(baker.cached(boltKey(CRIMSON))?.canvas)).toHaveLength(5);
       });
     });
 

@@ -1,4 +1,4 @@
-import { FOES } from '../content/foes';
+import { FOES, MINE } from '../content/foes';
 import type { FoeKind } from '../content/types';
 import { ASTEROID, PICKUP } from '../sim/config';
 import { isWarpClear, type SimEvent } from '../sim/events';
@@ -82,7 +82,11 @@ const EXPOSED_BURST: Counts = { shards: 0, sparks: 18, rings: 2, smoke: 0, shake
 /** The core shielded again: one ring closing the opening. */
 const SHIELDED_BURST: Counts = { shards: 0, sparks: 6, rings: 1, smoke: 0, shake: 0, flash: 0 };
 /** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one (the sounds in sfx.ts match). */
-const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2] };
+const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2], gunship: ASTEROID_BURSTS[1], mine: ASTEROID_BURSTS[2] };
+/** A mine going off: rings out to its blast reach, sparks and smoke, a shake and a flash in the hostile hue. */
+const MINE_BLAST_BURST: Counts = { shards: 0, sparks: 22, rings: 2, smoke: 4, shake: 5, flash: 0.25 };
+/** A bolt leaving its muzzle: a couple of sparks. */
+const MUZZLE_BURST: Counts = { shards: 0, sparks: 3, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A pickup dropping or being collected: a ring and a spray of sparks in its colour, no shake. */
 const PICKUP_DROP_BURST: Counts = { shards: 0, sparks: 8, rings: 1, smoke: 0, shake: 0, flash: 0 };
 const PICKUP_TAKE_BURST: Counts = { shards: 0, sparks: 12, rings: 1, smoke: 0, shake: 0, flash: 0 };
@@ -131,9 +135,18 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
       return writeBurst(into, PICKUP_TAKE_BURST, palette.ring);
     case 'shieldBroken':
       return writeBurst(into, SHIELD_BREAK_BURST, palette.ring);
-    // The hangar's doors and the light inside are the drawer's to show; a blast shows in the bursts of what it destroys.
-    case 'blast':
+    case 'mineBlast':
+      return writeBurst(into, MINE_BLAST_BURST, palette.hostile);
     case 'boltFired':
+      return writeBurst(into, MUZZLE_BURST, palette.hostile);
+    // The hangar's doors and the light inside are the drawer's to show; a blast shows in the bursts of what it destroys.
+    // A gunship's aim, a mine's arming and a zone are the foe and hazard passes' to show.
+    case 'blast':
+    case 'foeWindup':
+    case 'mineArmed':
+    case 'zoneWarning':
+    case 'zoneStart':
+    case 'zoneEnd':
     case 'hangarOpen':
     case 'hangarClose':
     case 'gameOver':
@@ -287,8 +300,17 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         return writeOrigin(origin, world.ship.x, world.ship.y, PICKUP.radius, PICKUP_COLORS[event.kind]);
       case 'shieldBroken':
         return writeOrigin(origin, world.ship.x, world.ship.y, SHIELD_RING_RADIUS, PICKUP_COLORS.shield);
-      case 'blast':
+      // Its rings reach out to the blast's edge.
+      case 'mineBlast':
+        return writeOrigin(origin, event.x, event.y, MINE.blastRadius / 2, emitter.palette.hostile);
       case 'boltFired':
+        return writeOrigin(origin, event.x, event.y, 0, emitter.palette.hostile);
+      case 'blast':
+      case 'foeWindup':
+      case 'mineArmed':
+      case 'zoneWarning':
+      case 'zoneStart':
+      case 'zoneEnd':
       case 'hangarOpen':
       case 'hangarClose':
       case 'gameOver':

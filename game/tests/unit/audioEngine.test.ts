@@ -591,6 +591,21 @@ describe('the gravity well hum', () => {
     for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("runs a danger zone's hum beside a well's: each starts and stops on its own events", () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const well = looping();
+    e.handle([{ type: 'zoneStart', id: 2 }]);
+    const both = looping();
+    expect(both.length).toBeGreaterThan(well.length);
+    const zone = both.filter((n) => !well.includes(n));
+    e.handle([{ type: 'zoneEnd', id: 2 }]);
+    expect(looping()).toEqual(well);
+    for (const osc of zone) expect(osc.stop).toHaveBeenCalledTimes(1);
+    e.handle([{ type: 'zoneStart', id: 3 }, { type: 'warpOut' }]);
+    expect(looping()).toEqual([]);
+  });
+
   it('builds no hum before the context runs, and starts it once it does', () => {
     FakeContext.startState = 'suspended';
     FakeContext.resumeSucceeds = false;

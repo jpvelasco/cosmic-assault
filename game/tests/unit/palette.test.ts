@@ -80,8 +80,8 @@ describe.each(ALL)('palette $id', (palette) => {
     expect(palette.shotCore).toBe('#ffffff');
   });
 
-  it.each(['shot', 'hostile (accent[0])', 'rock lit side'])('keeps the %s at 3:1 or better against every sky stop', (name) => {
-    const color = { shot: palette.shot, 'hostile (accent[0])': palette.accent[0], 'rock lit side': palette.rock[0] }[name] as string;
+  it.each(['shot', 'foe (accent[0])', 'hostile', 'rock lit side'])('keeps the %s at 3:1 or better against every sky stop', (name) => {
+    const color = { shot: palette.shot, 'foe (accent[0])': palette.accent[0], hostile: palette.hostile, 'rock lit side': palette.rock[0] }[name] as string;
     for (const stop of palette.skyStops) expect(contrast(color, stop), `${name} on ${stop}`).toBeGreaterThanOrEqual(3);
   });
 });
@@ -92,6 +92,14 @@ describe('the five palettes', () => {
       const seen = ALL.map((p) => JSON.stringify(p[field]));
       expect(new Set(seen).size, field).toBe(ALL.length);
     }
+  });
+
+  it('draw what is hostile (bolts, aim lines, arm rings, danger zones) in a hue of its own: the foes\' own in the first two Dimensions, so they look as they did', () => {
+    expect(DRIFT.hostile).toBe(DRIFT.accent[0]);
+    expect(ION_REACH.hostile).toBe(ION_REACH.accent[0]);
+    expect(CRIMSON_NEBULA.hostile).toBe('#ff58e6');
+    // From Crimson Nebula on, where hostile things fly, they never wear the player's shot colour.
+    for (const p of [CRIMSON_NEBULA, VOID_RIFT, SINGULARITY]) expect(p.hostile, p.id).not.toBe(p.shot);
   });
 
   it('lead with the colours the design asks for', () => {

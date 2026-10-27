@@ -1,14 +1,13 @@
-import { eventSeconds } from '../../content/curves';
 import { FOES } from '../../content/foes';
 import { HAZARD_RULES, WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH } from '../../content/hazards';
-import type { ForceKind, GalaxyEvent } from '../../content/types';
+import type { ForceKind } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import type { Foe } from '../foes/foe';
-import { nudge, TIME_EPSILON } from '../math';
-import type { Rng } from '../rng';
+import { nudge } from '../math';
 import { rescale } from '../wrap';
-import type { Hazard, HazardSetup, HazardState, Pullable } from './hazard';
+import type { Hazard, HazardSetup, HazardState, PointHazardState, Pullable } from './hazard';
+import { HazardSchedule } from './schedule';
 
 /** Where, inside the field, a force field may be drawn, as shares of its width and height: clear of the edges, so it is felt. */
 const PLACE_BAND = [0.25, 0.75] as const;
@@ -37,12 +36,11 @@ interface ForceBodies {
   readonly foes: readonly Foe[];
 }
 
-interface Current extends HazardState {
+interface Current extends PointHazardState {
   stage: HazardState['stage'];
   x: number;
   y: number;
   remaining: number;
-  readonly event: GalaxyEvent;
 }
 
 /**
@@ -52,80 +50,57 @@ interface Current extends HazardState {
  * `stepShip`, whose arithmetic the parity traces pin.
  */
 export class ForceField implements Hazard {
-  private readonly events: readonly GalaxyEvent[];
-  private readonly rng: Rng;
-  private readonly nextId: () => number;
-  private readonly telegraph: number;
-  private nextIndex = 0;
-  /** The warning or active field, if any: a list of zero or one. */
-  private readonly current: Current[] = [];
+  /** The schedule, holding the warning or active field, if any: a list of zero or one. */
+  private readonly schedule: HazardSchedule<Current>;
 
   constructor(
     private readonly kind: ForceKind,
     private readonly sign: 1 | -1,
     { events, rng, nextId }: HazardSetup,
   ) {
-    this.events = events;
-    this.rng = rng;
-    this.nextId = nextId;
-    this.telegraph = HAZARD_RULES[kind].telegraph;
+    this.schedule = new HazardSchedule<Current>(events, HAZARD_RULES[kind].telegraph, {
+      // Rolls where the field sits as its warning comes.
+      warn: (event, elapsed, field, into, out) => {
+        const x = field.width * rng.range(PLACE_BAND[0], PLACE_BAND[1]);
+        const y = field.height * rng.range(PLACE_BAND[0], PLACE_BAND[1]);
+        const id = nextId();
+        out.push({ type: 'wellWarning', id, kind, x, y, at: event.at });
+        into.push({ id, type: kind, stage: 'warning', x, y, intensity: event.intensity, remaining: event.at - elapsed });
+      },
+      started: (well, out) => {
+        out.push({ type: 'wellStart', id: well.id, kind });
+      },
+      ended: (well, out) => {
+        out.push({ type: 'wellEnd', id: well.id, kind });
+      },
+    });
   }
 
   get states(): readonly HazardState[] {
-    return this.current;
+    return this.schedule.live;
   }
 
   step(elapsed: number, field: Field, out: SimEvent[]): void {
-    const well = this.current[0] ?? this.warn(elapsed, field, out);
-    if (well === null) return;
-    const { at } = well.event;
-    if (well.stage === 'warning' && elapsed + TIME_EPSILON >= at) {
-      well.stage = 'active';
-      out.push({ type: 'wellStart', id: well.id, kind: this.kind });
-    }
-    if (well.stage === 'warning') {
-      well.remaining = at - elapsed;
-      return;
-    }
-    well.remaining = at + eventSeconds(well.event) - elapsed;
-    if (well.remaining <= TIME_EPSILON) {
-      this.current.length = 0;
-      out.push({ type: 'wellEnd', id: well.id, kind: this.kind });
-    }
+    this.schedule.step(elapsed, field, out);
   }
 
   /** Nudges the rocks and the foes it pulls by `dt` seconds of the active field. */
   pull(dt: number, { rocks, foes }: ForceBodies): void {
-    const well = this.current[0];
+    const well = this.schedule.live[0];
     if (well?.stage !== 'active') return;
     for (const rock of rocks) this.pullBody(well, rock, dt);
     for (const foe of foes) if (FOES[foe.kind].pulled) this.pullBody(well, foe, dt);
   }
 
   resize(old: Field, field: Field): void {
-    for (const well of this.current) {
+    for (const well of this.schedule.live) {
       well.x = rescale(well.x, old.width, field.width);
       well.y = rescale(well.y, old.height, field.height);
     }
   }
 
   stop(): void {
-    this.current.length = 0;
-    this.nextIndex = this.events.length;
-  }
-
-  /** Draws the next field once its warning time comes, rolling where it sits. */
-  private warn(elapsed: number, field: Field, out: SimEvent[]): Current | null {
-    const event = this.events[this.nextIndex];
-    if (event === undefined || elapsed + TIME_EPSILON < event.at - this.telegraph) return null;
-    this.nextIndex++;
-    const x = field.width * this.rng.range(PLACE_BAND[0], PLACE_BAND[1]);
-    const y = field.height * this.rng.range(PLACE_BAND[0], PLACE_BAND[1]);
-    const id = this.nextId();
-    out.push({ type: 'wellWarning', id, kind: this.kind, x, y, at: event.at });
-    const well: Current = { id, type: this.kind, stage: 'warning', x, y, intensity: event.intensity, remaining: event.at - elapsed, event };
-    this.current.push(well);
-    return well;
+    this.schedule.stop();
   }
 
   /** Speeds `body` toward (or away from) the field, but not past `WELL_SPEED_CAP` (a body already faster is only kept from gaining). */

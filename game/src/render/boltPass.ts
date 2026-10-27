@@ -25,9 +25,9 @@ const SPRITE_PAD = 4;
 /** The bolt's sprite cache key in `palette`, made once so drawing builds no strings. */
 export const boltKey = (palette: Palette): string => `bolt|${palette.id}`;
 
-/** The bolt: a glossy capsule along +x in the palette's hostile hue (the foes' first accent), a white-hot core down its middle. */
+/** The bolt: a glossy capsule along +x in the palette's hostile hue, a white-hot core down its middle. */
 function paintBolt(ctx: CanvasRenderingContext2D, p: Palette): void {
-  const hue = p.accent[0];
+  const hue = p.hostile;
   const r = BOLT.radius;
   const [half, width] = [HALF_LENGTH * r, HALF_WIDTH * r];
   ctx.globalCompositeOperation = 'lighter';
@@ -53,7 +53,7 @@ function paintBolt(ctx: CanvasRenderingContext2D, p: Palette): void {
  */
 export function createBoltPass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker: SpriteBaker, palette: Palette): BoltPass {
   const key = boltKey(palette);
-  const glowColor = palette.accent[0];
+  const glowColor = palette.hostile;
   const zoom = createZoom();
   const painter = zoom.wrap((c) => {
     paintBolt(c, palette);
@@ -64,11 +64,13 @@ export function createBoltPass(ctx: CanvasRenderingContext2D, stamp: Stamp, bake
       if (bolts.length === 0) return;
       zoom.value = visual.shot;
       const reach = BOLT.radius * GLOW_SCALE * zoom.value;
+      // Looked up once a frame, not once a bolt: the lookup builds its key.
+      const halo = baker.glow(glowColor, reach);
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = GLOW_ALPHA * glow;
       for (const bolt of bolts) {
         interpolatePose(bolt.px, bolt.py, 0, bolt.x, bolt.y, 0, alpha, field, pose);
-        stamp(baker.glow(glowColor, reach), pose.x, pose.y, 1, 0, reach / 2, field);
+        stamp(halo, pose.x, pose.y, 1, 0, reach / 2, field);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';

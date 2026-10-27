@@ -28,16 +28,30 @@ export interface Bodies {
 }
 
 /** What every hazard shows the renderer, the HUD and the bots: where it is, and how long until it changes. */
-export interface HazardState {
+interface HazardBase {
   readonly id: number;
-  readonly type: HazardType;
   readonly stage: 'warning' | 'active';
+  /** Its centre. */
   readonly x: number;
   readonly y: number;
   readonly intensity: GalaxyEvent['intensity'];
   /** Seconds until it turns hostile (warning) or ends (active). */
   readonly remaining: number;
 }
+
+/** A hazard round a point: a force field, a rift or a hole. */
+export interface PointHazardState extends HazardBase {
+  readonly type: Exclude<HazardType, 'dangerZone'>;
+}
+
+/** A danger zone: the `w` by `h` rectangle centred on (x, y), lethal to touch once active. */
+export interface ZoneState extends HazardBase {
+  readonly type: 'dangerZone';
+  readonly w: number;
+  readonly h: number;
+}
+
+export type HazardState = PointHazardState | ZoneState;
 
 /**
  * One type of hazard, running every event of that type in a galaxy. It is harmless while it warns. The optional

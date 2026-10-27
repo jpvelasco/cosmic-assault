@@ -51,12 +51,22 @@ function windUpTo(runner: BossRunner, arena: StubArena, attack: AttackId, phase:
   return runner.view.threat;
 }
 
+/** An import of a boss module from src/bot, in either quotes; and an id written in any quotes, a template's included. */
+const BOSS_IMPORT = /from ['"]\.\.\/sim\/boss\/(\w+)['"]/g;
+const quoted = (id: string): RegExp => new RegExp(`['"\`]${id}['"\`]`);
+
 describe('the generic boss threat view (M5-R30)', () => {
+  it('catches a boss or attack named in any quotes, and an import in either (Task 3 N-9)', () => {
+    for (const source of ["x === 'monolith'", 'x === "monolith"', 'x === `monolith`']) expect(source).toMatch(quoted('monolith'));
+    expect('monolithic').not.toMatch(quoted('monolith'));
+    expect([...'import { A } from "../sim/boss/monolith";'.matchAll(BOSS_IMPORT)].map((m) => m[1])).toEqual(['monolith']);
+  });
+
   it('lets the bots read a boss through its seam alone: nothing in src/bot imports a particular boss or names a boss or attack', () => {
     for (const file of readdirSync(BOT_DIR)) {
       const source = readFileSync(new URL(file, BOT_DIR), 'utf8');
-      for (const [, module] of source.matchAll(/from '\.\.\/sim\/boss\/(\w+)'/g)) expect(GENERIC_BOSS_MODULES, `${file} imports sim/boss/${String(module)}`).toContain(module);
-      for (const id of [...Object.keys(ATTACK_TELEGRAPHS), ...Object.keys(BOSSES)]) expect(source, `${file} names ${id}`).not.toContain(`'${id}'`);
+      for (const [, module] of source.matchAll(BOSS_IMPORT)) expect(GENERIC_BOSS_MODULES, `${file} imports sim/boss/${String(module)}`).toContain(module);
+      for (const id of [...Object.keys(ATTACK_TELEGRAPHS), ...Object.keys(BOSSES)]) expect(source, `${file} names ${id}`).not.toMatch(quoted(id));
     }
   });
 

@@ -31,21 +31,27 @@ const ROCKS: Ramps = {
   small: { from: 0.5, base: 0.1, step: 0.05, max: 0.4 },
   splitter: ABSENT,
   drone: ABSENT,
+  gunship: ABSENT,
+  mine: ABSENT,
 };
 const SPLITTERS: Ramps = { ...ROCKS, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.35 } };
 /** Ion Reach trades some of the large rocks, and their fragments, for drones that come more often galaxy by galaxy. */
 const SWARMS: Ramps = { ...SPLITTERS, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, drone: { from: 1, base: 0.15, step: 0.3, max: 0.45 } };
+/** Crimson Nebula keeps Ion Reach's table, and brings in gunships from its first galaxy and mines from its second. */
+const GUNSHIPS: Ramps = { ...SWARMS, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.3 }, mine: { from: 2, base: 0, step: 0.3, max: 0.18 } };
 /** A boss galaxy brings no large rocks and no foes but the boss's own, so its fight is not fought among fragments. */
 const BOSS_FIELD: Ramps = { ...ROCKS, large: ABSENT };
 
 /**
- * Splitters join from 1-3 and drones from Ion Reach, which keeps the splitters; a boss galaxy has neither. The
- * Dimensions after it keep their rocks until their own foes are made (M6).
+ * Splitters join from 1-3, drones from Ion Reach, which keeps the splitters, and gunships and mines from Crimson Nebula,
+ * which keeps the rest; a boss galaxy has none. The Dimensions after it keep their rocks until their own foes are made
+ * (M6).
  */
 function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
   if (index === 6) return BOSS_FIELD;
   if (dimension === 1) return index >= 3 ? SPLITTERS : ROCKS;
-  return dimension === 2 ? SWARMS : ROCKS;
+  if (dimension === 2) return SWARMS;
+  return dimension === 3 ? GUNSHIPS : ROCKS;
 }
 
 /** Each Dimension's boss; the M4 Sentinel holds the later ones until they get their own. */
@@ -68,18 +74,18 @@ function showers(dimension: Dimension, index: GalaxyIndex, duration: number): Ga
   return SHOWER_SHARES[index <= 3 ? 1 : 2].map((share) => ({ at: Math.min(latest, Math.round(duration * share)), type: 'meteorShower', intensity }));
 }
 
-/** Ion Reach's gravity wells by galaxy index: when one starts, and how hard it pulls. Each ends before the lull. */
-const WELLS: Readonly<Partial<Record<GalaxyIndex, readonly [at: number, intensity: GalaxyEvent['intensity']]>>> = {
-  2: [25, 1],
-  3: [25, 1],
-  4: [46, 1],
-  5: [46, 1],
+/** Events of `type`, made by when they start and how hard. */
+const eventsOf = (type: GalaxyEvent['type']) => (at: number, intensity: GalaxyEvent['intensity']): GalaxyEvent => ({ at, type, intensity });
+const well = eventsOf('gravityWell');
+const zone = eventsOf('dangerZone');
+
+/** Each Dimension's hazards by galaxy index: Ion Reach's gravity wells and Crimson Nebula's danger zones. Each ends before the lull. */
+const HAZARDS: Readonly<Partial<Record<Dimension, Readonly<Partial<Record<GalaxyIndex, readonly GalaxyEvent[]>>>>>> = {
+  2: { 2: [well(25, 1)], 3: [well(25, 1)], 4: [well(46, 1)], 5: [well(46, 1)] },
+  3: { 2: [zone(30, 1)], 3: [zone(30, 1), zone(70, 1)], 4: [zone(20, 1), zone(50, 2)], 5: [zone(20, 2), zone(50, 2)] },
 };
 
-function wells(dimension: Dimension, index: GalaxyIndex): GalaxyEvent[] {
-  const well = dimension === 2 ? WELLS[index] : undefined;
-  return well === undefined ? [] : [{ at: well[0], type: 'gravityWell', intensity: well[1] }];
-}
+const hazards = (dimension: Dimension, index: GalaxyIndex): readonly GalaxyEvent[] => HAZARDS[dimension]?.[index] ?? [];
 
 /** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
 export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
@@ -96,7 +102,7 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     kind: boss ? 'boss' : 'survival',
     duration,
     kinds: rampsFor(dimension, index),
-    events: boss ? [] : [...showers(dimension, index, duration), ...wells(dimension, index)].sort((a, b) => a.at - b.at),
+    events: boss ? [] : [...showers(dimension, index, duration), ...hazards(dimension, index)].sort((a, b) => a.at - b.at),
     pickups: poolFor(dimension),
     // A Dimension's breather teaches its new pickups (§6.1); D1 and D2 bring theirs in without one.
     featured: index === 1 && dimension >= FIRST_FEATURING ? newIn(dimension) : [],

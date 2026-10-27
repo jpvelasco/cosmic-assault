@@ -18,6 +18,9 @@ export const HAZARD_RULES: Readonly<Record<HazardType, HazardRule>> = {
   blackHole: { telegraph: 3, seconds: 75, from: 5 },
 };
 
+/** A danger zone event shows one zone per intensity, at most `maxZones`, each side from `side[0]` to `side[1]` units long. */
+export const DANGER_ZONE = { maxZones: 2, side: [120, 220] } as const;
+
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };
 

@@ -21,19 +21,22 @@ describe('hostile bolts', () => {
     expect(BOLT).toEqual({ radius: 5, speed: 230, life: 3.2, capacity: 96 });
   });
 
-  it('fire from a point along a bearing at a speed, announced with boltFired, the bolt tagged with its source', () => {
+  it('fire from a point along a bearing at a speed, announced with boltFired, the bolt tagged with its source and its foe', () => {
     const arena = stubArena();
     const bolts = new Bolts(arena);
     const bolt = bolts.fire(300, 200, Math.PI / 2, BOLT.speed, 'boss');
     expect(bolt).not.toBeNull();
     expect(bolts.list).toEqual([bolt]);
-    expect(bolt).toMatchObject({ x: 300, y: 200, px: 300, py: 200, radius: BOLT.radius, source: 'boss', fromAttack: false });
+    expect(bolt).toMatchObject({ x: 300, y: 200, px: 300, py: 200, radius: BOLT.radius, source: 'boss', owner: 0, fromAttack: false });
     expect(bolt?.vx).toBeCloseTo(0, 9);
     expect(bolt?.vy).toBeCloseTo(BOLT.speed, 9);
-    expect(ofType(arena.events, 'boltFired')).toEqual([{ type: 'boltFired', id: bolt?.id, source: 'boss', x: 300, y: 200, angle: Math.PI / 2 }]);
+    expect(ofType(arena.events, 'boltFired')).toEqual([{ type: 'boltFired', id: bolt?.id, source: 'boss', owner: 0, x: 300, y: 200, angle: Math.PI / 2 }]);
     bolts.step(0.5);
     expect(bolt?.py).toBe(200);
     expect(bolt?.y).toBeCloseTo(200 + BOLT.speed * 0.5, 9);
+    const gunship = bolts.fire(10, 20, 0, BOLT.speed, 'gunship', 42);
+    expect(gunship).toMatchObject({ source: 'gunship', owner: 42 });
+    expect(ofType(arena.events, 'boltFired')[1]).toMatchObject({ source: 'gunship', owner: 42 });
   });
 
   it('holds at most 96: a bolt past that is not fired, and a spent one frees its slot for the next, the same object', () => {

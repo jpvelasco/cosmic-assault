@@ -1,5 +1,5 @@
 import type { NoteEvent, VoiceName } from './sequencer';
-import type { SfxName } from './sfx';
+import type { HumName, SfxName } from './sfx';
 
 /** What every synthesized sound needs: the context to build nodes in and one shared buffer of noise. */
 export interface VoiceBed {
@@ -314,6 +314,38 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
     noiseBurst(bed, out, { filter: 'lowpass', from: 900, to: 200, start: t + 0.26, duration: 0.12, peak: 0.2 });
     tone(bed, out, { type: 'sine', from: 110, to: 55, start: t + 0.26, duration: 0.18, peak: 0.2 });
   },
+  // A gunship winding up: two quick rising ticks, a charge coming.
+  windupTick: (bed, out, t) => {
+    for (const start of [t, t + 0.14]) tone(bed, out, { type: 'square', from: 880, to: 1500, start, duration: 0.06, peak: 0.045 });
+  },
+  // A hostile bolt fired: a short falling zap over a hiss.
+  bolt: (bed, out, t) => {
+    tone(bed, out, { type: 'sawtooth', from: 1500, to: 280, start: t, duration: 0.13, peak: 0.05 });
+    noiseBurst(bed, out, { filter: 'highpass', from: 3500, to: 2000, start: t, duration: 0.06, peak: 0.06 });
+  },
+  // A mine arming: three high alarm beeps, quickening.
+  mineArm: (bed, out, t) => {
+    for (const start of [t, t + 0.16, t + 0.28]) tone(bed, out, { type: 'sine', from: 1320, start, duration: 0.07, peak: 0.09 });
+  },
+  // A mine going off: a medium boom with a crackling burst on top.
+  mineBlast: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomMedium);
+    noiseBurst(bed, out, { filter: 'bandpass', from: 2400, to: 500, q: 0.9, start: t, duration: 0.35, peak: 0.22 });
+  },
+  // A danger zone forming: a falling two-note warble.
+  zoneWarn: (bed, out, t) => {
+    for (const start of [t, t + 0.3]) tone(bed, out, { type: 'triangle', from: 760, to: 520, start, duration: 0.26, peak: 0.1, attack: 0.02 });
+  },
+  // A gunship going down: a medium boom and a heavy zap falling away.
+  gunshipDown: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomMedium);
+    tone(bed, out, { type: 'square', from: 700, to: 90, start: t, duration: 0.3, peak: 0.06 });
+  },
+  // A mine shot down before it could blast: a small boom and a bright ping.
+  mineDown: (bed, out, t) => {
+    boom(bed, out, t, BOOMS.boomSmall);
+    tone(bed, out, { type: 'triangle', from: 1800, to: 1200, start: t, duration: 0.12, peak: 0.07 });
+  },
 };
 
 /** A sound that plays until it is stopped. */
@@ -322,28 +354,41 @@ export interface Loop {
   stop(): void;
 }
 
-const HUM_PEAK = 0.09;
-const HUM_FADE_IN = 0.8;
-/** Seconds its fade out takes; its oscillators stop a tail after that, once it is silent. */
+/** Seconds a hum's fade out takes; its oscillators stop a tail after that, once it is silent. */
 const HUM_RELEASE = 0.3;
-/** Hz: a low fundamental and its fifth, with a slow swell in the level. */
-const HUM_HZ = 49;
-const HUM_FIFTH_HZ = 73.5;
-const HUM_SWELL_HZ = 0.6;
-const HUM_SWELL_DEPTH = 0.4;
+
+/** A looped hum: two voices under a slow swell in their level. */
+interface HumVoice {
+  readonly peak: number;
+  readonly fadeIn: number;
+  readonly low: readonly [OscillatorType, number];
+  /** The upper voice, and its detune in cents. */
+  readonly high: readonly [OscillatorType, number, number];
+  /** Hz, and the share of the peak it swells by. */
+  readonly swell: number;
+  readonly swellDepth: number;
+}
+
+const HUM_VOICES: Readonly<Record<HumName, HumVoice>> = {
+  // The well: a low sine and a detuned triangle a fifth above, swelling slowly.
+  well: { peak: 0.09, fadeIn: 0.8, low: ['sine', 49], high: ['triangle', 73.5, 7], swell: 0.6, swellDepth: 0.4 },
+  // The zone: an electric buzz, a sawtooth and a detuned square a fifth above, throbbing fast.
+  zone: { peak: 0.035, fadeIn: 0.25, low: ['sawtooth', 110], high: ['square', 165, -9], swell: 4, swellDepth: 0.35 },
+};
 
 /**
- * The gravity well's hum: a low sine and a detuned triangle a fifth above, swelling slowly, looped until `stop`. It
- * fades in from silence; `stop` ramps both its level and its swell to 0 from wherever they are, on the audio clock,
- * and stops the oscillators only after that, so it ends without a step.
+ * Hum `name` (see `HUM_VOICES`), looped until `stop`. It fades in from silence; `stop` ramps both its level and its
+ * swell to 0 from wherever they are, on the audio clock, and stops the oscillators only after that, so it ends without
+ * a step.
  */
-export function startWellHum({ ctx }: VoiceBed, out: AudioNode): Loop {
+export function startHum({ ctx }: VoiceBed, out: AudioNode, name: HumName): Loop {
+  const voice = HUM_VOICES[name];
   const t = ctx.currentTime;
   const level = ctx.createGain();
   level.gain.setValueAtTime(SILENCE, t);
-  level.gain.linearRampToValueAtTime(HUM_PEAK, t + HUM_FADE_IN);
+  level.gain.linearRampToValueAtTime(voice.peak, t + voice.fadeIn);
   const swellDepth = ctx.createGain();
-  swellDepth.gain.value = HUM_PEAK * HUM_SWELL_DEPTH;
+  swellDepth.gain.value = voice.peak * voice.swellDepth;
   const oscillator = (type: OscillatorType, hz: number, detune = 0): OscillatorNode => {
     const osc = ctx.createOscillator();
     osc.type = type;
@@ -352,12 +397,12 @@ export function startWellHum({ ctx }: VoiceBed, out: AudioNode): Loop {
     osc.start(t);
     return osc;
   };
-  const low = oscillator('sine', HUM_HZ);
-  const fifth = oscillator('triangle', HUM_FIFTH_HZ, 7);
-  const swell = oscillator('sine', HUM_SWELL_HZ);
-  const voices = [low, fifth, swell];
+  const low = oscillator(...voice.low);
+  const high = oscillator(...voice.high);
+  const swell = oscillator('sine', voice.swell);
+  const voices = [low, high, swell];
   low.connect(level);
-  fifth.connect(level);
+  high.connect(level);
   swell.connect(swellDepth).connect(level.gain);
   level.connect(out);
   low.onended = () => {

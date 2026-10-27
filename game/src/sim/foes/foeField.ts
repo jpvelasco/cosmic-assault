@@ -7,15 +7,18 @@ import type { Field } from '../field';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 import { overlapsAcrossWrap, rescalePose } from '../wrap';
+import type { Bolts } from './bolts';
 import { DRONE } from './drone';
 import { FoePool, type Foe, type FoeBehaviour, type FoeWorld } from './foe';
+import { GUNSHIP_BEHAVIOUR } from './gunship';
+import { MINE_BEHAVIOUR } from './mine';
 import { SPLITTER } from './splitter';
 
 /** The most foes on the field at once; a spawn beyond it is dropped. A boss's drones share the pool. */
 export const FOE_CAPACITY = 64;
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 
-const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = { splitter: SPLITTER, drone: DRONE };
+const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = { splitter: SPLITTER, drone: DRONE, gunship: GUNSHIP_BEHAVIOUR, mine: MINE_BEHAVIOUR };
 const NONE_STRUCK: readonly number[] = Object.freeze([]);
 
 /** What the galaxy run adds to a foe's death. */
@@ -42,6 +45,9 @@ export class FoeField implements FoeWorld, BossFoes {
   private querySkip: readonly number[] = NONE_STRUCK;
   private found: Foe | null = null;
   private foundIndex = -1;
+  /** The blasts set off this step, as circles; the slots are kept for reuse, so a step of blasts allocates nothing new. */
+  private readonly blasts: { x: number; y: number; r: number }[] = [];
+  private blastCount = 0;
   private readonly visit = (index: number): void => {
     const foe = this.pool.live[index];
     if (foe !== undefined && foe.hp > 0 && index > this.foundIndex && circlesOverlap(this.queryX, this.queryY, this.queryRadius, foe.x, foe.y, foe.radius) && !this.querySkip.includes(foe.id)) {
@@ -55,6 +61,8 @@ export class FoeField implements FoeWorld, BossFoes {
     /** The 'foes' stream. */
     readonly rng: Rng,
     private readonly hooks: FoeHooks,
+    /** The galaxy's hostile bolts, which gunships fire; a field without them may hold no gunship. */
+    readonly bolts: Bolts | null = null,
   ) {}
 
   /** The foes on the field; live, and mutated in place. */
@@ -106,9 +114,21 @@ export class FoeField implements FoeWorld, BossFoes {
     return true;
   }
 
-  /** Moves every foe and indexes it for the collisions that follow. */
+  detonate(foe: Foe, radius: number): void {
+    const slot = this.blasts[this.blastCount] ?? { x: 0, y: 0, r: 0 };
+    this.blasts[this.blastCount++] = slot;
+    slot.x = foe.x;
+    slot.y = foe.y;
+    slot.r = radius;
+    this.arena.events.push({ type: 'mineBlast', id: foe.id, x: foe.x, y: foe.y, radius });
+    foe.hp = 0;
+    this.destroy(foe, 0, false);
+  }
+
+  /** Moves every foe and indexes it for the collisions that follow. The last step's blasts are spent. */
   step(dt: number): void {
     const field = this.arena.field();
+    this.blastCount = 0;
     this.hash.clear();
     const { live } = this.pool;
     for (let i = 0; i < live.length; i++) {
@@ -154,6 +174,20 @@ export class FoeField implements FoeWorld, BossFoes {
     foe.hp = 0;
     this.destroy(foe, 0);
     return true;
+  }
+
+  /**
+   * True when the ship at (x, y) has run into a foe, which is destroyed for 0 points (`ram`), or is caught in a blast set
+   * off this step, measured across the wrap.
+   */
+  strikes(x: number, y: number, radius: number): boolean {
+    if (this.ram(x, y, radius)) return true;
+    const field = this.arena.field();
+    for (let i = 0; i < this.blastCount; i++) {
+      const blast = this.blasts[i] as { x: number; y: number; r: number };
+      if (overlapsAcrossWrap(field, blast.x, blast.y, blast.r, x, y, radius)) return true;
+    }
+    return false;
   }
 
   /** Clears every foe for 0 points, with no fragments: the galaxy is over. */

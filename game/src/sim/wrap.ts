@@ -52,6 +52,10 @@ export function wrapDelta(delta: number, size: number, margin: number = WRAP_MAR
   return delta < -period / 2 ? delta + period : delta;
 }
 
+/** The distance from `from` to `to`, measured across the wrap band as `wrapDelta` measures it. */
+export const wrappedDistance = (from: Readonly<{ x: number; y: number }>, to: Readonly<{ x: number; y: number }>, field: Field): number =>
+  Math.hypot(wrapDelta(to.x - from.x, field.width), wrapDelta(to.y - from.y, field.height));
+
 /** Whether two circles overlap, their offset measured across the wrap band as `wrapDelta` measures it. */
 export function overlapsAcrossWrap(field: Field, ax: number, ay: number, ar: number, bx: number, by: number, br: number): boolean {
   const dx = wrapDelta(bx - ax, field.width);

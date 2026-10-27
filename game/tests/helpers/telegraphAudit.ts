@@ -1,6 +1,7 @@
+import { GUNSHIP, MINE } from '../../src/content/foes';
 import { HAZARD_RULES } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { AttackId, HazardType } from '../../src/content/types';
+import type { AttackId, FoeKind, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 import type { BossView } from '../../src/sim/boss/behaviour';
 
@@ -31,20 +32,24 @@ export interface HazardTelegraph {
 
 /**
  * Every hazard type's telegraph events. A test fails while a hazard in `HAZARD_FACTORIES` has no entry here, so a new
- * hazard cannot slip past the audit. Boss attacks have their own entries, `ATTACK_TELEGRAPHS`; foe attacks join when
- * their own audits land.
+ * hazard cannot slip past the audit. Boss attacks have their own entries, `ATTACK_TELEGRAPHS`, and foe attacks
+ * theirs, `FOE_TELEGRAPHS`.
  */
 export const HAZARD_TELEGRAPHS: Readonly<Partial<Record<HazardType, HazardTelegraph>>> = {
   gravityWell: { warning: 'wellWarning', start: 'wellStart' },
   repulsionField: { warning: 'wellWarning', start: 'wellStart' },
+  dangerZone: { warning: 'zoneWarning', start: 'zoneStart' },
 };
 
 const AUDITED = Object.entries(HAZARD_TELEGRAPHS) as [HazardType, HazardTelegraph][];
 
-/** The hazard type `event` turns hostile, with its telegraph's events, or null for an event that turns nothing hostile. */
+/**
+ * The hazard type `event` turns hostile, with its telegraph's events, or null for an event that turns nothing hostile.
+ * Hazards that share their events (the force fields) tell them apart by `kind`; a zone's events are its own.
+ */
 function activation(event: SimEvent): { readonly type: HazardType; readonly telegraph: HazardTelegraph } | null {
   const kind = 'kind' in event ? event.kind : undefined;
-  for (const [type, telegraph] of AUDITED) if (telegraph.start === event.type && kind === type) return { type, telegraph };
+  for (const [type, telegraph] of AUDITED) if (telegraph.start === event.type && (kind ?? type) === type) return { type, telegraph };
   return null;
 }
 
@@ -187,6 +192,68 @@ export function auditAttacks(steps: readonly FightStep[], harms: Readonly<Record
       if (harms[current.attack] !== kind) throw new Error(`${current.attack} made ${kind}, which its telegraph entry does not name: fix ATTACK_TELEGRAPHS`);
       current.harm.add(kind);
     }
+  }
+  return pairs;
+}
+
+/** A foe's telegraphed attack: the event that warns of it and the one that does its harm, and the windup between them. */
+export interface FoeTelegraph {
+  readonly warning: SimEvent['type'];
+  readonly harm: SimEvent['type'];
+  /** Seconds the warning must run first: its declared windup, never under `MIN_WINDUP_SECONDS`. */
+  readonly minimum: number;
+}
+
+/**
+ * Every foe kind's telegraphed attack, or null for a kind with none. The record is total over `FoeKind`, so a new foe
+ * cannot slip past the audit: a gunship's windup before its bolt, a mine's arming before its blast.
+ */
+export const FOE_TELEGRAPHS: Readonly<Record<FoeKind, FoeTelegraph | null>> = {
+  splitter: null,
+  drone: null,
+  gunship: { warning: 'foeWindup', harm: 'boltFired', minimum: Math.max(MIN_WINDUP_SECONDS, GUNSHIP.windup) },
+  mine: { warning: 'mineArmed', harm: 'mineBlast', minimum: Math.max(MIN_WINDUP_SECONDS, MINE.fuse) },
+};
+
+/** A foe's harm and the warning it was paired with by the foe's id. */
+export interface FoeAttackPair {
+  readonly kind: FoeKind;
+  readonly foe: number;
+  readonly warned: number;
+  readonly harmed: number;
+  readonly minimum: number;
+}
+
+/** The foe a harm event comes from, by its kind and id, or null for an event that is no foe's harm. */
+function foeHarm(event: SimEvent): { readonly kind: FoeKind; readonly foe: number } | null {
+  if (event.type === 'boltFired') return event.source === 'boss' ? null : { kind: event.source, foe: event.owner };
+  if (event.type === 'mineBlast') return { kind: 'mine', foe: event.id };
+  return null;
+}
+
+/**
+ * Pairs each foe's harm (a gunship's bolt, a mine's blast) with that foe's latest warning, which it spends, and checks
+ * the warning ran at least the attack's minimum before it. Returns the pairs in the order the harms came; throws,
+ * naming the foe, at a harm never warned, warned too late, or by a kind `FOE_TELEGRAPHS` gives none.
+ */
+export function auditFoeAttacks(log: readonly TimedEvent[]): FoeAttackPair[] {
+  const warned = new Map<string, number>();
+  const pairs: FoeAttackPair[] = [];
+  for (const { elapsed, event } of log) {
+    for (const [kind, telegraph] of Object.entries(FOE_TELEGRAPHS) as [FoeKind, FoeTelegraph | null][]) {
+      if (telegraph?.warning === event.type && 'id' in event) warned.set(`${kind}#${String(event.id)}`, elapsed);
+    }
+    const harm = foeHarm(event);
+    if (harm === null) continue;
+    const telegraph = FOE_TELEGRAPHS[harm.kind];
+    if (telegraph === null) throw new Error(`a ${harm.kind} made ${event.type} at ${seconds(elapsed)}, but FOE_TELEGRAPHS gives it no telegraph: add one`);
+    const at = warned.get(`${harm.kind}#${String(harm.foe)}`);
+    if (at === undefined) throw new Error(`${harm.kind} ${String(harm.foe)} made ${event.type} at ${seconds(elapsed)} with no ${telegraph.warning}: warn first`);
+    if (elapsed - at + SLACK < telegraph.minimum) {
+      throw new Error(`${harm.kind} ${String(harm.foe)} made ${event.type} ${seconds(elapsed - at)} after its ${telegraph.warning}, under its ${seconds(telegraph.minimum)} windup: lengthen it`);
+    }
+    warned.delete(`${harm.kind}#${String(harm.foe)}`);
+    pairs.push({ kind: harm.kind, foe: harm.foe, warned: at, harmed: elapsed, minimum: telegraph.minimum });
   }
   return pairs;
 }

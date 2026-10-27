@@ -24,6 +24,8 @@ export interface Bolt {
   /** Seconds it has flown, in the enemies' time. */
   age: number;
   source: BoltSource;
+  /** The id of the foe that fired it, or 0 for a boss's. */
+  owner: number;
   /** True for a bolt a boss's attack fired, marked as it is made: the bots judge it on that attack's telegraph. */
   fromAttack: boolean;
 }
@@ -40,7 +42,7 @@ export class Bolts {
     private readonly arena: Pick<Arena, 'events' | 'field' | 'nextId'>,
     capacity: number = BOLT.capacity,
   ) {
-    this.spare = Array.from({ length: capacity }, () => ({ id: 0, x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0, radius: BOLT.radius, age: 0, source: 'boss', fromAttack: false }));
+    this.spare = Array.from({ length: capacity }, () => ({ id: 0, x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0, radius: BOLT.radius, age: 0, source: 'boss', owner: 0, fromAttack: false }));
   }
 
   /** The bolts on the field, in the order they were fired; live, and mutated in place. */
@@ -48,8 +50,11 @@ export class Bolts {
     return this.live;
   }
 
-  /** Fires a bolt from (x, y) along `angle` at `speed`, announced with `boltFired`; null, and nothing fired, with the pool full. */
-  fire(x: number, y: number, angle: number, speed: number, source: BoltSource): Bolt | null {
+  /**
+   * Fires a bolt from (x, y) along `angle` at `speed`, announced with `boltFired`; null, and nothing fired, with the
+   * pool full. `owner` is the id of the foe firing it, 0 for a boss.
+   */
+  fire(x: number, y: number, angle: number, speed: number, source: BoltSource, owner = 0): Bolt | null {
     const bolt = this.spare.pop();
     if (bolt === undefined) return null;
     bolt.id = this.arena.nextId();
@@ -59,9 +64,10 @@ export class Bolts {
     bolt.vy = Math.sin(angle) * speed;
     bolt.age = 0;
     bolt.source = source;
+    bolt.owner = owner;
     bolt.fromAttack = false;
     this.live.push(bolt);
-    this.arena.events.push({ type: 'boltFired', id: bolt.id, source, x, y, angle });
+    this.arena.events.push({ type: 'boltFired', id: bolt.id, source, owner, x, y, angle });
     return bolt;
   }
 

@@ -11,10 +11,9 @@ import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { bossView } from '../helpers/bossView';
 import { SCENE_FIELD, sceneView, stillRock } from '../helpers/botScene';
+import { foeAt } from '../helpers/foeAt';
 
-function foe(kind: FoeKind, x: number, y: number): Foe {
-  return { id: 0, kind, x, y, vx: 0, vy: 0, px: x, py: y, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1, fromAttack: false };
-}
+const foe = (kind: FoeKind, x: number, y: number): Foe => foeAt(kind, x, y, { radius: 12, hp: 1 });
 
 function part(x: number, y: number, hp: number): BossPart {
   return { x, y, px: x, py: y, radius: 15, hp, maxHp: 2 };

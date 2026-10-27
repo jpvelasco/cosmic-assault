@@ -92,8 +92,8 @@ export class GalaxyRun implements Spawner {
     this.director = new GalaxyDirector(galaxy, streams.director, areaOf(arena.field()));
     this.showers = new Showers(galaxy.events, streams.director);
     this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId());
-    this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
     this.bolts = new Bolts(arena);
+    this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } }, this.bolts);
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
     this.bosses = new BossArena(arena, BOSS_KILL_POINTS * galaxy.dimension, (base) => this.scoreKill(base), () => this.bringBoss());
     this.blastScene = { arena, foes: this.foes, bolts: this.bolts, bosses: this.bosses };
@@ -240,9 +240,9 @@ export class GalaxyRun implements Spawner {
     return this.foes.hit(x, y, radius, struck);
   }
 
-  /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, a boss that is fighting, a lethal hazard, or a bolt, which is spent. */
+  /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, or a mine's blast, a boss that is fighting, a lethal hazard, or a bolt, which is spent. */
   shipStruck(x: number, y: number, radius: number): boolean {
-    return this.foes.ram(x, y, radius) || this.bosses.touches(x, y, radius) || this.hazards.strikes(x, y, radius) || this.bolts.strikes(x, y, radius);
+    return this.foes.strikes(x, y, radius) || this.bosses.touches(x, y, radius) || this.hazards.strikes(x, y, radius) || this.bolts.strikes(x, y, radius);
   }
 
   /** While a boss is on the field, a respawning ship comes back clear of its reach, not at the centre, where the boss may be; else where a hazard sends it, if one does. */

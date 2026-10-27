@@ -6,18 +6,20 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { HAZARD_RULES } from '../../src/content/hazards';
-import type { GalaxyId, HazardType } from '../../src/content/types';
+import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
+import type { GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 import type { AttackId } from '../../src/content/types';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { HAZARD_FACTORIES } from '../../src/sim/hazards/hazardField';
 import { playExpert } from '../helpers/eventDigest';
-import { ATTACK_TELEGRAPHS, auditAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, type AttackPair, type FightStep, type TimedEvent } from '../helpers/telegraphAudit';
+import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, type AttackPair, type FightStep, type TimedEvent } from '../helpers/telegraphAudit';
 
 const SEEDS = [1, 2, 3];
-/** Every galaxy that schedules a hazard, with the hazards it schedules. */
-const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap((e) => (e.type === 'meteorShower' ? [] : [e.type])) })).filter((g) => g.hazards.length > 0);
+/** The hazards an event shows: one, or for a danger zone one per intensity, at most two. */
+const shown = (e: GalaxyEvent): HazardType[] => (e.type === 'meteorShower' ? [] : Array<HazardType>(e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : 1).fill(e.type));
+/** Every galaxy that schedules a hazard, with the hazards it shows. */
+const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap(shown) })).filter((g) => g.hazards.length > 0);
 /** Whole galaxies played by the expert take seconds apiece. */
 const PLAY_TIMEOUT_MS = 60_000;
 
@@ -38,13 +40,15 @@ describe('auditTelegraphs', () => {
   });
 
   it('audits every galaxy that schedules a hazard, and only hazards it audits are scheduled', () => {
-    expect(HAZARD_GALAXIES.map((g) => g.id)).toEqual(['2-2', '2-3', '2-4', '2-5']);
+    expect(HAZARD_GALAXIES.map((g) => g.id)).toEqual(['2-2', '2-3', '2-4', '2-5', '3-2', '3-3', '3-4', '3-5']);
     for (const g of HAZARD_GALAXIES) for (const type of g.hazards) expect(HAZARD_TELEGRAPHS[type], `${g.id} ${type}`).toBeDefined();
   });
 
-  it.each(HAZARD_GALAXIES)('finds every hazard of $id warned its full telegraph before it turns hostile, on seeds 1–3', ({ id, hazards }) => {
+  it.each(HAZARD_GALAXIES)('finds every hazard and foe attack of $id warned its full telegraph before it turns hostile, on seeds 1–3', ({ id, hazards }) => {
     for (const seed of SEEDS) {
-      const pairs = auditTelegraphs(timedLog(id, seed));
+      const log = timedLog(id, seed);
+      auditFoeAttacks(log);
+      const pairs = auditTelegraphs(log);
       expect(pairs.map((p) => p.kind), `${id} seed ${String(seed)}`).toEqual(hazards);
       for (const pair of pairs) expect(pair.minimum).toBe(HAZARD_RULES[pair.kind].telegraph);
     }
@@ -79,6 +83,38 @@ describe('auditTelegraphs', () => {
 
   it('ignores events that are not telegraphed hazards', () => {
     expect(auditTelegraphs([at(1, { type: 'shot', x: 0, y: 0 }), at(2, { type: 'wellEnd', id: 1, kind: 'gravityWell' })])).toEqual([]);
+  });
+});
+
+describe('auditFoeAttacks', () => {
+  const windup = (elapsed: number, id: number): TimedEvent => at(elapsed, { type: 'foeWindup', id, x: 0, y: 0, angle: 0 });
+  const bolt = (elapsed: number, owner: number, id = 100): TimedEvent => at(elapsed, { type: 'boltFired', id, source: 'gunship', owner, x: 0, y: 0, angle: 0 });
+
+  it('pairs each gunship bolt and mine blast with its own foe\'s warning, by id', () => {
+    const pairs = auditFoeAttacks([
+      windup(1, 7),
+      at(1.2, { type: 'mineArmed', id: 8, x: 0, y: 0 }),
+      windup(1.3, 9),
+      bolt(1.5, 7),
+      bolt(1.8, 9),
+      at(1.8, { type: 'mineBlast', id: 8, x: 0, y: 0, radius: 80 }),
+    ]);
+    expect(pairs.map((p) => [p.kind, p.foe, p.warned, p.harmed])).toEqual([
+      ['gunship', 7, 1, 1.5],
+      ['gunship', 9, 1.3, 1.8],
+      ['mine', 8, 1.2, 1.8],
+    ]);
+  });
+
+  it('fails a bolt sooner than its windup, an unwarned one, and a second bolt from one windup, naming the foe', () => {
+    expect(() => auditFoeAttacks([windup(1, 7), bolt(1.4, 7)])).toThrow(/^gunship 7 .*0\.4 s.*0\.5 s/);
+    expect(() => auditFoeAttacks([bolt(2, 7)])).toThrow(/^gunship 7 .*no foeWindup/);
+    expect(() => auditFoeAttacks([windup(1, 7), bolt(1.5, 7), bolt(1.6, 7, 101)])).toThrow(/^gunship 7 .*no foeWindup/);
+    expect(() => auditFoeAttacks([at(1, { type: 'mineArmed', id: 3, x: 0, y: 0 }), at(1.5, { type: 'mineBlast', id: 3, x: 0, y: 0, radius: 80 })])).toThrow(/^mine 3 /);
+  });
+
+  it('leaves a boss\'s bolts to the boss audit', () => {
+    expect(auditFoeAttacks([at(1, { type: 'boltFired', id: 4, source: 'boss', owner: 0, x: 0, y: 0, angle: 0 })])).toEqual([]);
   });
 });
 

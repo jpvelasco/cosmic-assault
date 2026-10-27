@@ -50,10 +50,9 @@ function run(
 }
 
 describe('THREAT_COST', () => {
-  it('prices large 4, medium 2, small 1, splitter 3 and drone 1, the foes from content', () => {
-    expect(THREAT_COST).toEqual({ large: 4, medium: 2, small: 1, splitter: 3, drone: 1 });
-    expect(THREAT_COST.splitter).toBe(FOES.splitter.cost);
-    expect(THREAT_COST.drone).toBe(FOES.drone.cost);
+  it('prices large 4, medium 2, small 1, splitter 3, drone 1, gunship 4 and mine 2, the foes from content', () => {
+    expect(THREAT_COST).toEqual({ large: 4, medium: 2, small: 1, splitter: 3, drone: 1, gunship: 4, mine: 2 });
+    for (const kind of ['splitter', 'drone', 'gunship', 'mine'] as const) expect(THREAT_COST[kind], kind).toBe(FOES[kind].cost);
   });
 
   it('prices a tiny fragment at half a small rock, so a splitter that breaks never adds cost', () => {
@@ -159,7 +158,7 @@ describe('GalaxyDirector kinds', () => {
   });
 
   it('weights kinds by kindProbability: large rocks (0.6) outnumber small (0.1, from tier 0.5) at tier 0', () => {
-    const counts: Record<ThreatKind, number> = { large: 0, medium: 0, small: 0, splitter: 0, drone: 0 };
+    const counts: Record<ThreatKind, number> = { large: 0, medium: 0, small: 0, splitter: 0, drone: 0, gunship: 0, mine: 0 };
     for (let seed = 1; seed <= 40; seed++) {
       for (const o of run(galaxyById('1-1'), seed, { start: 20, seconds: 30, decay: 2 }).orders) counts[o.kind]++;
     }

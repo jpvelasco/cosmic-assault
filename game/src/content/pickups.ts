@@ -23,7 +23,7 @@ export const PICKUPS: Readonly<Record<PickupId, PickupDef>> = {
   shield: { name: 'Shield', callout: 'New: Shield — absorbs one hit', from: 1, weight: 3 },
   rapidFire: { name: 'Rapid Fire', callout: 'New: Rapid Fire — shoot faster', from: 2, weight: 2 },
   spreadLaser: { name: 'Spread Laser', callout: 'New: Spread Laser — a fan of three shots', from: 2, weight: 2 },
-  piercingBeam: { name: 'Piercing Beam', callout: 'New: Piercing Beam — shots pass through', from: 3, weight: 2 },
+  piercingBeam: { name: 'Piercing Beam', callout: 'New: Piercing Beam — shots pass through rocks and foes', from: 3, weight: 2 },
   homingMissiles: { name: 'Homing Missiles', callout: 'New: Homing Missiles — every third shot seeks', from: 3, weight: 2 },
   fieldBomb: { name: 'Field Bomb', callout: 'New: Field Bomb — clears the space around you', from: 4, weight: 1.5 },
   wingman: { name: 'Wingman', callout: 'New: Wingman — a drone that fires beside you', from: 4, weight: 2 },

@@ -1,15 +1,19 @@
 import { clamp } from '../content/curves';
+import { MINE } from '../content/foes';
 import type { AttackId } from '../content/types';
 import { radialShove } from '../sim/boss/attacks';
 import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
+import type { Foe } from '../sim/foes/foe';
+import { zoneClearance } from '../sim/hazards/dangerZone';
+import type { HazardState, ZoneState } from '../sim/hazards/hazard';
 import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
-import { wrapDelta } from '../sim/wrap';
+import { wrapDelta, wrappedDistance } from '../sim/wrap';
 import { copyIntent, Hands, idleIntent, type Intent } from './hands';
-import { chooseTarget, leadHeading, wrappedDistance, type Target } from './targeting';
+import { chooseTarget, leadHeading, type Target } from './targeting';
 import type { Bot, BotView } from './view';
 
 /** How far ahead the pilot looks for a collision. */
@@ -42,6 +46,10 @@ const CORE_MARGIN = 40;
  * it counts them as touching: the gaps in a broadside's line and a quake's ring are usable.
  */
 const BOSS_ROCK_ALLOWANCE = 35;
+/** How far clear of a mine's arm ring it keeps, so it never arms one. */
+const ARM_CLEARANCE = 20;
+/** It keeps out of a danger zone that is active, or that will be within this many seconds. */
+const ZONE_LEAD_SECONDS = 1;
 /** It goes for a pickup this near that will not expire on the way. */
 const PICKUP_REACH = 450;
 const PICKUP_MIN_SECONDS = 1;
@@ -68,6 +76,16 @@ function onField(things: readonly Readonly<{ id: number; hp?: number }>[], id: n
   for (const thing of things) if (thing.id === id) return thing.hp === undefined || thing.hp > 0;
   return false;
 }
+
+/** How near a foe it must not come: a mine's arm ring and the clearance it keeps from it, a splitter's spray margin, else its body. */
+function foeReach(foe: Readonly<Foe>): number {
+  if (foe.kind === 'mine') return MINE.armRadius + ARM_CLEARANCE;
+  return foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0);
+}
+
+/** Whether `hazard` is a danger zone to keep out of now: active, or starting within `ZONE_LEAD_SECONDS`. */
+const zoneToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<ZoneState> =>
+  hazard.type === 'dangerZone' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
 
 /** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
 function splitterAhead(view: Readonly<BotView>): boolean {
@@ -119,6 +137,8 @@ export class Pilot {
   /** For a threat a telegraphed attack made, whether that attack was to be dodged; null for any other threat. */
   private readonly rolled: (boolean | null)[] = [];
   private count = 0;
+  /** The danger zones to keep out of, judged by their rectangles rather than as circles; refilled per judgement. */
+  private readonly zones: Readonly<ZoneState>[] = [];
   /** Seconds until the ship can be hurt by anything but a solid threat. */
   private harmlessFor = 0;
   /** What the last `predict` found: the least clearance, slack included, and the mean of each sample's capped least. */
@@ -362,10 +382,11 @@ export class Pilot {
       const allowance = boss !== null && rock.transient === true ? BOSS_ROCK_ALLOWANCE : 0;
       this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false, this.attackRoll(rock.id), allowance);
     }
-    for (const foe of view.foes) {
-      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.attackRoll(foe.id));
-    }
-    for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id));
+    for (const foe of view.foes) if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foeReach(foe), false, this.attackRoll(foe.id));
+    // Bolts pass out of the field and never wrap: one is judged where it really flies, not across the seam.
+    for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id), 0, false);
+    this.zones.length = 0;
+    for (const hazard of view.hazards) if (zoneToAvoid(hazard)) this.zones.push(hazard);
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
     for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
@@ -408,11 +429,14 @@ export class Pilot {
     this.addThreat(view, body.x, body.y, (body.x - body.px) / STEP_SECONDS, (body.y - body.py) / STEP_SECONDS, radius, true, this.strike === null ? null : this.dodgingStrike);
   }
 
-  /** Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. */
-  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null, allowance = 0): void {
+  /**
+   * Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. One that
+   * `wraps` is measured across the wrap; one that does not (a bolt), straight across the field.
+   */
+  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null, allowance = 0, wraps = true): void {
     const { ship, field } = view;
-    const dx = wrapDelta(x - ship.x, field.width);
-    const dy = wrapDelta(y - ship.y, field.height);
+    const dx = wraps ? wrapDelta(x - ship.x, field.width) : x - ship.x;
+    const dy = wraps ? wrapDelta(y - ship.y, field.height) : y - ship.y;
     const closing = (Math.hypot(vx, vy) + PLAYER.maxSpeed) * LOOK_AHEAD_SECONDS;
     // The allowance comes off the distance at which it counts as touching the ship.
     const touching = radius - allowance;
@@ -452,6 +476,15 @@ export class Pilot {
         if (clearance < sample) {
           sample = clearance;
           who = i;
+        }
+      }
+      if (!harmless) {
+        for (const zone of this.zones) {
+          const clearance = zoneClearance(view.field, zone, view.ship.x + (sx[k] ?? 0), view.ship.y + (sy[k] ?? 0)) - PLAYER.radius;
+          if (clearance < sample) {
+            sample = clearance;
+            who = -1;
+          }
         }
       }
       if (sample + k * SLACK_PER_SAMPLE < least) {

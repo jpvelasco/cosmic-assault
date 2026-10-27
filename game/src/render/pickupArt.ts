@@ -55,8 +55,11 @@ const RIGHT_SHOT = shotAt(0.42);
 const STAR = [0, -1, 0.28, -0.28, 1, 0, 0.28, 0.28, 0, 1, -0.28, 0.28, -1, 0, -0.28, -0.28];
 const BOLT = [0.3, -1, -0.6, 0.12, -0.06, 0.12, -0.3, 1, 0.6, -0.16, 0.06, -0.16];
 const CREST = [0, -1, 0.82, -0.62, 0.72, 0.18, 0, 1, -0.72, 0.18, -0.82, -0.62];
-const NEEDLE = [0, -1, 0.2, 0, 0, 1, -0.2, 0];
-const ARROW = [0, -1, 0.8, 0.2, 0.3, 0.2, 0.3, 1, -0.3, 1, -0.3, 0.2, -0.8, 0.2];
+/** A lance, point up, and the ring it passes through. */
+const LANCE = [0, -1, 0.18, -0.6, 0.11, 1, -0.11, 1, -0.18, -0.6];
+const RING_Y = 0.2;
+/** A dart, point to the right, at the end of the curve a seeking shot flies. */
+const DART = [0.98, -0.28, 0.18, -0.78, 0.36, -0.28, 0.18, 0.22];
 const BURST = [0, -1, 0.22, -0.53, 0.71, -0.71, 0.53, -0.22, 1, 0, 0.53, 0.22, 0.71, 0.71, 0.22, 0.53, 0, 1, -0.22, 0.53, -0.71, 0.71, -0.53, 0.22, -1, 0, -0.53, -0.22, -0.71, -0.71, -0.22, -0.53];
 const HOURGLASS = [-0.7, -1, 0.7, -1, 0.12, 0, 0.7, 1, -0.7, 1, -0.12, 0];
 const LEAD = [-0.2, -1, 0.3, 0.6, -0.7, 0.6];
@@ -94,13 +97,23 @@ const GLYPHS: Readonly<Record<PickupId, Glyph>> = {
   shield: (ctx, x, y, r) => {
     polygon(ctx, x, y, r, CREST);
   },
-  // A needle: a shot that passes through.
+  // A lance through a ring: a shot that passes through what it strikes.
   piercingBeam: (ctx, x, y, r) => {
-    polygon(ctx, x, y, r, NEEDLE);
+    ctx.beginPath();
+    ctx.arc(x, y + RING_Y * r, 0.52 * r, 0, Math.PI * 2);
+    ctx.lineWidth = 0.2 * r;
+    ctx.stroke();
+    polygon(ctx, x, y, r, LANCE);
   },
-  // An arrow head on a shaft: a shot that seeks.
+  // A dart at the end of a curving trail: a shot that swings round onto its mark.
   homingMissiles: (ctx, x, y, r) => {
-    polygon(ctx, x, y, r, ARROW);
+    ctx.beginPath();
+    ctx.moveTo(x - 0.8 * r, y + 0.9 * r);
+    ctx.quadraticCurveTo(x - 0.75 * r, y - 0.28 * r, x + 0.25 * r, y - 0.28 * r);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 0.24 * r;
+    ctx.stroke();
+    polygon(ctx, x, y, r, DART);
   },
   // A ring round a core: a blast around the ship.
   fieldBomb: (ctx, x, y, r) => {

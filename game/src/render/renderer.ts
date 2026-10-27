@@ -181,7 +181,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const passesFor = (p: Palette) => ({
     boss: createBossPass(ctx, pen, baker, p),
     bolt: createBoltPass(ctx, stamp, baker, p),
-    foe: createFoePass(ctx, stamp, baker, p),
+    foe: createFoePass(ctx, pen, stamp, baker, p),
     hazard: createHazardPass(ctx, stamp, baker, p),
     pickup: createPickupPass(ctx, stamp, baker, p),
   });

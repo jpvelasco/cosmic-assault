@@ -3,6 +3,7 @@ import type { FoeKind } from '../../content/types';
 import type { Field } from '../field';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
+import type { Bolts } from './bolts';
 
 /** A foe on the field. Pooled: a spent foe's object is reused for a later one, so never hold one across steps. */
 export interface Foe {
@@ -24,6 +25,15 @@ export interface Foe {
   hp: number;
   /** True for a foe a boss's attack launched, marked as it is made: the bots judge it on that attack's telegraph. */
   fromAttack: boolean;
+  /** Seconds until its next move: a gunship's next windup or shot, an armed mine's blast; unused by the others. */
+  timer: number;
+  /** True while its telegraphed attack winds up: a gunship aiming, or a mine armed and counting down. */
+  charging: boolean;
+  /** Where a winding-up gunship will fire: where the ship was as its windup began. */
+  aimX: number;
+  aimY: number;
+  /** Which way round the ship a gunship circles: 1 or -1. */
+  orbit: 1 | -1;
 }
 
 /** What a foe's behaviour sees of the field it is in. */
@@ -37,6 +47,10 @@ export interface FoeWorld {
   acquire(kind: FoeKind): Foe | null;
   /** Puts an acquired foe on the field where it stands and announces it. */
   commit(foe: Foe): void;
+  /** The galaxy's hostile bolts, which a gunship fires; null where none are given. */
+  readonly bolts: Bolts | null;
+  /** Sets `foe` off: it is destroyed for 0 points, and its blast of `radius` strikes a ship it reaches this step. */
+  detonate(foe: Foe, radius: number): void;
 }
 
 /** One kind of foe: how it arrives, how it moves, and what it leaves behind. */
@@ -58,6 +72,7 @@ export class FoePool {
   constructor(capacity: number) {
     this.spare = Array.from({ length: capacity }, () => ({
       id: 0, kind: 'splitter', x: 0, y: 0, vx: 0, vy: 0, px: 0, py: 0, rotation: 0, protation: 0, spin: 0, radius: 0, hp: 0, fromAttack: false,
+      timer: 0, charging: false, aimX: 0, aimY: 0, orbit: 1,
     }));
   }
 
@@ -70,8 +85,9 @@ export class FoePool {
     foe.kind = kind;
     foe.radius = radius;
     foe.hp = hp;
-    foe.vx = foe.vy = foe.spin = 0;
-    foe.fromAttack = false;
+    foe.vx = foe.vy = foe.spin = foe.timer = foe.aimX = foe.aimY = 0;
+    foe.fromAttack = foe.charging = false;
+    foe.orbit = 1;
     return foe;
   }
 

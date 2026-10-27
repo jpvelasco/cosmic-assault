@@ -1,7 +1,7 @@
 import { clamp } from '../content/curves';
 import { HAZARD_RULES } from '../content/hazards';
 import type { Field } from '../sim/field';
-import type { HazardState } from '../sim/hazards/hazard';
+import type { HazardState, PointHazardState, ZoneState } from '../sim/hazards/hazard';
 import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
 import type { Palette } from './palette';
@@ -12,7 +12,9 @@ export interface HazardPass {
   /**
    * The hazards in play. A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls,
    * a glow, three arcs swirling round it (held still and breathing under reduced motion) and a dark lens at its heart.
-   * The other hazards are drawn once they are made. Expects `source-over`, which it leaves as it found it, with alpha 1.
+   * A danger zone: a dashed, faintly hatched rectangle pulsing while it warns; once it is lethal, filled, hatched and
+   * outlined solid in the hostile hue. The other hazards are drawn once they are made. Expects `source-over`, which it
+   * leaves as it found it, with alpha 1.
    */
   drawHazards(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
 }
@@ -47,6 +49,69 @@ const ARCS = [
 /** Segments per arc: each brighter and wider toward the head, so the arc trails off like a comet. */
 const ARC_SEGMENTS = 28;
 const HORIZON = 0.2;
+
+const { telegraph: ZONE_TELEGRAPH_SECONDS, seconds: ZONE_SECONDS } = HAZARD_RULES.dangerZone;
+/** A zone's hatching: the gap between its stripes, in field units, and the dash and gap of its warning outline. */
+const HATCH_GAP = 16;
+const ZONE_DASH = 14;
+const ZONE_PAD = 4;
+/** Seconds a zone takes to fill as it turns lethal and to fade as it ends; the warning pulses this fast. */
+const ZONE_FILL_SECONDS = 0.25;
+const ZONE_FADE_SECONDS = 0.5;
+const ZONE_PULSE_HZ = 2.5;
+/** Zone sprites are kept per zone id; past this many ids the oldest are forgotten. */
+const ZONE_MEMORY = 16;
+
+/** Diagonal stripes `HATCH_GAP` apart across the `w` by `h` rectangle centred on the origin. */
+function hatch(ctx: CanvasRenderingContext2D, w: number, h: number, color: string, width: number): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-w / 2, -h / 2, w, h);
+  ctx.clip();
+  ctx.beginPath();
+  for (let d = -h; d < w; d += HATCH_GAP) {
+    ctx.moveTo(-w / 2 + d, h / 2);
+    ctx.lineTo(-w / 2 + d + h, -h / 2);
+  }
+  strokePath(ctx, color, width);
+  ctx.restore();
+}
+
+/** A zone's warning: a dashed outline, its corners marked solid, over faint hatching. */
+function paintZoneWarning(ctx: CanvasRenderingContext2D, w: number, h: number, color: string): void {
+  hatch(ctx, w, h, rgba(color, 0.22), 2);
+  ctx.setLineDash([ZONE_DASH, ZONE_DASH * 0.6]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-w / 2, -h / 2, w, h);
+  ctx.setLineDash([]);
+  const corner = Math.min(w, h) * 0.18;
+  ctx.beginPath();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+    ctx.moveTo((sx * w) / 2, (sy * h) / 2 - sy * corner);
+    ctx.lineTo((sx * w) / 2, (sy * h) / 2);
+    ctx.lineTo((sx * w) / 2 - sx * corner, (sy * h) / 2);
+  }
+  strokePath(ctx, mix(color, WHITE, 0.3), 3.5);
+}
+
+/** A lethal zone: filled and hatched in the hostile hue, outlined solid and bright. */
+function paintZoneActive(ctx: CanvasRenderingContext2D, w: number, h: number, color: string): void {
+  ctx.fillStyle = rgba(color, 0.2);
+  ctx.fillRect(-w / 2, -h / 2, w, h);
+  hatch(ctx, w, h, rgba(color, 0.55), 3);
+  ctx.strokeStyle = rgba(color, 0.35);
+  ctx.lineWidth = 8;
+  ctx.strokeRect(-w / 2, -h / 2, w, h);
+  ctx.strokeStyle = mix(color, WHITE, 0.35);
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-w / 2, -h / 2, w, h);
+}
+
+/** How strongly a lethal zone with `remaining` seconds to go is drawn: filling as it starts, fading as it ends. */
+export function zonePresence(remaining: number): number {
+  return Math.min(clamp((ZONE_SECONDS - remaining) / ZONE_FILL_SECONDS, 0, 1), clamp(remaining / ZONE_FADE_SECONDS, 0, 1));
+}
 
 /** A comet arc round the centre at radius `r`, its head at angle 0, sweeping `sweep` of a turn behind it. */
 function paintArc(ctx: CanvasRenderingContext2D, r: number, sweep: number, width: number, color: string): void {
@@ -123,18 +188,18 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
   const half = BAKED_RADIUS + SPRITE_PAD;
 
   /** Draws `sprite` at the well, `size` of its baked size, turned by `angle`. */
-  function put(sprite: Sprite, well: Readonly<HazardState>, size: number, angle: number, field: Field): void {
+  function put(sprite: Sprite, well: Readonly<PointHazardState>, size: number, angle: number, field: Field): void {
     stamp(sprite, well.x, well.y, Math.cos(angle) * size, Math.sin(angle) * size, sprite.halfW * size, field);
   }
 
-  function drawWarning(well: Readonly<HazardState>, field: Field, { time, still }: SceneLook): void {
+  function drawWarning(well: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
     const due = clamp(well.remaining / WELL_TELEGRAPH_SECONDS, 0, 1);
     const size = sizeOf(well.intensity) * (still ? 1 : 1 + OUTLINE_CLOSE * due);
     ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(time * TAU * OUTLINE_PULSE_HZ));
     put(baker.custom(outlineKey, half, paintOutlineNow), well, size, 0, field);
   }
 
-  function drawActive(well: Readonly<HazardState>, field: Field, { glow, time, still }: SceneLook): void {
+  function drawActive(well: Readonly<PointHazardState>, field: Field, { glow, time, still }: SceneLook): void {
     const shown = wellPresence(well.remaining);
     const size = sizeOf(well.intensity);
     // Reduced motion freezes the swirl; a slow breath in its opacity still shows the well is pulling.
@@ -148,12 +213,44 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
     if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), well, size * shown, 0, field);
   }
 
+  const zoneColor = palette.hostile;
+  /** Each zone's two sprites, keyed and painted at its own size, made once as it is first drawn. */
+  const zoneArt = new Map<number, { readonly warning: string; readonly active: string; readonly paintWarning: (c: CanvasRenderingContext2D) => void; readonly paintActive: (c: CanvasRenderingContext2D) => void }>();
+
+  function artOf(zone: Readonly<ZoneState>) {
+    const known = zoneArt.get(zone.id);
+    if (known !== undefined) return known;
+    if (zoneArt.size >= ZONE_MEMORY) zoneArt.clear();
+    const size = `${zone.w.toFixed(1)}x${zone.h.toFixed(1)}`;
+    const art = {
+      warning: `zone|${palette.id}|warning|${size}`,
+      active: `zone|${palette.id}|active|${size}`,
+      paintWarning: (c: CanvasRenderingContext2D): void => {
+        paintZoneWarning(c, zone.w, zone.h, zoneColor);
+      },
+      paintActive: (c: CanvasRenderingContext2D): void => {
+        paintZoneActive(c, zone.w, zone.h, zoneColor);
+      },
+    };
+    zoneArt.set(zone.id, art);
+    return art;
+  }
+
+  function drawZone(zone: Readonly<ZoneState>, field: Field, { time, still }: SceneLook): void {
+    const art = artOf(zone);
+    const warning = zone.stage === 'warning';
+    const sprite = warning ? baker.custom(art.warning, zone.w / 2 + ZONE_PAD, art.paintWarning, zone.h / 2 + ZONE_PAD) : baker.custom(art.active, zone.w / 2 + ZONE_PAD, art.paintActive, zone.h / 2 + ZONE_PAD);
+    // A warning pulses faster as it comes due; reduced motion holds it steady.
+    const due = 1 - clamp(zone.remaining / ZONE_TELEGRAPH_SECONDS, 0, 1);
+    ctx.globalAlpha = warning ? (still ? 0.75 : 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * ZONE_PULSE_HZ * (1 + due)))) : zonePresence(zone.remaining);
+    stamp(sprite, zone.x, zone.y, 1, 0, Math.max(zone.w, zone.h) / 2, field);
+  }
+
   return {
     drawHazards(hazards, field, look) {
       for (const hazard of hazards) {
-        if (hazard.type !== 'gravityWell') continue;
-        if (hazard.stage === 'warning') drawWarning(hazard, field, look);
-        else drawActive(hazard, field, look);
+        if (hazard.type === 'dangerZone') drawZone(hazard, field, look);
+        else if (hazard.type === 'gravityWell') (hazard.stage === 'warning' ? drawWarning : drawActive)(hazard, field, look);
         ctx.globalAlpha = 1;
       }
     },

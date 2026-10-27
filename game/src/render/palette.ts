@@ -29,6 +29,8 @@ export interface Palette {
   readonly ring: string;
   readonly hud: string;
   readonly accent: readonly [string, string, string];
+  /** What is hostile and telegraphed: bolts, a gunship's aim line, a mine's arm ring, a danger zone. */
+  readonly hostile: string;
   /** The stars and the dust in the sky. */
   readonly star: string;
 }
@@ -58,6 +60,7 @@ export const DRIFT: Palette = {
   ring: '#ffd36b',
   hud: '#ffc6ee',
   accent: ['#22d3ff', '#a855f7', '#ff4fd8'],
+  hostile: '#22d3ff',
   star: '#fff4ff',
 };
 
@@ -86,12 +89,14 @@ export const ION_REACH: Palette = {
   ring: '#ffe566',
   hud: '#d6f6ff',
   accent: ['#ffb0fa', '#9a5cff', '#00f0ff'],
+  hostile: '#ffb0fa',
   star: '#e8fdff',
 };
 
 /**
  * Dimension 3: a deep red sky, red, orange and amber nebula, warm stone rocks. The cyan shot and the yellow foes are the
- * cool and hot accents the red sky sets off.
+ * cool and hot accents the red sky sets off; what is hostile (bolts, aim lines, arm rings, danger zones) is a hot
+ * magenta, apart from both and from the reds behind it.
  */
 export const CRIMSON_NEBULA: Palette = {
   id: 'crimsonNebula',
@@ -113,6 +118,7 @@ export const CRIMSON_NEBULA: Palette = {
   ring: '#ffb347',
   hud: '#ffd2c2',
   accent: ['#ffe14f', '#ff7a45', '#5cf2ff'],
+  hostile: '#ff58e6',
   star: '#fff0e4',
 };
 
@@ -137,6 +143,7 @@ export const VOID_RIFT: Palette = {
   ring: '#ffd36b',
   hud: '#e2d2ff',
   accent: ['#ff4f7a', '#b07cff', '#4fe0ff'],
+  hostile: '#ff4f7a',
   star: '#f4ecff',
 };
 
@@ -164,6 +171,7 @@ export const SINGULARITY: Palette = {
   ring: '#ffc94a',
   hud: '#ffe9b0',
   accent: ['#ff3d6e', '#ffc94a', '#4fd8ff'],
+  hostile: '#ff3d6e',
   star: '#fff6dc',
 };
 

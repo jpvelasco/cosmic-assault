@@ -18,6 +18,7 @@ import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import type { Ship } from '../../src/sim/ship';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock, threatOf } from '../helpers/botScene';
+import { foeAt } from '../helpers/foeAt';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const WOBBLE_LIMIT = 0.25;
@@ -67,7 +68,7 @@ function dodgeRate(seed: number, windup: AttackId | null, place: (view: BotView,
 
 /** A drone `id` 100 units to the ship's right, flying straight at it; `fromAttack` marks it a boss attack's. */
 const oncoming = (id: number, fromAttack: boolean): Foe =>
-  ({ id, kind: 'drone', x: SCENE_SHIP.x + 100, y: SCENE_SHIP.y, vx: -110, vy: 0, px: SCENE_SHIP.x + 101, py: SCENE_SHIP.y, rotation: Math.PI, protation: Math.PI, spin: 0, radius: 12, hp: 1, fromAttack });
+  foeAt('drone', SCENE_SHIP.x + 100, SCENE_SHIP.y, { id, vx: -110, px: SCENE_SHIP.x + 101, rotation: Math.PI, protation: Math.PI, fromAttack });
 
 /** About how long a volley's shards take, once thrown, to pass where the ship was as the windup began. */
 const VOLLEY_ARRIVES = 0.6;

@@ -22,6 +22,8 @@ export const FOES: Readonly<Record<FoeKind, FoeDef>> = {
   // A rock between the medium (80) and the small (110) in speed; it scores what a small rock does (100).
   splitter: { from: 1, radius: 30, hp: 2, cost: 3, points: 100, speed: 95, group: [1, 1], pulled: true },
   drone: { from: 2, radius: 12, hp: 1, cost: 1, points: 100, speed: 110, group: [3, 5], pulled: false },
+  gunship: { from: 3, radius: 18, hp: 3, cost: 4, points: 250, speed: 80, group: [1, 1], pulled: false },
+  mine: { from: 3, radius: 12, hp: 1, cost: 2, points: 150, speed: 25, group: [1, 2], pulled: true },
 };
 
 /** Radians per second a drone can turn toward the ship. */
@@ -31,6 +33,25 @@ export const DRONE_TURN_RATE = 2.2;
  * pushes a drone's wanted heading away from it, up to `weight` times the pull of the ship when the two touch centres.
  */
 export const DRONE_SEPARATION = { radius: 28, weight: 2.5 } as const;
+/**
+ * How a gunship fights: it circles the ship between `orbit` units out, turning at up to `turnRate` rad/s, and keeps
+ * `separation` from the gunships beside it as drones do. Every `cadence` ± `cadenceJitter` seconds it winds up for
+ * `windup` seconds, aiming where the ship is then, and fires one bolt there. No more than `maxLive` fly at once.
+ */
+export const GUNSHIP = {
+  orbit: [240, 300],
+  turnRate: 1.6,
+  separation: { radius: 70, weight: 2.5 },
+  cadence: 2.6,
+  cadenceJitter: 0.4,
+  windup: 0.5,
+  maxLive: 4,
+} as const;
+/**
+ * How a mine goes off: a ship that touches its `armRadius` arms it, and `fuse` seconds later it blasts everything within
+ * `blastRadius`. It drifts in no nearer the ship than the safe radius plus `armRadius`.
+ */
+export const MINE = { armRadius: 110, fuse: 0.6, blastRadius: 80 } as const;
 /** A broken splitter leaves this many tiny fragments, each this many times as fast as a tiny rock. */
 export const SPLITTER_FRAGMENTS = 3;
 export const FRAGMENT_SPEED_MULTIPLIER = 1.6;

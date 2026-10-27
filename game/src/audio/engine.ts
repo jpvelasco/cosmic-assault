@@ -4,9 +4,9 @@ import { galaxyById } from '../content/galaxies';
 import type { MusicThemeId } from '../content/types';
 import type { SimEvent } from '../sim/events';
 import { createMusicPlayer, type MusicPlayer } from './music';
-import { humFor, isBossKill, PER_FRAME_CAPS, screenCue, sfxFor, type SfxName } from './sfx';
+import { HUM_NAMES, humFor, isBossKill, PER_FRAME_CAPS, screenCue, sfxFor, type HumChange, type HumName, type SfxName } from './sfx';
 import { bossThemeOf, THEMES, type ThemeId } from './themes';
-import { playSfx, startWellHum, type Loop, type VoiceBed } from './voices';
+import { playSfx, startHum, type Loop, type VoiceBed } from './voices';
 
 /** What the test bridge reports: no context yet, or the context's own state. */
 export type AudioState = 'none' | 'suspended' | 'running' | 'closed';
@@ -31,8 +31,9 @@ export interface AudioEngine {
   beginFrame(): void;
   /**
    * Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss), and
-   * starts or stops the gravity well's hum. The hum plays only in play: pause silences it until play resumes, and any
-   * other screen, a mute or dispose stops it. A galaxy's start picks its theme, and a boss's intro its boss variant.
+   * starts or stops the hazards' hums (a gravity well's, a danger zone's), each on its own events. The hums play only in
+   * play: pause silences them until play resumes, and any other screen, a mute or dispose stops them. A galaxy's start
+   * picks its theme, and a boss's intro its boss variant.
    */
   handle(events: readonly SimEvent[]): void;
   /** Plays `name`, `delay` seconds from now on the audio clock. */
@@ -113,10 +114,10 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let musicLevel: MusicLevel = 'menu';
   /** How many times each capped sound has started this frame. */
   const startedThisFrame: Partial<Record<SfxName, number>> = {};
-  /** Whether a well is pulling, as the events last told; and whether the screen is play, where the hum is heard. */
-  let humWanted = false;
+  /** Which hums the hazards ask for, as the events last told; and whether the screen is play, where they are heard. */
+  const humWanted: Record<HumName, boolean> = { well: false, zone: false };
   let inPlay = false;
-  let hum: Loop | null = null;
+  const hums: Record<HumName, Loop | null> = { well: null, zone: null };
   /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
   let screenBus: GainNode | null = null;
   /** The theme of the last galaxy started, and whether its boss has appeared; together they choose the music. */
@@ -189,23 +190,36 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     return !muted && graph?.ctx.state === 'running';
   }
 
-  /** Starts the hum when a well pulls in play and sound is audible, and stops it as soon as any of those ends. */
+  /** Every hum falls silent, whatever the hazards last asked for: the run is over or left. */
+  function silenceHums(): void {
+    for (const name of HUM_NAMES) humWanted[name] = false;
+  }
+
+  function changeHum(change: HumChange | null): void {
+    if (change === 'silence') silenceHums();
+    else if (change !== null) humWanted[change.hum] = change.on;
+  }
+
+  /** Starts each hum its hazard asks for in play while sound is audible, and stops it as soon as any of those ends. */
   function syncHum(): void {
     const current = graph;
-    if (humWanted && inPlay && current !== null && audible()) {
-      if (hum === null) {
+    const live = inPlay && current !== null && audible();
+    for (const name of HUM_NAMES) {
+      if (humWanted[name] && live) {
+        if (hums[name] === null) {
+          guard(() => {
+            hums[name] = startHum(current.bed, current.sfx, name);
+          });
+        }
+        continue;
+      }
+      const running = hums[name];
+      hums[name] = null;
+      if (running !== null) {
         guard(() => {
-          hum = startWellHum(current.bed, current.sfx);
+          running.stop();
         });
       }
-      return;
-    }
-    const running = hum;
-    hum = null;
-    if (running !== null) {
-      guard(() => {
-        running.stop();
-      });
     }
   }
 
@@ -350,7 +364,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       for (const event of events) {
         const cue = sfxFor(event, bossKill);
         if (cue !== null) play(cue.name, cue.delay);
-        humWanted = humFor(event) ?? humWanted;
+        changeHum(humFor(event));
         followTheme(event);
       }
       syncHum();
@@ -379,7 +393,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       // Pause keeps the well and the boss fight in mind for the resume; any other screen leaves the run, and both with it
       // (the menus play the plain theme of the last Dimension).
       if (!inPlay && screen !== 'paused') {
-        humWanted = false;
+        silenceHums();
         bossFight = false;
       }
       syncHum();
@@ -391,7 +405,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
       disposed = true;
       removeGestureListeners();
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      humWanted = false;
+      silenceHums();
       syncHum();
       const current = graph;
       graph = null;
