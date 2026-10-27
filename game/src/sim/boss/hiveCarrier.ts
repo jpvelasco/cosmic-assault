@@ -135,22 +135,39 @@ class HiveCarrier implements BossBehaviour {
   }
 
   /**
-   * Opens the hangar, and sends out the phase's wave of drones, as many as the cap leaves room for. A drone whose slot
-   * lies outside the field or within the safe radius of the ship stays in.
+   * Opens the hangar, and sends out the phase's wave of drones, as many as the cap leaves room for. A slot outside the
+   * field or within the safe radius of the ship stays empty, and its drone leaves from the next clear slot instead: the
+   * wave's other hangar slots, then the hull's ends, so a ship parked in front of the hangar still meets a full wave.
    */
   private launch(ctx: AttackContext): void {
     const { boss, arena } = ctx;
-    const { ship } = arena;
-    const field = arena.field();
     this.closesAt = arena.elapsed() + HANGAR_OPEN_SECONDS;
     const count = Math.min(LAUNCH_WAVES[boss.phase], DRONE_CAP - this.foes.launched);
-    const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;
-    for (let i = 0; i < count; i++) {
-      const at = hullPoint(boss, mouth, lane(i, count, LAUNCH_SPACING), spot);
-      if (!clearSlot(at, field, ship, ASTEROID.safeRadius)) continue;
-      if (!this.foes.launch('drone', at.x, at.y, boss.facing + lane(i, count, LAUNCH_FAN))) return;
+    let launched = 0;
+    for (let slot = 0; launched < count && slot < 3 * count; slot++) {
+      const heading = launchSlot(boss, slot, count, spot);
+      if (!clearSlot(spot, arena.field(), arena.ship, ASTEROID.safeRadius)) continue;
+      if (!this.foes.launch('drone', spot.x, spot.y, heading)) return;
+      launched++;
     }
   }
+}
+
+/**
+ * Writes into `out` where launch slot `slot` of a `count`-drone wave is, and returns the heading its drone leaves on.
+ * The first `count` slots fan out across the hangar mouth; the next `2 x count` line the hull's long axis out from its
+ * wingtips, alternating sides, so either side alone has room for a whole wave, and send their drones straight ahead.
+ */
+export function launchSlot(boss: Readonly<BossView>, slot: number, count: number, out: Point): number {
+  const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;
+  if (slot < count) {
+    hullPoint(boss, mouth, lane(slot, count, LAUNCH_SPACING), out);
+    return boss.facing + lane(slot, count, LAUNCH_FAN);
+  }
+  const end = slot - count;
+  const side = end % 2 === 0 ? -1 : 1;
+  hullPoint(boss, 0, side * (mouth + Math.floor(end / 2) * LAUNCH_SPACING), out);
+  return boss.facing;
 }
 
 /** Fires a line of pass-through rocks across its hangar, all flying the way it faces, none formed off the field or on top of the ship. */
