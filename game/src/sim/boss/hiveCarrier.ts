@@ -3,7 +3,7 @@ import { FOES } from '../../content/foes';
 import type { AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TIME_EPSILON, turnBetween } from '../math';
+import { smoothstep, TIME_EPSILON, turnBetween } from '../math';
 import { transientRock } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure, Point } from './behaviour';
 
@@ -194,7 +194,7 @@ function retreat(ctx: AttackContext): void {
   const inset = boss.radius + RETREAT_INSET;
   const toX = ctx.fromX < width / 2 ? width - inset : inset;
   const t = Math.min(1, (ctx.age + ctx.dt) / RETREAT_SECONDS);
-  boss.x = ctx.fromX + (toX - ctx.fromX) * t * t * (3 - 2 * t);
+  boss.x = ctx.fromX + smoothstep(t, toX - ctx.fromX);
 }
 
 /** The Hive Carrier's behaviour, with its attacks spelled out. */

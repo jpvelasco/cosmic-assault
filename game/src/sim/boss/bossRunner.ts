@@ -6,7 +6,7 @@ import { circlesOverlap } from '../collision';
 import type { Field } from '../field';
 import { nudge, TAU, TIME_EPSILON, type Moving } from '../math';
 import type { Arena } from '../rules';
-import { rescale } from '../wrap';
+import { rescale, rescalePose } from '../wrap';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
 
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
@@ -165,12 +165,7 @@ export class BossRunner {
   /** Stretches the core, its parts, its target and the points an attack under way aims at, to the new field like every other entity. */
   resize(old: Field, field: Field): void {
     const { view, context } = this;
-    for (const body of [view, ...view.parts]) {
-      body.x = rescale(body.x, old.width, field.width);
-      body.px = rescale(body.px, old.width, field.width);
-      body.y = rescale(body.y, old.height, field.height);
-      body.py = rescale(body.py, old.height, field.height);
-    }
+    for (const body of [view, ...view.parts]) rescalePose(body, old, field);
     this.refresh();
     if (context === null) return;
     context.aimX = rescale(context.aimX, old.width, field.width);

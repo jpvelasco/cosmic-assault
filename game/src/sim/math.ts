@@ -8,6 +8,12 @@ export function turnBetween(from: number, to: number): number {
   return turn <= -Math.PI ? turn + TAU : turn;
 }
 
+/**
+ * Eases `t` from 0 to 1 with zero slope at both ends (3t² − 2t³), times `scale`. The scale is multiplied in first, so a
+ * scaled ease rounds exactly as `scale * t * t * (3 - 2 * t)` written out does, and the sim's results do not move.
+ */
+export const smoothstep = (t: number, scale = 1): number => scale * t * t * (3 - 2 * t);
+
 /** Absorbs float residue from summing dt steps, so a time boundary fires on the step it is reached. */
 export const TIME_EPSILON = 1e-9;
 

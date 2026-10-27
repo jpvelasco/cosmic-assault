@@ -7,6 +7,22 @@ export function rescale(value: number, from: number, to: number): number {
   return ((value + WRAP_MARGIN) * (to + 2 * WRAP_MARGIN)) / (from + 2 * WRAP_MARGIN) - WRAP_MARGIN;
 }
 
+/** A body's place and its place a step ago, as `rescalePose` stretches them. */
+export interface Pose {
+  x: number;
+  y: number;
+  px: number;
+  py: number;
+}
+
+/** Stretches `body`'s place and its place a step ago from field `old` to `field`, keeping their fractions of the wrap band. */
+export function rescalePose(body: Pose, old: Field, field: Field): void {
+  body.x = rescale(body.x, old.width, field.width);
+  body.y = rescale(body.y, old.height, field.height);
+  body.px = rescale(body.px, old.width, field.width);
+  body.py = rescale(body.py, old.height, field.height);
+}
+
 export function wrapPosition(p: { x: number; y: number }, field: Field, margin: number = WRAP_MARGIN): void {
   if (p.x < -margin) {
     p.x = field.width + margin;

@@ -6,7 +6,7 @@ import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
-import { rescale } from '../wrap';
+import { rescalePose } from '../wrap';
 import { DRONE } from './drone';
 import { FoePool, type Foe, type FoeBehaviour, type FoeWorld } from './foe';
 import { SPLITTER } from './splitter';
@@ -157,12 +157,7 @@ export class FoeField implements FoeWorld, BossFoes {
 
   /** Stretches every foe's place to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void {
-    for (const foe of this.pool.live) {
-      foe.x = rescale(foe.x, old.width, field.width);
-      foe.y = rescale(foe.y, old.height, field.height);
-      foe.px = rescale(foe.px, old.width, field.width);
-      foe.py = rescale(foe.py, old.height, field.height);
-    }
+    for (const foe of this.pool.live) rescalePose(foe, old, field);
   }
 
   private destroy(foe: Foe, points: number): void {

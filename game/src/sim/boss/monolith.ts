@@ -1,6 +1,6 @@
 import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
-import { TAU } from '../math';
+import { smoothstep, TAU } from '../math';
 import { rockRing } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView, Point } from './behaviour';
 import { bossHome } from './bossRunner';
@@ -47,8 +47,6 @@ export type MonolithAttack = 'shardVolley' | 'quake' | 'pulse';
 
 /** The Monolith's windups, in seconds. */
 export const MONOLITH_WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, quake: 0.8, pulse: 0.5 };
-
-const smooth = (t: number): number => t * t * (3 - 2 * t);
 
 /** How far round from bearing `aim` a part sits about the core, in radians from -π to π. */
 function offsetFrom(aim: number, part: Readonly<BossPart>, boss: Readonly<BossView>): number {
@@ -182,7 +180,7 @@ class Monolith implements BossBehaviour {
     const ty = ctx.aimY + uy * VOLLEY_OVERSHOOT + ux * lane * VOLLEY_SPREAD;
     // Out to the turning point over the first half, then back to its orbit, wherever that has turned to.
     const out = this.flight < 0.5;
-    const s = out ? smooth(this.flight * 2) : 1 - smooth(this.flight * 2 - 1);
+    const s = out ? smoothstep(this.flight * 2) : 1 - smoothstep(this.flight * 2 - 1);
     part.x += (tx - part.x) * s;
     part.y += (ty - part.y) * s;
   }

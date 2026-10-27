@@ -18,7 +18,7 @@ import { createRng, deriveSeed, type Rng } from './rng';
 import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
 import { makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
 import { removeFlagged, resetFlags } from './flagged';
-import { rescale } from './wrap';
+import { rescalePose } from './wrap';
 import { assertAsteroidPlacement, assertField, placeShip, resolveOptions, type WorldOptions } from './worldOptions';
 
 export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
@@ -279,12 +279,7 @@ export class World {
     assertField(field);
     const old = this.currentField;
     this.currentField = field;
-    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) {
-      e.x = rescale(e.x, old.width, field.width);
-      e.y = rescale(e.y, old.height, field.height);
-      e.px = rescale(e.px, old.width, field.width);
-      e.py = rescale(e.py, old.height, field.height);
-    }
+    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) rescalePose(e, old, field);
     this.run?.resize(old, field);
   }
 

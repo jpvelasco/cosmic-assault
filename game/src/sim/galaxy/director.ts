@@ -3,7 +3,7 @@ import { tierOf } from '../../content/galaxies';
 import { FOES, isFoeKind } from '../../content/foes';
 import type { GalaxyDef, ThreatKind } from '../../content/types';
 import type { AsteroidSize } from '../asteroid';
-import type { Rng } from '../rng';
+import { weightedIndex, type Rng } from '../rng';
 import { phaseAt, phasePressure, pressureScale } from './pacing';
 
 /** What a threat weighs on the budget while it is on the field: a rock by its size, a foe by its content; tiny fragments weigh 0.5. */
@@ -134,13 +134,8 @@ export class GalaxyDirector {
       const ramp = this.galaxy.kinds[kind];
       return opening && ramp.from !== 0 ? 0 : kindProbability(ramp, this.tier);
     });
-    const total = weights.reduce((sum, w) => sum + w, 0);
-    if (total <= 0) return null;
-    let roll = this.rng.next() * total;
-    for (const [i, kind] of THREAT_KINDS.entries()) {
-      roll -= weights[i] ?? 0;
-      if (roll < 0) return kind;
-    }
-    return THREAT_KINDS.findLast((_, i) => (weights[i] ?? 0) > 0) ?? null;
+    // Nothing on offer draws nothing, so the stream holds still through a galaxy's quiet stretches.
+    if (!weights.some((w) => w > 0)) return null;
+    return THREAT_KINDS[weightedIndex(weights, this.rng.next())] ?? null;
   }
 }
