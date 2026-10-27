@@ -150,10 +150,16 @@ export interface BossBehaviour {
   /** Its parts, which the runner shows on the view, steps the previous poses of, rescales and strikes. None if absent. */
   readonly parts?: readonly BossPart[];
   /**
-   * How far the core keeps from the walls as it drifts, and from a respawning ship; the core radius if absent. A live
-   * part that trails beyond it, a serpent's tail say, is kept inside the field and clear of the ship by its own radius.
+   * How far the core keeps from the walls as it drifts, and from a respawning ship; the core radius if absent. A
+   * respawning ship also keeps clear of every live part by the part's own radius, wherever it is.
    */
   readonly reach?: number;
+  /**
+   * True for parts that move rigidly with the core, an orbit or a ring say: the drift then keeps every live part inside
+   * the field too, beyond `reach`. False if absent: a boss whose parts trail behind it, a serpent's body say, keeps
+   * them inside the field itself, since moving the core does not move them with it.
+   */
+  readonly rigidParts?: boolean;
   /** Where in `field` it arrives; `bossHome` if absent. */
   home?(field: Field): Readonly<Point>;
   /** The events announcing its core exposed and shielded again; `bossExposed` and `bossShielded` if absent. */

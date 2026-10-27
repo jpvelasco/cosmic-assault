@@ -23,6 +23,9 @@ const REACH_SLACK = 1e-6;
 /** `extent`, if it lies beyond `reach` by more than float residue, else `reach`. */
 const beyond = (reach: number, extent: number): number => (extent > reach + REACH_SLACK ? extent : reach);
 
+/** The parts a boss whose parts trail behind it widens its drift's clamp by: none. */
+const NO_PARTS: readonly BossPart[] = [];
+
 /** How a boss announces its core opening and closing, unless its behaviour says otherwise. */
 const CORE_EXPOSURE: Exposure = { opened: 'bossExposed', closed: 'bossShielded' };
 /** Where a boss faces until its behaviour turns it: down the field, toward the ship's side. */
@@ -100,7 +103,7 @@ export class BossRunner {
     return this.view.state;
   }
 
-  /** How far the core keeps from the walls, and from a respawning ship: its behaviour's reach, else its radius. Live parts beyond it count too. */
+  /** How far the core keeps from the walls, and from a respawning ship: its behaviour's reach, else its radius. A respawning ship keeps clear of every live part too. */
   get reach(): number {
     return this.behaviour.reach ?? this.view.radius;
   }
@@ -361,12 +364,16 @@ export class BossRunner {
     return this.context;
   }
 
-  /** Moves the core along its heading, bouncing it off the walls so the whole boss, parts and all, stays inside the field. */
+  /**
+   * Moves the core along its heading, bouncing it off the walls so its reach stays inside the field, and with it every
+   * live part of a boss whose parts move rigidly with its core.
+   */
   private drift(dt: number, field: Field): void {
     const { view, reach } = this;
-    // How far the boss extends each way from its core: its reach, or further where a live part trails beyond it.
+    // How far the boss extends each way from its core: its reach, or further where a rigid live part lies beyond it.
     let [left, right, up, down] = [reach, reach, reach, reach];
-    for (const part of view.parts) {
+    const parts = this.behaviour.rigidParts === true ? view.parts : NO_PARTS;
+    for (const part of parts) {
       if (part.hp <= 0) continue;
       left = beyond(left, view.x - part.x + part.radius);
       right = beyond(right, part.x - view.x + part.radius);

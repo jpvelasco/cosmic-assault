@@ -55,6 +55,7 @@ const WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, qu
  */
 class Monolith implements BossBehaviour {
   readonly driftSpeed = DRIFT_SPEED;
+  readonly rigidParts = true;
   readonly reach: number;
   readonly parts: readonly BossPart[];
   readonly attacks: Readonly<Record<MonolithAttack, AttackSpec>>;

@@ -33,6 +33,7 @@ function serpent(trail = TRAIL, driftSpeed = 60): BossBehaviour {
   };
   return {
     driftSpeed,
+    rigidParts: true,
     // Every attack the 1-★ and Sentinel definitions name, so it can stand in for either.
     attacks: { shardRing: spec, lunge: spec, shardVolley: spec, quake: spec, pulse: spec },
     parts: [segment],
@@ -90,6 +91,41 @@ describe('part-aware boss reach', () => {
       expect(segment.y + segment.radius, `segment at ${String(segment.y)}`).toBeLessThanOrEqual(BOSS_FIELD.height + 1e-6);
     }, arena, 60);
     expect(lowest).toBeGreaterThan(BOSS_FIELD.height - 40);
+  });
+
+  it('leaves the core of a boss whose parts trail behind it on its own path: a segment outside the field never shoves it', () => {
+    const LAG_STEPS = 20;
+    const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
+    /** A drifting core whose one segment copies where the core was `LAG_STEPS` steps of the fight before, or none. */
+    const trailing = (withSegment: boolean): BossBehaviour => {
+      // It starts 5 units past the bottom wall, below a core at home, and stays there until the fight has run its lag.
+      const segment: BossPart = { x: 640, y: BOSS_FIELD.height + 5 - SEGMENT_RADIUS, px: 0, py: 0, radius: SEGMENT_RADIUS, hp: 4, maxHp: 4 };
+      const xs: number[] = [];
+      const ys: number[] = [];
+      return {
+        driftSpeed: 60,
+        attacks: { shardRing: spec, lunge: spec },
+        parts: withSegment ? [segment] : [],
+        step: (ctx) => {
+          if (ctx.boss.state !== 'fighting') return;
+          xs.push(ctx.boss.x);
+          ys.push(ctx.boss.y);
+          if (xs.length <= LAG_STEPS) return;
+          segment.x = xs[xs.length - 1 - LAG_STEPS] ?? 0;
+          segment.y = ys[ys.length - 1 - LAG_STEPS] ?? 0;
+        },
+      };
+    };
+    const paths = [true, false].map((withSegment) => {
+      const runner = new BossRunner(BOSSES.sentinel, trailing(withSegment), setupFor(BOSS_FIELD));
+      const path: number[] = [];
+      runFor((dt, a) => {
+        runner.step(dt, a);
+        path.push(runner.view.x, runner.view.y);
+      }, stubArena(), 6);
+      return path;
+    });
+    expect(paths[0]).toEqual(paths[1]);
   });
 
   it('respawns a ship clear of a segment that lies across the usual spot, not only clear of the core', () => {
