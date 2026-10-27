@@ -1,6 +1,6 @@
 import { showerSeconds } from './curves';
 import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
-import { poolFor } from './pickups';
+import { newIn, poolFor } from './pickups';
 import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, MusicThemeId, PaletteId, ThreatKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
@@ -54,6 +54,9 @@ const BOSS_OF: Readonly<Record<Dimension, BossId>> = { 1: 'monolith', 2: 'hiveCa
 /** When, as a share of the duration, a galaxy's showers fall: one, or two with the second at 60%. */
 const SHOWER_SHARES: Readonly<Record<1 | 2, readonly number[]>> = { 1: [0.45], 2: [0.3, 0.6] };
 
+/** The first Dimension whose opening galaxy features its new pickups. */
+const FIRST_FEATURING: Dimension = 3;
+
 const survivalSeconds = (dimension: Dimension): number => 90 + 15 * (dimension - 1);
 
 /** Showers fall at their share of the duration, but late enough ones move earlier so they end by the lull. */
@@ -95,6 +98,8 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     kinds: rampsFor(dimension, index),
     events: boss ? [] : [...showers(dimension, index, duration), ...wells(dimension, index)].sort((a, b) => a.at - b.at),
     pickups: poolFor(dimension),
+    // A Dimension's breather teaches its new pickups (§6.1); D1 and D2 bring theirs in without one.
+    featured: index === 1 && dimension >= FIRST_FEATURING ? newIn(dimension) : [],
     boss: boss ? BOSS_OF[dimension] : null,
     ...LOOKS[dimension],
   };

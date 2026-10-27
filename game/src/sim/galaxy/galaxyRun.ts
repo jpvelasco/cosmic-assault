@@ -2,10 +2,11 @@ import { bossHp, BOSSES } from '../../content/bosses';
 import { rockSpeedMultiplier } from '../../content/curves';
 import { isFoeKind } from '../../content/foes';
 import { tierOf } from '../../content/galaxies';
-import type { BossId, GalaxyDef, HazardType, PickupId, RockKind, WeaponTier } from '../../content/types';
+import { isBlast } from '../../content/pickups';
+import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
 import type { BossFactory, BossSetup, BossView } from '../boss/behaviour';
-import { BossRunner, clearSpot, DYING_SECONDS } from '../boss/bossRunner';
+import { BossRunner, clearSpot, DYING_SECONDS, type HitResult } from '../boss/bossRunner';
 import { createHiveCarrier } from '../boss/hiveCarrier';
 import { createMonolith } from '../boss/monolith';
 import { SENTINEL } from '../boss/sentinel';
@@ -14,17 +15,19 @@ import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
 import type { HazardState } from '../hazards/hazard';
-import { HazardField, hazardStreams } from '../hazards/hazardField';
+import { HazardField } from '../hazards/hazardField';
 import { TIME_EPSILON } from '../math';
+import { blast, type BlastScene } from '../pickups/blast';
 import { Loadout } from '../pickups/effects';
 import { PickupField, type Pickup } from '../pickups/pickups';
-import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Arena, Spawner } from '../rules';
 import type { Ship } from '../ship';
+import type { ShotRules } from '../shots';
 import { clearReport, Combo, type GalaxyMode } from '../scoring';
 import { GalaxyDirector, SIZE_COST } from './director';
 import { phaseAt, type Phase } from './pacing';
 import { Showers, type ShowerState } from './showers';
+import type { GalaxyStreams } from './streams';
 
 const WARP_SECONDS = 1.5;
 /** A beaten boss dies over the warp, so that warp lasts as long as its dying. */
@@ -41,25 +44,6 @@ const SHOWER_SIZE: AsteroidSize = 3;
 const BOSS_BEHAVIOURS: Readonly<Record<BossId, BossFactory>> = { monolith: createMonolith, hiveCarrier: createHiveCarrier, sentinel: () => SENTINEL };
 /** Points for beating a boss, per Dimension, before the combo multiplier. */
 const BOSS_KILL_POINTS = 1000;
-
-/** The named streams a galaxy run draws from, one per concern, so one never shifts another. */
-export interface GalaxyStreams {
-  /** Kinds, spawn points and showers. */
-  readonly director: Rng;
-  readonly boss: Rng;
-  /** Whether a kill drops, and what. */
-  readonly pickups: Rng;
-  /** Foe behaviour: where they enter, their headings and their fragments. */
-  readonly foes: Rng;
-  /** Each hazard type's own stream (`hazardStreamName`): where it sits, and what else it rolls. The same stream on every call. */
-  readonly hazards: (type: HazardType) => Rng;
-}
-
-/** The streams of a run with `seed`. */
-export function galaxyStreams(seed: number): GalaxyStreams {
-  const stream = (name: string): Rng => createRng(deriveSeed(seed, name));
-  return { director: stream('director'), boss: stream('boss'), pickups: stream('pickups'), foes: stream('foes'), hazards: hazardStreams(seed) };
-}
 
 const areaOf = (field: Field): number => field.width * field.height;
 
@@ -85,10 +69,12 @@ export class GalaxyRun implements Spawner {
   /** What the ship carries: its weapon tier and its timed effects. */
   readonly loadout: Loadout;
   private readonly pickupField: PickupField;
-  /** Hands a collected pickup to the loadout; made once so stepping allocates nothing. */
+  /** Hands a collected pickup to the loadout, or sets off its blast at the ship; made once so stepping allocates nothing. */
   private readonly takePickup = (kind: PickupId): void => {
-    this.loadout.collect(kind);
+    if (isBlast(kind)) blast(kind, this.arena.ship.x, this.arena.ship.y, this.blastScene);
+    else this.loadout.collect(kind);
   };
+  private readonly blastScene: BlastScene;
   /** Refilled every step, so the director's input costs no allocation. */
   private readonly context = { elapsed: 0, onFieldCost: 0, mercy: 1 };
 
@@ -102,12 +88,13 @@ export class GalaxyRun implements Spawner {
     private readonly behaviours: Readonly<Record<BossId, BossFactory>> = BOSS_BEHAVIOURS,
   ) {
     this.loadout = new Loadout(startTier);
-    this.pickupField = new PickupField(galaxy.pickups, tierOf(galaxy), streams.pickups);
+    this.pickupField = new PickupField(galaxy.pickups, tierOf(galaxy), streams.pickups, galaxy.featured);
     this.director = new GalaxyDirector(galaxy, streams.director, areaOf(arena.field()));
     this.showers = new Showers(galaxy.events, streams.director);
     this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId());
     this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
+    this.blastScene = { arena, foes: this.foes, boss: () => this.bossRunner, score: (base) => this.scoreKill(base), hitCore: this.hitCore.bind(this), hitPart: this.hitPart.bind(this) };
   }
 
   get phase(): Phase {
@@ -171,12 +158,22 @@ export class GalaxyRun implements Spawner {
 
   /**
    * The hazard path. Hazards pull by nudging the velocities of the ship (capped, summed), the rocks and the foes they
-   * pull, and a boss's attack shoves the ship, here, after `stepShip` and before anything else moves; then the foes move.
+   * pull, and a boss's attack shoves the ship, here, after `stepShip` and before anything else moves; then the foes
+   * move, at the enemies' time scale.
    */
   moveOwn(dt: number, ship: Ship): void {
     this.hazards.move(dt, ship, this.arena.asteroids, this.foes.list);
     this.bossRunner?.shove(ship);
-    this.foes.step(dt);
+    this.foes.step(dt * this.enemyTimeScale());
+  }
+
+  shotRules(): ShotRules {
+    return this.loadout.shotRules;
+  }
+
+  /** Half while Time Warp runs (M6-R4): the rocks, the foes and the fighting boss run at it; the clock, the hazards, the pickups and the ship never do. */
+  enemyTimeScale(): number {
+    return this.loadout.timeScale;
   }
 
   /** Takes off the field the foes this step's collisions destroyed, whether or not the ship survived them. */
@@ -191,8 +188,8 @@ export class GalaxyRun implements Spawner {
       this.announceCombo();
       this.spawn(dt, elapsed);
     }
-    // The fight, or a beaten boss dying under the warp.
-    this.stepBoss(dt, elapsed);
+    // The fight, at the enemies' time scale, or a beaten boss dying under the warp in real time, so it dies as the warp ends.
+    this.stepBoss(this.bossBeaten ? dt : dt * this.enemyTimeScale(), elapsed);
     if (this.warpEndsAt === null) {
       if (this.bossBeaten) this.warpOut(elapsed, BOSS_WARP_SECONDS);
     } else if (elapsed + TIME_EPSILON >= this.warpEndsAt) {
@@ -227,23 +224,24 @@ export class GalaxyRun implements Spawner {
     if (boss === null || boss.state === 'down') return false;
     const part = boss.partAt(x, y, radius);
     if (part >= 0) {
-      this.hitPart(boss, part);
+      this.hitPart(boss, part, 1);
       return true;
     }
     if (!boss.overlaps(x, y, radius)) return false;
-    const result = boss.hit(1, x, y);
-    if (result === 'blocked') return true;
-    if (result === 'deflected') {
-      this.arena.events.push({ type: 'bossDeflected', x, y });
-      return true;
-    }
-    this.arena.events.push({ type: 'bossHit', x, y, hp: boss.hp });
-    if (result === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
+    if (this.hitCore(boss, 1, x, y) === 'deflected') this.arena.events.push({ type: 'bossDeflected', x, y });
     return true;
   }
 
-  private hitPart(boss: BossRunner, index: number): void {
-    const result = boss.hitPart(index, 1);
+  /** Takes `damage` off the core for a blow at (x, y): a hurt core reports a `bossHit`, and the blow that kills it scores. */
+  private hitCore(boss: BossRunner, damage: number, x: number, y: number): HitResult {
+    const result = boss.hit(damage, x, y);
+    if (result === 'hit' || result === 'killed') this.arena.events.push({ type: 'bossHit', x, y, hp: boss.hp });
+    if (result === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
+    return result;
+  }
+
+  private hitPart(boss: BossRunner, index: number, damage: number): void {
+    const result = boss.hitPart(index, damage);
     const part = boss.view.parts[index];
     if (result === 'blocked' || part === undefined) return;
     const { x, y } = part;
@@ -272,9 +270,9 @@ export class GalaxyRun implements Spawner {
     this.pickupField.roll(x, y, { lastLife: this.arena.lives() === 1, weaponTier: this.loadout.tier }, this.arena.events);
   }
 
-  /** A shot at (x, y) has reached a foe, if it overlaps one; true means the shot is spent. A kill scores and may drop a pickup. */
-  hitFoe(x: number, y: number, radius: number): boolean {
-    return this.foes.hit(x, y, radius);
+  /** A shot at (x, y) has reached a foe not in `struck`, if it overlaps one: returns its id, or -1. A kill scores and may drop a pickup. */
+  hitFoe(x: number, y: number, radius: number, struck?: readonly number[]): number {
+    return this.foes.hit(x, y, radius, struck);
   }
 
   /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, a boss that is fighting, or a lethal hazard. */

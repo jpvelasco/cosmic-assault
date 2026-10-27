@@ -116,31 +116,10 @@ const measured = (): Measured => ({ text: '', width: 0 });
 
 export function createHud(initial: Palette): Hud {
   let palette = initial;
-  const boxes: Readonly<Record<HudPill, HudRect>> = {
-    score: box(),
-    lives: box(),
-    galaxy: box(),
-    timer: box(),
-    combo: box(),
-    doubleShot: box(),
-    rapidFire: box(),
-    spreadLaser: box(),
-    shield: box(),
-    boss: box(),
-  };
+  const boxes = Object.fromEntries(HUD_PILLS.map((id) => [id, box()])) as Readonly<Record<HudPill, HudRect>>;
   const { score, lives, galaxy, timer, combo, boss } = boxes;
-  const shown: Record<HudPill, boolean> = {
-    score: true,
-    lives: false,
-    galaxy: true,
-    timer: false,
-    combo: false,
-    doubleShot: false,
-    rapidFire: false,
-    spreadLaser: false,
-    shield: false,
-    boss: false,
-  };
+  /** The score and the galaxy show from the start; every other pill once there is something to show. */
+  const shown = Object.fromEntries(HUD_PILLS.map((id) => [id, id === 'score' || id === 'galaxy'])) as Record<HudPill, boolean>;
   /** The HP track inside the boss bar. */
   const hpTrack = box();
   let rects: readonly HudRect[] = [];

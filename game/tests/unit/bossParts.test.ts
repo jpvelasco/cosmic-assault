@@ -1,19 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import { bossTarget, BossRunner, DYING_SECONDS, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
-import { STEP_SECONDS } from '../../src/sim/config';
+import { BLAST, STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { TAU } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
+import { comboMultiplier } from '../../src/sim/scoring';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF: BossDef = BOSSES.sentinel;
@@ -345,6 +346,64 @@ describe('GalaxyRun with a boss that has parts', () => {
     steps();
     expect(arena.ship.vx).toBe(0);
     expect(arena.events.map((e) => e.type)).toContain('warpOut');
+  });
+  describe('a blast', () => {
+    /** The probe fighting, the ship `below` units under its core, and the parts named broken first. */
+    function blastRig(below: number, broken: readonly number[] = []) {
+      const rig = galaxyRun();
+      const runner = rig.run['bossRunner'];
+      if (runner === null) throw new Error('no boss');
+      for (const i of broken) runner.hitPart(i, 2);
+      rig.arena.events.length = 0;
+      rig.arena.ship.x = rig.boss.x;
+      rig.arena.ship.y = rig.boss.y + below;
+      return { ...rig, blast: (kind: 'fieldBomb' | 'nova') => { rig.run['takePickup'](kind); } };
+    }
+
+    it('takes 1 off each live part a Field Bomb reaches, and nothing off a shielded core', () => {
+      const { arena, boss, blast } = blastRig(150);
+      blast('fieldBomb');
+      // Parts 0-2 lie within 220 of the blast (plus their radius); part 3, above the core, does not.
+      expect(boss.parts.map((p) => p.hp)).toEqual([1, 1, 1, 2]);
+      expect(ofType(arena.events, 'bossPartHit').map((e) => e.part)).toEqual([0, 1, 2]);
+      expect(ofType(arena.events, 'bossHit')).toEqual([]);
+      expect(ofType(arena.events, 'bossDeflected')).toEqual([]);
+      expect(boss.hp).toBe(boss.maxHp);
+    });
+
+    it('takes 2 off a vulnerable core a Field Bomb reaches, striking the rim facing the blast', () => {
+      const { arena, boss, blast } = blastRig(150, [0, 1, 2]);
+      expect(boss.vulnerable).toBe(true);
+      blast('fieldBomb');
+      expect(boss.hp).toBe(boss.maxHp - BLAST.fieldBomb.coreDamage);
+      expect(ofType(arena.events, 'bossHit')).toEqual([{ type: 'bossHit', x: boss.x, y: boss.y + boss.radius, hp: boss.maxHp - 2 }]);
+      expect(BLAST.fieldBomb).toEqual({ radius: 220, coreDamage: 2, partDamage: 1 });
+    });
+
+    it('takes 2 off every part a Nova reaches, then 4 off the core their breaking exposed', () => {
+      const { arena, boss, blast } = blastRig(150);
+      blast('nova');
+      expect(boss.parts.map((p) => p.hp)).toEqual([0, 0, 0, 0]);
+      expect(ofType(arena.events, 'bossPartBroken')).toHaveLength(4);
+      expect(boss.hp).toBe(boss.maxHp - 4);
+      expect(BLAST.nova).toEqual({ radius: 520, coreDamage: 4, partDamage: 2 });
+    });
+
+    it('leaves a boss out of its reach alone', () => {
+      const { arena, boss, blast } = blastRig(400, [0, 1, 2]);
+      blast('fieldBomb');
+      expect(arena.events.map((e) => e.type)).toEqual(['blast']);
+      expect(boss.hp).toBe(boss.maxHp);
+    });
+
+    it('scores the boss kill it lands, as a shot\'s would', () => {
+      const { arena, boss, blast } = blastRig(150, [0, 1, 2]);
+      boss.hp = 2;
+      const award = vi.spyOn(arena, 'award');
+      blast('fieldBomb');
+      expect(boss.state).toBe('dying');
+      expect(award).toHaveBeenCalledWith(1000 * comboMultiplier(1));
+    });
   });
 });
 

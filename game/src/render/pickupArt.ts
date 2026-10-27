@@ -11,6 +11,12 @@ export const PICKUP_COLORS: Readonly<Record<PickupId, string>> = {
   shield: '#3fd9ff',
   rapidFire: '#ff8a2b',
   spreadLaser: '#b26bff',
+  piercingBeam: '#e8f4ff',
+  homingMissiles: '#ff4d4d',
+  fieldBomb: '#ffd9a0',
+  wingman: '#5fffd2',
+  nova: '#fff27a',
+  timeWarp: '#8fa8ff',
 };
 
 /** The Shield ring's radius round the ship's centre, before the visual scale; its break bursts from it. */
@@ -49,6 +55,12 @@ const RIGHT_SHOT = shotAt(0.42);
 const STAR = [0, -1, 0.28, -0.28, 1, 0, 0.28, 0.28, 0, 1, -0.28, 0.28, -1, 0, -0.28, -0.28];
 const BOLT = [0.3, -1, -0.6, 0.12, -0.06, 0.12, -0.3, 1, 0.6, -0.16, 0.06, -0.16];
 const CREST = [0, -1, 0.82, -0.62, 0.72, 0.18, 0, 1, -0.72, 0.18, -0.82, -0.62];
+const NEEDLE = [0, -1, 0.2, 0, 0, 1, -0.2, 0];
+const ARROW = [0, -1, 0.8, 0.2, 0.3, 0.2, 0.3, 1, -0.3, 1, -0.3, 0.2, -0.8, 0.2];
+const BURST = [0, -1, 0.22, -0.53, 0.71, -0.71, 0.53, -0.22, 1, 0, 0.53, 0.22, 0.71, 0.71, 0.22, 0.53, 0, 1, -0.22, 0.53, -0.71, 0.71, -0.53, 0.22, -1, 0, -0.53, -0.22, -0.71, -0.71, -0.22, -0.53];
+const HOURGLASS = [-0.7, -1, 0.7, -1, 0.12, 0, 0.7, 1, -0.7, 1, -0.12, 0];
+const LEAD = [-0.2, -1, 0.3, 0.6, -0.7, 0.6];
+const WING = [0.55, -0.4, 0.9, 0.9, 0.2, 0.9];
 
 /** The pickup glyphs: plain canvas paths, so they never depend on a font or an emoji. Each spans ±r around (x, y). */
 const GLYPHS: Readonly<Record<PickupId, Glyph>> = {
@@ -81,6 +93,37 @@ const GLYPHS: Readonly<Record<PickupId, Glyph>> = {
   // A crest.
   shield: (ctx, x, y, r) => {
     polygon(ctx, x, y, r, CREST);
+  },
+  // A needle: a shot that passes through.
+  piercingBeam: (ctx, x, y, r) => {
+    polygon(ctx, x, y, r, NEEDLE);
+  },
+  // An arrow head on a shaft: a shot that seeks.
+  homingMissiles: (ctx, x, y, r) => {
+    polygon(ctx, x, y, r, ARROW);
+  },
+  // A ring round a core: a blast around the ship.
+  fieldBomb: (ctx, x, y, r) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 0.75 * r, 0, Math.PI * 2);
+    ctx.lineWidth = 0.25 * r;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, 0.3 * r, 0, Math.PI * 2);
+    ctx.fill();
+  },
+  // A ship with a smaller one off its wing.
+  wingman: (ctx, x, y, r) => {
+    polygon(ctx, x, y, r, LEAD);
+    polygon(ctx, x, y, r, WING);
+  },
+  // An eight-pointed burst: the biggest blast.
+  nova: (ctx, x, y, r) => {
+    polygon(ctx, x, y, r, BURST);
+  },
+  // An hourglass: time slows.
+  timeWarp: (ctx, x, y, r) => {
+    polygon(ctx, x, y, r, HOURGLASS);
   },
 };
 

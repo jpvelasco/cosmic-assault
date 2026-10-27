@@ -207,7 +207,7 @@ describe('FoeField launching a boss\'s foes', () => {
     foes.launch('drone', 500, 300, 0);
     expect(foes.launched).toBe(2);
     foes.step(STEP_SECONDS);
-    expect(foes.hit(foes.list[3]?.x ?? 0, foes.list[3]?.y ?? 0, 1)).toBe(true);
+    expect(foes.hit(foes.list[3]?.x ?? 0, foes.list[3]?.y ?? 0, 1)).toBe(foes.list[3]?.id);
     foes.sweep();
     expect(foes.launched).toBe(1);
     foes.step(STEP_SECONDS);

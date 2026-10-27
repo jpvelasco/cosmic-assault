@@ -62,7 +62,7 @@ interface CosmicAssaultTestState {
   readonly boss: CosmicAssaultTestBoss | null;
   /** How many sim events of each type the run in play has produced (a shot fired, a boss shot deflected, a hangar opened ...), from its first step. */
   readonly events: Readonly<Partial<Record<import('./sim/events').SimEvent['type'], number>>>;
-  /** The timed effects running (doubleShot, rapidFire, spreadLaser, shield), each with its seconds left; one that is off is absent. */
+  /** The timed effects running, each with its seconds left; one that is off is absent. */
   readonly effects: Readonly<Partial<Record<import('./content/pickups').TimedPickupId, number>>>;
   /** The weapon tier, 0–3; 0 outside a run. */
   readonly weaponTier: import('./content/types').WeaponTier;

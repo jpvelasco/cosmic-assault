@@ -110,7 +110,7 @@ describe('splitter', () => {
     const { arena, foes, foe, awarded, killed } = withSplitter();
     arena.events.length = 0;
     foes.step(DT);
-    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(true);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(foe.id);
     expect(ofType(arena.events, 'foeHit')).toEqual([{ type: 'foeHit', id: foe.id, x: foe.x, y: foe.y, hp: 1 }]);
     expect(ofType(arena.events, 'foeDestroyed')).toEqual([]);
     expect(awarded).toEqual([]);
@@ -146,11 +146,11 @@ describe('splitter', () => {
     const { arena, foes, foe, awarded, killed } = withSplitter();
     foes.step(DT);
     foes.hit(foe.x, foe.y, PROJECTILE.radius);
-    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(true);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(foe.id);
     // The dead splitter is still listed until the step's sweep, but it can no longer be hit.
     expect(foes.list).toContain(foe);
-    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(false);
-    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(false);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(-1);
+    expect(foes.hit(foe.x, foe.y, PROJECTILE.radius)).toBe(-1);
     expect(ofType(arena.events, 'foeDestroyed')).toHaveLength(1);
     expect(awarded).toHaveLength(1);
     expect(killed).toHaveLength(1);
@@ -192,8 +192,8 @@ describe('splitter', () => {
   it('misses a shot just outside its radius and hits one just inside', () => {
     const { foes, foe } = withSplitter();
     foes.step(DT);
-    expect(foes.hit(foe.x + foe.radius + PROJECTILE.radius + 0.5, foe.y, PROJECTILE.radius)).toBe(false);
-    expect(foes.hit(foe.x + foe.radius + PROJECTILE.radius - 0.5, foe.y, PROJECTILE.radius)).toBe(true);
+    expect(foes.hit(foe.x + foe.radius + PROJECTILE.radius + 0.5, foe.y, PROJECTILE.radius)).toBe(-1);
+    expect(foes.hit(foe.x + foe.radius + PROJECTILE.radius - 0.5, foe.y, PROJECTILE.radius)).toBe(foe.id);
   });
 });
 
@@ -276,7 +276,7 @@ describe('drone', () => {
     const drone = r.foes.list[1];
     if (drone === undefined) throw new Error('a drone should have arrived');
     r.arena.events.length = 0;
-    expect(r.foes.hit(drone.x, drone.y, PROJECTILE.radius)).toBe(true);
+    expect(r.foes.hit(drone.x, drone.y, PROJECTILE.radius)).toBe(drone.id);
     expect(ofType(r.arena.events, 'foeDestroyed')).toEqual([{ type: 'foeDestroyed', id: drone.id, kind: 'drone', x: drone.x, y: drone.y, points: 300 }]);
     expect(r.awarded).toEqual([300]);
     expect(r.killed).toHaveLength(1);

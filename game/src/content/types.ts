@@ -9,8 +9,19 @@ export type PaletteId = 'drift' | 'ionReach' | 'crimsonNebula' | 'voidRift' | 's
 /** The music themes a galaxy can play, one per Dimension, each with a heavier boss variant (see `audio/themes.ts`). */
 export type MusicThemeId = PaletteId;
 
-/** The pickups a kill can drop. M6 extends this. */
-export type PickupId = 'weaponCore' | 'doubleShot' | 'shield' | 'rapidFire' | 'spreadLaser';
+/** The pickups a kill can drop. */
+export type PickupId =
+  | 'weaponCore'
+  | 'doubleShot'
+  | 'shield'
+  | 'rapidFire'
+  | 'spreadLaser'
+  | 'piercingBeam'
+  | 'homingMissiles'
+  | 'fieldBomb'
+  | 'wingman'
+  | 'nova'
+  | 'timeWarp';
 
 /** The ship's weapon tier: 0 fires one shot, 3 five. It indexes `WEAPON_SPREAD`. */
 export type WeaponTier = 0 | 1 | 2 | 3;
@@ -66,6 +77,8 @@ export interface GalaxyDef {
   readonly events: readonly GalaxyEvent[];
   /** The pickups its kills can drop: every pickup from its Dimension or an earlier one. */
   readonly pickups: readonly PickupId[];
+  /** The pickups its drops favour, twice as likely as their weight: in a Dimension's first galaxy, the ones it brings in. */
+  readonly featured: readonly PickupId[];
   readonly boss: BossId | null;
   /** The look it is drawn in, and the theme it plays: one per Dimension. */
   readonly palette: PaletteId;

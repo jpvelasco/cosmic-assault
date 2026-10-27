@@ -54,16 +54,45 @@ export const WEAPON_SPREAD: readonly (readonly number[])[] = [
 
 export const MAX_WEAPON_TIER = 3;
 
-/** How shots combine. A volley never exceeds `maxShots`: the widest tier fires 5, Double Shot adds 1 and Spread Laser 2. */
+/**
+ * How shots combine. The ship's volley never exceeds `maxShots`: the widest tier fires 5, Double Shot adds 1 and Spread
+ * Laser 2. The Wingman adds one more beside the ship, so a trigger fires at most `maxPerTrigger`.
+ */
 export const VOLLEY = {
   maxShots: 8,
+  maxPerTrigger: 9,
   /** Double Shot turns the centre shot into a pair, this far to either side of the nose axis. */
   parallelOffset: 6,
   /** Spread Laser adds a shot at each of `+angle` and `-angle`. */
   spreadLaserAngle: 0.22,
   /** Rapid Fire multiplies the fire interval by this. */
   rapidFireScale: 0.6,
+  /** A Piercing Beam shot passes through this many rocks and foes; the next one stops it. */
+  pierceTargets: 3,
+  /** While Homing Missiles run, every this-many-th player projectile homes. */
+  homingEvery: 3,
 } as const;
+
+/** How a homing shot seeks: it turns toward the nearest target this far away and this far either side of its heading. */
+export const HOMING = {
+  /** Radians per second. */
+  turnRate: 4,
+  range: 320,
+  /** Radians either side of the heading: 70°. */
+  cone: (70 * Math.PI) / 180,
+} as const;
+
+/** The Wingman drone flies this far off the ship's left wing. */
+export const WINGMAN = { offset: 34 } as const;
+
+/** The blasts of the Field Bomb and the Nova: their reach, and what they take off a boss's core or each of its parts. */
+export const BLAST = {
+  fieldBomb: { radius: 220, coreDamage: 2, partDamage: 1 },
+  nova: { radius: 520, coreDamage: 4, partDamage: 2 },
+} as const;
+
+/** Time Warp runs rocks, foes and the boss at this share of real time. */
+export const TIME_WARP_SCALE = 0.5;
 
 export const PICKUP = {
   radius: 14,

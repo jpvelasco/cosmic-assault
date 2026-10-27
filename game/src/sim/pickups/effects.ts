@@ -1,21 +1,26 @@
-import { EFFECT_SECONDS, TIMED_PICKUPS, type TimedPickupId } from '../../content/pickups';
+import { EFFECT_SECONDS, isTimed, noEffects, TIMED_PICKUPS, type TimedPickupId } from '../../content/pickups';
 import type { PickupId, WeaponTier } from '../../content/types';
-import { MAX_WEAPON_TIER } from '../config';
+import { MAX_WEAPON_TIER, TIME_WARP_SCALE } from '../config';
 import type { SimEvent } from '../events';
 import { TIME_EPSILON } from '../math';
 import type { Weapon } from '../ship';
-import { weaponFor } from './volley';
+import type { ShotRules } from '../shots';
+import { shotRulesFor, weaponFor } from './volley';
 
-const isTimed = (kind: PickupId): kind is TimedPickupId => kind !== 'weaponCore';
+/** What the ship fires with and what its shots carry, rebuilt together. */
+interface Armament {
+  readonly weapon: Weapon;
+  readonly rules: ShotRules;
+}
 
 /**
- * What the ship carries: its weapon tier, and the timed effects (Double Shot, Rapid Fire, Spread Laser, Shield) with
- * the seconds each has left. Collecting a kind already running refreshes its clock; it never stacks.
+ * What the ship carries: its weapon tier, and the timed effects with the seconds each has left. Collecting a kind
+ * already running refreshes its clock; it never stacks. The blasts act at once, and are the run's to set off.
  */
 export class Loadout {
   private tierValue: WeaponTier;
-  private readonly left: Record<TimedPickupId, number> = { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 };
-  private cached: Weapon | null = null;
+  private readonly left = noEffects();
+  private cached: Armament | null = null;
 
   constructor(startTier: WeaponTier = 0) {
     this.tierValue = startTier;
@@ -34,20 +39,29 @@ export class Loadout {
     return this.left.shield > 0;
   }
 
-  /** The weapon the ship fires with, rebuilt only when the tier or a volley effect changes. */
+  /** The weapon the ship fires with, rebuilt only when the tier or an effect changes. */
   get weapon(): Weapon {
-    return (this.cached ??= weaponFor(this.tierValue, {
-      doubleShot: this.left.doubleShot > 0,
-      rapidFire: this.left.rapidFire > 0,
-      spreadLaser: this.left.spreadLaser > 0,
-    }));
+    return this.armament().weapon;
+  }
+
+  /** What the player's shots carry: pierces, the homing cadence and the Wingman; the same object until an effect changes. */
+  get shotRules(): ShotRules {
+    return this.armament().rules;
+  }
+
+  /** The share of real time the foes, the rocks and the boss run at: half while Time Warp runs. */
+  get timeScale(): number {
+    return this.left.timeWarp > 0 ? TIME_WARP_SCALE : 1;
   }
 
   collect(kind: PickupId): void {
     if (isTimed(kind)) {
       this.left[kind] = EFFECT_SECONDS[kind];
-    } else {
+    } else if (kind === 'weaponCore') {
       this.tierValue = Math.min(MAX_WEAPON_TIER, this.tierValue + 1) as WeaponTier;
+    } else {
+      // A blast changes nothing the ship carries.
+      return;
     }
     this.cached = null;
   }
@@ -71,6 +85,13 @@ export class Loadout {
     for (const kind of TIMED_PICKUPS) if (this.left[kind] > 0) this.end(kind, events);
     if (dropTier) this.tierValue = Math.max(0, this.tierValue - 1) as WeaponTier;
     this.cached = null;
+  }
+
+  private armament(): Armament {
+    if (this.cached !== null) return this.cached;
+    const on = (kind: TimedPickupId): boolean => this.left[kind] > 0;
+    const flags = { doubleShot: on('doubleShot'), rapidFire: on('rapidFire'), spreadLaser: on('spreadLaser'), piercingBeam: on('piercingBeam'), homingMissiles: on('homingMissiles'), wingman: on('wingman') };
+    return (this.cached = { weapon: weaponFor(this.tierValue, flags), rules: shotRulesFor(flags) });
   }
 
   private end(kind: TimedPickupId, events: SimEvent[]): void {

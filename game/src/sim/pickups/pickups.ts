@@ -26,6 +26,9 @@ export interface Pickup {
 
 /** On the last life the Shield is this many times as likely, to give a struggling player a chance. */
 const LAST_LIFE_SHIELD_WEIGHT = 3;
+/** A galaxy's featured kinds are this many times as likely. */
+const FEATURED_WEIGHT = 2;
+const NOT_FEATURED: readonly PickupId[] = Object.freeze([]);
 
 /** What a drop's kind depends on besides the pool. */
 export interface DropContext {
@@ -35,19 +38,19 @@ export interface DropContext {
   readonly weaponTier: WeaponTier;
 }
 
-function weightOf(kind: PickupId, { lastLife, weaponTier }: DropContext): number {
+function weightOf(kind: PickupId, { lastLife, weaponTier }: DropContext, featured: readonly PickupId[]): number {
   if (kind === 'weaponCore' && weaponTier >= MAX_WEAPON_TIER) return 0;
-  return PICKUPS[kind].weight * (lastLife && kind === 'shield' ? LAST_LIFE_SHIELD_WEIGHT : 1);
+  return PICKUPS[kind].weight * (lastLife && kind === 'shield' ? LAST_LIFE_SHIELD_WEIGHT : 1) * (featured.includes(kind) ? FEATURED_WEIGHT : 1);
 }
 
 /**
- * One kind of `pool`, by the weights of `PICKUPS` (the Shield tripled on the last life, the weapon core dropped at max
- * tier); null if nothing in the pool can drop. It always consumes exactly one draw, so the stream does not shift with
- * the situation.
+ * One kind of `pool`, by the weights of `PICKUPS` (the Shield tripled on the last life, the `featured` kinds doubled,
+ * the weapon core dropped at max tier); null if nothing in the pool can drop. It always consumes exactly one draw, so
+ * the stream does not shift with the situation.
  */
-export function chooseKind(pool: readonly PickupId[], rng: Rng, context: DropContext): PickupId | null {
+export function chooseKind(pool: readonly PickupId[], rng: Rng, context: DropContext, featured: readonly PickupId[] = NOT_FEATURED): PickupId | null {
   const draw = rng.next();
-  return pool[weightedIndex(pool.map((kind) => weightOf(kind, context)), draw)] ?? null;
+  return pool[weightedIndex(pool.map((kind) => weightOf(kind, context, featured)), draw)] ?? null;
 }
 
 /** The pickups on a galaxy's field: what a kill drops from `pool`, and what drifts, expires or is collected. */
@@ -60,11 +63,13 @@ export class PickupField {
    * @param pool what kills here can drop
    * @param tier the galaxy's difficulty tier, which sets the drop chance
    * @param rng the 'pickups' stream
+   * @param featured the kinds this galaxy favours
    */
   constructor(
     private readonly pool: readonly PickupId[],
     private readonly tier: number,
     private readonly rng: Rng,
+    private readonly featured: readonly PickupId[] = NOT_FEATURED,
   ) {}
 
   /**
@@ -73,7 +78,7 @@ export class PickupField {
    */
   roll(x: number, y: number, context: DropContext, events: SimEvent[]): void {
     if (this.list.length >= PICKUP.maxOnField || !this.rng.chance(dropChance(this.tier))) return;
-    const kind = chooseKind(this.pool, this.rng, context);
+    const kind = chooseKind(this.pool, this.rng, context, this.featured);
     if (kind === null) return;
     const heading = this.rng.range(0, TAU);
     const pickup: Pickup = {

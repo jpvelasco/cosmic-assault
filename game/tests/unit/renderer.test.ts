@@ -9,7 +9,7 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
-import type { TimedPickupId } from '../../src/content/pickups';
+import { noEffects, type TimedPickupId } from '../../src/content/pickups';
 import { galaxyById } from '../../src/content/galaxies';
 import { foeKeys } from '../../src/render/foePass';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
@@ -113,7 +113,7 @@ function stubWorld(): { stub: Stub; world: World } {
     foes: [],
     hazards: [],
     pickups: [],
-    effects: { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 },
+    effects: noEffects(),
   };
   const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null }) as unknown as World;
   return { stub, world };

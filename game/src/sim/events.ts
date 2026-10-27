@@ -1,4 +1,4 @@
-import type { TimedPickupId } from '../content/pickups';
+import type { BlastKind, TimedPickupId } from '../content/pickups';
 import type { AttackId, BossId, FoeKind, ForceKind, GalaxyId, PickupId } from '../content/types';
 import type { AsteroidSize } from './asteroid';
 import type { Stars } from './scoring';
@@ -58,6 +58,8 @@ export type SimEvent =
   | { type: 'effectEnded'; kind: TimedPickupId }
   /** The Shield took a hit for the ship: no life lost, and the ship is invulnerable for a moment. */
   | { type: 'shieldBroken' }
+  /** A Field Bomb or a Nova went off at (x, y), reaching `radius`: its kills and boss hits follow as their own events. */
+  | { type: 'blast'; kind: BlastKind; x: number; y: number; radius: number }
   /** A foe has entered, at (x, y). */
   | { type: 'foeSpawned'; id: number; kind: FoeKind; x: number; y: number }
   /** A shot hurt a foe at (x, y) and left it alive with `hp`. The killing blow is `foeDestroyed` instead. */

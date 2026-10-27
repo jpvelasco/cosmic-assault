@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EFFECT_SECONDS } from '../../src/content/pickups';
+import { EFFECT_SECONDS, noEffects, TIMED_PICKUPS } from '../../src/content/pickups';
 import type { SimEvent } from '../../src/sim/events';
 import { Loadout } from '../../src/sim/pickups/effects';
 
@@ -101,6 +101,51 @@ describe('Loadout timed effects', () => {
   });
 });
 
+describe('Loadout shot rules and time scale', () => {
+  it('pierces 3 targets while the Piercing Beam runs, and stops when it ends', () => {
+    const l = new Loadout();
+    l.collect('piercingBeam');
+    expect(l.shotRules.pierce).toBe(3);
+    run(l, EFFECT_SECONDS.piercingBeam);
+    expect(l.shotRules.pierce).toBe(0);
+  });
+
+  it('homes every third shot while Homing Missiles run, and flies the Wingman while it runs', () => {
+    const l = new Loadout();
+    l.collect('homingMissiles');
+    l.collect('wingman');
+    expect(l.shotRules).toEqual({ pierce: 0, homingEvery: 3, wingman: true });
+    run(l, EFFECT_SECONDS.homingMissiles);
+    expect(l.shotRules).toEqual({ pierce: 0, homingEvery: 0, wingman: false });
+  });
+
+  it('returns the same rules object until an effect starts or ends, so reading it each step allocates nothing', () => {
+    const l = new Loadout();
+    l.collect('wingman');
+    const rules = l.shotRules;
+    run(l, 1);
+    expect(l.shotRules).toBe(rules);
+  });
+
+  it('runs the foes at half speed while Time Warp runs, and at full speed again after its 8 s', () => {
+    const l = new Loadout();
+    expect(l.timeScale).toBe(1);
+    l.collect('timeWarp');
+    expect(l.timeScale).toBe(0.5);
+    run(l, EFFECT_SECONDS.timeWarp);
+    expect(l.timeScale).toBe(1);
+  });
+
+  it.each(['fieldBomb', 'nova'] as const)('leaves the tier and every effect alone for a %s: its blast is the run\'s', (kind) => {
+    const l = new Loadout(1);
+    const weapon = l.weapon;
+    l.collect(kind);
+    expect(l.tier).toBe(1);
+    expect(l.effects).toEqual(noEffects());
+    expect(l.weapon).toBe(weapon);
+  });
+});
+
 describe('Loadout death', () => {
   it('clears every timed effect and the shield, reporting each as ended', () => {
     const l = new Loadout(2);
@@ -112,10 +157,21 @@ describe('Loadout death', () => {
       { type: 'effectEnded', kind: 'rapidFire' },
       { type: 'effectEnded', kind: 'shield' },
     ]);
-    expect(l.effects).toEqual({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
+    expect(l.effects).toEqual(noEffects());
     expect(l.shielded).toBe(false);
     expect(l.weapon.fireIntervalScale).toBe(1);
     expect(l.tier).toBe(2);
+  });
+
+  it('ends every M6 effect with the ship too: piercing, homing, the wingman and time warp', () => {
+    const l = new Loadout();
+    for (const kind of TIMED_PICKUPS) l.collect(kind);
+    const events: SimEvent[] = [];
+    l.die(events, false);
+    expect(events).toEqual(TIMED_PICKUPS.map((kind) => ({ type: 'effectEnded', kind })));
+    expect(l.effects).toEqual(noEffects());
+    expect(l.shotRules).toEqual({ pierce: 0, homingEvery: 0, wingman: false });
+    expect(l.timeScale).toBe(1);
   });
 
   it('drops one tier when asked, never below 0', () => {

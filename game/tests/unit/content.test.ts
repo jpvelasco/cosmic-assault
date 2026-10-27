@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
-import { EFFECT_SECONDS, PICKUP_IDS, PICKUPS } from '../../src/content/pickups';
+import { EFFECT_SECONDS, INSTANT_PICKUPS, isTimed, PICKUP_IDS, PICKUPS, TIMED_PICKUPS } from '../../src/content/pickups';
 import { FOES } from '../../src/content/foes';
 import { HAZARD_RULES } from '../../src/content/hazards';
 import type { GalaxyDef, GalaxyId, HazardType, PickupId, ThreatKind } from '../../src/content/types';
@@ -169,10 +169,35 @@ describe('the galaxy table', () => {
     expect(galaxyById('1-5').events.map((e) => e.at)).toEqual([27, 51]);
   });
 
-  it('pools pickups cumulatively: D1 drops core, double shot and shield; D2 adds rapid fire and spread laser; D3-5 inherit D2', () => {
+  it('pools pickups cumulatively: D1 drops core, double shot and shield; D2 adds rapid fire and spread laser; D3 piercing and homing; D4 the field bomb and the wingman; D5 the nova and time warp', () => {
     const d1: PickupId[] = ['weaponCore', 'doubleShot', 'shield'];
     const d2: PickupId[] = [...d1, 'rapidFire', 'spreadLaser'];
-    for (const g of GALAXIES) expect(g.pickups, g.id).toEqual(g.dimension === 1 ? d1 : d2);
+    const d3: PickupId[] = [...d2, 'piercingBeam', 'homingMissiles'];
+    const d4: PickupId[] = [...d3, 'fieldBomb', 'wingman'];
+    const d5: PickupId[] = [...d4, 'nova', 'timeWarp'];
+    const pools = { 1: d1, 2: d2, 3: d3, 4: d4, 5: d5 };
+    for (const g of GALAXIES) expect(g.pickups, g.id).toEqual(pools[g.dimension]);
+  });
+
+  it('enters the M6 pickups at their Dimensions with their weights', () => {
+    const rows = (['piercingBeam', 'homingMissiles', 'fieldBomb', 'wingman', 'nova', 'timeWarp'] as const).map((id) => [id, PICKUPS[id].from, PICKUPS[id].weight]);
+    expect(rows).toEqual([
+      ['piercingBeam', 3, 2],
+      ['homingMissiles', 3, 2],
+      ['fieldBomb', 4, 1.5],
+      ['wingman', 4, 2],
+      ['nova', 5, 0.75],
+      ['timeWarp', 5, 1.5],
+    ]);
+  });
+
+  it('features the Dimension\'s new pickups in its first galaxy only, from D3 on, and only ones its pool holds', () => {
+    for (const g of GALAXIES) {
+      const fresh = PICKUP_IDS.filter((id) => PICKUPS[id].from === g.dimension);
+      expect(g.featured, g.id).toEqual(g.index === 1 && g.dimension >= 3 ? fresh : []);
+      for (const id of g.featured) expect(g.pickups, `${g.id} ${id}`).toContain(id);
+    }
+    expect(galaxyById('4-1').featured).toEqual(['fieldBomb', 'wingman']);
   });
 
   it('never lists a pickup before its Dimension, or one that does not exist', () => {
@@ -183,6 +208,7 @@ describe('the galaxy table', () => {
       }
     expect(PICKUPS.rapidFire.from).toBe(2);
     expect(PICKUPS.spreadLaser.from).toBe(2);
+    expect(PICKUP_IDS.filter((id) => PICKUPS[id].from >= 3).every((id) => GALAXIES.every((g) => g.dimension >= PICKUPS[id].from || !g.pickups.includes(id)))).toBe(true);
   });
 
   it('gives every pickup a distinct name, a "New: ..." callout that names it, a positive weight and a pool somewhere', () => {
@@ -197,8 +223,15 @@ describe('the galaxy table', () => {
     expect(new Set(PICKUP_IDS.map((id) => PICKUPS[id].name)).size).toBe(PICKUP_IDS.length);
   });
 
-  it('lasts 12 s for double shot, rapid fire and spread laser, and 15 s for the shield', () => {
-    expect(EFFECT_SECONDS).toEqual({ doubleShot: 12, rapidFire: 12, spreadLaser: 12, shield: 15 });
+  it('lasts 12 s for double shot, rapid fire, spread laser, homing and the wingman, 15 s for the shield, 10 s for piercing and 8 s for time warp', () => {
+    expect(EFFECT_SECONDS).toEqual({ doubleShot: 12, rapidFire: 12, spreadLaser: 12, shield: 15, piercingBeam: 10, homingMissiles: 12, wingman: 12, timeWarp: 8 });
+  });
+
+  it('times every pickup but the instant ones: the weapon core, the field bomb and the nova', () => {
+    expect(INSTANT_PICKUPS).toEqual(['weaponCore', 'fieldBomb', 'nova']);
+    const instant: readonly PickupId[] = INSTANT_PICKUPS;
+    expect([...TIMED_PICKUPS].sort()).toEqual(PICKUP_IDS.filter((id) => !instant.includes(id)).sort());
+    for (const id of PICKUP_IDS) expect(isTimed(id), id).toBe(!instant.includes(id));
   });
 
   it('shares one pool per Dimension', () => {

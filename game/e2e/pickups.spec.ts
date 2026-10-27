@@ -36,12 +36,16 @@ function shotsPerVolley(page: Page): Promise<number> {
   }, STEP_SECONDS);
 }
 
-/** Pickups that run on a timer, each with the shots one trigger fires once it is collected (the Shield and Rapid Fire change no shot count). */
+/** Pickups that run on a timer, each with the shots one trigger fires once it is collected (only Double Shot, Spread Laser and the Wingman add shots). */
 const TIMED = [
   { kind: 'doubleShot', volley: 2 },
   { kind: 'spreadLaser', volley: 3 },
   { kind: 'rapidFire', volley: 1 },
   { kind: 'shield', volley: 1 },
+  { kind: 'piercingBeam', volley: 1 },
+  { kind: 'homingMissiles', volley: 1 },
+  { kind: 'wingman', volley: 2 },
+  { kind: 'timeWarp', volley: 1 },
 ] as const;
 
 test.describe('a collected timed pickup', () => {

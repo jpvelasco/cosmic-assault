@@ -4,7 +4,7 @@ import { showerWarningAngle, timerFraction } from '../../src/render/hudGalaxy';
 import { pillFraction } from '../../src/render/hudPickups';
 import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { galaxyById } from '../../src/content/galaxies';
-import { EFFECT_SECONDS, type TimedPickupId } from '../../src/content/pickups';
+import { EFFECT_SECONDS, noEffects, type TimedPickupId } from '../../src/content/pickups';
 import type { GalaxyId } from '../../src/content/types';
 import type { BossView } from '../../src/sim/boss/behaviour';
 import type { ShowerState } from '../../src/sim/galaxy/showers';
@@ -59,7 +59,7 @@ interface GalaxyWorld {
   readonly effects?: Partial<Record<TimedPickupId, number>>;
 }
 
-const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 };
+const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = noEffects();
 
 /** The fields of a galaxy World the HUD reads, as a stand-in. */
 function galaxyWorld({ galaxy = '1-3', lives = 3, timeLeft = 45, multiplier = 1, boss = null, shower = null, effects = {} }: GalaxyWorld = {}): World {

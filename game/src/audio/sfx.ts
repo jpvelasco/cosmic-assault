@@ -161,7 +161,8 @@ function soundOf(event: SimEvent): SfxName | null {
     case 'bossDown':
       return 'bossDown';
     // A meteor leaving is not an event to the player, and a shower ending needs no fanfare. The clear's fanfare is
-    // cued by its results card (`screenCue`).
+    // cued by its results card (`screenCue`). A blast is heard in the booms of what it destroys until it has a sound of its own.
+    case 'blast':
     case 'asteroidLeft':
     case 'showerEnd':
     case 'galaxyCleared':

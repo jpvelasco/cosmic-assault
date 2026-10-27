@@ -341,7 +341,8 @@ describe('meteors pass through', () => {
   });
 
   it('keeps a 3-5 run within its budget plus the shower cap through both showers, and pins the peak', () => {
-    const g = galaxyById('3-5');
+    // The drop pool is held at the one 3-5 had when the peak was pinned, so the run pins the director, not which pickups fall.
+    const g = { ...galaxyById('3-5'), pickups: galaxyById('2-5').pickups };
     const area = FIELD.width * FIELD.height;
     const peakBudget = Math.max(...Array.from({ length: g.duration * 10 }, (_, i) => fieldBudget(g, i / 10, 1, area)));
     const meteorCap = Math.floor(showerCap(3, area));

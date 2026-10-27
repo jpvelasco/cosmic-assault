@@ -6,6 +6,7 @@ import { TIME_EPSILON } from './math';
 import type { Rng } from './rng';
 import type { GalaxyMode } from './scoring';
 import { respawnShip, type Ship } from './ship';
+import type { ShotRules } from './shots';
 import { placePose } from './wrap';
 
 export const MIN_PRACTICE_LEVEL = 1;
@@ -73,6 +74,13 @@ export interface Spawner {
   respawnPoint?(): Readonly<{ x: number; y: number }> | null;
   /** A shot has just broken `rock`, after the kill is scored. */
   rockKilled?(rock: Readonly<Asteroid>): void;
+  /** What the player's shots carry this step (pierces, homing, the Wingman); none without the hook or for null. */
+  shotRules?(): ShotRules | null;
+  /**
+   * The share of real time the rocks run at this step (the ruleset scales its own foes and boss alike): 1 without the
+   * hook. The ship, its shots, the pickups, the hazards and the clock always run in real time.
+   */
+  enemyTimeScale?(): number;
 }
 
 /** Brings a lost ship back: at the field's centre, invulnerable, then wherever `rules` would rather have it. */
