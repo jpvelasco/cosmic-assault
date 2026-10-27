@@ -94,7 +94,9 @@ const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = {
 /** A mine going off: rings out to its blast reach, sparks and smoke, a shake and a flash in the hostile hue. */
 const MINE_BLAST_BURST: Counts = { shards: 0, sparks: 22, rings: 2, smoke: 4, shake: 5, flash: 0.25 };
 /** A blast going off: two rings out to its reach, sparks and a hard shake, in the ring colour. */
-const BLAST_BURST: Counts = { shards: 0, sparks: 20, rings: 2, smoke: 0, shake: 8, flash: 0.25 };
+const BLAST_BURST: Counts = { shards: 0, sparks: 20, rings: 1, smoke: 0, shake: 8, flash: 0.25 };
+/** An armoured rock turning a shot aside: more sparks than a boss's shield tick, so it reads on a phone. */
+const FOE_DEFLECT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
 /** A phaser blinking: a spray of sparks and a ring where it lands. */
 const PHASER_BLINK_BURST: Counts = { shards: 0, sparks: 10, rings: 1, smoke: 0, shake: 0, flash: 0 };
 /** A ship passing through a warp rift: a ring at the mouth and a spray of sparks; a rock or foe passing is only a few sparks. */
@@ -137,8 +139,9 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'foeHit':
       return writeBurst(into, HIT_BURST, palette.shot);
     case 'bossDeflected':
-    case 'foeDeflected':
       return writeBurst(into, DEFLECT_BURST, palette.spark);
+    case 'foeDeflected':
+      return writeBurst(into, FOE_DEFLECT_BURST, palette.spark);
     case 'phaserBlink':
       return writeBurst(into, PHASER_BLINK_BURST, palette.accent[0]);
     case 'riftJump':
@@ -332,7 +335,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         return writeOrigin(origin, event.x, event.y, MINE.blastRadius / 2, emitter.palette.hostile);
       case 'boltFired':
         return writeOrigin(origin, event.x, event.y, 0, emitter.palette.hostile);
-      // A blast's first ring reaches its edge: rings are drawn at 1.6 and 2.1 times the origin's radius.
+      // A blast's ring reaches its edge: a ring is drawn at 1.6 times the origin's radius.
       case 'blast':
         return writeOrigin(origin, event.x, event.y, event.radius / BLAST_RING_SCALE, emitter.palette.ring);
       case 'foeDeflected':

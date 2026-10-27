@@ -60,4 +60,14 @@ describe('the expert and the armoured rock', () => {
     expect(chooseTarget({ ...viewWith([phaser]), asteroids: [near as never] }, out)).toBe(true);
     expect(out.x).toBe(SHIP_X + 300);
   });
+
+  it('reads an armoured rock\'s facing across the wrap: a ship just over the seam is shot at from its facing', () => {
+    // The ship is 20 units past the left edge, which the rock at x 10 reaches across the wrap: its nearest bearing points west.
+    const out = target();
+    const rock = foeAt('armoured', 1, 10, SHIP_Y, Math.PI);
+    const view = viewWith([rock]);
+    view.ship = { ...view.ship, x: FIELD.width - 10 };
+    expect(chooseTarget(view, out)).toBe(true);
+    expect(out.x).toBe(10);
+  });
 });

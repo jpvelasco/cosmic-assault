@@ -53,7 +53,8 @@ const ARMOUR_AIM = Math.PI / 6;
 /** Whether `foe` is worth a shot now: any foe but an armoured rock, and an armoured rock whose soft arc faces the ship within `ARMOUR_AIM`. */
 function shootable(foe: Readonly<Foe>, view: Readonly<BotView>): boolean {
   if (foe.kind !== 'armoured') return true;
-  const toShip = Math.atan2(view.ship.y - foe.y, view.ship.x - foe.x);
+  const { ship, field } = view;
+  const toShip = Math.atan2(wrapDelta(ship.y - foe.y, field.height), wrapDelta(ship.x - foe.x, field.width));
   return Math.abs(turnBetween(foe.rotation, toShip)) <= ARMOUR_AIM;
 }
 

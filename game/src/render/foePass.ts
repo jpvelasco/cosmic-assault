@@ -248,8 +248,8 @@ function paintArmoured(ctx: CanvasRenderingContext2D, p: Palette): void {
   strokePath(ctx, rgba(mix(plate, BLACK, 0.5), 0.8), 1.2);
   ctx.beginPath();
   ctx.arc(0, 0, 0.8 * r, -ARMOURED.softArc, ARMOURED.softArc);
-  strokePath(ctx, rgba(p.accent[2], 0.5), 7);
-  strokePath(ctx, mix(p.accent[2], WHITE, 0.5), 1.8);
+  strokePath(ctx, rgba(p.accent[2], 0.65), 9);
+  strokePath(ctx, mix(p.accent[2], WHITE, 0.5), 2.6);
 }
 
 /** The mine: a dark orb in the second accent bristling with spikes, a hostile light at its heart. */

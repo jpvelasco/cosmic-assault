@@ -1,9 +1,10 @@
 import { ARMOURED, FOES } from '../../content/foes';
-import { aimFromEdge, createAsteroid, headInward } from '../asteroid';
+import { aimFromEdge, headInward } from '../asteroid';
 import { ASTEROID } from '../config';
 import { TAU, turnBetween } from '../math';
 import { wrapPosition } from '../wrap';
 import type { FoeBehaviour } from './foe';
+import { breakInto } from './shatter';
 
 /** A shard of an armoured rock is a small rock, the size a rock of its weight breaks down to. */
 const SHARD_SIZE = 2;
@@ -44,11 +45,7 @@ export const ARMOURED_BEHAVIOUR: FoeBehaviour = {
     return Math.abs(turnBetween(foe.rotation, Math.atan2(y - foe.y, x - foe.x))) > ARMOURED.softArc;
   },
 
-  destroyed(foe, { arena, rng }) {
-    const first = rng.range(0, TAU);
-    for (let i = 0; i < ARMOURED.shards; i++) {
-      const angle = first + (i * TAU) / ARMOURED.shards;
-      arena.asteroids.push(createAsteroid(rng, foe.x, foe.y, SHARD_SIZE, angle, 1, arena.shapeRng, arena.nextId()));
-    }
+  destroyed(foe, world) {
+    breakInto(foe, world, ARMOURED.shards, SHARD_SIZE, 1, false);
   },
 };

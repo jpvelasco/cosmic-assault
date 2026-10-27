@@ -1,9 +1,10 @@
 import { FOES, FRAGMENT_SPEED_MULTIPLIER, SPLITTER_FRAGMENTS } from '../../content/foes';
-import { aimFromEdge, createAsteroid, headInward } from '../asteroid';
+import { aimFromEdge, headInward } from '../asteroid';
 import { ASTEROID } from '../config';
 import { TAU } from '../math';
 import { wrapPosition } from '../wrap';
 import type { FoeBehaviour } from './foe';
+import { breakInto } from './shatter';
 
 const TINY = 3;
 
@@ -39,13 +40,7 @@ export const SPLITTER: FoeBehaviour = {
     wrapPosition(foe, field);
   },
 
-  destroyed(foe, { arena, rng }) {
-    const first = rng.range(0, TAU);
-    for (let i = 0; i < SPLITTER_FRAGMENTS; i++) {
-      const angle = first + (i * TAU) / SPLITTER_FRAGMENTS;
-      const fragment = createAsteroid(rng, foe.x, foe.y, TINY, angle, FRAGMENT_SPEED_MULTIPLIER, arena.shapeRng, arena.nextId());
-      fragment.transient = true;
-      arena.asteroids.push(fragment);
-    }
+  destroyed(foe, world) {
+    breakInto(foe, world, SPLITTER_FRAGMENTS, TINY, FRAGMENT_SPEED_MULTIPLIER, true);
   },
 };

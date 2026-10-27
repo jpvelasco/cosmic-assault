@@ -313,7 +313,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
-    passes.wingman.draw(world, alpha, field, scene);
+    // The Wingman flies with the ship, so it blinks hidden with it while the ship is invulnerable and in its hidden half.
+    if (!(world.ship.invulnerable && blinkHidden(world.elapsed))) passes.wingman.draw(world, alpha, field, scene);
     particlePass.drawBursts(visual.effect);
   }
 

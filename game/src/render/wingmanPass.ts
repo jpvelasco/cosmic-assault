@@ -1,5 +1,5 @@
-import { WINGMAN } from '../sim/config';
 import type { Field } from '../sim/field';
+import { wingmanPoint } from '../sim/pickups/wingman';
 import type { World } from '../sim/world';
 import { mix, rgba } from './color';
 import { expiryAlpha } from './pickupArt';
@@ -46,6 +46,7 @@ function paintWingman(ctx: CanvasRenderingContext2D, p: Palette): void {
 export function createWingmanPass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker: SpriteBaker, palette: Palette): WingmanPass {
   const key = `wingman|${palette.id}`;
   const pose = { x: 0, y: 0, angle: 0 };
+  const drone = { x: 0, y: 0 };
   const paint = (c: CanvasRenderingContext2D): void => {
     paintWingman(c, palette);
   };
@@ -57,9 +58,9 @@ export function createWingmanPass(ctx: CanvasRenderingContext2D, stamp: Stamp, b
       if (left <= 0 || world.status === 'gameOver') return;
       const { ship } = world;
       interpolatePose(ship.px, ship.py, ship.pangle, ship.x, ship.y, ship.angle, alpha, field, pose);
-      // The Wingman's shot starts where the ship's left wing is: the same offset `wingmanShot` uses.
-      const x = pose.x + Math.sin(pose.angle) * WINGMAN.offset;
-      const y = pose.y - Math.cos(pose.angle) * WINGMAN.offset;
+      // Where its shot starts, the same point `wingmanShot` uses.
+      wingmanPoint(pose, drone);
+      const { x, y } = drone;
       const visible = expiryAlpha(left, still);
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = GLOW_ALPHA * glow * visible;

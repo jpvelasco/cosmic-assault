@@ -29,7 +29,8 @@ const RIPPLE_SECONDS = 1.6;
 /** A warp rift: its mouths are the well's swirl at this share of its size, and linked by a dashed arc that marches. */
 const { telegraph: RIFT_TELEGRAPH_SECONDS, seconds: RIFT_SECONDS } = HAZARD_RULES.warpRift;
 const RIFT_RADIUS = WARP_RIFT.radius;
-const RIFT_LINK_DASH: readonly number[] = [8, 6];
+const RIFT_LINK_DASH: number[] = [8, 6];
+const NO_DASH: number[] = [];
 const RIFT_LINK_MARCH = 40;
 const RIFT_LINK_WIDTH = 2;
 const RIFT_LINK_BOW = 0.18;
@@ -226,8 +227,11 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     paintOutline(c, BAKED_RADIUS, mix(violet, WHITE, 0.35));
   };
   const half = BAKED_RADIUS + SPRITE_PAD;
-  const mouthA = { x: 0, y: 0 };
-  const mouthB = { x: 0, y: 0 };
+  /** A warp rift's two mouths, set in place each frame: the entry and the exit of its pair. */
+  const mouths: [{ x: number; y: number }, { x: number; y: number }] = [
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+  ];
 
   /** Draws `sprite` at (x, y), `size` of its baked size, turned by `angle`. */
   function put(sprite: Sprite, at: Readonly<{ x: number; y: number }>, size: number, angle: number, field: Field): void {
@@ -297,7 +301,9 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   function drawRiftWarning(rift: Readonly<RiftState>, field: Field, { time, still }: SceneLook): void {
     const due = 1 - clamp(rift.remaining / RIFT_TELEGRAPH_SECONDS, 0, 1);
     ctx.globalAlpha = still ? 0.6 : 0.35 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * (OUTLINE_PULSE_HZ + 2 * due)));
-    for (const mouth of mouthsOf(rift)) put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouth, MOUTH_SCALE, 0, field);
+    placeMouths(rift);
+    put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouths[0], MOUTH_SCALE, 0, field);
+    put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouths[1], MOUTH_SCALE, 0, field);
     drawLink(rift, time, still, 0.35);
   }
 
@@ -305,29 +311,30 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   function drawRiftOpen(rift: Readonly<RiftState>, field: Field, { glow, time, still }: SceneLook): void {
     const shown = presenceOf(rift.remaining, RIFT_SECONDS);
     const breath = still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * (0.5 + 0.5 * Math.sin(time * TAU * STILL_PULSE_HZ)) : 1;
-    const [a, b] = mouthsOf(rift);
+    placeMouths(rift);
     drawLink(rift, time, still, shown * breath);
-    for (const [mouth, turn] of [
-      [a, 1],
-      [b, -1],
-    ] as const) {
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = GLOW_ALPHA * glow * shown * breath;
-      put(baker.glow(violet, GLOW_DIAMETER), mouth, MOUTH_SCALE, 0, field);
-      ctx.globalAlpha = shown * breath;
-      for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), mouth, MOUTH_SCALE, (still ? 0 : turn * time * arc.rate) + arc.phase, field);
-      ctx.globalCompositeOperation = 'source-over';
-      if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), mouth, MOUTH_SCALE * shown, 0, field);
-    }
+    // The two mouths turn in opposite ways, so the pair reads as a pair.
+    drawMouth(mouths[0], 1, shown, breath, time, glow, still, field);
+    drawMouth(mouths[1], -1, shown, breath, time, glow, still, field);
   }
 
-  /** The two mouths of a warp rift, as the points they sit at. */
-  function mouthsOf(rift: Readonly<RiftState>): readonly [{ x: number; y: number }, { x: number; y: number }] {
-    mouthA.x = rift.x;
-    mouthA.y = rift.y;
-    mouthB.x = rift.toX;
-    mouthB.y = rift.toY;
-    return [mouthA, mouthB];
+  /** One of a warp rift's open mouths: a glow, the well's arcs turning at `turn` and a dark lens, all at `shown` and `breath`. */
+  function drawMouth(mouth: Readonly<{ x: number; y: number }>, turn: number, shown: number, breath: number, time: number, glow: number, still: boolean, field: Field): void {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = GLOW_ALPHA * glow * shown * breath;
+    put(baker.glow(violet, GLOW_DIAMETER), mouth, MOUTH_SCALE, 0, field);
+    ctx.globalAlpha = shown * breath;
+    for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), mouth, MOUTH_SCALE, (still ? 0 : turn * time * arc.rate) + arc.phase, field);
+    ctx.globalCompositeOperation = 'source-over';
+    if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), mouth, MOUTH_SCALE * shown, 0, field);
+  }
+
+  /** Sets `mouths` to where a warp rift's two mouths sit. */
+  function placeMouths(rift: Readonly<RiftState>): void {
+    mouths[0].x = rift.x;
+    mouths[0].y = rift.y;
+    mouths[1].x = rift.toX;
+    mouths[1].y = rift.toY;
   }
 
   /** The dashed arc between a rift's mouths, bowed a little to one side and marching toward the far mouth. */
@@ -343,13 +350,13 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     ctx.beginPath();
     ctx.moveTo(rift.x, rift.y);
     ctx.quadraticCurveTo(mx + (nx / length) * bow * 2, my + (ny / length) * bow * 2, rift.toX, rift.toY);
-    ctx.setLineDash([...RIFT_LINK_DASH]);
+    ctx.setLineDash(RIFT_LINK_DASH);
     ctx.lineDashOffset = still ? 0 : -time * RIFT_LINK_MARCH;
     ctx.lineWidth = RIFT_LINK_WIDTH;
     ctx.strokeStyle = violet;
     ctx.globalAlpha = alpha;
     ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.setLineDash(NO_DASH);
     ctx.lineDashOffset = 0;
     ctx.globalAlpha = 1;
   }
