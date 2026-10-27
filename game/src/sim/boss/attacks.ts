@@ -72,24 +72,29 @@ export const pulseAttack = (windup: number, active: number, speed: number, reach
   threat: { kind: 'shove', speed, reach },
 });
 
-/**
- * Dashes the core in a straight line, over `seconds`, to where the ship was as the windup began, stopping short of the
- * field's edge.
- */
+/** Dashes the core in a straight line, over `seconds`, to the windup's aim. */
 export function dash(ctx: AttackContext, seconds: number): void {
   const { boss } = ctx;
-  const { width, height } = ctx.arena.field();
   const progress = Math.min(1, (ctx.age + ctx.dt) / seconds);
-  const toX = clamp(ctx.aimX, boss.radius, width - boss.radius);
-  const toY = clamp(ctx.aimY, boss.radius, height - boss.radius);
-  boss.x = ctx.fromX + (toX - ctx.fromX) * progress;
-  boss.y = ctx.fromY + (toY - ctx.fromY) * progress;
+  boss.x = ctx.fromX + (boss.aim.x - ctx.fromX) * progress;
+  boss.y = ctx.fromY + (boss.aim.y - ctx.fromY) * progress;
 }
 
-/** A dash telegraphed for `windup` s and lasting `seconds`, declaring the core's lane to the aim as its threat. */
-export const dashAttack = (windup: number, seconds: number): AttackSpec => ({
+/** Writes into `out`, and returns, where a core of `radius` dashing at `at` stops: there, kept `radius` inside the field. */
+export function dashAim(at: Readonly<Point>, field: Field, radius: number, out: Point): Point {
+  out.x = clamp(at.x, radius, field.width - radius);
+  out.y = clamp(at.y, radius, field.height - radius);
+  return out;
+}
+
+/**
+ * A dash, by a core of `radius`, telegraphed for `windup` s and lasting `seconds`: aimed where the ship is as the windup
+ * begins, short of the field's edge (`dashAim`), and declaring the core's lane to that aim as its threat.
+ */
+export const dashAttack = (windup: number, seconds: number, radius: number): AttackSpec => ({
   windup,
   active: seconds,
+  aim: (ship, field, out) => { dashAim(ship, field, radius, out); },
   run: (ctx) => { dash(ctx, seconds); },
   threat: { kind: 'lane', reach: 'core' },
 });
@@ -174,7 +179,7 @@ export function radialBolts(ctx: AttackContext, parts: readonly Readonly<BossPar
  * was as the windup began; one bolt flies straight at it.
  */
 export function aimedBolts(ctx: AttackContext, from: Readonly<Point>, count: number, spread: number, speed: number = BOLT.speed): void {
-  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, fanBearing(from, ctx.aimX, ctx.aimY, i, count, spread), speed);
+  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, fanBearing(from, ctx.boss.aim.x, ctx.boss.aim.y, i, count, spread), speed);
 }
 
 /**

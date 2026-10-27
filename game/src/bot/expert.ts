@@ -2,7 +2,7 @@ import { clamp } from '../content/curves';
 import { MINE } from '../content/foes';
 import { BLACK_HOLE, WARP_RIFT } from '../content/hazards';
 import type { AttackId } from '../content/types';
-import { radialShove } from '../sim/boss/attacks';
+import { dashAim, radialShove } from '../sim/boss/attacks';
 import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
@@ -188,12 +188,12 @@ export class Pilot {
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
-  /** The boss's current attack and its threat, and when and where the ship was as its windup began; null between attacks. */
+  /** The boss's current attack and its threat, and when its windup began; null between attacks. */
   private strike: AttackId | null = null;
   private strikeThreat: Readonly<BossThreat> | null = null;
   private strikeAt = 0;
-  private strikeX = 0;
-  private strikeY = 0;
+  /** Where a lane threat ends; reused. */
+  private readonly laneEnd: Point = { x: 0, y: 0 };
   /** Seconds until a boss's shove lands, from now; infinite when none is coming. */
   private shoveIn = Infinity;
   /** The predicted ship's velocity, and a shove on it; reused. */
@@ -339,8 +339,8 @@ export class Pilot {
   }
 
   /**
-   * Notes a boss attack as its windup begins, with its threat and when and where the ship is then, and rolls whether to
-   * dodge it; and forgets it once the attack is over; and while an attack that shoves winds up, when its shove will land.
+   * Notes a boss attack as its windup begins, with its threat and when it began, and rolls whether to dodge it; and
+   * forgets it once the attack is over; and while an attack that shoves winds up, when its shove will land.
    */
   private trackStrike(view: Readonly<BotView>): void {
     // First, while the attack that ran last step is still remembered: an attack with no active time (a launch, a quake,
@@ -354,8 +354,6 @@ export class Pilot {
       this.strike = attack;
       this.strikeThreat = boss?.threat ?? null;
       this.strikeAt = view.elapsed;
-      this.strikeX = view.ship.x;
-      this.strikeY = view.ship.y;
       this.dodgingStrike = this.roll(this.telegraphDodgeChance);
     }
     const threat = this.strikeThreat;
@@ -441,12 +439,12 @@ export class Pilot {
   }
 
   /**
-   * A ring of `ring.radius` about the core, or about where the ship was as the windup began, as circles `reach` across
-   * no more than a reach apart: a telegraphed attack may sweep the boss's parts, or its body, round it.
+   * A ring of `ring.radius` about the core, or about the windup's aim, as circles `reach` across no more than a reach
+   * apart: a telegraphed attack may sweep the boss's parts, or its body, round it.
    */
   private addRing(view: Readonly<BotView>, boss: Readonly<BossView>, ring: NonNullable<BossThreat['ring']>, reach: number): void {
-    const cx = ring.around === 'core' ? boss.x : this.strikeX;
-    const cy = ring.around === 'core' ? boss.y : this.strikeY;
+    const cx = ring.around === 'core' ? boss.x : boss.aim.x;
+    const cy = ring.around === 'core' ? boss.y : boss.aim.y;
     const circles = Math.max(RING_MIN_CIRCLES, Math.ceil((TAU * ring.radius) / reach));
     for (let i = 0; i < circles; i++) {
       const angle = (i * TAU) / circles;
@@ -455,13 +453,14 @@ export class Pilot {
   }
 
   /**
-   * The lane from the core to the strike point, as circles `radius` across no more than a radius apart: a telegraphed
-   * attack may send the core, or its shards, down it. A boss never leaves the field, so neither does the lane's end.
+   * The lane from the core to the windup's aim, as circles `radius` across no more than a radius apart: a telegraphed
+   * attack may send the core, or its shards, down it. The lane ends where a core dashing at the aim would stop
+   * (`dashAim`): at the aim itself for a dash, whose own aim already stops there.
    */
   private addLane(view: Readonly<BotView>, boss: Readonly<BossView>, radius: number): void {
-    const { field } = view;
-    const dx = clamp(this.strikeX, boss.radius, field.width - boss.radius) - boss.x;
-    const dy = clamp(this.strikeY, boss.radius, field.height - boss.radius) - boss.y;
+    const end = dashAim(boss.aim, view.field, boss.radius, this.laneEnd);
+    const dx = end.x - boss.x;
+    const dy = end.y - boss.y;
     const circles = Math.max(1, Math.ceil(Math.hypot(dx, dy) / radius));
     for (let i = 1; i <= circles; i++) this.addThreat(view, boss.x + (dx * i) / circles, boss.y + (dy * i) / circles, 0, 0, radius, true, this.dodgingStrike);
   }

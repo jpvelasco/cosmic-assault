@@ -1,6 +1,6 @@
 import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
-import { COIL_OPENING, COIL_RADIUS, tailOf } from '../../sim/boss/leviathan';
+import { COIL_OPENING, tailOf } from '../../sim/boss/leviathan';
 import { TAU } from '../../sim/math';
 import { mix, rgba } from '../color';
 import { coreSprite, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
@@ -38,9 +38,8 @@ const segmentKeys = (radius: number, palette: PaletteId): Readonly<Record<Segmen
  * The Leviathan: an indigo serpent in the Dimension's light. Its segments are drawn tail first, each turned toward the
  * one ahead of it, so the head lies over the body; the armoured ones plated over, the open tail glowing hot (cracked
  * once hurt), each flashing white when hit. The head is turned the way it faces, its jaws shut until it is bare and then
- * gaping on a glowing maw. A coil's ring is drawn round where the ship was as it wound up, open over the arc the head
- * came from, in the Dimension's hostile hue. Sprites are baked by key, the keys made once per size, and nothing is
- * allocated as it draws.
+ * gaping on a glowing maw. A coil's ring is drawn round the windup's aim, open over the arc the head came from, in the
+ * Dimension's hostile hue. Sprites are baked by key, the keys made once per size, and nothing is allocated as it draws.
  */
 export const leviathanDrawer: DrawerFactory = (kit) => {
   const { ctx, pen, baker, palette } = kit;
@@ -70,10 +69,8 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   let placeY = new Float64Array(0);
   let turns = new Float64Array(0);
   const offset = { x: 0, y: 0 };
-  /** The coil's ring: whether one is shown, its centre and the bearing of its opening from it. */
+  /** The coil's ring: whether one is shown, and the bearing of its opening from its centre. */
   let coiling = false;
-  let coilX = 0;
-  let coilY = 0;
   let opening = 0;
 
   function reset(): void {
@@ -82,7 +79,10 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
     coiling = false;
   }
 
-  /** Notes the ring of a coil winding up on its first frame, as the sim did; forgets it once the coil is over. */
+  /**
+   * Notes the coil's opening on its windup's first frame: the bearing from its aim to the head, which holds still
+   * through the windup. Forgets it once the coil is over.
+   */
   function trackCoil(boss: Readonly<BossView>, frame: Readonly<BossFrame>): void {
     if (boss.windup !== 'coil' && boss.active !== 'coil') {
       coiling = false;
@@ -90,14 +90,17 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
     }
     if (coiling) return;
     coiling = true;
-    coilX = frame.look.aimX;
-    coilY = frame.look.aimY;
-    opening = Math.atan2(frame.y - coilY, frame.x - coilX);
+    opening = Math.atan2(frame.y - boss.aim.y, frame.x - boss.aim.x);
   }
 
-  /** The coil's ring: the whole circle but its opening, with a tick at each of the opening's edges. */
+  /**
+   * The coil's ring round the windup's aim, at the radius its threat declares: the whole circle but its opening, with a
+   * tick at each of the opening's edges.
+   */
   function drawRing(boss: Readonly<BossView>, frame: Readonly<BossFrame>): void {
     const { shown, look } = frame;
+    const { x, y } = boss.aim;
+    const radius = boss.threat?.ring?.radius ?? 0;
     const half = COIL_OPENING / 2;
     const pulse = look.still ? 1 : 0.75 + 0.25 * Math.sin(time * TAU * RING_PULSE_HZ);
     pen.field();
@@ -106,7 +109,7 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
       ctx.strokeStyle = pass[0];
       ctx.lineWidth = pass[1];
       ctx.beginPath();
-      ctx.arc(coilX, coilY, COIL_RADIUS, opening + half, opening + TAU - half);
+      ctx.arc(x, y, radius, opening + half, opening + TAU - half);
       ctx.stroke();
     }
     ctx.lineWidth = 4;
@@ -115,8 +118,8 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
       const c = Math.cos(opening + side * half);
       const s = Math.sin(opening + side * half);
       ctx.beginPath();
-      ctx.moveTo(coilX + c * (COIL_RADIUS - OPENING_TICK / 2), coilY + s * (COIL_RADIUS - OPENING_TICK / 2));
-      ctx.lineTo(coilX + c * (COIL_RADIUS + OPENING_TICK / 2), coilY + s * (COIL_RADIUS + OPENING_TICK / 2));
+      ctx.moveTo(x + c * (radius - OPENING_TICK / 2), y + s * (radius - OPENING_TICK / 2));
+      ctx.lineTo(x + c * (radius + OPENING_TICK / 2), y + s * (radius + OPENING_TICK / 2));
       ctx.stroke();
     }
   }

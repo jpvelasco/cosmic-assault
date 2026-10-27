@@ -5,10 +5,8 @@ import type { BossFrame, DrawerKit } from './drawer';
 
 /** A dive's aim line, as the boss pass draws it. */
 export interface AimLine {
-  /** Draws the line for `boss` winding up a dive `clock` seconds in; forgets the aim once it is not. */
+  /** Draws the line for `boss` winding up a dive `clock` seconds of its own time in; nothing outside a dive's windup. */
   draw(boss: Readonly<BossView>, frame: Readonly<BossFrame>, clock: number): void;
-  /** Forgets the aim, for a new fight. */
-  reset(): void;
 }
 
 const WHITE = '#ffffff';
@@ -46,10 +44,9 @@ function paintReticle(ctx: CanvasRenderingContext2D, r: number, color: string): 
 }
 
 /**
- * The aim line a dive shows through its windup, in the Dimension's hostile hue: a dashed line from the core to where the
- * ship was as the windup began, marching toward it, and a reticle there closing in as the dive nears. Where the ship
- * was is read from the first frame of the windup, as the sim read it then. Strokes no path and bakes nothing outside a
- * dive's windup, and allocates nothing as it draws.
+ * The aim line a dive shows through its windup, in the Dimension's hostile hue: a dashed line from the core to the
+ * windup's aim (`BossView.aim`), marching toward it, and a reticle there closing in as the dive nears. Strokes no path
+ * and bakes nothing outside a dive's windup, and allocates nothing as it draws.
  */
 export function createAimLine({ ctx, pen, baker, palette }: DrawerKit): AimLine {
   const color = palette.accent[0];
@@ -58,20 +55,10 @@ export function createAimLine({ ctx, pen, baker, palette }: DrawerKit): AimLine 
   const paint = (c: CanvasRenderingContext2D): void => {
     paintReticle(c, RETICLE_RADIUS, color);
   };
-  let aiming = false;
-  let aimX = 0;
-  let aimY = 0;
   return {
     draw(boss, frame, clock) {
-      if (boss.windup !== 'dive') {
-        aiming = false;
-        return;
-      }
-      if (!aiming) {
-        aiming = true;
-        aimX = frame.look.aimX;
-        aimY = frame.look.aimY;
-      }
+      if (boss.windup !== 'dive') return;
+      const { x: aimX, y: aimY } = boss.aim;
       const still = frame.look.still;
       pen.field();
       ctx.globalAlpha = frame.shown;
@@ -87,9 +74,6 @@ export function createAimLine({ ctx, pen, baker, palette }: DrawerKit): AimLine 
       const close = still ? 1 : 1 + RETICLE_CLOSE * Math.max(0, 1 - clock / RETICLE_CLOSE_SECONDS);
       pen.place(aimX, aimY, close, 0);
       pen.blit(baker.custom(key, RETICLE_RADIUS + 2, paint));
-    },
-    reset() {
-      aiming = false;
     },
   };
 }

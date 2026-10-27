@@ -648,29 +648,25 @@ describe('createBossPass', () => {
       expect(keysOf(white)).not.toContain(`${KEY}|segment|cracked|24`);
     });
 
-    it('draws a dive\'s aim line and reticle at where the ship was as it wound up, and only through a dive\'s windup', () => {
+    it('draws a dive\'s aim line and reticle at the windup\'s aim, wherever the ship has gone, and only through a dive\'s windup', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(leviathan(), 1, LOOK);
       expect(calls).not.toContain('setLineDash');
       calls.length = 0;
-      pass.draw(leviathan({ windup: 'dive' }), 1, LOOK);
+      pass.draw(leviathan({ windup: 'dive', aim: { x: 300, y: 500 } }), 1, { ...LOOK, aimX: 100, aimY: 100 });
       expect(calls).toEqual(expect.arrayContaining(['setLineDash', 'moveTo', 'lineTo', 'stroke']));
-      const reticle = drawOf('boss|drift|aim|reticle', custom);
-      expect(reticle).toMatchObject({ e: LOOK.aimX, f: LOOK.aimY });
-      // The ship moves on; the line still points where it was.
-      draws.length = 0;
-      pass.draw(leviathan({ windup: 'dive' }), 1, { ...LOOK, aimX: 100, aimY: 100 });
-      expect(draws.findLast((d) => d.image === reticle?.image)).toMatchObject({ e: LOOK.aimX, f: LOOK.aimY });
+      expect(drawOf('boss|drift|aim|reticle', custom)).toMatchObject({ e: 300, f: 500 });
     });
 
-    it('draws a coil\'s ring round where the ship was through its windup and while it runs, and not after', () => {
+    it('draws a coil\'s ring round the windup\'s aim through its windup and while it runs, and not after', () => {
       pass.draw(leviathan(), 1, LOOK);
       expect(calls).not.toContain('arc');
       calls.length = 0;
-      pass.draw(leviathan({ windup: 'coil' }), 1, LOOK);
+      const threat = { attack: 'coil', windup: 0.9, kind: 'ring', reach: 34, speed: 0, ring: { radius: 220, around: 'aim' } } as const;
+      pass.draw(leviathan({ windup: 'coil', threat }), 1, LOOK);
       expect(calls.filter((c) => c === 'arc')).toHaveLength(3);
       calls.length = 0;
-      pass.draw(leviathan({ active: 'coil' }), 1, LOOK);
+      pass.draw(leviathan({ active: 'coil', threat }), 1, LOOK);
       expect(calls).toContain('arc');
       calls.length = 0;
       pass.draw(leviathan(), 1, LOOK);

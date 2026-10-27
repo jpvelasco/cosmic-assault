@@ -1,6 +1,7 @@
 import { BOSSES } from '../../content/bosses';
 import { clamp } from '../../content/curves';
 import type { AttackId } from '../../content/types';
+import { PLAYER } from '../config';
 import type { Field } from '../field';
 import { smoothstep, TAU, turnBetween } from '../math';
 import { rescale } from '../wrap';
@@ -29,12 +30,19 @@ export const EASE_SECONDS = 1;
 const REJOIN_SAMPLES = 256;
 
 export const DIVE_SECONDS = 1;
-/** The coil: a ring of this radius round where the ship was, run for this long, open over this arc where the head was. */
+/** The coil: a ring of this radius round the windup's aim (`coilAim`), run this long, open over this arc where the head was. */
 export const COIL_RADIUS = 220;
 export const COIL_SECONDS = 2;
 export const COIL_OPENING = Math.PI / 3;
 /** The head's radius: how far either side of the ring the coil reaches. */
 const HEAD_RADIUS = BOSSES.leviathan.radius;
+/** The least room a ship that holds still where it was keeps inside the ring, clear of the head. */
+const COIL_CLEARANCE = 40;
+/**
+ * How far in from where the ship was a coil's centre moves at most, to bring its ring onto the field: as far as still
+ * leaves a ship that holds still `COIL_CLEARANCE` inside the ring, clear of the head.
+ */
+export const COIL_NUDGE = COIL_RADIUS - HEAD_RADIUS - PLAYER.radius - COIL_CLEARANCE;
 /** Seconds the head takes to reach the ring, and how far past it the head swims out through the opening. */
 const COIL_ENTRY_SECONDS = 0.5;
 const COIL_EXIT = 80;
@@ -56,6 +64,20 @@ export function swimPoint(field: Field, phase: number, out: Point): Point {
   out.x = field.width / 2 + (field.width / 2 - SWIM_MARGIN) * Math.sin(SWIM_X_TURNS * phase);
   out.y = field.height / 2 - (field.height / 2 - SWIM_MARGIN) * Math.cos(SWIM_Y_TURNS * phase);
   return out;
+}
+
+/**
+ * Writes into `out` the centre of a coil round a ship at `ship` in `field`, its aim: where the ship was, moved toward the
+ * spot where the whole ring and the head fit inside the field, but no further than `COIL_NUDGE`. A ring round a ship
+ * near an edge or a corner so stays mostly on the field, and the ship inside it.
+ */
+export function coilAim(ship: Readonly<Point>, field: Field, out: Point): void {
+  const fit = COIL_RADIUS + HEAD_RADIUS;
+  const dx = (field.width < 2 * fit ? field.width / 2 : clamp(ship.x, fit, field.width - fit)) - ship.x;
+  const dy = (field.height < 2 * fit ? field.height / 2 : clamp(ship.y, fit, field.height - fit)) - ship.y;
+  const share = Math.min(1, COIL_NUDGE / Math.hypot(dx, dy));
+  out.x = ship.x + dx * share;
+  out.y = ship.y + dy * share;
 }
 
 /** The phase of the swim path's point nearest (x, y), of `REJOIN_SAMPLES` round a lap; the first of equals. */
@@ -90,8 +112,9 @@ const spot: Point = { x: 0, y: 0 };
  *
  * The head owns its pose: it swims a Lissajous path inside the field, holds still through every windup, and dives,
  * spits and coils. It never wraps: it moves in plain field coordinates and is never carried across an edge, and its
- * segments lie on its own trail, so none ever jumps. A coil round a ship near an edge can carry it past that edge, and
- * it eases back the way it went; everything else keeps it inside the field.
+ * segments lie on its own trail, so none ever jumps. A coil's ring is moved in toward the field (`coilAim`), but round a
+ * ship near a corner it can still carry the head past an edge, and it eases back the way it went; everything else keeps
+ * it inside the field.
  */
 class Leviathan implements BossBehaviour {
   readonly driftSpeed = 0;
@@ -112,9 +135,7 @@ class Leviathan implements BossBehaviour {
   /** Whether an attack that moves the head ran last step. */
   private striking = false;
   private lastWindup: AttackId | null = null;
-  /** The coil under way: its centre, the bearing from it its opening faces, and which way round the head goes. */
-  private coilX = 0;
-  private coilY = 0;
+  /** The coil under way, round the view's aim: the bearing from it its opening faces, and which way round the head goes. */
   private coilOpening = 0;
   private coilTurn = 1;
 
@@ -122,9 +143,9 @@ class Leviathan implements BossBehaviour {
     this.field = setup.field;
     this.parts = Array.from({ length: SEGMENT_COUNT }, () => ({ x: 0, y: 0, px: 0, py: 0, radius: SEGMENT_RADIUS, hp: SEGMENT_HP, maxHp: SEGMENT_HP }));
     this.attacks = {
-      dive: dashAttack(WINDUPS.dive, DIVE_SECONDS),
+      dive: dashAttack(WINDUPS.dive, DIVE_SECONDS, HEAD_RADIUS),
       spit: { windup: WINDUPS.spit, active: 0, run: (ctx) => { this.spit(ctx); } },
-      coil: { windup: WINDUPS.coil, active: COIL_SECONDS, run: (ctx) => { this.coil(ctx); }, threat: { kind: 'ring', radius: COIL_RADIUS, reach: HEAD_RADIUS, around: 'aim' } },
+      coil: { windup: WINDUPS.coil, active: COIL_SECONDS, aim: coilAim, run: (ctx) => { this.coil(ctx); }, threat: { kind: 'ring', radius: COIL_RADIUS, reach: HEAD_RADIUS, around: 'aim' } },
     };
     this.arrive(setup.field);
     const front = this.parts[SEGMENT_COUNT - 1] as BossPart;
@@ -207,7 +228,7 @@ class Leviathan implements BossBehaviour {
       return;
     }
     if (boss.windup !== null) {
-      if (fresh && boss.windup === 'coil') this.aimCoil(ctx);
+      if (fresh && boss.windup === 'coil') this.openCoil(boss);
       return;
     }
     this.swim(ctx.dt);
@@ -218,7 +239,7 @@ class Leviathan implements BossBehaviour {
     const { boss, dt } = ctx;
     if (boss.windup === 'dive') {
       const limit = AIM_TURN_RATE * dt;
-      boss.facing += clamp(turnBetween(boss.facing, Math.atan2(ctx.aimY - this.headY, ctx.aimX - this.headX)), -limit, limit);
+      boss.facing += clamp(turnBetween(boss.facing, Math.atan2(boss.aim.y - this.headY, boss.aim.x - this.headX)), -limit, limit);
       return;
     }
     const dx = this.headX - boss.px;
@@ -250,13 +271,10 @@ class Leviathan implements BossBehaviour {
     this.phase = nearestPhase(this.field, this.headX, this.headY, spot);
   }
 
-  /** Notes the coil's ring, round where the ship is as the windup begins, opening where the head is, turning the way it swam. */
-  private aimCoil(ctx: AttackContext): void {
-    const { boss } = ctx;
-    this.coilX = ctx.aimX;
-    this.coilY = ctx.aimY;
-    const rx = this.headX - this.coilX;
-    const ry = this.headY - this.coilY;
+  /** Notes the coil's opening, where the head is as the windup begins, and that it turns round the ring the way the head swam. */
+  private openCoil(boss: Readonly<BossView>): void {
+    const rx = this.headX - boss.aim.x;
+    const ry = this.headY - boss.aim.y;
     this.coilOpening = Math.atan2(ry, rx);
     this.coilTurn = rx * Math.sin(boss.facing) - ry * Math.cos(boss.facing) >= 0 ? 1 : -1;
   }
@@ -273,8 +291,8 @@ class Leviathan implements BossBehaviour {
     const angle = this.coilOpening + this.coilTurn * sweep;
     const radius = COIL_RADIUS + COIL_EXIT * smoothstep(Math.max(0, sweep - (TAU - half)) / half);
     const enter = Math.min(1, elapsed / COIL_ENTRY_SECONDS);
-    boss.x = ctx.fromX + (this.coilX + Math.cos(angle) * radius - ctx.fromX) * enter;
-    boss.y = ctx.fromY + (this.coilY + Math.sin(angle) * radius - ctx.fromY) * enter;
+    boss.x = ctx.fromX + (boss.aim.x + Math.cos(angle) * radius - ctx.fromX) * enter;
+    boss.y = ctx.fromY + (boss.aim.y + Math.sin(angle) * radius - ctx.fromY) * enter;
   }
 
   /** Fires a bolt from each live segment, square to the body there, to one side and then the other down its length. */
@@ -288,7 +306,10 @@ class Leviathan implements BossBehaviour {
     }
   }
 
-  /** Follows a resize: its trail, its ease and its coil stretch with the field, and a swimming head eases onto the new path. */
+  /**
+   * Follows a resize: its trail and its ease stretch with the field, as the runner stretches the aim, and a swimming head
+   * eases onto the new path.
+   */
   private refit(boss: Readonly<BossView>, field: Field): void {
     const old = this.field;
     this.field = field;
@@ -297,8 +318,6 @@ class Leviathan implements BossBehaviour {
     this.headY = boss.y;
     this.easeX = rescale(this.easeX, old.width, field.width);
     this.easeY = rescale(this.easeY, old.height, field.height);
-    this.coilX = rescale(this.coilX, old.width, field.width);
-    this.coilY = rescale(this.coilY, old.height, field.height);
     if (!this.striking) this.rejoin();
   }
 }

@@ -34,7 +34,7 @@ describe('the boss roster', () => {
 describe('the shared attack library', () => {
   it('builds a pulse or a dash as a whole attack, its declared threat matching what it does', () => {
     expect(pulseAttack(0.5, 0.3, 260, 320)).toMatchObject({ windup: 0.5, active: 0.3, threat: { kind: 'shove', speed: 260, reach: 320 } });
-    expect(dashAttack(0.7, 1)).toMatchObject({ windup: 0.7, active: 1, threat: { kind: 'lane', reach: 'core' } });
+    expect(dashAttack(0.7, 1, 70)).toMatchObject({ windup: 0.7, active: 1, threat: { kind: 'lane', reach: 'core' } });
   });
 
   it("runs the Sentinel's lunge as the shared dash over its 0.8 s, and makes the Monolith's shards a ShardOrbit of its options", () => {

@@ -232,7 +232,6 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       windup = null;
       active = null;
       for (const drawer of allDrawers) drawer.reset?.();
-      aimLine.reset();
     },
   };
 }

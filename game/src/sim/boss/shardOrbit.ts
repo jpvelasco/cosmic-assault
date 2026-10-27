@@ -151,7 +151,7 @@ export class ShardOrbit {
   private pickVolley(ctx: AttackContext): void {
     const { boss } = ctx;
     const { parts, thrown } = this;
-    const aim = Math.atan2(ctx.aimY - boss.y, ctx.aimX - boss.x);
+    const aim = Math.atan2(ctx.boss.aim.y - boss.y, ctx.boss.aim.x - boss.x);
     thrown.length = 0;
     for (let n = 0; n < this.shape.shards; n++) {
       let best = -1;
@@ -169,14 +169,14 @@ export class ShardOrbit {
 
   /** Moves a shard in flight from its orbit out to its lane's turning point and back, easing at both ends. */
   private fly(ctx: AttackContext, lane: number, part: BossPart): void {
-    const dx = ctx.aimX - ctx.fromX;
-    const dy = ctx.aimY - ctx.fromY;
+    const dx = ctx.boss.aim.x - ctx.fromX;
+    const dy = ctx.boss.aim.y - ctx.fromY;
     const length = Math.hypot(dx, dy);
     const ux = length > 0 ? dx / length : 0;
     const uy = length > 0 ? dy / length : 1;
     const { overshoot, spread } = this.shape;
-    const tx = ctx.aimX + ux * overshoot - uy * lane * spread;
-    const ty = ctx.aimY + uy * overshoot + ux * lane * spread;
+    const tx = ctx.boss.aim.x + ux * overshoot - uy * lane * spread;
+    const ty = ctx.boss.aim.y + uy * overshoot + ux * lane * spread;
     // Out to the turning point over the first half, then back to its orbit, wherever that has turned to.
     const s = outAndBack(this.progress);
     part.x += (tx - part.x) * s;

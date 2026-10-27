@@ -7,6 +7,8 @@ import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour
 import { bossClearance, bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import {
+  coilAim,
+  COIL_NUDGE,
   COIL_OPENING,
   COIL_RADIUS,
   COIL_SECONDS,
@@ -423,27 +425,58 @@ describe('Leviathan attacks', () => {
 });
 
 describe('a Leviathan coil near the field\'s edge', () => {
-  it.each([
-    ['the top edge', { x: 640, y: 60 }],
-    ['a top corner', { x: 1220, y: 60 }],
-    ['a bottom corner', { x: 60, y: 660 }],
-  ] as const)('rings a ship at %s round where it was, past the edge but never across it, never touching it if it holds still', (_name, ship) => {
+  /**
+   * Where a ship parks, 60 in from each corner and from the middle of each edge, and the least share of the coil's steps
+   * the head spends on the field there. At an edge the nudge brings nearly the whole ring on; at a corner the ring
+   * overhangs two edges by 64 however it is nudged without passing over a still ship, so about half of it shows.
+   */
+  const PARKED = [
+    ['the top-left corner', { x: 60, y: 60 }, 0.4],
+    ['the top-right corner', { x: 1220, y: 60 }, 0.4],
+    ['the bottom-left corner', { x: 60, y: 660 }, 0.4],
+    ['the bottom-right corner', { x: 1220, y: 660 }, 0.4],
+    ['the top edge', { x: 640, y: 60 }, 0.8],
+    ['the bottom edge', { x: 640, y: 660 }, 0.8],
+    ['the left edge', { x: 60, y: 360 }, 0.8],
+    ['the right edge', { x: 1220, y: 360 }, 0.8],
+  ] as const;
+
+  /** The coil round a ship parked at `ship`: the share of its steps with the head on the field, and the head's nearest pass to the ship once on the ring. */
+  function coilRound(ship: { readonly x: number; readonly y: number }): { onField: number; nearest: number; centre: { x: number; y: number } } {
     const rigged = fighting(1, ship);
     for (let i = 0; i < 5; i++) breakTail(rigged.r);
     untilWindup(rigged, 'coil', 60);
+    const centre = { ...rigged.r.view.aim };
     untilActive(rigged);
+    let steps = 0;
+    let on = 0;
     let nearest = Infinity;
-    let beyond = 0;
     runFor(stepper(rigged), rigged.arena, COIL_SECONDS, () => {
       const { view } = rigged.r;
-      if (Math.abs(distance(view, ship) - COIL_RADIUS) < SLACK) nearest = Math.min(nearest, distance(view, ship));
-      for (const body of [view, ...view.parts]) {
-        expect(distance(body, { x: body.px, y: body.py }), 'a step').toBeLessThan(SEGMENT_GAP);
-        if (body.y < 0 || body.x < 0 || body.x > BOSS_FIELD.width || body.y > BOSS_FIELD.height) beyond++;
-      }
+      for (const body of [view, ...view.parts]) expect(distance(body, { x: body.px, y: body.py }), 'a step').toBeLessThan(SEGMENT_GAP);
+      steps++;
+      if (view.x >= 0 && view.y >= 0 && view.x <= BOSS_FIELD.width && view.y <= BOSS_FIELD.height) on++;
+      if (Math.abs(distance(view, centre) - COIL_RADIUS) < SLACK) nearest = Math.min(nearest, distance(view, ship));
     });
-    expect(nearest).toBeCloseTo(COIL_RADIUS, 6);
-    expect(beyond).toBeGreaterThan(0);
+    return { onField: on / steps, nearest, centre };
+  }
+
+  it.each(PARKED)('rings a ship parked at %s from a centre moved in toward the field, a still ship never touched', (_name, ship, floor) => {
+    const { onField, nearest, centre } = coilRound(ship);
+    expect(distance(centre, ship)).toBeGreaterThan(0);
+    expect(distance(centre, ship)).toBeLessThanOrEqual(COIL_NUDGE + SLACK);
+    expect(onField).toBeGreaterThanOrEqual(floor);
+    expect(nearest).toBeGreaterThanOrEqual(DEF.radius + PLAYER.radius + 40 - SLACK);
+  });
+
+  it('centres the ring where the ship was when the whole ring fits on the field, and moves it no more than the nudge', () => {
+    const at = { x: 0, y: 0 };
+    coilAim({ x: 640, y: 360 }, BOSS_FIELD, at);
+    expect(at).toEqual({ x: 640, y: 360 });
+    coilAim({ x: 640, y: 60 }, BOSS_FIELD, at);
+    expect(at).toEqual({ x: 640, y: 60 + COIL_NUDGE });
+    coilAim({ x: 0, y: 0 }, BOSS_FIELD, at);
+    expect(Math.hypot(at.x, at.y)).toBeCloseTo(COIL_NUDGE, 9);
   });
 });
 

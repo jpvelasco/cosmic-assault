@@ -59,10 +59,10 @@ export interface Staged {
 
 /**
  * Puts a boss in the fight into `view`, standing still: its weak point at its core unless `target` says otherwise, and
- * winding up `windup`, with the threat its roster boss declares, if given.
+ * winding up `windup`, with the threat its roster boss declares, if given, aimed where the ship is.
  */
 export function stage(view: BotView, { id = 'monolith', at = { x: 640, y: 130 }, radius = 90, target = at, windup = null, threat: shown }: Staged): BotView {
   const threat = shown ?? (windup === null ? null : threatOf(windup, radius));
-  view.boss = bossView({ id, ...at, radius, hp: 60, maxHp: 60, phase: 3, windup, vulnerable: target !== null, target, threat });
+  view.boss = bossView({ id, ...at, radius, hp: 60, maxHp: 60, phase: 3, windup, vulnerable: target !== null, target, threat, aim: { x: view.ship.x, y: view.ship.y } });
   return view;
 }

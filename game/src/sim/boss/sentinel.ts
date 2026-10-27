@@ -1,3 +1,4 @@
+import { BOSSES } from '../../content/bosses';
 import type { AsteroidSize } from '../asteroid';
 import { dashAttack, rockRing } from './attacks';
 import type { AttackContext, BossBehaviour, BossPhase } from './behaviour';
@@ -20,6 +21,6 @@ export const SENTINEL = {
   driftSpeed: 20,
   attacks: {
     shardRing: { windup: 0.6, active: 0, run: shardRing },
-    lunge: dashAttack(0.5, LUNGE_SECONDS),
+    lunge: dashAttack(0.5, LUNGE_SECONDS, BOSSES.sentinel.radius),
   },
 } as const satisfies BossBehaviour;

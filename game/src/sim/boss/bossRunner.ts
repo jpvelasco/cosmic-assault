@@ -119,8 +119,6 @@ export class BossRunner {
     view.aim.x = rescale(view.aim.x, old.width, field.width);
     view.aim.y = rescale(view.aim.y, old.height, field.height);
     if (context === null) return;
-    context.aimX = view.aim.x;
-    context.aimY = view.aim.y;
     context.fromX = rescale(context.fromX, old.width, field.width);
     context.fromY = rescale(context.fromY, old.height, field.height);
   }
@@ -323,7 +321,7 @@ export class BossRunner {
     }
   }
 
-  /** Picks the phase's next attack and starts telegraphing it, noting where the ship is. */
+  /** Picks the phase's next attack and starts telegraphing it, noting where it aims. */
   private beginWindup(arena: Arena): void {
     const view = this.view;
     const list = this.def.phases[view.phase - 1] ?? [];
@@ -335,10 +333,19 @@ export class BossRunner {
     this.clock = 0;
     view.windup = attack;
     view.threat = this.threats.get(attack) ?? null;
-    const ctx = this.contextFor(arena);
-    ctx.aimX = view.aim.x = arena.ship.x;
-    ctx.aimY = view.aim.y = arena.ship.y;
+    this.aimAt(this.spec(attack), arena);
     arena.events.push({ type: 'bossWindup', attack, x: view.x, y: view.y });
+  }
+
+  /** Sets the view's aim for `spec`'s windup: where the ship is, or where the attack's own `aim` puts it. */
+  private aimAt(spec: AttackSpec, arena: Arena): void {
+    const { aim } = this.view;
+    if (spec.aim !== undefined) {
+      spec.aim(arena.ship, arena.field(), aim);
+      return;
+    }
+    aim.x = arena.ship.x;
+    aim.y = arena.ship.y;
   }
 
   private beginActive(arena: Arena): void {
@@ -362,7 +369,7 @@ export class BossRunner {
   }
 
   private contextFor(arena: Arena): AttackContext {
-    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, bolts: this.setup.bolts ?? null, boss: this.view, dt: 0, age: 0, aimX: 0, aimY: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
+    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, bolts: this.setup.bolts ?? null, boss: this.view, dt: 0, age: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
     this.context.arena = arena;
     return this.context;
   }
