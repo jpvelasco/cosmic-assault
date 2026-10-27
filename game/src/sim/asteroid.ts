@@ -29,6 +29,11 @@ export interface Asteroid {
   vertices: readonly { readonly x: number; readonly y: number }[];
   /** A pass-through rock (a meteor or a boss's shard): it never wraps, and leaves once past the field. Set when it is made and inherited by its fragments; absent on every other rock. */
   transient?: true;
+  /**
+   * Made by a boss's telegraphed attack (a quake's ring, a broadside, a shard ring), so a bot can tell it from rocks
+   * that came unannounced. Set where the attack makes it, and never inherited: its fragments come unannounced.
+   */
+  fromAttack?: true;
 }
 
 export interface PracticeSettings {

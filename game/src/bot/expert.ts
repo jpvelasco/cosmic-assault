@@ -3,7 +3,7 @@ import type { AttackId } from '../content/types';
 import type { BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
 import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
-import { ASTEROID, PLAYER, STEP_SECONDS, STICK } from '../sim/config';
+import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import { wellAcceleration } from '../sim/hazards/gravityWell';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
@@ -37,8 +37,11 @@ const SPLITTER_SAFE = 200;
 const HOLD_FIRE_ARC = 0.35;
 /** A boss's core sends its attacks out from close by, so the pilot keeps this much farther from it too. */
 const CORE_MARGIN = 40;
-/** A boss's own rocks fly straight and never wrap, so the pilot lets them pass this much closer than the field's. */
-const BOSS_ROCK_SLACK = 35;
+/**
+ * A boss's own rocks fly straight and never wrap, so the pilot lets them pass this much nearer than the field's before
+ * it counts them as touching: the gaps in a broadside's line and a quake's ring are usable.
+ */
+const BOSS_ROCK_ALLOWANCE = 35;
 /** It goes for a pickup this near that will not expire on the way. */
 const PICKUP_REACH = 450;
 const PICKUP_MIN_SECONDS = 1;
@@ -66,15 +69,9 @@ const STATION_INSET = 60;
 /** How near the lead its nose must be for it to fire at a boss. */
 const BOSS_FIRE_ARC = 0.2;
 
-/**
- * A rock appearing within this far of a fighting boss's rim as one of its attacks runs is that attack's: a quake's
- * ring, a broadside's line or a shard ring form at the rim. A shot rock's fragments form where the shot struck.
- */
-const ATTACK_ROCK_REACH = ASTEROID.radii[0];
-
-/** Whether `id` is still on the field among `things`. */
-function onField(things: readonly Readonly<{ id: number }>[], id: number): boolean {
-  for (const thing of things) if (thing.id === id) return true;
+/** Whether `id` is still on the field among `things`: there, and not spent if it has hit points. */
+function onField(things: readonly Readonly<{ id: number; hp?: number }>[], id: number): boolean {
+  for (const thing of things) if (thing.id === id) return thing.hp === undefined || thing.hp > 0;
   return false;
 }
 
@@ -314,7 +311,7 @@ export class Pilot {
 
   /**
    * Forgets the attacks' rocks and drones that have left the field, and notes the new ones the attack under way sends
-   * out, with its roll: a launch's drones, and the rocks that form at the boss's rim.
+   * out, with its roll: a launch's drones, and the rocks the sim marks as an attack's (never their fragments).
    */
   private trackSpawns(view: Readonly<BotView>): void {
     const { spawnIds, spawnDodging } = this;
@@ -332,12 +329,10 @@ export class Pilot {
       mark = Math.max(mark, foe.id);
       if (this.strike === 'launch' && foe.kind === 'drone') this.noteSpawn(foe.id);
     }
-    const boss = view.boss;
     for (const rock of view.asteroids) {
       if (rock.id <= this.idMark) continue;
       mark = Math.max(mark, rock.id);
-      if (this.strike === null || boss === null || rock.transient !== true) continue;
-      if (Math.hypot(rock.x - boss.x, rock.y - boss.y) <= boss.radius + ATTACK_ROCK_REACH) this.noteSpawn(rock.id);
+      if (rock.fromAttack === true) this.noteSpawn(rock.id);
     }
     this.idMark = mark;
   }
@@ -347,7 +342,7 @@ export class Pilot {
     this.spawnDodging.push(this.dodgingStrike);
   }
 
-  /** The roll of the attack that sent out rock or drone `id`, or null for one no attack made. */
+  /** The roll of the attack that sent out rock or drone `id`, or null for one no attack made. Public so tests can read what a fight tagged. */
   attackRoll(id: number): boolean | null {
     const at = this.spawnIds.indexOf(id);
     return at < 0 ? null : (this.spawnDodging[at] ?? null);
@@ -359,8 +354,8 @@ export class Pilot {
     const { ship, boss } = view;
     this.harmlessFor = ship.invulnerable ? ship.invulnerableFor : 0;
     for (const rock of view.asteroids) {
-      const slack = boss !== null && rock.transient === true ? BOSS_ROCK_SLACK : 0;
-      this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius - slack, false, this.attackRoll(rock.id));
+      const allowance = boss !== null && rock.transient === true ? BOSS_ROCK_ALLOWANCE : 0;
+      this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false, this.attackRoll(rock.id), allowance);
     }
     for (const foe of view.foes) {
       if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.attackRoll(foe.id));
@@ -393,18 +388,20 @@ export class Pilot {
   }
 
   /** Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. */
-  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null): void {
+  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null, allowance = 0): void {
     const { ship, field } = view;
     const dx = wrapDelta(x - ship.x, field.width);
     const dy = wrapDelta(y - ship.y, field.height);
     const closing = (Math.hypot(vx, vy) + PLAYER.maxSpeed) * LOOK_AHEAD_SECONDS;
-    if (Math.hypot(dx, dy) - radius - PLAYER.radius > closing + CLEAR_ENOUGH) return;
+    // The allowance comes off the distance at which it counts as touching the ship.
+    const touching = radius - allowance;
+    if (Math.hypot(dx, dy) - touching - PLAYER.radius > closing + CLEAR_ENOUGH) return;
     const i = this.count++;
     this.tx[i] = dx;
     this.ty[i] = dy;
     this.tvx[i] = vx;
     this.tvy[i] = vy;
-    this.reach[i] = radius + PLAYER.radius;
+    this.reach[i] = touching + PLAYER.radius;
     this.solid[i] = solid;
     this.rolled[i] = rolled;
   }

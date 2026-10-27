@@ -15,6 +15,10 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import { turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
+import type { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
+import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
+import type { Ship } from '../../src/sim/ship';
+import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock } from '../helpers/botScene';
 import { MUTED_KINDS } from '../helpers/mute';
 
@@ -28,12 +32,13 @@ function windUp(view: BotView, windup: BossView['windup']): void {
   view.boss = { ...(view.boss as BossView), windup };
 }
 
-/** A tiny pass-through rock `id` at (x, y), flying at 250 units/s along `angle`. */
-function flyingRock(id: number, x: number, y: number, angle: number): Asteroid {
+/** A tiny pass-through rock `id` at (x, y), flying at 250 units/s along `angle`; `fromAttack` marks it a boss attack's. */
+function flyingRock(id: number, x: number, y: number, angle: number, fromAttack = false): Asteroid {
   const rock = createAsteroid(createRng(id), x, y, 3, angle, 1, createRng(1), id);
   rock.vx = Math.cos(angle) * 250;
   rock.vy = Math.sin(angle) * 250;
   rock.transient = true;
+  if (fromAttack) rock.fromAttack = true;
   return rock;
 }
 
@@ -174,7 +179,7 @@ describe("the casual bot's handicaps", () => {
     // The quake has run: its ring forms at the rim, and the boss rests. One of its rocks flies straight at the ship.
     const rate = dodgeRate(17, 'quake', (view, id) => {
       windUp(view, null);
-      view.asteroids = [flyingRock(id, SMALL_BOSS.at.x, SMALL_BOSS.at.y + SMALL_BOSS.radius + 15, Math.PI / 2)];
+      view.asteroids = [flyingRock(id, SMALL_BOSS.at.x, SMALL_BOSS.at.y + SMALL_BOSS.radius + 15, Math.PI / 2, true)];
     });
     expect(Math.abs(rate - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
   });
@@ -187,31 +192,56 @@ describe("the casual bot's handicaps", () => {
     expect(Math.abs(rate - DODGE_CHANCE)).toBeLessThan(0.05);
   });
 
-  it('tags every drone and rock a real Hive Carrier sends out with its attack\'s roll, as the fight runs', () => {
-    // A calm 2-★ spawns nothing of its own, and an idle ship shoots nothing: what appears on the step an attack runs is the carrier's.
+  it('tags every drone and rock a real Hive Carrier sends out with its attack\'s roll, through all three phases, and no fragment', () => {
+    // A calm 2-★ spawns nothing of its own and an idle ship shoots nothing: its drones are all the carrier's. Blows
+    // through the open hangar take it to phase 2 after 10 s of fight and to phase 3 after 20 s. The ship is kept
+    // unhurt, and a shot breaks the first rock of each broadside, so its fragments come too.
     const galaxy = { ...galaxyById('2-6'), kinds: MUTED_KINDS, events: [] };
     const world = new World({ seed: 2, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'rank' }, startLives: 5 });
+    const run = (world as unknown as { run: GalaxyRun }).run;
     const pilot = createCasualPilot(createRng(3));
     const intent = idleIntent();
     const view = createView(world);
     const known = new Set<number>();
-    const sent = { drone: 0, rock: 0 };
-    for (let step = 0; step * STEP_SECONDS < 50 && world.status === 'playing'; step++) {
-      const attacking = world.boss !== null && (world.boss.windup !== null || world.boss.active !== null);
+    /** The most attack rocks seen forming on one step, by phase: a whole broadside line. */
+    const widest = new Map<number, number>();
+    let fragments = 0;
+    const fight = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS;
+    for (let step = 0; step * STEP_SECONDS < fight + 45 && world.status === 'playing'; step++) {
+      const boss = world.boss;
+      if (boss?.vulnerable === true && world.elapsed > fight + 10) {
+        const floor = world.elapsed > fight + 20 ? boss.maxHp / 3 - 1 : (2 * boss.maxHp) / 3 - 1;
+        const target = boss.target;
+        if (target !== null && boss.hp > Math.max(2, floor)) run.hitBoss(target.x, target.y, 1);
+      }
+      Object.assign(world.ship as Ship, { invulnerable: true, invulnerableFor: 1 });
       world.step(STEP_SECONDS, NO_CONTROLS);
       pilot.plan(readView(world, view), intent);
-      for (const [kind, things] of [['drone', view.foes], ['rock', view.asteroids]] as const) {
-        for (const { id } of things) {
-          if (known.has(id)) continue;
-          known.add(id);
-          if (!attacking) continue;
-          expect(pilot.attackRoll(id), `${kind} ${String(id)}`).not.toBeNull();
-          sent[kind]++;
+      let formed = 0;
+      for (const foe of view.foes) {
+        if (known.has(foe.id)) continue;
+        known.add(foe.id);
+        expect(pilot.attackRoll(foe.id), `drone ${String(foe.id)}`).not.toBeNull();
+      }
+      for (const rock of view.asteroids) {
+        if (known.has(rock.id)) continue;
+        known.add(rock.id);
+        if (rock.fromAttack === true) {
+          expect(pilot.attackRoll(rock.id), `rock ${String(rock.id)}`).not.toBeNull();
+          if (formed++ === 0) (world.projectiles as Projectile[]).push(projectileFromShot({ x: rock.x, y: rock.y, vx: 0, vy: 0 }, 9000 + rock.id));
+        } else {
+          expect(pilot.attackRoll(rock.id), `fragment ${String(rock.id)}`).toBeNull();
+          fragments++;
         }
       }
+      const phase = world.boss?.phase ?? 1;
+      widest.set(phase, Math.max(widest.get(phase) ?? 0, formed));
     }
-    expect(sent.drone).toBeGreaterThan(0);
-    expect(sent.rock).toBeGreaterThan(0);
+    expect(world.boss?.phase).toBe(3);
+    // Phase 2's broadside is 4 rocks wide and phase 3's 5: the outer ones form farthest from the hull.
+    expect(widest.get(2)).toBeGreaterThanOrEqual(4);
+    expect(widest.get(3)).toBeGreaterThanOrEqual(5);
+    expect(fragments).toBeGreaterThan(0);
   });
 
   it('the expert dodges every such episode, so the casual\'s misses are its handicap', () => {

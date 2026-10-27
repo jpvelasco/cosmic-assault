@@ -159,8 +159,8 @@ class HiveCarrier implements BossBehaviour {
 /**
  * Writes into `out` where launch slot `slot` of a `count`-drone wave is, and returns the heading its drone leaves on.
  * The first `count` slots fan out across the hangar mouth; the rest line the hull's long axis out from its wingtips,
- * alternating sides, and send their drones straight ahead. `launch` gives each side at least `count` of them, so either
- * side alone has room for a whole wave.
+ * alternating sides, and send their drones straight ahead. `launch` gives each side `max(count, END_SLOTS_A_SIDE)`, so either
+ * side alone has room for a whole wave, and a ship tucked at a corner cannot leave a small wave short.
  */
 export function launchSlot(boss: Readonly<BossView>, slot: number, count: number, out: Point): number {
   const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;

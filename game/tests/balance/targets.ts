@@ -38,9 +38,10 @@ const EXPERT_THREE_STAR_SHARE = 0.7;
 /** Five galaxies of bot runs, the previous galaxy's included, take more than a minute on a loaded host. */
 const GALAXY_TIMEOUT_MS = 600_000;
 
-const ROWS_DIR = new URL('../../test-results/balance/', import.meta.url);
+/** Under node_modules/.cache, which Git ignores and Playwright, which empties test-results/ on every run, leaves alone. */
+const ROWS_DIR = new URL('../../node_modules/.cache/balance/', import.meta.url);
 /** The rows of the run before, kept to name the seeds that flipped since. */
-const PREVIOUS_DIR = new URL('../../test-results/balance-previous/', import.meta.url);
+const PREVIOUS_DIR = new URL('../../node_modules/.cache/balance-previous/', import.meta.url);
 
 /** What the bots did in one galaxy, as the table prints it. */
 export interface Row {

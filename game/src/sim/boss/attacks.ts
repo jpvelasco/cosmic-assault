@@ -4,13 +4,14 @@ import { TAU } from '../math';
 import type { AttackContext } from './behaviour';
 
 /**
- * Sends a pass-through rock of `size` from (x, y) along `angle`, at `speed` times the galaxy's rock speed. Its shape
- * comes from the arena's shape stream, everything else from the boss's.
+ * Sends a pass-through rock of `size` from (x, y) along `angle`, at `speed` times the galaxy's rock speed, marked as
+ * the attack's. Its shape comes from the arena's shape stream, everything else from the boss's.
  */
 export function transientRock(ctx: AttackContext, x: number, y: number, size: AsteroidSize, angle: number, speed: number): void {
   const { arena } = ctx;
   const rock = createAsteroid(ctx.rng, x, y, size, angle, ctx.rockSpeed * speed, arena.shapeRng, arena.nextId());
   rock.transient = true;
+  rock.fromAttack = true;
   arena.asteroids.push(rock);
 }
 
