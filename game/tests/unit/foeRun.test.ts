@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FOES } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import type { FoeKind, GalaxyDef, GalaxyId } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -152,7 +153,7 @@ describe('foes and the threat budget', () => {
       const spawned = ofType(step(w), 'foeSpawned').length;
       if (spawned === 0 || w.deaths > 0) continue;
       groups++;
-      const cost = w.foes.reduce((sum, f) => sum + (f.kind === 'drone' ? 1.5 : 3), 0);
+      const cost = w.foes.reduce((sum, f) => sum + FOES[f.kind].cost, 0);
       expect(cost).toBeLessThanOrEqual(fieldBudget(galaxy, w.elapsed, 1, FIELD.width * FIELD.height) + 1e-9);
     }
     expect(groups).toBeGreaterThan(0);

@@ -356,7 +356,7 @@ describe('a World with the Monolith', () => {
     const run = (world as unknown as { run: GalaxyRun }).run;
     const part = boss?.parts[0];
     if (boss?.state !== 'fighting' || part === undefined) throw new Error('the Monolith should be fighting 22.1 s in');
-    run.hitBoss(part.x, part.y, 1);
+    while (part.hp > 1) run.hitBoss(part.x, part.y, 1);
     expect(part.hp).toBe(1);
     const shots = world.projectiles as Projectile[];
     for (let i = 0; i < 2; i++) shots.push(projectileFromShot({ x: part.x, y: part.y, vx: 0, vy: 0 }, 9000 + i));

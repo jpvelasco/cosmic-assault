@@ -39,7 +39,7 @@ const ENTRIES = [
   // The Ion Reach spec: the idle ship lives to the well's warning, with a foe on the field, and on into the pull.
   { seed: 12, claim: 'ion-reach-hazards', galaxy: ION_REACH_GALAXY },
   // The perf spec measures frame time, not an outcome; this seed pins a busy field so every run spawns the same rocks.
-  { seed: 7, claim: 'busy-field', galaxy: PERF_GALAXY },
+  { seed: 3, claim: 'busy-field', galaxy: PERF_GALAXY },
 ] as const satisfies readonly { readonly seed: number; readonly claim: string; readonly galaxy: GalaxyId }[];
 
 /** A claim a seed in the table makes. */

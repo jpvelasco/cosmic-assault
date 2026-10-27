@@ -18,9 +18,9 @@ export function showerRate(intensity: Intensity, fieldArea: number): number {
   return ((2 + intensity) * fieldArea) / REFERENCE_AREA;
 }
 
-/** The most shower rocks on the field at once: 3 + 2 x intensity at the reference area, scaled by field area. */
+/** The most shower rocks on the field at once: 5 + 2 x intensity at the reference area, scaled by field area. */
 export function showerCap(intensity: Intensity, fieldArea: number): number {
-  return ((3 + 2 * intensity) * fieldArea) / REFERENCE_AREA;
+  return ((5 + 2 * intensity) * fieldArea) / REFERENCE_AREA;
 }
 
 export interface ShowerState {

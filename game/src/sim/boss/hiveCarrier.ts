@@ -8,11 +8,11 @@ import { transientRock } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure, Point } from './behaviour';
 
 /** Seconds the hangar stays open after each launch. */
-export const HANGAR_OPEN_SECONDS = 2.5;
+export const HANGAR_OPEN_SECONDS = 4;
 /** The most of its drones alive at once; a launch at the cap launches none, but still opens the hangar. */
-export const DRONE_CAP = 8;
+export const DRONE_CAP = 3;
 /** Drones a launch sends out, by phase. */
-export const LAUNCH_WAVES: Readonly<Record<BossPhase, number>> = { 1: 3, 2: 4, 3: 5 };
+export const LAUNCH_WAVES: Readonly<Record<BossPhase, number>> = { 1: 1, 2: 2, 3: 2 };
 /** How far either side of where it faces the hangar reaches round the hull, in radians: the weak point's half-width. */
 export const HANGAR_HALF_ARC = 0.5;
 /** How fast it turns its hangar toward the ship, radians per second. */
@@ -33,17 +33,17 @@ const LAUNCH_GAP = 6;
 const LAUNCH_SPACING = 36;
 const LAUNCH_FAN = 0.3;
 /** Rocks in a broadside line, by phase, and how far apart along it. */
-const BROADSIDE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 5, 2: 6, 3: 7 };
+const BROADSIDE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 3, 2: 4, 3: 5 };
 const BROADSIDE_SPACING = 90;
 const BROADSIDE_SIZE: AsteroidSize = 2;
-const BROADSIDE_SPEED = 1.1;
+const BROADSIDE_SPEED = 0.8;
 /** No broadside rock forms nearer the ship than this. */
 const BROADSIDE_CLEARANCE = 70;
 /** Where a shot is aimed into the open hangar, as a share of the hull radius out from the centre. */
 const TARGET_DEPTH = 0.85;
 
 /** The Hive Carrier's windups, in seconds. */
-const WINDUPS = { launch: 0.7, broadside: 0.6, retreat: 0.5 } as const;
+const WINDUPS = { launch: 0.7, broadside: 1.0, retreat: 1.0 } as const;
 export type HiveCarrierAttack = keyof typeof WINDUPS;
 
 const HANGAR: Exposure = { opened: 'hangarOpen', closed: 'hangarClose' };

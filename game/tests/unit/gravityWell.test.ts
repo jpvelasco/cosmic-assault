@@ -51,11 +51,11 @@ function trace(w: Wells, seconds: number): Beat[] {
 }
 
 describe('wellAcceleration', () => {
-  it('is k / max(r, 60)^2, k being 1,000,000 times the intensity', () => {
-    expect(WELL_STRENGTH).toBe(1_000_000);
-    expect(wellAcceleration(300, 1)).toBeCloseTo(1_000_000 / 300 ** 2, 10);
-    expect(wellAcceleration(200, 2)).toBeCloseTo(50, 10);
-    expect(wellAcceleration(400, 3)).toBeCloseTo(18.75, 10);
+  it('is k / max(r, 60)^2, k being 800,000 times the intensity', () => {
+    expect(WELL_STRENGTH).toBe(800_000);
+    expect(wellAcceleration(300, 1)).toBeCloseTo(800_000 / 300 ** 2, 10);
+    expect(wellAcceleration(200, 2)).toBeCloseTo(40, 10);
+    expect(wellAcceleration(400, 3)).toBeCloseTo(15, 10);
   });
 
   it('falls with the square of the distance while under the cap', () => {
@@ -78,8 +78,8 @@ describe('wellAcceleration', () => {
     expect(wellAcceleration(61, 1)).toBeLessThanOrEqual(wellAcceleration(60, 1));
   });
 
-  it('holds the cap out to sqrt(k / 140) from the centre: about 85, 120 and 146 units at intensity 1, 2 and 3', () => {
-    for (const [intensity, reach] of [[1, 84.5], [2, 119.5], [3, 146.4]] as const) {
+  it('holds the cap out to sqrt(k / 140) from the centre: about 76, 107 and 131 units at intensity 1, 2 and 3', () => {
+    for (const [intensity, reach] of [[1, 75.6], [2, 106.9], [3, 130.9]] as const) {
       expect(wellAcceleration(reach - 1, intensity), String(intensity)).toBe(140);
       expect(wellAcceleration(reach + 1, intensity), String(intensity)).toBeLessThan(140);
     }

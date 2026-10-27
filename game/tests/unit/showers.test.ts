@@ -118,9 +118,9 @@ describe('shower density', () => {
     for (const t of rocks) expect(rocks.filter((u) => u >= t && u < t + 1 - 1e-6).length).toBeLessThanOrEqual(Math.ceil(showerRate(intensity, AREA)));
   });
 
-  it.each([1, 2, 3] as const)('holds at most (3 + 2 x intensity) rocks on the field at intensity %i, dropping the rest', (intensity) => {
+  it.each([1, 2, 3] as const)('holds at most (5 + 2 x intensity) rocks on the field at intensity %i, dropping the rest', (intensity) => {
     const events: GalaxyEvent[] = [{ at: 30, type: 'meteorShower', intensity }];
-    expect(showerCap(intensity, REFERENCE_AREA)).toBe(3 + 2 * intensity);
+    expect(showerCap(intensity, REFERENCE_AREA)).toBe(5 + 2 * intensity);
     // Rocks that never leave: the cap is all the shower can ever drop.
     expect(trace(events, 2, 50, AREA, 1000).rocks).toHaveLength(Math.floor(showerCap(intensity, AREA)));
     // Rocks that cross in 2 s: the field never holds more than the cap.

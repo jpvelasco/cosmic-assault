@@ -4,8 +4,8 @@ import type { GalaxyId } from '../../src/content/types';
 
 /** The seeds every clear-rate test plays. */
 export const BOT_SEEDS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-/** The seeds a boss's kill-rate test plays (§10.2). */
-export const BOSS_SEEDS: readonly number[] = Array.from({ length: 40 }, (_, i) => i + 1);
+/** The 40 seeds the balance suite plays each galaxy over. */
+export const BALANCE_SEEDS: readonly number[] = Array.from({ length: 40 }, (_, i) => i + 1);
 
 /** `profile` playing galaxy `id` once per seed in `seeds`. */
 export function botRuns(id: GalaxyId, profile: BotProfile, maxSeconds?: number, seeds: readonly number[] = BOT_SEEDS): RunResult[] {

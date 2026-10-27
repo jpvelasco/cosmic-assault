@@ -31,8 +31,9 @@ export type BossId = 'sentinel' | 'monolith' | 'hiveCarrier';
 export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat';
 
 /**
- * How likely a kind is to be picked: `base` up to tier `from`, then rising by `step` per tier past it, never above
- * `max`. `from` is not a grace period: a kind that must not appear before some tier needs a `base` of 0.
+ * How likely a kind is to be picked at tier `t`: `base` while `t` is at or below `from`, then `base + (t - from) * step`
+ * past it, never above `max`. `from` is not a grace period: a kind that must not appear before some tier needs a `base`
+ * of 0. The one place `from` keeps a kind out is a galaxy's opening, which offers only the kinds whose `from` is 0.
  */
 export interface KindRamp {
   readonly from: number;

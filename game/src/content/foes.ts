@@ -21,7 +21,7 @@ export interface FoeDef {
 export const FOES: Readonly<Record<FoeKind, FoeDef>> = {
   // A rock between the medium (80) and the small (110) in speed; it scores what a small rock does (100).
   splitter: { from: 1, radius: 30, hp: 2, cost: 3, points: 100, speed: 95, group: [1, 1], pulled: true },
-  drone: { from: 2, radius: 12, hp: 1, cost: 1.5, points: 100, speed: 120, group: [3, 5], pulled: false },
+  drone: { from: 2, radius: 12, hp: 1, cost: 1, points: 100, speed: 110, group: [3, 5], pulled: false },
 };
 
 /** Radians per second a drone can turn toward the ship. */

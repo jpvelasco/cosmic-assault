@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
+import { FOES } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import { bossTarget, BossRunner } from '../../src/sim/boss/bossRunner';
@@ -177,7 +178,7 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
     expect(foes.launch('drone', 300, 250, 0)).toBe(true);
     expect(foes.launched).toBe(1);
     expect(run.foeList).toHaveLength(1);
-    expect(run.foeList[0]).toMatchObject({ kind: 'drone', x: 300, y: 250, rotation: 0, vx: 120, vy: 0 });
+    expect(run.foeList[0]).toMatchObject({ kind: 'drone', x: 300, y: 250, rotation: 0, vx: FOES.drone.speed, vy: 0 });
     expect(arena.events).toEqual([expect.objectContaining({ type: 'foeSpawned', kind: 'drone', x: 300, y: 250 })]);
   });
 });
@@ -194,7 +195,7 @@ describe('FoeField launching a boss\'s foes', () => {
     const [drone] = foes.list;
     expect(drone).toMatchObject({ kind: 'drone', x: 400, y: 300, px: 400, py: 300, rotation: Math.PI / 2, hp: 1 });
     expect(drone?.vx).toBeCloseTo(0, 9);
-    expect(drone?.vy).toBeCloseTo(120, 9);
+    expect(drone?.vy).toBeCloseTo(FOES.drone.speed, 9);
     expect(foes.rng.next()).toBe(createRng(4).next());
   });
 

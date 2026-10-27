@@ -1,5 +1,9 @@
 import { expect, expectMode, fastForward, gameState, openGame, test } from './fixtures';
 import { ION_REACH_GALAXY, seedFor, WELL_PULL_SECONDS, WELL_WARNING_SECONDS } from './seeds';
+import { galaxyById } from '../src/content/galaxies';
+
+/** The pull of the galaxy's one well, as its content schedules it. */
+const WELL_INTENSITY = galaxyById(ION_REACH_GALAXY).events.find((e) => e.type === 'gravityWell')?.intensity;
 
 test.describe(`Ion Reach ${ION_REACH_GALAXY}`, () => {
   test('the bridge lists the foes on the field and the gravity well, first telegraphed and then pulling', async ({ page }) => {
@@ -12,7 +16,7 @@ test.describe(`Ion Reach ${ION_REACH_GALAXY}`, () => {
     const warning = await gameState(page);
     expect(warning.screen).toBe('playing');
     expect(warning.wells).toHaveLength(1);
-    expect(warning.wells[0]).toMatchObject({ stage: 'warning', intensity: 2 });
+    expect(warning.wells[0]).toMatchObject({ stage: 'warning', intensity: WELL_INTENSITY });
     expect(warning.wells[0]?.remaining).toBeGreaterThan(0);
     expect(warning.wells[0]?.remaining).toBeLessThanOrEqual(2);
     expect(warning.foes.length).toBeGreaterThan(0);

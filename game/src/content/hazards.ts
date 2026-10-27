@@ -3,7 +3,7 @@ export const WELL_TELEGRAPH_SECONDS = 2;
 /** Seconds a gravity well pulls for. */
 export const WELL_SECONDS = 14;
 /** The pull's strength `k` at intensity 1, in `a = k / max(r, WELL_MIN_RADIUS)²`; intensity multiplies it. */
-export const WELL_STRENGTH = 1_000_000;
+export const WELL_STRENGTH = 800_000;
 /** Distances under this pull as hard as this one does, so the pull has no singularity. */
 export const WELL_MIN_RADIUS = 60;
 /** Units per second squared: the most any well pulls with. */

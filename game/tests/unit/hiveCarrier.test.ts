@@ -19,7 +19,7 @@ import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed 
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF = BOSSES.hiveCarrier;
-/** Its HP in 2-★, the only galaxy it guards. */
+/** The rigs' HP: enough to space out the phase thresholds the tests wound it to. */
 const MAX_HP = 70;
 const INTRO = 2;
 const APPROACH = 20;
@@ -88,20 +88,21 @@ function launchTimes(log: readonly Timed[]): number[] {
 const near = (a: number, b: number): boolean => Math.abs(a - b) < 1.5 * STEP_SECONDS;
 
 describe('the Hive Carrier definition', () => {
-  it('is a radius-100, 70 HP hull on three phases of launches, broadsides and retreats, resting less each phase', () => {
-    expect(DEF).toMatchObject({ name: 'Hive Carrier', radius: 100, hp: 64 });
+  it('is a radius-100, 28 HP hull on three phases of launches, broadsides and retreats, resting less each phase', () => {
+    expect(DEF).toMatchObject({ name: 'Hive Carrier', radius: 100, hp: 22 });
     expect(DEF.phases).toEqual([['launch', 'broadside'], ['launch', 'retreat', 'broadside'], ['launch', 'broadside', 'launch', 'retreat']]);
-    expect(DEF.rest).toEqual([2.2, 1.6, 1.2]);
+    expect(DEF.rest).toEqual([2.5, 2.0, 1.6]);
     expect(ATTACKS.launch.windup).toBe(0.7);
-    expect(ATTACKS.broadside.windup).toBe(0.6);
-    expect(HANGAR_OPEN_SECONDS).toBe(2.5);
-    expect(DRONE_CAP).toBe(8);
-    expect(LAUNCH_WAVES).toEqual({ 1: 3, 2: 4, 3: 5 });
+    expect(ATTACKS.broadside.windup).toBe(1.0);
+    expect(ATTACKS.retreat.windup).toBe(1.0);
+    expect(HANGAR_OPEN_SECONDS).toBe(4);
+    expect(DRONE_CAP).toBe(3);
+    expect(LAUNCH_WAVES).toEqual({ 1: 1, 2: 2, 3: 2 });
   });
 
   it('guards 2-★, while the later Dimensions keep the Sentinel for now', () => {
     expect(galaxyById('2-6').boss).toBe('hiveCarrier');
-    expect(bossHp(DEF, 2)).toBe(MAX_HP);
+    expect(bossHp(DEF, 2)).toBe(28);
     for (const id of ['3-6', '4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
   });
 
@@ -188,8 +189,9 @@ describe('the Hive Carrier\'s hangar', () => {
 });
 
 describe('the Hive Carrier\'s drones', () => {
-  it('launches 3, 4 or 5 by phase from the hangar mouth, heading out of it, apart', () => {
-    for (const [hp, wave] of [[MAX_HP, 3], [40, 4], [20, 5]] as const) {
+  it('launches its phase\'s wave from the hangar mouth, heading out of it, apart', () => {
+    for (const [hp, phase] of [[MAX_HP, 1], [40, 2], [20, 3]] as const) {
+      const wave = LAUNCH_WAVES[phase];
       const rig = fighting();
       woundTo(rig, hp);
       rig.foes.clear();
@@ -213,16 +215,20 @@ describe('the Hive Carrier\'s drones', () => {
     }
   });
 
-  it('never has more than 8 of its drones alive, and tops a wave up to the cap', () => {
+  it('never has more than its cap of drones alive, and tops a wave up to the cap', () => {
     const rig = fighting();
-    for (let i = 0; i < 6; i++) rig.foes.launch('drone', 100 + 40 * i, 650, 0);
+    // One short of the cap, under a phase 2 wave of two: the next launch sends out just the one.
+    woundTo(rig, 40);
+    rig.foes.clear();
+    for (let i = 0; i < DRONE_CAP - 1; i++) rig.foes.launch('drone', 100 + 40 * i, 650, 0);
     const log = runFor(stepper(rig.r), rig.arena, 120, () => {
       expect(rig.foes.launched).toBeLessThanOrEqual(DRONE_CAP);
     });
     const first = launchTimes(log)[0] ?? Number.NaN;
-    expect(timedOfType(log, 'foeSpawned').filter((l) => near(l.at, first))).toHaveLength(2);
+    expect(LAUNCH_WAVES[2]).toBe(2);
+    expect(timedOfType(log, 'foeSpawned').filter((l) => near(l.at, first))).toHaveLength(1);
     expect(rig.foes.launched).toBe(DRONE_CAP);
-    expect(timedOfType(log, 'foeSpawned')).toHaveLength(2);
+    expect(timedOfType(log, 'foeSpawned')).toHaveLength(1);
   });
 
   it('launches again once its drones are shot down', () => {
@@ -295,7 +301,7 @@ describe('the Hive Carrier\'s flight', () => {
     const at = timedOfType(log, 'bossWindup').find((l) => l.event.attack === 'broadside');
     if (at === undefined) throw new Error('a broadside should follow the first launch');
     const rocks = rig.arena.asteroids;
-    expect(rocks.length).toBeGreaterThanOrEqual(4);
+    expect(rocks.length).toBeGreaterThanOrEqual(3);
     const { x, y, facing } = rig.r.view;
     const along = (rock: { x: number; y: number }) => (rock.x - x) * Math.cos(facing) + (rock.y - y) * Math.sin(facing);
     for (const rock of rocks) {
@@ -508,7 +514,7 @@ describe('the Hive Carrier in 2-★', () => {
     expect(world.projectiles.filter((p) => p.id === 9000)).toEqual([]);
     expect(world.asteroids).toContain(rock);
     expect(world.foes).toHaveLength(1);
-    expect(boss.hp).toBe(MAX_HP);
+    expect(boss.hp).toBe(bossHp(DEF, 2));
   });
 
   it('takes a life off a ship that never moves or fires, in a 120 s fight, by what it sends out and not on arrival', () => {

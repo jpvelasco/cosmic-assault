@@ -62,12 +62,12 @@ function exposedAt(r: BossRunner, hp: number): void {
 const orbitDistances = (boss: Readonly<BossView>): number[] => boss.parts.filter((p) => p.hp > 0).map((p) => Math.hypot(p.x - boss.x, p.y - boss.y));
 
 describe('the Monolith definition', () => {
-  it('is a radius-90, 60 HP core on three phases of shard volleys, quakes and pulses, resting less each phase', () => {
-    expect(DEF).toMatchObject({ name: 'Monolith', radius: 90, hp: 60 });
-    expect(bossHp(DEF, 1)).toBe(60);
+  it('is a radius-90, 36 HP core on three phases of shard volleys, quakes and pulses, resting less each phase', () => {
+    expect(DEF).toMatchObject({ name: 'Monolith', radius: 90, hp: 36 });
+    expect(bossHp(DEF, 1)).toBe(36);
     expect(DEF.phases).toEqual([['shardVolley'], ['shardVolley', 'quake'], ['quake', 'shardVolley', 'pulse']]);
-    expect(DEF.rest).toEqual([2.0, 1.5, 1.0]);
-    expect(ATTACKS.shardVolley.windup).toBe(0.6);
+    expect(DEF.rest).toEqual([2.5, 2.0, 1.5]);
+    expect(ATTACKS.shardVolley.windup).toBe(1.2);
     expect(ATTACKS.quake.windup).toBe(0.8);
     expect(ATTACKS.pulse.windup).toBe(0.5);
   });
@@ -79,14 +79,14 @@ describe('the Monolith definition', () => {
 });
 
 describe('the Monolith\'s shards', () => {
-  it('number 8 to 12, drawn from the boss stream, each with 2 HP', () => {
+  it('number 8 to 12, drawn from the boss stream, each with 1 HP', () => {
     const counts = new Set<number>();
     for (let seed = 1; seed <= 200; seed++) {
       const { parts } = monolith(seed).view;
       counts.add(parts.length);
       for (const part of parts) expect(part).toMatchObject({ hp: SHARD_HP, maxHp: SHARD_HP });
     }
-    expect(SHARD_HP).toBe(2);
+    expect(SHARD_HP).toBe(1);
     expect(SHARD_COUNTS).toEqual([8, 12]);
     expect([...counts].sort((a, b) => a - b)).toEqual([8, 9, 10, 11, 12]);
   });
@@ -290,13 +290,14 @@ describe('Monolith attacks', () => {
     const { r, arena } = fighting();
     const { parts } = r.view;
     const thrown = parts[0] as BossPart;
-    // Bare 1.5 s into the fight, with only shards 0 to 2 left: its first shard grows back 6 s later, during the second
-    // volley, and the lowest broken shard is the one that grows, so breaking shard 0 in that volley's flight makes it the one.
-    runFor(stepper(r), arena, 1.45);
+    // Bare with only shards 0 to 2 left just long enough before the second volley's flight that its first shard grows
+    // back 0.45 s into it; the lowest broken shard is the one that grows, so breaking shard 0 in that flight makes it the one.
+    const secondFlight = 2 * DEF.rest[0] + 2 * ATTACKS.shardVolley.windup + ATTACKS.shardVolley.active;
+    const lead = runFor(stepper(r), arena, secondFlight + 0.45 - REGROW_SECONDS);
     parts.forEach((part, i) => {
       while (i > 2 && part.hp > 0) r.hitPart(i, 1);
     });
-    let volleys = 0;
+    let volleys = timedOfType(lead, 'bossWindup').length;
     let broken = false;
     let regrownAt: number | null = null;
     const offOrbit = (): boolean => Math.abs(Math.hypot(thrown.x - r.view.x, thrown.y - r.view.y) - ORBIT_RADIUS) > 1;
@@ -347,7 +348,7 @@ describe('Monolith attacks', () => {
       const { ship } = arena;
       Object.assign(ship, shipAt);
       let pushes = 0;
-      runFor(stepper(r), arena, 8, () => {
+      runFor(stepper(r), arena, 12, () => {
         const before = { vx: ship.vx, vy: ship.vy };
         r.shove(ship);
         if (ship.vx !== before.vx || ship.vy !== before.vy) pushes++;

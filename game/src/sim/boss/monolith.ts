@@ -7,7 +7,7 @@ import { bossHome } from './bossRunner';
 
 /** How many shards it starts with, least and most. */
 export const SHARD_COUNTS = [8, 12] as const;
-export const SHARD_HP = 2;
+export const SHARD_HP = 1;
 export const SHARD_RADIUS = 15;
 /** How far the shards orbit from the core's centre. */
 export const ORBIT_RADIUS = 118;
@@ -46,7 +46,7 @@ const PULSE_REACH = 320;
 export type MonolithAttack = 'shardVolley' | 'quake' | 'pulse';
 
 /** The Monolith's windups, in seconds. */
-export const MONOLITH_WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 0.6, quake: 0.8, pulse: 0.5 };
+export const MONOLITH_WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, quake: 0.8, pulse: 0.5 };
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
