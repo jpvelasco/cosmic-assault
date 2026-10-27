@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FOES } from '../../src/content/foes';
 import { WARP_RIFT } from '../../src/content/hazards';
+import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { MOUTH_SPACING, SHIP_SPACING } from '../../src/sim/hazards/warpRift';
 import { wrappedDistance } from '../../src/sim/wrap';
 import type { GalaxyEvent } from '../../src/content/types';
@@ -296,3 +297,56 @@ describe('warp rift chaining', () => {
     }
   });
 });
+
+describe('warp rift exit grace', () => {
+  /** A rift of one pair, open, and the ship set down at the mouth (at, heading `vx`), with `bodies` placed as given. */
+  function openRift(seed: number) {
+    const r = rig({ seed, intensity: 1 });
+    stepTo(r, FIELD_169, 22);
+    const [pair] = riftStates(r);
+    if (pair === undefined) throw new Error('a rift should be open');
+    return { r, pair };
+  }
+
+  it('grants the ship a grace of MIN_WINDUP_SECONDS when a jump puts it onto a rock', () => {
+    const { r, pair } = openRift(21);
+    r.ship.x = pair.x;
+    r.ship.y = pair.y;
+    r.ship.vx = 100;
+    r.ship.vy = 0;
+    // The ship comes out of the other mouth 42 units east of it; a large rock lies 100 out, beyond its reach (90), so it
+    // does not jump, yet it touches the ship there (60 + 10 against 58).
+    const rock = { id: 701, x: pair.toX + 100, y: pair.toY, px: pair.toX + 100, py: pair.toY, vx: 0, vy: 0, radius: 60, size: 1 } as unknown as Asteroid;
+    r.hazards.move(DT, r.ship, [rock], [], []);
+    expect(r.ship.invulnerable).toBe(true);
+    expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
+  });
+
+  it('grants the same grace when a jump carries a rock onto a ship parked beside the other mouth', () => {
+    const { r, pair } = openRift(22);
+    // A rock at the first mouth, moving toward the second: it comes out of the second 72 units along that line.
+    const dx = pair.toX - pair.x;
+    const dy = pair.toY - pair.y;
+    const length = Math.hypot(dx, dy);
+    const ux = dx / length;
+    const uy = dy / length;
+    r.ship.x = pair.toX + ux * 80;
+    r.ship.y = pair.toY + uy * 80;
+    r.ship.vx = r.ship.vy = 0;
+    const rock = { id: 702, x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: ux * 100, vy: uy * 100, radius: 40, size: 1 } as unknown as Asteroid;
+    r.hazards.move(DT, r.ship, [rock], [], []);
+    expect(r.ship.invulnerable).toBe(true);
+    expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
+  });
+
+  it('grants nothing when a jump lands clear of every body', () => {
+    const { r, pair } = openRift(23);
+    r.ship.x = pair.x;
+    r.ship.y = pair.y;
+    r.ship.vx = 100;
+    r.ship.vy = 0;
+    r.hazards.move(DT, r.ship, [], [], []);
+    expect(r.ship.invulnerable).toBe(false);
+  });
+});
+

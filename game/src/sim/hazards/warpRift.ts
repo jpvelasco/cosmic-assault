@@ -1,3 +1,5 @@
+import { clamp } from '../../content/curves';
+import { MIN_WINDUP_SECONDS } from '../../content/pacingRules';
 import { HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
 import type { GalaxyEvent } from '../../content/types';
 import { ASTEROID, PLAYER } from '../config';
@@ -5,6 +7,7 @@ import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
+import type { Ship } from '../ship';
 import { rescale, wrapDelta, wrapPosition } from '../wrap';
 import { zoneClearance, zoneKeepOutBoxes, type ZoneBox } from './dangerZone';
 import type { Bodies, Circle, Hazard, HazardSetup, HazardState, RiftState } from './hazard';
@@ -74,10 +77,25 @@ const near = (field: Field, body: Mover, x: number, y: number, reach: number): b
   Math.hypot(wrapDelta(x - body.x, field.width), wrapDelta(y - body.y, field.height)) < reach;
 
 /**
+ * Whether `body` (of `radius`) touches the ship now, or within `seconds` on straight-line motion from both. The offset is
+ * measured across the wrap, as everything else is.
+ */
+function touchesWithin(field: Field, ship: Readonly<Ship>, body: Mover, radius: number, seconds: number): boolean {
+  const dx = wrapDelta(body.x - ship.x, field.width);
+  const dy = wrapDelta(body.y - ship.y, field.height);
+  const rvx = body.vx - ship.vx;
+  const rvy = body.vy - ship.vy;
+  const speed2 = rvx * rvx + rvy * rvy;
+  const t = speed2 > 0 ? clamp(-(dx * rvx + dy * rvy) / speed2, 0, seconds) : 0;
+  return Math.hypot(dx + rvx * t, dy + rvy * t) < radius + PLAYER.radius;
+}
+
+/**
  * A galaxy's warp rifts, one event at a time: each shows `min(intensity, 2)` pairs of mouths as a warning for its
  * telegraph, then the pairs are open for their length. A body whose edge reaches an open mouth (`radius` plus its own)
  * leaves by the paired mouth, along its velocity and just outside it, with its previous pose reset so nothing streaks.
- * A body leaves at most once a step. It never strikes. Mouths keep clear of the field's centre, the ship and the HUD
+ * A body leaves at most once a step. A jump that leaves the ship touching a body, or about to within a windup, grants the
+ * ship its invulnerability for that long. It never strikes. Mouths keep clear of the field's centre, the ship and the HUD
  * and thumb corners, and of each other across pairs (`MOUTH_SPACING`), and sit at least `apart` of the field's width
  * from their pair: placed from their own stream.
  */
@@ -130,14 +148,19 @@ export class WarpRifts implements Hazard {
     this.schedule.stop();
   }
 
-  /** Carries every body that reaches an open mouth to the other one of its pair, the ship first. */
+  /**
+   * Carries every body that reaches an open mouth to the other one of its pair, the ship first. A jump that leaves the ship
+   * touching a body, or about to, grants the ship its grace: the ship's own jump checks every body, a body's jump checks
+   * that body.
+   */
   carry(bodies: Bodies, out: SimEvent[]): void {
     const { field } = this;
     if (field === null) return;
-    this.carryBody(field, bodies.ship, PLAYER.radius, true, out);
-    for (const rock of bodies.rocks) this.carryBody(field, rock, rock.radius, false, out);
+    const { ship } = bodies;
+    const shipJumped = this.carryBody(field, ship, PLAYER.radius, true, out);
+    for (const rock of bodies.rocks) this.carryOther(field, ship, rock, rock.radius, shipJumped, true, out);
     // A phaser that is warning is on its way to its blink spot: carrying it would leave its blink spot where it is not.
-    for (const foe of bodies.foes) if (!(foe.kind === 'phaser' && foe.charging)) this.carryBody(field, foe, foe.radius, false, out);
+    for (const foe of bodies.foes) this.carryOther(field, ship, foe, foe.radius, shipJumped, !(foe.kind === 'phaser' && foe.charging), out);
   }
 
   /** Warns of the next pairs an event shows: `min(intensity, 2)` of them, each placed where a pair fits, or not at all. */
@@ -170,6 +193,12 @@ export class WarpRifts implements Hazard {
       return { id: this.nextId(), type: 'warpRift', stage: 'warning', intensity: event.intensity, x: a.x, y: a.y, toX: b.x, toY: b.y, remaining: event.at - elapsed };
     }
     return null;
+  }
+
+  /** Carries a rock or foe, then grants the ship its grace if this jump, or the ship's, leaves them touching it. */
+  private carryOther(field: Field, ship: Readonly<Ship>, body: Mover & { readonly radius: number }, radius: number, shipJumped: boolean, carriable: boolean, out: SimEvent[]): void {
+    const jumped = carriable && this.carryBody(field, body, radius, false, out);
+    if (shipJumped || jumped) this.graceIfTouching(field, ship, body, radius);
   }
 
   /** Sends `body` out of the other mouth of the first open pair it reaches, once; true if one did. */
@@ -209,5 +238,12 @@ export class WarpRifts implements Hazard {
     body.px = body.x;
     body.py = body.y;
     out.push({ type: 'riftJump', id: pair.id, x: fromX, y: fromY, toX, toY, ship });
+  }
+
+  /** Grants the ship its invulnerability for a windup if `body` touches it now, or will within one. */
+  private graceIfTouching(field: Field, ship: Ship, body: Mover, radius: number): void {
+    if (!touchesWithin(field, ship, body, radius, MIN_WINDUP_SECONDS)) return;
+    ship.invulnerable = true;
+    ship.invulnerableFor = Math.max(ship.invulnerableFor, MIN_WINDUP_SECONDS);
   }
 }
