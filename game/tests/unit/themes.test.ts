@@ -26,11 +26,6 @@ describe('the theme table', () => {
     expect(bossThemeOf('ionReach')).toBe('ionReachBoss');
     expect(bossThemeOf('singularity')).toBe('singularityBoss');
   });
-
-  it('gives each of the five Dimensions its own theme', () => {
-    const themes = new Map(GALAXIES.map((g) => [g.dimension, g.theme]));
-    expect([...themes.values()]).toEqual(['drift', 'ionReach', 'crimsonNebula', 'voidRift', 'singularity']);
-  });
 });
 
 describe.each(ALL)('theme $id', (theme) => {

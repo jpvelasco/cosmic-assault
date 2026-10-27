@@ -62,13 +62,13 @@ export const DRIFT: Palette = {
 };
 
 /**
- * Dimension 2: an electric cyan sky, teal and violet nebula, cooler rocks. The ship stays `#39ff14` and the shot keeps
+ * Dimension 2: a deep cyan sky (its brightest stop stays dark enough for the pink shot to read on it), teal and violet nebula, cooler rocks. The ship stays `#39ff14` and the shot keeps
  * its white core. The accents lead with magenta and violet, since drones and wells are drawn in them and a cyan foe
  * would vanish against this sky.
  */
 export const ION_REACH: Palette = {
   id: 'ionReach',
-  skyStops: ['#041c40', '#066b93', '#10c4d4'],
+  skyStops: ['#041c40', '#06638c', '#08728e'],
   nebula: [
     { x: 0.2, y: 0.3, r: 220 / 300, color: '#00e5d4', alpha: 0.3 },
     { x: 0.4, y: 0.1, r: 160 / 300, color: '#2f8bff', alpha: 0.22 },
@@ -80,12 +80,12 @@ export const ION_REACH: Palette = {
   rockGlow: '#7af0ff',
   ship: DRIFT.ship,
   cockpit: DRIFT.cockpit,
-  shot: '#ffa0f8',
+  shot: '#ffb0fa',
   shotCore: '#ffffff',
   spark: '#e2fcff',
   ring: '#ffe566',
   hud: '#d6f6ff',
-  accent: ['#ffa0f8', '#9a5cff', '#00f0ff'],
+  accent: ['#ffb0fa', '#9a5cff', '#00f0ff'],
   star: '#e8fdff',
 };
 

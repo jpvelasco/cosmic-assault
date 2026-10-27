@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOSS_FLASH_SECONDS, createBossPass, type BossPass } from '../../src/render/bossPass';
 import { createFieldPen } from '../../src/render/fieldPen';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, SINGULARITY, VOID_RIFT, type Palette } from '../../src/render/palette';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { bossView } from '../helpers/bossView';
@@ -98,7 +98,7 @@ describe('createBossPass', () => {
     const custom = vi.spyOn(baker, 'custom');
     pass.draw(boss(), 0.5, LOOK);
     expect(draws.length).toBeGreaterThan(0);
-    expect(custom.mock.calls.map(([key]) => key)).toContain('boss|core|70');
+    expect(custom.mock.calls.map(([key]) => key)).toContain('boss|drift|core|70');
     // Halfway from x 600 to 640.
     expect(draws.some(({ e, f }) => e === 620 && f === 200)).toBe(true);
   });
@@ -106,11 +106,32 @@ describe('createBossPass', () => {
   it('rings the core with a glow while an attack winds up, coloured by the attack', () => {
     const custom = vi.spyOn(baker, 'custom');
     pass.draw(boss(), 1, LOOK);
-    expect(custom.mock.calls.some(([key]) => key.startsWith('boss|ring|'))).toBe(false);
+    expect(custom.mock.calls.some(([key]) => key.startsWith('boss|drift|ring|'))).toBe(false);
     pass.draw(boss({ windup: 'shardRing' }), 1, LOOK);
     pass.draw(boss({ windup: 'lunge' }), 1, LOOK);
-    const rings = custom.mock.calls.map(([key]) => key).filter((key) => key.startsWith('boss|ring|'));
+    const rings = custom.mock.calls.map(([key]) => key).filter((key) => key.startsWith('boss|drift|ring|'));
     expect(new Set(rings).size).toBe(2);
+  });
+
+  it('keys every baked boss sprite by palette, so no two palettes share one', () => {
+    const keysIn = (palette: Palette): string[] => {
+      const fake = fakeContext();
+      const pen = createFieldPen(fake.ctx);
+      pen.aim(1, 0, 0);
+      const custom = vi.spyOn(baker, 'custom');
+      custom.mockClear();
+      const drawing = createBossPass(fake.ctx, pen, baker, palette);
+      for (const id of ['sentinel', 'monolith', 'hiveCarrier'] as const) {
+        drawing.draw(boss({ id, windup: 'lunge' }), 1, LOOK);
+      }
+      return [...new Set(custom.mock.calls.map(([key]) => key))];
+    };
+    const [drift, rift, hole] = [DRIFT, VOID_RIFT, SINGULARITY].map(keysIn) as [string[], string[], string[]];
+    expect(drift.length).toBeGreaterThan(3);
+    for (const [palette, keys] of [[DRIFT, drift], [VOID_RIFT, rift], [SINGULARITY, hole]] as const) {
+      for (const key of keys) expect(key.startsWith(`boss|${palette.id}|`), key).toBe(true);
+    }
+    expect(new Set([...drift, ...rift, ...hole]).size).toBe(drift.length + rift.length + hole.length);
   });
 
   it('flashes on a hit, for a moment', () => {
@@ -125,8 +146,8 @@ describe('createBossPass', () => {
 
   it('draws the core as its white silhouette for the first 60 ms after a hit, then in colour again', () => {
     pass.draw(boss(), 1, LOOK);
-    const core = baker.custom('boss|core|70', 0, () => undefined).canvas;
-    const white = baker.white('boss|core|70')?.canvas;
+    const core = baker.custom('boss|drift|core|70', 0, () => undefined).canvas;
+    const white = baker.white('boss|drift|core|70')?.canvas;
     expect(white).toBeDefined();
     draws.length = 0;
     pass.handle([{ type: 'bossHit', x: 640, y: 200, hp: 19 }]);
@@ -163,13 +184,13 @@ describe('createBossPass', () => {
     const winding = boss({ windup: 'shardRing' });
     pass.advance(0.01, winding);
     pass.draw(winding, 1, LOOK);
-    const early = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    const early = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
     pass.advance(0.3, winding);
     pass.draw(winding, 1, LOOK);
-    const later = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    const later = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
     pass.advance(0.4, winding);
     pass.draw(winding, 1, LOOK);
-    const closed = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    const closed = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
     expect(early).toBeGreaterThan(later);
     expect(later).toBeGreaterThan(closed);
     expect(closed).toBeCloseTo(1);
@@ -184,7 +205,7 @@ describe('createBossPass', () => {
     for (const dt of [0.01, 0.1, 0.2]) {
       pass.advance(dt, winding);
       pass.draw(winding, 1, still);
-      const ring = drawOf('boss|ring|lunge|70', custom);
+      const ring = drawOf('boss|drift|ring|lunge|70', custom);
       sizes.push(ring?.a ?? 0);
       alphas.push(ring?.alpha ?? 0);
     }
@@ -198,11 +219,11 @@ describe('createBossPass', () => {
     pass.advance(0.01, dying);
     pass.advance(0.5, dying);
     pass.draw(dying, 1, LOOK);
-    const early = drawOf('boss|core|70', custom);
+    const early = drawOf('boss|drift|core|70', custom);
     const earlyWhite = draws.filter((d) => d.alpha > 0 && d.image !== early?.image).length;
     pass.advance(1, dying);
     pass.draw(dying, 1, LOOK);
-    const late = drawOf('boss|core|70', custom);
+    const late = drawOf('boss|drift|core|70', custom);
     expect(late?.alpha).toBeLessThan(early?.alpha ?? 0);
     expect(late?.a).toBeGreaterThan(early?.a ?? Infinity);
     expect(earlyWhite).toBeGreaterThan(0);
@@ -218,21 +239,21 @@ describe('createBossPass', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(monolith(), 1, LOOK);
       const keys = keysOf(custom);
-      expect(keys).toEqual(expect.arrayContaining(['boss|monolith|core|90', 'boss|monolith|fissures|90', 'boss|monolith|shard|15', 'boss|monolith|shardCracked|15']));
-      expect(keys.filter((k) => k === 'boss|monolith|shard|15')).toHaveLength(1);
-      expect(keys.filter((k) => k === 'boss|monolith|shardCracked|15')).toHaveLength(1);
-      expect(keys.some((k) => String(k).startsWith('boss|eye|'))).toBe(false);
-      expect(keys).not.toContain('boss|core|90');
+      expect(keys).toEqual(expect.arrayContaining(['boss|drift|monolith|core|90', 'boss|drift|monolith|fissures|90', 'boss|drift|monolith|shard|15', 'boss|drift|monolith|shardCracked|15']));
+      expect(keys.filter((k) => k === 'boss|drift|monolith|shard|15')).toHaveLength(1);
+      expect(keys.filter((k) => k === 'boss|drift|monolith|shardCracked|15')).toHaveLength(1);
+      expect(keys.some((k) => String(k).startsWith('boss|drift|eye|'))).toBe(false);
+      expect(keys).not.toContain('boss|drift|core|90');
     });
 
     it('lights its fissures brighter, and adds a glow, once its core is exposed', () => {
       const custom = vi.spyOn(baker, 'custom');
       const glow = vi.spyOn(baker, 'glow');
       pass.draw(monolith(), 1, LOOK);
-      const shielded = drawOf('boss|monolith|fissures|90', custom)?.alpha ?? 1;
+      const shielded = drawOf('boss|drift|monolith|fissures|90', custom)?.alpha ?? 1;
       const shieldedGlows = glow.mock.calls.length;
       pass.draw(monolith({ vulnerable: true }), 1, LOOK);
-      const exposed = drawOf('boss|monolith|fissures|90', custom)?.alpha ?? 0;
+      const exposed = drawOf('boss|drift|monolith|fissures|90', custom)?.alpha ?? 0;
       expect(exposed).toBeGreaterThan(shielded + 0.3);
       expect(glow.mock.calls.length - shieldedGlows).toBeGreaterThan(shieldedGlows);
     });
@@ -240,10 +261,10 @@ describe('createBossPass', () => {
     it('flashes a shard white when a shot cracks it', () => {
       const white = vi.spyOn(baker, 'white');
       pass.draw(monolith(), 1, LOOK);
-      expect(white.mock.calls.map(([key]) => key)).not.toContain('boss|monolith|shard|15');
+      expect(white.mock.calls.map(([key]) => key)).not.toContain('boss|drift|monolith|shard|15');
       pass.handle([{ type: 'bossPartHit', part: 0, x: 600, y: 330, hp: 1 }]);
       pass.draw(monolith(), 1, LOOK);
-      expect(white.mock.calls.map(([key]) => key)).toContain('boss|monolith|shard|15');
+      expect(white.mock.calls.map(([key]) => key)).toContain('boss|drift|monolith|shard|15');
       pass.advance(0.2, monolith());
       white.mockClear();
       pass.draw(monolith(), 1, LOOK);
@@ -257,10 +278,10 @@ describe('createBossPass', () => {
       const regrown = monolith({ parts: [shard(600)] });
       pass.advance(0.05, regrown);
       pass.draw(regrown, 1, LOOK);
-      const early = drawOf('boss|monolith|shard|15', custom)?.scale ?? 0;
+      const early = drawOf('boss|drift|monolith|shard|15', custom)?.scale ?? 0;
       pass.advance(1, regrown);
       pass.draw(regrown, 1, LOOK);
-      const later = drawOf('boss|monolith|shard|15', custom)?.scale ?? 0;
+      const later = drawOf('boss|drift|monolith|shard|15', custom)?.scale ?? 0;
       expect(early).toBeLessThan(later * 0.7);
       expect(later).toBeCloseTo(1, 6);
     });
@@ -271,7 +292,7 @@ describe('createBossPass', () => {
       pass.advance(0.01, arriving);
       pass.advance(0.1, arriving);
       pass.draw(arriving, 1, LOOK);
-      const early = drawOf('boss|monolith|shard|15', custom);
+      const early = drawOf('boss|drift|monolith|shard|15', custom);
       expect(early?.scale ?? 1).toBeLessThan(0.9);
       expect(Math.hypot((early?.e ?? 0) - 640, (early?.f ?? 0) - 200)).toBeLessThan(Math.hypot(740 - 640, 330 - 200) * 0.9);
     });
@@ -283,7 +304,7 @@ describe('createBossPass', () => {
       const next = monolith({ parts: [shard(600)] });
       pass.advance(0.01, next);
       pass.draw(next, 1, LOOK);
-      expect(drawOf('boss|monolith|shard|15', custom)?.scale).toBeCloseTo(1, 6);
+      expect(drawOf('boss|drift|monolith|shard|15', custom)?.scale).toBeCloseTo(1, 6);
     });
 
     it('rings its windups in the attack\'s colour, and sends a shockwave out as it pulses', () => {
@@ -291,15 +312,15 @@ describe('createBossPass', () => {
       pass.draw(monolith({ windup: 'shardVolley' }), 1, LOOK);
       pass.draw(monolith({ windup: 'quake' }), 1, LOOK);
       pass.draw(monolith({ windup: 'pulse' }), 1, LOOK);
-      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|ring|shardVolley|90', 'boss|ring|quake|90', 'boss|ring|pulse|90']));
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|shardVolley|90', 'boss|drift|ring|quake|90', 'boss|drift|ring|pulse|90']));
       custom.mockClear();
       const pulsing = monolith({ active: 'pulse' });
       pass.advance(0.01, pulsing);
       pass.draw(pulsing, 1, LOOK);
-      const near = drawOf('boss|ring|pulse|90', custom)?.a ?? 0;
+      const near = drawOf('boss|drift|ring|pulse|90', custom)?.a ?? 0;
       pass.advance(0.2, pulsing);
       pass.draw(pulsing, 1, LOOK);
-      const far = drawOf('boss|ring|pulse|90', custom)?.a ?? 0;
+      const far = drawOf('boss|drift|ring|pulse|90', custom)?.a ?? 0;
       expect(near).toBeGreaterThan(0);
       expect(far).toBeGreaterThan(near);
     });
@@ -312,10 +333,10 @@ describe('createBossPass', () => {
     /** The bearing a draw is turned to, from its transform, as |cos|: 0 straight down the field. */
     const turn = (d: Draw | undefined): number => Math.abs((d?.a ?? Number.NaN) / (d?.scale ?? Number.NaN));
 
-    const HULL = 'boss|hiveCarrier|hull|100';
-    const SHUT = 'boss|hiveCarrier|hullShut|100';
-    const DOORS = ['boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100'] as const;
-    const BAY = 'boss|hiveCarrier|bay|100';
+    const HULL = 'boss|drift|hiveCarrier|hull|100';
+    const SHUT = 'boss|drift|hiveCarrier|hullShut|100';
+    const DOORS = ['boss|drift|hiveCarrier|door|1|100', 'boss|drift|hiveCarrier|door|-1|100'] as const;
+    const BAY = 'boss|drift|hiveCarrier|bay|100';
     const area = (d: Draw | undefined): number => {
       const image = d?.image as { width: number; height: number } | undefined;
       return (image?.width ?? Number.NaN) * (image?.height ?? Number.NaN);
@@ -334,7 +355,7 @@ describe('createBossPass', () => {
       pass.draw(carrier(), 1, LOOK);
       const keys = keysOf(custom);
       expect(keys).toEqual([SHUT]);
-      expect(keys).not.toContain('boss|core|100');
+      expect(keys).not.toContain('boss|drift|core|100');
       const { turned, shown } = hullDraws(SHUT, custom);
       expect(turn(turned)).toBeCloseTo(0, 9);
       expect(shown).toHaveLength(1);
@@ -432,7 +453,7 @@ describe('createBossPass', () => {
     it('rings its launch, broadside and retreat windups', () => {
       const custom = vi.spyOn(baker, 'custom');
       for (const windup of ['launch', 'broadside', 'retreat'] as const) pass.draw(carrier({ windup }), 1, LOOK);
-      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|ring|launch|100', 'boss|ring|broadside|100', 'boss|ring|retreat|100']));
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|launch|100', 'boss|drift|ring|broadside|100', 'boss|drift|ring|retreat|100']));
     });
   });
 

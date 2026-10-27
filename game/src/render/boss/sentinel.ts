@@ -1,3 +1,4 @@
+import type { PaletteId } from '../../content/types';
 import type { BossPhase } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
 import { mix, rgba } from '../color';
@@ -57,10 +58,11 @@ function paintEye(ctx: CanvasRenderingContext2D, r: number, color: string): void
   disc(ctx, -0.3 * r, -0.32 * r, 0.16 * r, rgba(WHITE, 0.85));
 }
 
-/** The cache keys of the Sentinel's sprites at `radius`, made once per radius so drawing builds no strings. */
-function keysFor(radius: number): { readonly core: string; readonly eyes: Readonly<Record<BossPhase, string>> } {
+/** The cache keys of the Sentinel's sprites at `radius` in `palette`, made once per radius so drawing builds no strings. */
+function keysFor(radius: number, palette: PaletteId): { readonly core: string; readonly eyes: Readonly<Record<BossPhase, string>> } {
+  const prefix = `boss|${palette}`;
   const size = String(radius);
-  return { core: `boss|core|${size}`, eyes: { 1: `boss|eye|1|${size}`, 2: `boss|eye|2|${size}`, 3: `boss|eye|3|${size}` } };
+  return { core: `${prefix}|core|${size}`, eyes: { 1: `${prefix}|eye|1|${size}`, 2: `${prefix}|eye|2|${size}`, 3: `${prefix}|eye|3|${size}` } };
 }
 
 /** The Sentinel: an armoured violet core, and an eye in its socket that looks toward the ship, its colour by phase. */
@@ -69,7 +71,7 @@ export const sentinelDrawer: DrawerFactory = (kit) => {
   const eyeColors: Readonly<Record<BossPhase, string>> = { 1: palette.accent[0], 2: palette.ring, 3: palette.shot };
   /** The radius the sprites are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;
-  let keys = keysFor(radius);
+  let keys = keysFor(radius, palette.id);
   const paintCoreAt = (c: CanvasRenderingContext2D): void => {
     paintCore(c, radius, palette);
   };
@@ -83,7 +85,7 @@ export const sentinelDrawer: DrawerFactory = (kit) => {
       const r = boss.radius;
       if (r !== radius) {
         radius = r;
-        keys = keysFor(r);
+        keys = keysFor(r, palette.id);
       }
       pen.place(x, y, size, 0);
       blitCore(kit, keys.core, r + RIM_PAD, paintCoreAt, tinted);

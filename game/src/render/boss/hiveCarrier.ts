@@ -1,3 +1,4 @@
+import type { PaletteId } from '../../content/types';
 import { HANGAR_HALF_ARC } from '../../sim/boss/hiveCarrier';
 import { TAU } from '../../sim/math';
 import type { Palette } from '../palette';
@@ -17,14 +18,15 @@ const ENGINE_GLOW_SCALE = 0.45;
 const ENGINE_GLOW_ALPHA = 0.8;
 
 /** The cache keys of the carrier's sprites, made once per size so drawing builds no strings. */
-const keysFor = (radius: number) => {
+const keysFor = (radius: number, palette: PaletteId) => {
   const size = String(radius);
+  const prefix = `boss|${palette}|hiveCarrier`;
   return {
-    hull: `boss|hiveCarrier|hull|${size}`,
-    hullShut: `boss|hiveCarrier|hullShut|${size}`,
-    bay: `boss|hiveCarrier|bay|${size}`,
-    doorUp: `boss|hiveCarrier|door|1|${size}`,
-    doorDown: `boss|hiveCarrier|door|-1|${size}`,
+    hull: `${prefix}|hull|${size}`,
+    hullShut: `${prefix}|hullShut|${size}`,
+    bay: `${prefix}|bay|${size}`,
+    doorUp: `${prefix}|door|1|${size}`,
+    doorDown: `${prefix}|door|-1|${size}`,
   } as const;
 };
 
@@ -57,7 +59,7 @@ export const hiveCarrierDrawer: DrawerFactory = (kit) => {
   const { ctx, pen, baker, palette } = kit;
   const glowColor = palette.accent[2];
   let radius = 0;
-  let keys = keysFor(radius);
+  let keys = keysFor(radius, palette.id);
   let boxes = hiveArtBoxes(radius, RIM_PAD);
   /** A sprite painter for `paint` at the radius in force, made once so drawing builds no closures. */
   const painter = (paint: Paint) => (c: CanvasRenderingContext2D): void => {
@@ -116,7 +118,7 @@ export const hiveCarrierDrawer: DrawerFactory = (kit) => {
       const r = boss.radius;
       if (r !== radius) {
         radius = r;
-        keys = keysFor(r);
+        keys = keysFor(r, palette.id);
         boxes = hiveArtBoxes(r, RIM_PAD);
       }
       const half = r * HIVE_ART_REACH + RIM_PAD;

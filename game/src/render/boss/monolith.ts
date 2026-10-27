@@ -1,3 +1,4 @@
+import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
 import { HIT_FLASH_SECONDS } from '../hitFlash';
@@ -20,8 +21,14 @@ const GROW_SECONDS = 0.4;
 const SHARD_TUMBLE = 1.4;
 
 /** The cache keys of the Monolith's sprites, made once per size so drawing builds no strings. */
-const coreKeys = (radius: number): { readonly core: string; readonly fissures: string } => ({ core: `boss|monolith|core|${String(radius)}`, fissures: `boss|monolith|fissures|${String(radius)}` });
-const shardKeys = (radius: number): { readonly whole: string; readonly cracked: string } => ({ whole: `boss|monolith|shard|${String(radius)}`, cracked: `boss|monolith|shardCracked|${String(radius)}` });
+const coreKeys = (radius: number, palette: PaletteId): { readonly core: string; readonly fissures: string } => ({
+  core: `boss|${palette}|monolith|core|${String(radius)}`,
+  fissures: `boss|${palette}|monolith|fissures|${String(radius)}`,
+});
+const shardKeys = (radius: number, palette: PaletteId): { readonly whole: string; readonly cracked: string } => ({
+  whole: `boss|${palette}|monolith|shard|${String(radius)}`,
+  cracked: `boss|${palette}|monolith|shardCracked|${String(radius)}`,
+});
 
 /** Grows `list` to `length` with `fill`, or cuts it down, so it has one slot per part. */
 function fit(list: number[], length: number, fill: number): void {
@@ -39,9 +46,9 @@ export const monolithDrawer: DrawerFactory = (kit) => {
   /** The cracks and the bare core's heat: molten, against its cool rock. */
   const heat = palette.ring;
   let radius = 0;
-  let keys = coreKeys(radius);
+  let keys = coreKeys(radius, palette.id);
   let shardRadius = 0;
-  let shards = shardKeys(shardRadius);
+  let shards = shardKeys(shardRadius, palette.id);
   const paintCoreAt = (c: CanvasRenderingContext2D): void => {
     paintMonolithCore(c, radius, palette);
   };
@@ -72,7 +79,7 @@ export const monolithDrawer: DrawerFactory = (kit) => {
     if (part.hp <= 0) return;
     if (part.radius !== shardRadius) {
       shardRadius = part.radius;
-      shards = shardKeys(shardRadius);
+      shards = shardKeys(shardRadius, palette.id);
     }
     const { alpha, size } = frame;
     const x = frame.x + (part.px + (part.x - part.px) * alpha - cx) * size;
@@ -101,7 +108,7 @@ export const monolithDrawer: DrawerFactory = (kit) => {
       const r = boss.radius;
       if (r !== radius) {
         radius = r;
-        keys = coreKeys(r);
+        keys = coreKeys(r, palette.id);
       }
       pen.place(x, y, size, 0);
       blitCore(kit, keys.core, r * MONOLITH_ART_REACH + RIM_PAD, paintCoreAt, frame.tinted);

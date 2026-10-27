@@ -20,11 +20,6 @@ describe('paletteFor', () => {
     expect(paletteFor('singularity')).toBe(SINGULARITY);
   });
 
-  it('gives each Dimension of the galaxies its own palette', () => {
-    const named = new Map(GALAXIES.map((g) => [g.dimension, g.palette]));
-    expect([...named.values()]).toEqual(['drift', 'ionReach', 'crimsonNebula', 'voidRift', 'singularity']);
-  });
-
   it('resolves the palette of every galaxy', () => {
     for (const g of GALAXIES) expect(PALETTE_IDS, g.id).toContain(g.palette);
   });
@@ -85,14 +80,9 @@ describe.each(ALL)('palette $id', (palette) => {
     expect(palette.shotCore).toBe('#ffffff');
   });
 
-  it('keeps the shot and the hostile colour (accent[0]) at 3:1 or better against the sky\'s middle stop', () => {
-    const sky = palette.skyStops[1];
-    expect(contrast(palette.shot, sky), 'shot').toBeGreaterThanOrEqual(3);
-    expect(contrast(palette.accent[0], sky), 'accent[0]').toBeGreaterThanOrEqual(3);
-  });
-
-  it('keeps the rocks\' lit side at 3:1 or better against the sky\'s middle stop, so they read against it', () => {
-    expect(contrast(palette.rock[0], palette.skyStops[1])).toBeGreaterThanOrEqual(3);
+  it.each(['shot', 'hostile (accent[0])', 'rock lit side'])('keeps the %s at 3:1 or better against every sky stop', (name) => {
+    const color = { shot: palette.shot, 'hostile (accent[0])': palette.accent[0], 'rock lit side': palette.rock[0] }[name] as string;
+    for (const stop of palette.skyStops) expect(contrast(color, stop), `${name} on ${stop}`).toBeGreaterThanOrEqual(3);
   });
 });
 

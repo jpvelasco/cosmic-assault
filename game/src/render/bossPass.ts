@@ -1,4 +1,4 @@
-import type { AttackId, BossId } from '../content/types';
+import type { AttackId, BossId, PaletteId } from '../content/types';
 import type { BossState, BossView } from '../sim/boss/behaviour';
 import { DYING_SECONDS } from '../sim/boss/bossRunner';
 import type { SimEvent } from '../sim/events';
@@ -84,7 +84,7 @@ function perAttack<T>(make: (id: AttackId) => T): Record<AttackId, T> {
 }
 
 /** The cache keys of the windup rings at `radius`, made once per radius so drawing builds no strings. */
-const ringKeys = (radius: number): Record<AttackId, string> => perAttack((id) => `boss|ring|${id}|${String(radius)}`);
+const ringKeys = (radius: number, palette: PaletteId): Record<AttackId, string> => perAttack((id) => `boss|${palette}|ring|${id}|${String(radius)}`);
 
 /**
  * Draws the boss from baked sprites (no `shadowBlur`): what every boss shares (a glow, a closing ring while an attack
@@ -109,7 +109,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
   };
   /** The radius the rings are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;
-  let rings = ringKeys(radius);
+  let rings = ringKeys(radius, palette.id);
   const ringPainters = perAttack((attack) => (c: CanvasRenderingContext2D): void => {
     paintRing(c, radius, ringColors[attack]);
   });
@@ -176,7 +176,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       const r = boss.radius;
       if (r !== radius) {
         radius = r;
-        rings = ringKeys(r);
+        rings = ringKeys(r, palette.id);
       }
       const shown = presence(boss.state);
       const dying = boss.state === 'dying' && boss.state === state ? stateClock / DYING_SECONDS : 0;

@@ -277,18 +277,18 @@ describe('createRenderer', () => {
       const { stub, world } = stubWorld();
       stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
       const setScale = vi.spyOn(baker, 'setScale');
-      const ships: HTMLCanvasElement[] = [];
+      let previous = DRIFT;
       for (const id of ['crimsonNebula', 'voidRift', 'singularity'] as const) {
         renderer.setPalette(id);
         expect(renderer.palette).toBe(id);
         drawFrame(world, 1);
         const palette = paletteFor(id);
         expect(drawsOf(baker.ship(palette).canvas), id).toHaveLength(1);
+        expect(drawsOf(baker.ship(previous).canvas), `${id} leaves ${previous.id} unused`).toHaveLength(0);
         expect(baker.cached(foeKeys(palette).drone), id).toBeDefined();
-        ships.push(baker.ship(palette).canvas);
+        previous = palette;
       }
       expect(setScale).toHaveBeenCalledTimes(3);
-      expect(new Set(ships).size).toBe(3);
     });
 
     it('draws the HUD bars in the new palette', () => {
