@@ -30,6 +30,13 @@ describe('mergeControls', () => {
     expect(mergeControls(KEYS, NO_TOUCH, pad).turn).toBe(-1);
   });
 
+  it('lets the keys turn the ship even while a stick is reported (a drifting pad or a resting thumb)', () => {
+    const merged = mergeControls({ ...KEYS, turn: -1, thrust: true }, { fire: false, stick: stick(1) }, { ...NO_CONTROLS, stick: stick(2) });
+    expect(merged.stick).toBeNull();
+    expect(merged.turn).toBe(-1);
+    expect(merged.thrust).toBe(true);
+  });
+
   it('steers by the touch stick before the pad stick', () => {
     const pad: Controls = { ...NO_CONTROLS, stick: stick(2) };
     expect(mergeControls(KEYS, { fire: false, stick: stick(1) }, pad).stick).toEqual(stick(1));
