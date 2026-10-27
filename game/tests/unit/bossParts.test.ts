@@ -278,10 +278,10 @@ describe('GalaxyRun with a boss that has parts', () => {
   it('spends a shot on a part, reporting the hit and then the break, before the core behind it', () => {
     const { arena, run, boss } = galaxyRun();
     const part = boss.parts[0] as BossPart;
-    expect(run.hitBoss(part.x, part.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(part.x, part.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossPartHit', part: 0, x: part.x, y: part.y, hp: 1 }]);
     arena.events.length = 0;
-    expect(run.hitBoss(part.x, part.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(part.x, part.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossPartBroken', part: 0, x: part.x, y: part.y }]);
     expect(boss.hp).toBe(boss.maxHp);
   });
@@ -293,14 +293,14 @@ describe('GalaxyRun with a boss that has parts', () => {
     const at = { x: boss.x + 89, y: boss.y };
     expect(Math.hypot(at.x - part.x, at.y - part.y)).toBeLessThan(PART_RADIUS + 3);
     expect(boss.radius + 3).toBeGreaterThan(89);
-    expect(run.hitBoss(at.x, at.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(at.x, at.y, 3)).toBe(true);
     expect(arena.events.map((e) => e.type)).toEqual(['bossPartHit']);
     expect(part.hp).toBe(1);
   });
 
   it('spends a shot on a shielded core with a deflection, not a hit', () => {
     const { arena, run, boss } = galaxyRun();
-    expect(run.hitBoss(boss.x, boss.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(boss.x, boss.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossDeflected', x: boss.x, y: boss.y }]);
     expect(boss.hp).toBe(boss.maxHp);
   });
@@ -342,7 +342,7 @@ describe('GalaxyRun with a boss that has parts', () => {
     steps();
     const boss = run.boss;
     if (boss?.active == null) throw new Error('the probe should attack within 30 s');
-    for (let target = bossTarget(boss); target !== null; target = bossTarget(boss)) run.hitBoss(target.x, target.y, 1);
+    for (let target = bossTarget(boss); target !== null; target = bossTarget(boss)) run.bosses.hitBoss(target.x, target.y, 1);
     expect(boss.state).toBe('dying');
     steps();
     expect(arena.ship.vx).toBe(0);
@@ -351,7 +351,7 @@ describe('GalaxyRun with a boss that has parts', () => {
   it('stops a piercing shot on a part and on the shielded core, whatever pierces it has left', () => {
     const { arena, run, boss } = galaxyRun();
     const shots = new PlayerShots(arena.events, () => 9000);
-    const targets: ShotTargets = { rocks: [], foes: () => [], aim: () => null, hitBoss: (x, y, r) => run.hitBoss(x, y, r), hitFoe: () => -1, hitRock: () => -1 };
+    const targets: ShotTargets = { rocks: [], foes: () => [], aim: () => null, hitBoss: (x, y, r) => run.bosses.hitBoss(x, y, r), hitFoe: () => -1, hitRock: () => -1 };
     const part = boss.parts[0] as BossPart;
     for (const at of [part, boss]) shots.fire([{ x: at.x, y: at.y, vx: 0, vy: 0 }], arena.ship, { pierce: 3, homingEvery: 0, wingman: false });
     shots.collide(targets);
@@ -364,7 +364,7 @@ describe('GalaxyRun with a boss that has parts', () => {
     /** The probe fighting, the ship `below` units under its core, and the parts named broken first. */
     function blastRig(below: number, broken: readonly number[] = []) {
       const rig = galaxyRun();
-      const runner = rig.run['bossRunner'];
+      const runner = rig.run.bosses.runner;
       if (runner === null) throw new Error('no boss');
       for (const i of broken) runner.hitPart(i, 2);
       rig.arena.events.length = 0;
@@ -428,7 +428,7 @@ describe('a World with the Monolith', () => {
     const run = (world as unknown as { run: GalaxyRun }).run;
     const part = boss?.parts[0];
     if (boss?.state !== 'fighting' || part === undefined) throw new Error('the Monolith should be fighting 22.1 s in');
-    while (part.hp > 1) run.hitBoss(part.x, part.y, 1);
+    while (part.hp > 1) run.bosses.hitBoss(part.x, part.y, 1);
     expect(part.hp).toBe(1);
     const shots = world.projectiles as Projectile[];
     for (let i = 0; i < 2; i++) shots.push(projectileFromShot({ x: part.x, y: part.y, vx: 0, vy: 0 }, 9000 + i));

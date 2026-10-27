@@ -1,5 +1,5 @@
 import type { BlastKind } from '../../content/pickups';
-import type { BossRunner } from '../boss/bossRunner';
+import type { BossArena } from '../boss/bossArena';
 import { BLAST } from '../config';
 import type { Arena } from '../rules';
 import { overlapsAcrossWrap, wrapDelta } from '../wrap';
@@ -9,12 +9,8 @@ export interface BlastScene {
   readonly arena: Arena;
   /** The foes on the field: those in range are destroyed for score, leaving nothing behind. */
   readonly foes: { blast(x: number, y: number, radius: number): void };
-  /** The boss, once it has arrived. */
-  boss(): BossRunner | null;
-  /** Takes `damage` off the boss's core for a blow landing at (x, y), reporting and scoring it as a shot's. */
-  hitCore(boss: BossRunner, damage: number, x: number, y: number): void;
-  /** Takes `damage` off live part `index`, reporting it as a shot's. */
-  hitPart(boss: BossRunner, index: number, damage: number): void;
+  /** The boss, once it has arrived, which reports and scores the blast's blows on it as a shot's. */
+  readonly bosses: Pick<BossArena, 'runner' | 'hitCore' | 'hitPart'>;
 }
 
 /**
@@ -28,17 +24,18 @@ export function blast(kind: BlastKind, x: number, y: number, scene: BlastScene):
   scene.arena.events.push({ type: 'blast', kind, x, y, radius });
   clearRocks(x, y, radius, scene);
   scene.foes.blast(x, y, radius);
-  const boss = scene.boss();
+  const { bosses } = scene;
+  const boss = bosses.runner;
   if (boss?.state !== 'fighting') return;
   const { view } = boss;
   const field = scene.arena.field();
   for (let i = 0; i < view.parts.length; i++) {
     const part = view.parts[i];
-    if (part !== undefined && part.hp > 0 && overlapsAcrossWrap(field, x, y, radius, part.x, part.y, part.radius)) scene.hitPart(boss, i, partDamage);
+    if (part !== undefined && part.hp > 0 && overlapsAcrossWrap(field, x, y, radius, part.x, part.y, part.radius)) bosses.hitPart(boss, i, partDamage);
   }
   if (!overlapsAcrossWrap(field, x, y, radius, view.x, view.y, view.radius)) return;
   const away = Math.atan2(wrapDelta(y - view.y, field.height), wrapDelta(x - view.x, field.width));
-  scene.hitCore(boss, coreDamage, view.x + Math.cos(away) * view.radius, view.y + Math.sin(away) * view.radius);
+  bosses.hitCore(boss, coreDamage, view.x + Math.cos(away) * view.radius, view.y + Math.sin(away) * view.radius);
 }
 
 /** Destroys every rock the blast reaches, whole, for its points through the combo. */

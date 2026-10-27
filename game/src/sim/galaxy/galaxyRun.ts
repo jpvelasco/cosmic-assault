@@ -6,11 +6,11 @@ import { isBlast } from '../../content/pickups';
 import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
 import type { BossFactory, BossSetup, BossView } from '../boss/behaviour';
-import { BossRunner, clearSpot, DYING_SECONDS, type HitResult } from '../boss/bossRunner';
+import { BossArena } from '../boss/bossArena';
+import { BossRunner, DYING_SECONDS } from '../boss/bossRunner';
 import { createHiveCarrier } from '../boss/hiveCarrier';
 import { createMonolith } from '../boss/monolith';
 import { SENTINEL } from '../boss/sentinel';
-import { ASTEROID, PLAYER } from '../config';
 import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
@@ -63,7 +63,8 @@ export class GalaxyRun implements Spawner {
   private readonly rockSpeed: number;
   private shownMultiplier = 1;
   private started = false;
-  private bossRunner: BossRunner | null = null;
+  /** Where the boss, once it arrives, meets the shots, the blasts and the ship. */
+  readonly bosses: BossArena;
   private warpEndsAt: number | null = null;
   private mercyUntil = 0;
   /** What the ship carries: its weapon tier and its timed effects. */
@@ -94,7 +95,8 @@ export class GalaxyRun implements Spawner {
     this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId());
     this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
-    this.blastScene = { arena, foes: this.foes, boss: () => this.bossRunner, hitCore: this.hitCore.bind(this), hitPart: this.hitPart.bind(this) };
+    this.bosses = new BossArena(arena, BOSS_KILL_POINTS * galaxy.dimension, (base) => this.scoreKill(base), () => this.bringBoss());
+    this.blastScene = { arena, foes: this.foes, bosses: this.bosses };
   }
 
   get phase(): Phase {
@@ -120,7 +122,7 @@ export class GalaxyRun implements Spawner {
 
   /** The boss, once its approach is over; the same object every step. */
   get boss(): BossView | null {
-    return this.bossRunner?.view ?? null;
+    return this.bosses.view;
   }
 
   /** The pickups on the field; a live view. */
@@ -143,7 +145,7 @@ export class GalaxyRun implements Spawner {
     this.pickupField.resize(old, field);
     this.foes.resize(old, field);
     this.hazards.resize(old, field);
-    this.bossRunner?.resize(old, field);
+    this.bosses.resize(old, field);
   }
 
   /** Announces the galaxy on its first step, and warps out on the step its timer runs out, before anything collides. */
@@ -163,7 +165,7 @@ export class GalaxyRun implements Spawner {
    */
   moveOwn(dt: number, ship: Ship): void {
     this.hazards.move(dt, ship, this.arena.asteroids, this.foes.list);
-    this.bossRunner?.shove(ship);
+    this.bosses.shove(ship);
     this.foes.step(dt * this.enemyTimeScale());
   }
 
@@ -183,15 +185,16 @@ export class GalaxyRun implements Spawner {
 
   step(dt: number): void {
     const elapsed = this.arena.elapsed();
-    if (this.warpEndsAt === null && !this.bossBeaten) {
+    const beaten = this.bosses.beaten;
+    if (this.warpEndsAt === null && !beaten) {
       this.combo.expire(elapsed);
       this.announceCombo();
       this.spawn(dt, elapsed);
     }
     // The fight, at the enemies' time scale, or a beaten boss dying under the warp in real time, so it dies as the warp ends.
-    this.stepBoss(this.bossBeaten ? dt : dt * this.enemyTimeScale(), elapsed);
+    this.stepBoss(beaten ? dt : dt * this.enemyTimeScale(), elapsed);
     if (this.warpEndsAt === null) {
-      if (this.bossBeaten) this.warpOut(elapsed, BOSS_WARP_SECONDS);
+      if (this.bosses.beaten) this.warpOut(elapsed, BOSS_WARP_SECONDS);
     } else if (elapsed + TIME_EPSILON >= this.warpEndsAt) {
       this.finish();
     }
@@ -201,56 +204,10 @@ export class GalaxyRun implements Spawner {
     if (this.warpEndsAt === null) this.pickupField.step(dt, this.arena.field(), ship, this.takePickup, events);
   }
 
-  /** The boss's HP has hit 0: it is dying, or down. */
-  private get bossBeaten(): boolean {
-    const state = this.bossRunner?.state;
-    return state === 'dying' || state === 'down';
-  }
-
   scoreKill(base: number): number {
     const multiplier = this.combo.kill(this.arena.elapsed());
     this.announceCombo();
     return base * multiplier;
-  }
-
-  /**
-   * A shot at (x, y) has reached the boss, if it overlaps a live part or the core; true means the shot is spent. A part
-   * takes 1 damage, reporting `bossPartHit` or `bossPartBroken`. The core takes 1 damage and reports a `bossHit`, or a
-   * `bossDeflected` at (x, y) while shielded or off its weak point, and nothing while invulnerable; the blow that kills
-   * it scores `1000 x Dimension` as a combo kill.
-   */
-  hitBoss(x: number, y: number, radius: number): boolean {
-    const boss = this.bossRunner;
-    if (boss === null || boss.state === 'down') return false;
-    const part = boss.partAt(x, y, radius);
-    if (part >= 0) {
-      this.hitPart(boss, part, 1);
-      return true;
-    }
-    if (!boss.overlaps(x, y, radius)) return false;
-    if (this.hitCore(boss, 1, x, y) === 'deflected') this.arena.events.push({ type: 'bossDeflected', x, y });
-    return true;
-  }
-
-  /** Takes `damage` off the core for a blow at (x, y): a hurt core reports a `bossHit`, and the blow that kills it scores. */
-  private hitCore(boss: BossRunner, damage: number, x: number, y: number): HitResult {
-    const result = boss.hit(damage, x, y);
-    if (result === 'hit' || result === 'killed') this.arena.events.push({ type: 'bossHit', x, y, hp: boss.hp });
-    if (result === 'killed') this.arena.award(this.scoreKill(BOSS_KILL_POINTS * this.galaxy.dimension));
-    return result;
-  }
-
-  private hitPart(boss: BossRunner, index: number, damage: number): void {
-    const result = boss.hitPart(index, damage);
-    const part = boss.view.parts[index];
-    if (result === 'blocked' || part === undefined) return;
-    const { x, y } = part;
-    this.arena.events.push(result === 'broken' ? { type: 'bossPartBroken', part: index, x, y } : { type: 'bossPartHit', part: index, x, y, hp: part.hp });
-  }
-
-  /** True when a circle at (x, y) touches a boss that is fighting, its core or a live part; the intro and dying are harmless. */
-  touchesBoss(x: number, y: number, radius: number): boolean {
-    return this.bossRunner?.state === 'fighting' && this.bossRunner.touches(x, y, radius);
   }
 
   shipLost(): void {
@@ -277,14 +234,12 @@ export class GalaxyRun implements Spawner {
 
   /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, a boss that is fighting, or a lethal hazard. */
   shipStruck(x: number, y: number, radius: number): boolean {
-    return this.foes.ram(x, y, radius) || this.touchesBoss(x, y, radius) || this.hazards.strikes(x, y, radius);
+    return this.foes.ram(x, y, radius) || this.bosses.touches(x, y, radius) || this.hazards.strikes(x, y, radius);
   }
 
   /** While a boss is on the field, a respawning ship comes back clear of its reach, not at the centre, where the boss may be; else where a hazard sends it, if one does. */
   respawnPoint(): Readonly<{ x: number; y: number }> | null {
-    const boss = this.bossRunner;
-    if (boss === null || boss.state === 'down') return this.hazards.respawnPoint();
-    return clearSpot(boss.view, boss.reach + PLAYER.radius + ASTEROID.safeRadius, this.arena.field());
+    return this.bosses.respawnPoint() ?? this.hazards.respawnPoint();
   }
 
   /** The Shield takes a hit meant for the ship, if it has one; true means the hit is absorbed: no life is lost. */
@@ -297,13 +252,13 @@ export class GalaxyRun implements Spawner {
 
   /** Brings the boss in as the approach ends, and runs it. */
   private stepBoss(dt: number, elapsed: number): void {
-    const { boss: id, dimension } = this.galaxy;
-    if (id === null || phaseAt(this.galaxy, elapsed) !== 'boss') return;
-    this.bossRunner ??= this.bringBoss(id, dimension);
-    this.bossRunner.step(dt, this.arena);
+    if (this.galaxy.boss !== null && phaseAt(this.galaxy, elapsed) === 'boss') this.bosses.step(dt);
   }
 
-  private bringBoss(id: BossId, dimension: GalaxyDef['dimension']): BossRunner {
+  /** The galaxy's boss fight, made as the boss arrives. */
+  private bringBoss(): BossRunner {
+    const { boss: id, dimension } = this.galaxy;
+    if (id === null) throw new RangeError(`${this.galaxy.id} has no boss to bring in: only a boss galaxy's run steps a boss`);
     const def = BOSSES[id];
     const setup: BossSetup = { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field(), foes: this.foes };
     return new BossRunner(def, this.behaviours[id](setup), setup);

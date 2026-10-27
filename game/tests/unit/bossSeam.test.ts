@@ -161,10 +161,10 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
     run.step(STEP_SECONDS);
     arena.events.length = 0;
     const hull = { x: boss.x - boss.radius, y: boss.y };
-    expect(run.hitBoss(hull.x, hull.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(hull.x, hull.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossDeflected', ...hull }]);
     arena.events.length = 0;
-    expect(run.hitBoss(boss.x + boss.radius, boss.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(boss.x + boss.radius, boss.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossHit', x: boss.x + boss.radius, y: boss.y, hp: boss.maxHp - 1 }]);
   });
 

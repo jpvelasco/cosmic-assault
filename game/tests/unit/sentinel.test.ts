@@ -349,7 +349,7 @@ describe('beating the Sentinel', () => {
     if (boss === null) throw new Error('the boss should be fighting by now');
     let blows = 0;
     while (boss.state === 'fighting') {
-      expect(run.hitBoss(boss.x, boss.y, 1)).toBe(true);
+      expect(run.bosses.hitBoss(boss.x, boss.y, 1)).toBe(true);
       blows++;
     }
     expect(blows).toBe(BOSS_HP);
@@ -403,7 +403,7 @@ describe('beating the Sentinel', () => {
     const boss = g.world.boss;
     if (boss === null) throw new Error('the boss should be fighting by now');
     const run = runOf(g.world);
-    while (boss.hp > 1) run.hitBoss(boss.x, boss.y, 1);
+    while (boss.hp > 1) run.bosses.hitBoss(boss.x, boss.y, 1);
     // The last blow is a real shot, so it lands inside a step, as in play.
     let killStep: SimEvent['type'][] = [];
     for (let i = 0; i < 3 * STEPS_PER_SECOND && boss.state === 'fighting'; i++) killStep = g.world.step(STEP_SECONDS, aimAtBoss(g.world)).map((e) => e.type);
@@ -435,7 +435,7 @@ describe('beating the Sentinel', () => {
   });
 });
 
-describe('GalaxyRun.hitBoss', () => {
+describe('BossArena.hitBoss', () => {
   /** Runs a 1-6 galaxy on a stub arena for `to` seconds; the arena's events are left empty. */
   function approach(to: number) {
     const arena = stubArena();
@@ -452,15 +452,15 @@ describe('GalaxyRun.hitBoss', () => {
 
   it('reports nothing for a shot that misses or arrives before the boss', () => {
     const { run } = approach(19);
-    expect(run.hitBoss(HOME.x, HOME.y, 3)).toBe(false);
+    expect(run.bosses.hitBoss(HOME.x, HOME.y, 3)).toBe(false);
     const { arena, run: later } = approach(23);
-    expect(later.hitBoss(0, 0, 3)).toBe(false);
+    expect(later.bosses.hitBoss(0, 0, 3)).toBe(false);
     expect(arena.events).toEqual([]);
   });
 
   it('spends a shot in the intro without a hit, then reports each damaging hit with the HP it left, the last at 0', () => {
     const intro = approach(21);
-    expect(intro.run.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
+    expect(intro.run.bosses.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
     expect(intro.arena.events).toEqual([]);
     expect(intro.run.boss?.hp).toBe(20);
 
@@ -468,14 +468,14 @@ describe('GalaxyRun.hitBoss', () => {
     const hits: number[] = [];
     for (let i = 0; i < 20; i++) {
       arena.events.length = 0;
-      expect(run.hitBoss(HOME.x + 5, HOME.y - 6, 3)).toBe(true);
+      expect(run.bosses.hitBoss(HOME.x + 5, HOME.y - 6, 3)).toBe(true);
       expect(arena.events).toEqual([{ type: 'bossHit', x: HOME.x + 5, y: HOME.y - 6, hp: 19 - i }]);
       hits.push(run.boss?.hp ?? -1);
     }
     expect(hits).toEqual(Array.from({ length: 20 }, (_, i) => 19 - i));
     expect(run.boss?.state).toBe('dying');
     arena.events.length = 0;
-    expect(run.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
     expect(arena.events).toEqual([]);
   });
 });

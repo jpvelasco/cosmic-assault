@@ -148,7 +148,7 @@ describe('a kill drops a pickup', () => {
     const w = galaxyWorld({ seed: seedDropping('shield'), galaxy: calm('1-6') });
     const log = play(w, 23);
     const target = () => (w.boss === null ? null : bossTarget(w.boss));
-    for (let t = target(); t !== null; t = target()) w['run']?.hitBoss(t.x, t.y, 1);
+    for (let t = target(); t !== null; t = target()) w['run']?.bosses.hitBoss(t.x, t.y, 1);
     log.push(...play(w, 3));
     expect(w.boss?.hp).toBe(0);
     expect(ofType(log, 'bossDown')).toHaveLength(1);

@@ -211,7 +211,7 @@ describe("the casual bot's handicaps", () => {
       if (boss?.vulnerable === true && world.elapsed > fight + 10) {
         const floor = world.elapsed > fight + 20 ? boss.maxHp / 3 - 1 : (2 * boss.maxHp) / 3 - 1;
         const target = boss.target;
-        if (target !== null && boss.hp > Math.max(2, floor)) run.hitBoss(target.x, target.y, 1);
+        if (target !== null && boss.hp > Math.max(2, floor)) run.bosses.hitBoss(target.x, target.y, 1);
       }
       Object.assign(world.ship as Ship, { invulnerable: true, invulnerableFor: 1 });
       world.step(STEP_SECONDS, NO_CONTROLS);

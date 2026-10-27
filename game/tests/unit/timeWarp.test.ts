@@ -128,7 +128,7 @@ describe('Time Warp', () => {
       for (let i = 0; i < Math.round(60 / DT) && w.status !== 'cleared'; i++) {
         hold(w, true, true);
         const boss = w.boss;
-        if (boss !== null) for (let t = bossTarget(boss); t !== null; t = bossTarget(boss)) run.hitBoss(t.x, t.y, 1);
+        if (boss !== null) for (let t = bossTarget(boss); t !== null; t = bossTarget(boss)) run.bosses.hitBoss(t.x, t.y, 1);
         w.step(DT, NO_CONTROLS);
       }
       expect(w.status).toBe('cleared');

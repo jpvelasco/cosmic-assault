@@ -92,7 +92,7 @@ export class World {
       const boss = this.run?.boss ?? null;
       return boss === null ? null : bossTarget(boss);
     },
-    hitBoss: (x, y, radius) => this.run?.hitBoss(x, y, radius) === true,
+    hitBoss: (x, y, radius) => this.run?.bosses.hitBoss(x, y, radius) === true,
     hitFoe: (x, y, radius, struck) => this.run?.hitFoe(x, y, radius, struck) ?? -1,
     hitRock: (x, y, radius) => this.breakRock(x, y, radius),
   };
