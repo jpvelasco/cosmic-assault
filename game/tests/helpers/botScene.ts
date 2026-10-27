@@ -1,5 +1,7 @@
 import { createView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
+import type { AttackId, BossId } from '../../src/content/types';
+import type { BossView, Point } from '../../src/sim/boss/behaviour';
 import { World, type AsteroidPlacement } from '../../src/sim/world';
 import { MUTED_KINDS } from './mute';
 
@@ -19,5 +21,20 @@ export function sceneView(rocks: readonly AsteroidPlacement[] = []): BotView {
   const world = new World({ seed: 1, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialShip: { ...SCENE_SHIP, angle: 0 }, initialAsteroids: rocks });
   const view = createView(world);
   view.ship = { ...view.ship, invulnerable: false, invulnerableFor: 0 };
+  return view;
+}
+
+export interface Staged {
+  readonly id?: BossId;
+  readonly at?: Point;
+  readonly radius?: number;
+  readonly target?: Point | null;
+  readonly windup?: AttackId | null;
+}
+
+/** Puts a boss in the fight into `view`, standing still: its weak point at its core unless `target` says otherwise. */
+export function stage(view: BotView, { id = 'monolith', at = { x: 640, y: 130 }, radius = 90, target = at, windup = null }: Staged): BotView {
+  const boss: BossView = { id, ...at, px: at.x, py: at.y, radius, hp: 60, maxHp: 60, phase: 3, state: 'fighting', windup, active: null, vulnerable: target !== null, parts: [], facing: Math.PI / 2, target };
+  view.boss = boss;
   return view;
 }

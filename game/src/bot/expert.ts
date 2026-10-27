@@ -4,6 +4,7 @@ import type { BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
 import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
+import type { Foe } from '../sim/foes/foe';
 import { wellAcceleration } from '../sim/hazards/gravityWell';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
@@ -66,6 +67,12 @@ const STATION_INSET = 60;
 /** How near the lead its nose must be for it to fire at a boss. */
 const BOSS_FIRE_ARC = 0.2;
 
+/** Whether foe `id` is still on the field. */
+function isLive(foes: readonly Readonly<Foe>[], id: number): boolean {
+  for (const foe of foes) if (foe.id === id) return foe.hp > 0;
+  return false;
+}
+
 /** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
 function splitterAhead(view: Readonly<BotView>): boolean {
   const { ship, field } = view;
@@ -83,6 +90,12 @@ export interface PilotOptions {
   readonly rng: Rng;
   /** The chance it dodges at all, rolled once as each danger episode starts; at 1 it always dodges and draws nothing. */
   readonly dodgeChance?: number;
+  /**
+   * The chance it dodges a boss's telegraphed attack, rolled once as its windup begins; at 1 it always dodges and draws
+   * nothing. From the windup until the attack is over, this roll, not the episode's, decides whether it dodges; so it
+   * does afterwards whenever the nearest danger is a drone the attack launched.
+   */
+  readonly telegraphDodgeChance?: number;
   /** Radians its aim strays either way, redrawn every half second; at 0 it aims true and draws nothing. */
   readonly aimWobble?: number;
 }
@@ -97,6 +110,7 @@ export interface PilotOptions {
 export class Pilot {
   private readonly rng: Rng;
   private readonly dodgeChance: number;
+  private readonly telegraphDodgeChance: number;
   private readonly aimWobble: number;
   /** Threats, relative to the ship: offset, velocity and the centre distance at which they touch it. */
   private readonly tx: number[] = [];
@@ -106,19 +120,30 @@ export class Pilot {
   private readonly reach: number[] = [];
   /** A boss's bodies and its strike lane: worth keeping out of even while the ship cannot be hurt. */
   private readonly solid: boolean[] = [];
+  /** For a drone a telegraphed launch sent out, whether that launch was to be dodged; null for any other threat. */
+  private readonly rolled: (boolean | null)[] = [];
   private count = 0;
   /** Seconds until the ship can be hurt by anything but a solid threat. */
   private harmlessFor = 0;
   /** What the last `predict` found: the least clearance, slack included, and the mean of each sample's capped least. */
   private least = 0;
   private mean = 0;
+  /** The `rolled` of the threat that came nearest in the last `predict`. */
+  private nearestRolled: boolean | null = null;
   /** Where the ship would be at each sample, relative to now. */
   private readonly sx = new Float64Array(SAMPLES + 1);
   private readonly sy = new Float64Array(SAMPLES + 1);
   private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0, wraps: true };
   private readonly last = idleIntent();
   private inDanger = false;
+  /** Whether it dodges in the danger episode under way, and in the boss attack under way. */
   private dodging = true;
+  private dodgingStrike = true;
+  /** The drones a telegraphed launch sent out, by id, and whether that launch was to be dodged. */
+  private readonly waveIds: number[] = [];
+  private readonly waveDodging: boolean[] = [];
+  /** The highest foe id seen so far: a foe above it is new. */
+  private foeMark = 0;
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
@@ -136,6 +161,7 @@ export class Pilot {
   constructor(options: PilotOptions) {
     this.rng = options.rng;
     this.dodgeChance = options.dodgeChance ?? 1;
+    this.telegraphDodgeChance = options.telegraphDodgeChance ?? 1;
     this.aimWobble = options.aimWobble ?? 0;
   }
 
@@ -159,7 +185,7 @@ export class Pilot {
     out.heading = aim;
     out.thrust = false;
     this.predict(view, null);
-    if (this.danger() && this.dodging) {
+    if (this.danger() && this.willDodge()) {
       this.dodge(view, aim ?? view.ship.angle, out);
       return;
     }
@@ -181,9 +207,23 @@ export class Pilot {
       this.inDanger = this.least < CALM;
     } else if (this.least < DANGER) {
       this.inDanger = true;
-      this.dodging = this.dodgeChance >= 1 || this.rng.chance(this.dodgeChance);
+      this.dodging = this.roll(this.dodgeChance);
     }
     return this.inDanger;
+  }
+
+  /**
+   * Whether it dodges the danger it is in: as it rolled for the boss attack under way, else for the launch that sent
+   * out the drone nearest it, else for the episode.
+   */
+  private willDodge(): boolean {
+    if (this.strike !== null) return this.dodgingStrike;
+    return this.nearestRolled ?? this.dodging;
+  }
+
+  /** True with `chance`, drawn from the bot's stream; a sure thing draws nothing. */
+  private roll(chance: number): boolean {
+    return chance >= 1 || this.rng.chance(chance);
   }
 
   /** Thrusts the safest way, the nose kept near `aim` among equals; leaves `out` coasting if that is safest. */
@@ -250,10 +290,11 @@ export class Pilot {
   }
 
   /**
-   * Notes a boss attack as its windup begins, with when and where the ship is then, and forgets it once the attack is
-   * over; and while a pulse winds up, when its shove will land.
+   * Notes a boss attack as its windup begins, with when and where the ship is then, and rolls whether to dodge it; and
+   * forgets it once the attack is over; and while a pulse winds up, when its shove will land.
    */
   private trackStrike(view: Readonly<BotView>): void {
+    this.trackWave(view);
     const boss = view.boss;
     const attack = boss === null ? null : (boss.windup ?? boss.active);
     if (attack === null) {
@@ -263,8 +304,39 @@ export class Pilot {
       this.strikeAt = view.elapsed;
       this.strikeX = view.ship.x;
       this.strikeY = view.ship.y;
+      this.dodgingStrike = this.roll(this.telegraphDodgeChance);
     }
     this.shoveIn = boss?.windup === 'pulse' ? Math.max(0, this.strikeAt + MONOLITH_WINDUPS.pulse - view.elapsed) : Infinity;
+  }
+
+  /**
+   * Keeps the launched drones still alive, and adds the new drones that appear while a launch is under way, with the
+   * launch's roll.
+   */
+  private trackWave(view: Readonly<BotView>): void {
+    const { waveIds, waveDodging } = this;
+    let kept = 0;
+    for (let i = 0; i < waveIds.length; i++) {
+      if (!isLive(view.foes, waveIds[i] ?? 0)) continue;
+      waveIds[kept] = waveIds[i] ?? 0;
+      waveDodging[kept++] = waveDodging[i] ?? true;
+    }
+    waveIds.length = waveDodging.length = kept;
+    let mark = this.foeMark;
+    for (const foe of view.foes) {
+      if (foe.id <= this.foeMark) continue;
+      mark = Math.max(mark, foe.id);
+      if (this.strike !== 'launch' || foe.kind !== 'drone') continue;
+      waveIds.push(foe.id);
+      waveDodging.push(this.dodgingStrike);
+    }
+    this.foeMark = mark;
+  }
+
+  /** The launch roll of a drone a telegraphed launch sent out, or null for any other foe. */
+  private waveRoll(id: number): boolean | null {
+    const at = this.waveIds.indexOf(id);
+    return at < 0 ? null : (this.waveDodging[at] ?? null);
   }
 
   /** Lists every threat that could come near the ship over the look-ahead, relative to it. */
@@ -277,7 +349,7 @@ export class Pilot {
       this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius - slack, false);
     }
     for (const foe of view.foes) {
-      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false);
+      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.waveRoll(foe.id));
     }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
@@ -304,7 +376,7 @@ export class Pilot {
   }
 
   /** Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. */
-  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean): void {
+  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null): void {
     const { ship, field } = view;
     const dx = wrapDelta(x - ship.x, field.width);
     const dy = wrapDelta(y - ship.y, field.height);
@@ -317,6 +389,7 @@ export class Pilot {
     this.tvy[i] = vy;
     this.reach[i] = radius + PLAYER.radius;
     this.solid[i] = solid;
+    this.rolled[i] = rolled;
   }
 
   /**
@@ -330,21 +403,31 @@ export class Pilot {
     const { tx, ty, tvx, tvy, reach, solid, sx, sy } = this;
     let least = Infinity;
     let total = 0;
+    let nearest = -1;
     for (let k = 0; k <= SAMPLES; k++) {
       const t = k * SAMPLE_SECONDS;
       const harmless = t < this.harmlessFor;
       let sample = Infinity;
+      let who = -1;
       for (let i = 0; i < this.count; i++) {
         if (harmless && solid[i] !== true) continue;
         const dx = wrapDelta((tx[i] ?? 0) + (tvx[i] ?? 0) * t - (sx[k] ?? 0), width);
         const dy = wrapDelta((ty[i] ?? 0) + (tvy[i] ?? 0) * t - (sy[k] ?? 0), height);
-        sample = Math.min(sample, Math.hypot(dx, dy) - (reach[i] ?? 0));
+        const clearance = Math.hypot(dx, dy) - (reach[i] ?? 0);
+        if (clearance < sample) {
+          sample = clearance;
+          who = i;
+        }
       }
-      least = Math.min(least, sample + k * SLACK_PER_SAMPLE);
+      if (sample + k * SLACK_PER_SAMPLE < least) {
+        least = sample + k * SLACK_PER_SAMPLE;
+        nearest = who;
+      }
       if (k > 0) total += Math.min(sample, CLEAR_ENOUGH);
     }
     this.least = least;
     this.mean = total / SAMPLES;
+    this.nearestRolled = nearest < 0 ? null : (this.rolled[nearest] ?? null);
   }
 
   /**

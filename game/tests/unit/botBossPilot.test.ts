@@ -2,27 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { Pilot } from '../../src/bot/expert';
 import { idleIntent, type Intent } from '../../src/bot/hands';
 import type { BotView } from '../../src/bot/view';
-import type { AttackId, BossId } from '../../src/content/types';
-import type { BossView, Point } from '../../src/sim/boss/behaviour';
+import type { BossView } from '../../src/sim/boss/behaviour';
 import { MONOLITH_WINDUPS } from '../../src/sim/boss/monolith';
 import { createRng } from '../../src/sim/rng';
 import { wrapDelta } from '../../src/sim/wrap';
-import { SCENE_SHIP, sceneView, stillRock } from '../helpers/botScene';
-
-interface Staged {
-  readonly id?: BossId;
-  readonly at?: Point;
-  readonly radius?: number;
-  readonly target?: Point | null;
-  readonly windup?: AttackId | null;
-}
-
-/** A boss in the fight, standing still: its weak point at its core unless `target` says otherwise. */
-function stage(view: BotView, { id = 'monolith', at = { x: 640, y: 130 }, radius = 90, target = at, windup = null }: Staged): BotView {
-  const boss: BossView = { id, ...at, px: at.x, py: at.y, radius, hp: 60, maxHp: 60, phase: 3, state: 'fighting', windup, active: null, vulnerable: target !== null, parts: [], facing: Math.PI / 2, target };
-  view.boss = boss;
-  return view;
-}
+import { SCENE_SHIP, sceneView, stage, stillRock, type Staged } from '../helpers/botScene';
 
 /** The pilot's intent on the step `seconds` after its first look at `view`, which it watches throughout. */
 function after(view: BotView, seconds: number): Intent {
