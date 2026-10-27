@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
-import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE } from '../../src/sim/boss/bossRules';
+import type { BossPart } from '../../src/sim/boss/behaviour';
+import { bossClearance, clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE } from '../../src/sim/boss/bossRules';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
@@ -38,6 +39,29 @@ describe('clearSpot', () => {
     expect(RESPAWN_LOWEST_SHARE).toBe(0.8);
     expect(clearSpot({ x: 640, y: 201.6 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: 640, y: BOSS_FIELD.height * 0.8 });
     expect(clearSpot({ x: 700, y: 587 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: RESPAWN_INSET, y: RESPAWN_INSET });
+  });
+});
+
+describe('clearSpot with its usual spots blocked', () => {
+  const MARGIN = PLAYER.radius + ASTEROID.safeRadius;
+  /** One part on each of the five usual spots of a small core at (640, 300). */
+  const blocker = (): { x: number; y: number; parts: BossPart[] } => {
+    const [left, right, top, bottom] = [RESPAWN_INSET, BOSS_FIELD.width - RESPAWN_INSET, RESPAWN_INSET, BOSS_FIELD.height * RESPAWN_LOWEST_SHARE];
+    const spots = [[640, bottom], [left, top], [right, top], [left, bottom], [right, bottom]] as const;
+    return { x: 640, y: 300, parts: spots.map(([x, y]) => ({ x, y, px: x, py: y, radius: 40, hp: 1, maxHp: 1 })) };
+  };
+
+  it('searches a grid across the respawn band for a spot clear of every part, the same one every time', () => {
+    const boss = blocker();
+    const spot = clearSpot(boss, 10, BOSS_FIELD, MARGIN);
+    expect(bossClearance(boss, 10, spot.x, spot.y)).toBeGreaterThanOrEqual(MARGIN);
+    expect(inside(spot, BOSS_FIELD)).toBe(true);
+    expect(clearSpot(boss, 10, BOSS_FIELD, MARGIN)).toEqual(spot);
+  });
+
+  it('with nowhere clear, takes the clearest spot of all: the far corner from a core whose reach covers the field', () => {
+    const boss = { x: 300, y: 200 };
+    expect(clearSpot(boss, 5000, BOSS_FIELD, MARGIN)).toEqual({ x: BOSS_FIELD.width - RESPAWN_INSET, y: BOSS_FIELD.height * RESPAWN_LOWEST_SHARE });
   });
 });
 

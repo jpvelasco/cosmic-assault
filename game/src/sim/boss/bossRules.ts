@@ -34,10 +34,16 @@ export function bossClearance(boss: BossBodies, reach: number, x: number, y: num
   return clearance;
 }
 
+/** The grid a respawn searches when none of its five usual spots is clear: columns and rows across the respawn band. */
+const RESPAWN_GRID_COLUMNS = 9;
+const RESPAWN_GRID_ROWS = 6;
+
 /**
  * Where a ship can respawn at least `margin` outside the boss (`bossClearance`): low in the middle, at
  * `RESPAWN_LOWEST_SHARE` of the height; or, if the boss lies too near it, the corner farthest from the core, as low or as
- * near the top; or, if a part lies on that too, the first other corner that is clear, else the clearest spot of all.
+ * near the top; or, if a part lies on that too, the first other corner that is clear. If none of those is, the first
+ * clear point of a grid across the same band, row by row from the top; else, with nowhere clear, the clearest spot of
+ * all, the first found among equals, so a respawn is always the same for the same boss.
  */
 export function clearSpot(boss: BossBodies, reach: number, field: Field, margin = 0): Point {
   const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height * RESPAWN_LOWEST_SHARE];
@@ -46,10 +52,18 @@ export function clearSpot(boss: BossBodies, reach: number, field: Field, margin 
   const spots: readonly Point[] = [{ x: field.width / 2, y: bottom }, { x: farX, y: farY }, { x: left + right - farX, y: farY }, { x: farX, y: top + bottom - farY }, { x: left + right - farX, y: top + bottom - farY }];
   let best = spots[1] as Point;
   let bestClearance = -Infinity;
-  for (const spot of spots) {
+  /** Whether `spot` is clear by `margin`, noting it if it is the clearest yet. */
+  const clear = (spot: Point): boolean => {
     const clearance = bossClearance(boss, reach, spot.x, spot.y);
-    if (clearance >= margin) return spot;
     if (clearance > bestClearance) [best, bestClearance] = [spot, clearance];
+    return clearance >= margin;
+  };
+  for (const spot of spots) if (clear(spot)) return spot;
+  for (let row = 0; row < RESPAWN_GRID_ROWS; row++) {
+    for (let column = 0; column < RESPAWN_GRID_COLUMNS; column++) {
+      const spot = { x: left + ((right - left) * column) / (RESPAWN_GRID_COLUMNS - 1), y: top + ((bottom - top) * row) / (RESPAWN_GRID_ROWS - 1) };
+      if (clear(spot)) return spot;
+    }
   }
   return best;
 }
