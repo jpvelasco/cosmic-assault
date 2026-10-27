@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import { DANGER_ZONE } from '../../src/content/hazards';
 import { noEffects, TIMED_PICKUPS } from '../../src/content/pickups';
-import { touchControlBoxes, type CssBox } from '../../src/input/touchControls';
+import { NO_INSETS, touchControlBoxes, type CssBox, type SafeInsets } from '../../src/input/touchControls';
 import { createHud } from '../../src/render/hud';
 import { layoutFor } from '../../src/render/layout';
 import { DRIFT } from '../../src/render/palette';
@@ -43,8 +43,24 @@ function onField(box: CssBox, cssWidth: number, cssHeight: number, field: Field)
 const within = (inner: ZoneBox, outer: ZoneBox): boolean =>
   inner.x - inner.w / 2 >= outer.x - outer.w / 2 && inner.x + inner.w / 2 <= outer.x + outer.w / 2 && inner.y - inner.h / 2 >= outer.y - outer.h / 2 && inner.y + inner.h / 2 <= outer.y + outer.h / 2;
 
+describe('touchControlBoxes', () => {
+  it('sits each control its edge gap in from the screen, or past a larger safe-area inset, as the stylesheet does', () => {
+    const plain = touchControlBoxes(844, 390, false);
+    expect(plain.stick).toEqual({ x: 35, y: 390 - 35 - 120, width: 120, height: 120 });
+    expect(plain.fire).toEqual({ x: 844 - 20 - 80, y: 390 - 20 - 80, width: 80, height: 80 });
+    expect(plain.pause).toEqual({ x: 844 - 16 - 44, y: 16, width: 44, height: 44 });
+    const notch = touchControlBoxes(844, 390, true, { top: 0, left: 47, right: 47, bottom: 21 });
+    expect(notch.stick).toMatchObject({ x: 844 - 47 - 120, y: 390 - 35 - 120 });
+    expect(notch.fire).toMatchObject({ x: 47, y: 390 - 21 - 80 });
+    expect(notch.pause).toMatchObject({ x: 844 - 47 - 44, y: 16 });
+  });
+});
+
 describe('danger zone keep-outs', () => {
-  it('cover the four corners of every field the game plays at, the same in field units on every device', () => {
+  it('cover the four corners of every field the game plays at, the same in field units on every device, the top two narrower on a narrow field', () => {
+    const widths = (width: number): number[] => zoneKeepOutBoxes({ width, height: 720 }).map((box) => box.w);
+    expect(widths(960)).toEqual([0.62 * 960, 0.29 * 960, 340, 340]);
+    expect(widths(1680)).toEqual([820, 440, 340, 340]);
     expect(DANGER_ZONE.keepOuts.map((k) => k.corner).sort()).toEqual(['bottomLeft', 'bottomRight', 'topLeft', 'topRight']);
     for (const field of [{ width: 960, height: 720 }, { width: 1680, height: 720 }]) {
       for (const box of zoneKeepOutBoxes(field)) {
@@ -54,13 +70,21 @@ describe('danger zone keep-outs', () => {
     }
   });
 
-  // A desktop, a 4:3 tablet window and phones in landscape up to 21:9, the touch ones in either hand.
+  /** A phone in landscape with a notch on one side: both sides inset alike, and the home bar's inset at the bottom. */
+  const notched = (side: number, bottom: number): SafeInsets => ({ top: 0, left: side, right: side, bottom });
+
+  // Desktops, 4:3 windows and phones in landscape up to 21:9, notched ones included, the touch ones in either hand.
   describe.each([
-    { name: 'a 1280x720 desktop', width: 1280, height: 720, touch: false },
-    { name: 'a 1024x768 window', width: 1024, height: 768, touch: false },
-    { name: 'Pixel 5 landscape', width: 802, height: 293, touch: true },
-    { name: 'a 844x390 phone', width: 844, height: 390, touch: true },
-  ])('on $name', ({ width, height, touch }) => {
+    { name: 'a 1280x720 desktop', width: 1280, height: 720, touch: false, insets: NO_INSETS },
+    { name: 'a 1366x768 desktop', width: 1366, height: 768, touch: false, insets: NO_INSETS },
+    { name: 'a 1024x768 window', width: 1024, height: 768, touch: false, insets: NO_INSETS },
+    { name: 'an 800x600 window', width: 800, height: 600, touch: false, insets: NO_INSETS },
+    { name: 'Pixel 5 landscape', width: 802, height: 293, touch: true, insets: NO_INSETS },
+    { name: 'a 844x390 phone', width: 844, height: 390, touch: true, insets: NO_INSETS },
+    { name: 'a notched 844x390 phone', width: 844, height: 390, touch: true, insets: notched(47, 21) },
+    { name: 'a notched 852x393 phone', width: 852, height: 393, touch: true, insets: notched(59, 21) },
+    { name: 'a notched 932x430 phone', width: 932, height: 430, touch: true, insets: notched(59, 21) },
+  ])('on $name', ({ width, height, touch, insets }) => {
     const field = fieldForViewport(width, height);
     const keepOuts = zoneKeepOutBoxes(field);
     const covered = (box: CssBox, what: string): void => {
@@ -69,10 +93,10 @@ describe('danger zone keep-outs', () => {
     };
 
     it.each(touch ? [false, true] : [false])('keeps every HUD pill, at its fullest, and every touch control inside a keep-out (left-handed: %s)', (leftHanded) => {
-      const controls = touchControlBoxes(width, height, leftHanded);
+      const controls = touchControlBoxes(width, height, leftHanded, insets);
       const hud = createHud(DRIFT);
       hud.resize(width, height);
-      hud.setBounds({ insets: { top: 0, right: 0, left: 0 }, topRight: touch ? { width: width - controls.pause.x, height: controls.pause.y + controls.pause.height } : null });
+      hud.setBounds({ insets, topRight: touch ? { width: width - controls.pause.x, height: controls.pause.y + controls.pause.height } : null });
       hud.draw(ctx, fullHudWorld(), 9_876_543);
       expect(hud.rects.length).toBeGreaterThan(10);
       for (const rect of hud.rects) covered(rect, 'pill');

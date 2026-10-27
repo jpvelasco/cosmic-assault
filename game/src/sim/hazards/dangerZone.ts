@@ -31,12 +31,15 @@ export const boxesOverlap = (a: ZoneBox, b: ZoneBox): boolean => Math.abs(a.x - 
 
 /** The `DANGER_ZONE.keepOuts` corners of `field`, as boxes. */
 export function zoneKeepOutBoxes(field: Field): ZoneBox[] {
-  return DANGER_ZONE.keepOuts.map(({ corner, width, height }) => ({
-    x: corner.endsWith('Left') ? width / 2 : field.width - width / 2,
-    y: corner.startsWith('top') ? height / 2 : field.height - height / 2,
-    w: width,
-    h: height,
-  }));
+  return DANGER_ZONE.keepOuts.map(({ corner, width: most, height, widthShare }) => {
+    const width = widthShare === undefined ? most : Math.min(most, widthShare * field.width);
+    return {
+      x: corner.endsWith('Left') ? width / 2 : field.width - width / 2,
+      y: corner.startsWith('top') ? height / 2 : field.height - height / 2,
+      w: width,
+      h: height,
+    };
+  });
 }
 
 interface Zone extends ZoneState {
