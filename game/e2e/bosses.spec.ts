@@ -144,7 +144,10 @@ test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
   });
 });
 
-/** The Leviathan's galaxy. Like the Warden's case, it leans on no seed: five lives carry the idle ship through the approach. */
+/**
+ * The Leviathan's galaxy. The case plays `openGame`'s default seed, whose idle ship loses a life or so to the approach's
+ * rocks and reaches the fight with the rest of its five; no seed claim guards that yet.
+ */
 const LEVIATHAN_GALAXY = '4-6';
 
 test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {

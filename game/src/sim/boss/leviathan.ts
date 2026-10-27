@@ -43,7 +43,7 @@ const COIL_CLEARANCE = 40;
  * leaves a ship that holds still `COIL_CLEARANCE` inside the ring, clear of the head.
  */
 export const COIL_NUDGE = COIL_RADIUS - HEAD_RADIUS - PLAYER.radius - COIL_CLEARANCE;
-/** Seconds the head takes to reach the ring, and how far past it the head swims out through the opening. */
+/** Seconds the head takes to swim in or out to the ring, and how far past it the head swims out through the opening. */
 const COIL_ENTRY_SECONDS = 0.5;
 const COIL_EXIT = 80;
 /** How fast the head turns toward a dive's aim through its windup, radians per second. */
@@ -78,6 +78,54 @@ export function coilAim(ship: Readonly<Point>, field: Field, out: Point): void {
   const share = Math.min(1, COIL_NUDGE / Math.hypot(dx, dy));
   out.x = ship.x + dx * share;
   out.y = ship.y + dy * share;
+}
+
+/** How a coil runs, planned as its windup begins: refilled in place. */
+export interface CoilPlan {
+  /** The bearing, from the ring's centre, of the head as the windup began: the middle of the ring's opening. */
+  opening: number;
+  /** How far from the centre the head began. */
+  from: number;
+  /** Which way round the head goes: 1 or -1. */
+  turn: number;
+  /** Seconds into the coil the head starts round the ring, and starts in or out to it. */
+  turnsAt: number;
+  movesAt: number;
+}
+
+/**
+ * Plans a coil about `aim` whose head holds at `head`, against a ship holding still at `ship`, the head having swum the
+ * `swimTurn` way round the aim (its sign). The head goes round away from the ship's side, or the way it swam if the
+ * ship sits on its line. A head outside the ring swims straight in to it first, never nearer the centre than the ring
+ * and so never nearer the ship, which is inside it, and then goes round. A head inside the ring goes round first at its
+ * own distance, which only takes it further from the ship, until the ship is a quarter turn or more behind it, and then
+ * swims out; from there the ship stays behind it until it is on the ring. So the head never closes on a still ship.
+ */
+export function planCoil(head: Readonly<Point>, aim: Readonly<Point>, ship: Readonly<Point>, swimTurn: number, plan: CoilPlan): CoilPlan {
+  plan.opening = Math.atan2(head.y - aim.y, head.x - aim.x);
+  plan.from = Math.hypot(head.x - aim.x, head.y - aim.y);
+  const side = turnBetween(plan.opening, Math.atan2(ship.y - aim.y, ship.x - aim.x));
+  plan.turn = side > 0 ? -1 : side < 0 ? 1 : swimTurn >= 0 ? 1 : -1;
+  const outside = plan.from >= COIL_RADIUS;
+  plan.turnsAt = outside ? COIL_ENTRY_SECONDS : 0;
+  plan.movesAt = outside ? 0 : (Math.max(0, Math.PI / 2 - Math.abs(side)) / TAU) * COIL_SECONDS;
+  return plan;
+}
+
+/**
+ * Writes into `out`, and returns, where the head is `elapsed` seconds into a coil about `aim` run to `plan`: turning
+ * once round the aim from its opening from `plan.turnsAt` to the coil's end, easing from its own distance to the ring
+ * over `COIL_ENTRY_SECONDS` from `plan.movesAt`, and swimming out through the opening's near half as the turn ends.
+ */
+export function coilPoint(plan: Readonly<CoilPlan>, aim: Readonly<Point>, elapsed: number, out: Point): Point {
+  const half = COIL_OPENING / 2;
+  const sweep = TAU * clamp((elapsed - plan.turnsAt) / (COIL_SECONDS - plan.turnsAt), 0, 1);
+  const angle = plan.opening + plan.turn * sweep;
+  const ease = smoothstep(clamp((elapsed - plan.movesAt) / COIL_ENTRY_SECONDS, 0, 1));
+  const radius = plan.from + (COIL_RADIUS - plan.from) * ease + COIL_EXIT * smoothstep(Math.max(0, sweep - (TAU - half)) / half);
+  out.x = aim.x + Math.cos(angle) * radius;
+  out.y = aim.y + Math.sin(angle) * radius;
+  return out;
 }
 
 /** The phase of the swim path's point nearest (x, y), of `REJOIN_SAMPLES` round a lap; the first of equals. */
@@ -135,9 +183,8 @@ class Leviathan implements BossBehaviour {
   /** Whether an attack that moves the head ran last step. */
   private striking = false;
   private lastWindup: AttackId | null = null;
-  /** The coil under way, round the view's aim: the bearing from it its opening faces, and which way round the head goes. */
-  private coilOpening = 0;
-  private coilTurn = 1;
+  /** The coil under way, round the view's aim. */
+  private readonly coilPlan: CoilPlan = { opening: 0, from: 0, turn: 1, turnsAt: 0, movesAt: 0 };
 
   constructor(setup: BossSetup) {
     this.field = setup.field;
@@ -228,7 +275,7 @@ class Leviathan implements BossBehaviour {
       return;
     }
     if (boss.windup !== null) {
-      if (fresh && boss.windup === 'coil') this.openCoil(boss);
+      if (fresh && boss.windup === 'coil') this.openCoil(boss, ctx.arena.ship);
       return;
     }
     this.swim(ctx.dt);
@@ -271,28 +318,18 @@ class Leviathan implements BossBehaviour {
     this.phase = nearestPhase(this.field, this.headX, this.headY, spot);
   }
 
-  /** Notes the coil's opening, where the head is as the windup begins, and that it turns round the ring the way the head swam. */
-  private openCoil(boss: Readonly<BossView>): void {
+  /** Plans the coil as its windup begins: about the view's aim, from where the head holds, against where the ship is. */
+  private openCoil(boss: Readonly<BossView>, ship: Readonly<Point>): void {
     const rx = this.headX - boss.aim.x;
     const ry = this.headY - boss.aim.y;
-    this.coilOpening = Math.atan2(ry, rx);
-    this.coilTurn = rx * Math.sin(boss.facing) - ry * Math.cos(boss.facing) >= 0 ? 1 : -1;
+    spot.x = this.headX;
+    spot.y = this.headY;
+    planCoil(spot, boss.aim, ship, rx * Math.sin(boss.facing) - ry * Math.cos(boss.facing), this.coilPlan);
   }
 
-  /**
-   * Runs the head round the ring: in to it over `COIL_ENTRY_SECONDS` from where it held, round it at `COIL_RADIUS` away
-   * from the opening it showed, and out through the near half of that opening as the coil ends.
-   */
+  /** Runs the head round the ring as its plan says (`coilPoint`). */
   private coil(ctx: AttackContext): void {
-    const { boss } = ctx;
-    const elapsed = ctx.age + ctx.dt;
-    const half = COIL_OPENING / 2;
-    const sweep = half + (TAU - half) * Math.min(1, elapsed / COIL_SECONDS);
-    const angle = this.coilOpening + this.coilTurn * sweep;
-    const radius = COIL_RADIUS + COIL_EXIT * smoothstep(Math.max(0, sweep - (TAU - half)) / half);
-    const enter = Math.min(1, elapsed / COIL_ENTRY_SECONDS);
-    boss.x = ctx.fromX + (boss.aim.x + Math.cos(angle) * radius - ctx.fromX) * enter;
-    boss.y = ctx.fromY + (boss.aim.y + Math.sin(angle) * radius - ctx.fromY) * enter;
+    coilPoint(this.coilPlan, ctx.boss.aim, ctx.age + ctx.dt, ctx.boss);
   }
 
   /** Fires a bolt from each live segment, square to the body there, to one side and then the other down its length. */

@@ -8,6 +8,10 @@ import { bossClearance, bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import {
   coilAim,
+  coilPoint,
+  planCoil,
+  swimPoint,
+  type CoilPlan,
   COIL_NUDGE,
   COIL_OPENING,
   COIL_RADIUS,
@@ -27,7 +31,7 @@ import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
-import { turnBetween } from '../../src/sim/math';
+import { TAU, turnBetween } from '../../src/sim/math';
 import { createRng, type Rng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
@@ -398,7 +402,7 @@ describe('Leviathan attacks', () => {
     for (const bolt of rigged.bolts.list) expect(bolt.fromAttack).toBe(true);
   });
 
-  it('coils round where the ship was at radius 220 for 2.0 s, keeping out of the 60° opening it showed, then leaves through it', () => {
+  it('coils round where the ship was at radius 220 for 2.0 s, in through the 60° opening it showed, out of it while round, then out through it', () => {
     const rigged = fighting(1, CENTRE);
     for (let i = 0; i < 5; i++) breakTail(rigged.r);
     untilWindup(rigged, 'coil', 60);
@@ -414,10 +418,13 @@ describe('Leviathan attacks', () => {
       radii.push(distance(view, centre));
     });
     expect(rigged.r.view.active).toBeNull();
-    // Circling: once on the ring and until it turns out through the opening.
+    // Circling: on the ring. It comes in through the opening, and once round out of it keeps out of it until it turns
+    // out through it.
     const circling = bearings.map((b, i) => ({ b, r: radii[i] ?? 0 })).filter((s) => Math.abs(s.r - COIL_RADIUS) < SLACK);
-    expect(circling.length * STEP_SECONDS).toBeGreaterThan(COIL_SECONDS * 0.6);
-    for (const { b } of circling) expect(Math.abs(b)).toBeGreaterThanOrEqual(COIL_OPENING / 2 - SLACK);
+    expect(circling.length * STEP_SECONDS).toBeGreaterThan(COIL_SECONDS * 0.5);
+    const round = circling.findIndex(({ b }) => Math.abs(b) >= COIL_OPENING / 2);
+    expect(round).toBeGreaterThanOrEqual(0);
+    for (const { b } of circling.slice(round)) expect(Math.abs(b)).toBeGreaterThanOrEqual(COIL_OPENING / 2 - SLACK);
     // It leaves inside the opening, outside the ring.
     expect(Math.abs(bearings.at(-1) ?? Infinity)).toBeLessThan(COIL_OPENING / 2);
     expect(radii.at(-1)).toBeGreaterThan(COIL_RADIUS);
@@ -446,32 +453,107 @@ describe('a Leviathan coil near the field\'s edge', () => {
     ['the right edge', { x: 1220, y: 360 }, 0.8],
   ] as const;
 
-  /** The coil round a ship parked at `ship`: the share of its steps with the head on the field, and the head's nearest pass to the ship once on the ring. */
-  function coilRound(ship: { readonly x: number; readonly y: number }): { onField: number; nearest: number; centre: { x: number; y: number } } {
-    const rigged = fighting(1, ship);
+  /**
+   * The coil round a ship parked at `ship`: the share of its steps with the head on the field, the head's nearest pass
+   * to the ship on the ring and over every active step, in to the ring and out, and the nearest pass of a live segment.
+   */
+  function coilRound(ship: { readonly x: number; readonly y: number }): { onField: number; onRing: number; head: number; segment: number; centre: { x: number; y: number } } {
+    // The ship waits at the centre, where the dive before the coil goes, and parks at `ship` as the spit before it winds up.
+    const rigged = fighting(1);
     for (let i = 0; i < 5; i++) breakTail(rigged.r);
-    untilWindup(rigged, 'coil', 60);
+    untilWindup(rigged, 'spit');
+    Object.assign(rigged.arena.ship, ship);
+    untilWindup(rigged, 'coil');
+    for (const body of [rigged.r.view, ...rigged.r.view.parts.filter((p) => p.hp > 0)]) expect(distance(body, ship), 'clear as the coil winds up').toBeGreaterThan(body.radius + PLAYER.radius);
     const centre = { ...rigged.r.view.aim };
     untilActive(rigged);
     let steps = 0;
     let on = 0;
-    let nearest = Infinity;
+    const nearest = { onRing: Infinity, head: Infinity, segment: Infinity };
     runFor(stepper(rigged), rigged.arena, COIL_SECONDS, () => {
       const { view } = rigged.r;
       for (const body of [view, ...view.parts]) expect(distance(body, { x: body.px, y: body.py }), 'a step').toBeLessThan(SEGMENT_GAP);
       steps++;
       if (view.x >= 0 && view.y >= 0 && view.x <= BOSS_FIELD.width && view.y <= BOSS_FIELD.height) on++;
-      if (Math.abs(distance(view, centre) - COIL_RADIUS) < SLACK) nearest = Math.min(nearest, distance(view, ship));
+      nearest.head = Math.min(nearest.head, distance(view, ship));
+      if (Math.abs(distance(view, centre) - COIL_RADIUS) < SLACK) nearest.onRing = Math.min(nearest.onRing, distance(view, ship));
+      for (const part of view.parts) if (part.hp > 0) nearest.segment = Math.min(nearest.segment, distance(part, ship));
     });
-    return { onField: on / steps, nearest, centre };
+    return { onField: on / steps, ...nearest, centre };
   }
 
   it.each(PARKED)('rings a ship parked at %s from a centre moved in toward the field, a still ship never touched', (_name, ship, floor) => {
-    const { onField, nearest, centre } = coilRound(ship);
+    const { onField, onRing, head, segment, centre } = coilRound(ship);
     expect(distance(centre, ship)).toBeGreaterThan(0);
     expect(distance(centre, ship)).toBeLessThanOrEqual(COIL_NUDGE + SLACK);
     expect(onField).toBeGreaterThanOrEqual(floor);
-    expect(nearest).toBeGreaterThanOrEqual(DEF.radius + PLAYER.radius + 40 - SLACK);
+    expect(onRing).toBeGreaterThanOrEqual(DEF.radius + PLAYER.radius + 40 - SLACK);
+    expect(head).toBeGreaterThanOrEqual(DEF.radius + PLAYER.radius);
+    expect(segment).toBeGreaterThanOrEqual(SEGMENT_RADIUS + PLAYER.radius);
+  });
+
+  it('plans every coil clear of a ship that holds still: over ship spots, swim-path phases and both turns', () => {
+    // Seeded ship spots over the field, the head held at points round its swim path, and the head having swum either
+    // way: the head never comes within touching distance of the ship at any moment of the coil, in, round and out.
+    const spots = createRng(17);
+    const plan: CoilPlan = { opening: 0, from: 0, turn: 1, turnsAt: 0, movesAt: 0 };
+    const [head, aim, at] = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+    const touch = DEF.radius + PLAYER.radius;
+    const turns = new Set<number>();
+    let coils = 0;
+    for (let n = 0; n < 400; n++) {
+      const ship = { x: spots.range(60, BOSS_FIELD.width - 60), y: spots.range(60, BOSS_FIELD.height - 60) };
+      coilAim(ship, BOSS_FIELD, aim);
+      for (let k = 0; k < 32; k++) {
+        swimPoint(BOSS_FIELD, (k / 32) * TAU, head);
+        if (distance(head, ship) <= touch) continue;
+        for (const swimTurn of [1, -1]) {
+          planCoil(head, aim, ship, swimTurn, plan);
+          turns.add(plan.turn);
+          coils++;
+          for (let t = 0; t <= COIL_SECONDS + SLACK; t += STEP_SECONDS) {
+            coilPoint(plan, aim, t, at);
+            if (distance(at, ship) < touch) throw new Error(`ship at ${ship.x.toFixed(1)}, ${ship.y.toFixed(1)}, head from ${head.x.toFixed(1)}, ${head.y.toFixed(1)}, swum ${String(swimTurn)}: ${distance(at, ship).toFixed(1)} away at ${t.toFixed(3)} s`);
+          }
+        }
+      }
+    }
+    expect(coils).toBeGreaterThan(20_000);
+    expect(turns).toEqual(new Set([1, -1]));
+  });
+
+  it('never touches a ship that holds still where it was as a coil wound up, wherever the ship is and whichever way the head turns', () => {
+    // Ships at seeded spots over the field, each met by every coil of a fight's second phase, from wherever the swim
+    // and the attacks before it left the head; a ship already within reach of the body as a coil winds up is skipped.
+    const spots = createRng(41);
+    const turns = new Set<number>();
+    let coils = 0;
+    for (let n = 0; n < 24; n++) {
+      const ship = { x: spots.range(60, BOSS_FIELD.width - 60), y: spots.range(60, BOSS_FIELD.height - 60) };
+      const rigged = fighting(1 + n, ship);
+      for (let i = 0; i < 5; i++) breakTail(rigged.r);
+      let watching = false;
+      let lastWindup: AttackId | null = null;
+      runFor(stepper(rigged), rigged.arena, 40, () => {
+        const { view } = rigged.r;
+        if (view.windup === 'coil' && lastWindup !== 'coil') {
+          const bodies = [view, ...view.parts.filter((p) => p.hp > 0)];
+          watching = bodies.every((b) => distance(b, ship) > b.radius + PLAYER.radius + 8);
+          if (watching) coils++;
+        }
+        lastWindup = view.windup;
+        if (!watching || view.active !== 'coil') return;
+        const label = `ship at ${ship.x.toFixed(0)}, ${ship.y.toFixed(0)}, ${rigged.arena.elapsed().toFixed(2)} s`;
+        expect(distance(view, ship), label).toBeGreaterThanOrEqual(DEF.radius + PLAYER.radius);
+        for (const part of view.parts) if (part.hp > 0) expect(distance(part, ship), label).toBeGreaterThanOrEqual(SEGMENT_RADIUS + PLAYER.radius);
+        // Which way round the head goes, once it is on the ring.
+        if (Math.abs(distance(view, view.aim) - COIL_RADIUS) < SLACK) {
+          turns.add(Math.sign((view.x - view.aim.x) * (view.y - view.py) - (view.y - view.aim.y) * (view.x - view.px)));
+        }
+      });
+    }
+    expect(coils).toBeGreaterThan(30);
+    expect(turns).toEqual(new Set([1, -1]));
   });
 
   it('centres the ring where the ship was when the whole ring fits on the field, and moves it no more than the nudge', () => {

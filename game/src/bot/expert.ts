@@ -455,7 +455,9 @@ export class Pilot {
   /**
    * The lane from the core to the windup's aim, as circles `radius` across no more than a radius apart: a telegraphed
    * attack may send the core, or its shards, down it. The lane ends where a core dashing at the aim would stop
-   * (`dashAim`): at the aim itself for a dash, whose own aim already stops there.
+   * (`dashAim`): at the aim itself for a dash, whose own aim already stops there. For any other lane, shards that fly on
+   * past the aim or bolts that converge on it, that end is an approximation the pilot keeps: it is the one it has always
+   * judged them by.
    */
   private addLane(view: Readonly<BotView>, boss: Readonly<BossView>, radius: number): void {
     const end = dashAim(boss.aim, view.field, boss.radius, this.laneEnd);

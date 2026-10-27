@@ -1,6 +1,6 @@
 import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
-import { COIL_OPENING, tailOf } from '../../sim/boss/leviathan';
+import { COIL_OPENING } from '../../sim/boss/leviathan';
 import { TAU } from '../../sim/math';
 import { mix, rgba } from '../color';
 import { coreSprite, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
@@ -33,6 +33,15 @@ const headKeys = (radius: number, palette: PaletteId): Readonly<Record<'shut' | 
 });
 const segmentKeys = (radius: number, palette: PaletteId): Readonly<Record<SegmentLook, string>> =>
   Object.fromEntries(SEGMENT_LOOKS.map((look) => [look, `boss|${palette}|leviathan|segment|${look}|${String(radius)}`])) as Record<SegmentLook, string>;
+
+/** The index of the live part a shot can hurt, the body's open tail, as the sim publishes it; -1 with none. */
+function openPart(parts: readonly Readonly<BossPart>[]): number {
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i] as BossPart;
+    if (part.hp > 0 && part.armoured !== true) return i;
+  }
+  return -1;
+}
 
 /**
  * The Leviathan: an indigo serpent in the Dimension's light. Its segments are drawn tail first, each turned toward the
@@ -163,12 +172,12 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
     underglow(boss, frame) {
       trackCoil(boss, frame);
       if (coiling) drawRing(boss, frame);
-      const index = tailOf(boss.parts);
-      const tail = boss.parts[index];
+      const tail = boss.parts[openPart(boss.parts)];
       if (tail === undefined || boss.state !== 'fighting') return;
-      layout(boss, frame);
+      // Just the tail's place: the whole body is laid out once a frame, for its body.
+      const at = partOffset(tail, frame, boss.px + (boss.x - boss.px) * frame.alpha, boss.py + (boss.y - boss.py) * frame.alpha, offset);
       ctx.globalAlpha = TAIL_GLOW_ALPHA * frame.look.glow * frame.shown * tailPulse(frame);
-      pen.place(placeX[index] ?? 0, placeY[index] ?? 0, frame.size, 0);
+      pen.place(frame.x + at.x * frame.size, frame.y + at.y * frame.size, frame.size, 0);
       pen.blit(baker.glow(heat, tail.radius * TAIL_GLOW_SCALE));
     },
     body(boss, frame) {
@@ -180,7 +189,7 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
       }
       layout(boss, frame);
       const { parts } = boss;
-      const tail = tailOf(boss.parts);
+      const tail = openPart(boss.parts);
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i] as BossPart;
         if (part.hp <= 0) continue;
