@@ -4,7 +4,8 @@ import { isFoeKind } from '../../content/foes';
 import { tierOf } from '../../content/galaxies';
 import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
-import { BossRunner, DYING_SECONDS, type BossFactory, type BossSetup, type BossView } from '../boss/bossRunner';
+import { BossRunner, clearSpot, DYING_SECONDS, type BossFactory, type BossSetup, type BossView } from '../boss/bossRunner';
+import { ASTEROID, PLAYER } from '../config';
 import { createMonolith } from '../boss/monolith';
 import { SENTINEL } from '../boss/sentinel';
 import type { Field } from '../field';
@@ -275,6 +276,15 @@ export class GalaxyRun implements Spawner {
   /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, or into a boss that is fighting. */
   shipStruck(x: number, y: number, radius: number): boolean {
     return this.foes.ram(x, y, radius) || this.touchesBoss(x, y, radius);
+  }
+
+  /** A ship respawning while a boss is on the field comes back clear of its reach, not at the centre, where the boss may be. */
+  respawned(ship: Ship): void {
+    const boss = this.bossRunner;
+    if (boss === null || boss.state === 'down') return;
+    const spot = clearSpot(boss.view, boss.reach + PLAYER.radius + ASTEROID.safeRadius, this.arena.field());
+    ship.x = ship.px = spot.x;
+    ship.y = ship.py = spot.y;
   }
 
   /** The Shield takes a hit meant for the ship, if it has one; true means the hit is absorbed: no life is lost. */

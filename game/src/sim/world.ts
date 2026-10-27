@@ -412,6 +412,7 @@ export class World {
       return false;
     }
     respawnShip(ship, this.currentField);
+    this.rules.respawned?.(ship);
     return true;
   }
 

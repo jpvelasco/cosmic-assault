@@ -179,6 +179,12 @@ export function openGameOverRun(page: Page): Promise<void> {
   return openGame(page, { seed: seedFor('one-life-death'), lives: 1, galaxy: GAME_OVER_GALAXY });
 }
 
+/**
+ * Shots `damageBoss` lands to beat any boss: each goes where it does harm, so this must cover the shots that break a
+ * shielded boss's parts as well as its HP (the Monolith's: at most 9 shards of 2 HP, then 60 HP, 78 in all).
+ */
+export const KILL_SHOTS = 100;
+
 /** Opens BOSS_GALAXY in Free play with the 'boss-fight' seed, whose idle ship lives to the boss fight. */
 export function openBossGame(page: Page): Promise<void> {
   return openGame(page, { seed: seedFor('boss-fight'), galaxy: BOSS_GALAXY });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
-import { bossTarget, BossRunner, MAX_SHOVE_SPEED, MIN_WINDUP_SECONDS, type BossSetup, type BossView } from '../../src/sim/boss/bossRunner';
+import { bossTarget, BossRunner, MAX_SHOVE_SPEED, MIN_WINDUP_SECONDS, type BossPart, type BossSetup, type BossView } from '../../src/sim/boss/bossRunner';
 import { createMonolith, EXPOSED_AT, ORBIT_RADIUS, ORBIT_SPEED, REGROW_CAP, REGROW_SECONDS, SHARD_COUNTS, SHARD_HP, SHARD_RADIUS } from '../../src/sim/boss/monolith';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -283,6 +283,34 @@ describe('Monolith attacks', () => {
     expect(flying).toBe(3);
     // Close enough to strike a ship that stayed put.
     expect(closest).toBeLessThan(SHARD_RADIUS + PLAYER.radius);
+  });
+
+  it('grows a shard back on its orbit, even one broken in flight while its volley is still under way', () => {
+    const { r, arena } = fighting();
+    const { parts } = r.view;
+    const thrown = parts[0] as BossPart;
+    // Bare 1.5 s into the fight, with only shards 0 to 2 left: its first shard grows back 6 s later, during the second
+    // volley, and the lowest broken shard is the one that grows, so breaking shard 0 in that volley's flight makes it the one.
+    runFor(stepper(r), arena, 1.45);
+    parts.forEach((part, i) => {
+      while (i > 2 && part.hp > 0) r.hitPart(i, 1);
+    });
+    let volleys = 0;
+    let broken = false;
+    let regrownAt: number | null = null;
+    const offOrbit = (): boolean => Math.abs(Math.hypot(thrown.x - r.view.x, thrown.y - r.view.y) - ORBIT_RADIUS) > 1;
+    runFor(stepper(r), arena, 8, () => {
+      if (arena.events.some((e) => e.type === 'bossWindup')) volleys++;
+      if (volleys !== 2 || r.view.active !== 'shardVolley') return;
+      if (!broken && offOrbit()) {
+        while (thrown.hp > 0) r.hitPart(0, 1);
+        broken = true;
+      } else if (broken && regrownAt === null && thrown.hp > 0) {
+        regrownAt = arena.elapsed();
+        expect(offOrbit(), 'regrown on its orbit').toBe(false);
+      }
+    });
+    expect(regrownAt).not.toBeNull();
   });
 
   it('flies what shards it has left when fewer than three remain', () => {

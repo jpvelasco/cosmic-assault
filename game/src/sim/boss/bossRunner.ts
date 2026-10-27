@@ -125,6 +125,22 @@ export interface BossSetup {
   readonly field: Field;
 }
 
+/** How far inside the field's edges a ship respawns clear of a boss. */
+export const RESPAWN_INSET = 60;
+
+/**
+ * Where a ship can respawn at least `clearance` from a core at `core`: bottom-centre, a little inside the edge, or if
+ * the core has drifted too near it, the inset corner farthest from the core.
+ */
+export function clearSpot(core: Readonly<{ x: number; y: number }>, clearance: number, field: Field): { x: number; y: number } {
+  const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height - RESPAWN_INSET];
+  const spot = { x: field.width / 2, y: bottom };
+  if (Math.hypot(spot.x - core.x, spot.y - core.y) >= clearance) return spot;
+  spot.x = Math.abs(core.x - left) > Math.abs(core.x - right) ? left : right;
+  spot.y = Math.abs(core.y - top) > Math.abs(core.y - bottom) ? top : bottom;
+  return spot;
+}
+
 /** Where a boss arrives in `field`. */
 export function bossHome(field: Field): { readonly x: number; readonly y: number } {
   return { x: field.width / 2, y: field.height * HOME_HEIGHT_SHARE };
@@ -227,6 +243,11 @@ export class BossRunner {
     return this.view.state;
   }
 
+  /** How far from the core's centre the boss reaches, its parts included. */
+  get reach(): number {
+    return this.behaviour.reach ?? this.view.radius;
+  }
+
   /** Stretches the core, its parts and the points an attack under way aims at, to the new field like every other entity. */
   resize(old: Field, field: Field): void {
     const { view, context } = this;
@@ -301,11 +322,11 @@ export class BossRunner {
     return 'broken';
   }
 
-  /** Applies, on the hazard path, the shove the last attack asked for, then forgets it. */
+  /** Applies, on the hazard path, the shove the last attack asked for, then forgets it; a boss beaten meanwhile shoves nothing. */
   shove(ship: Moving): void {
     const ctx = this.context;
     if (ctx === null || (ctx.shoveX === 0 && ctx.shoveY === 0)) return;
-    nudge(ship, ctx.shoveX, ctx.shoveY, MAX_SHOVE_SPEED);
+    if (this.view.state === 'fighting') nudge(ship, ctx.shoveX, ctx.shoveY, MAX_SHOVE_SPEED);
     ctx.shoveX = 0;
     ctx.shoveY = 0;
   }
@@ -453,7 +474,7 @@ export class BossRunner {
   /** Moves the core along its heading, bouncing it off the walls so the whole boss, parts and all, stays inside the field. */
   private drift(dt: number, field: Field): void {
     const { view } = this;
-    const reach = this.behaviour.reach ?? view.radius;
+    const { reach } = this;
     const [maxX, maxY] = [field.width - reach, field.height - reach];
     view.x = clamp(view.x + this.dx * dt, reach, maxX);
     view.y = clamp(view.y + this.dy * dt, reach, maxY);

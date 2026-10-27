@@ -256,6 +256,27 @@ describe('createBossPass', () => {
       expect(later).toBeCloseTo(1, 6);
     });
 
+    it('brings its shards in with the core through the intro, at its scale and about its centre', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const arriving = monolith({ state: 'intro', px: 640, parts: [shard(740)] });
+      pass.advance(0.01, arriving);
+      pass.advance(0.1, arriving);
+      pass.draw(arriving, 1, LOOK);
+      const early = drawOf('boss|monolith|shard|15', custom);
+      expect(early?.scale ?? 1).toBeLessThan(0.9);
+      expect(Math.hypot((early?.e ?? 0) - 640, (early?.f ?? 0) - 200)).toBeLessThan(Math.hypot(740 - 640, 330 - 200) * 0.9);
+    });
+
+    it('starts each fight with its shards whole, not growing back from the last fight', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.advance(0.01, monolith({ parts: [shard(600, 0)] }));
+      pass.handle([{ type: 'bossIntro', id: 'monolith' }]);
+      const next = monolith({ parts: [shard(600)] });
+      pass.advance(0.01, next);
+      pass.draw(next, 1, LOOK);
+      expect(drawOf('boss|monolith|shard|15', custom)?.scale).toBeCloseTo(1, 6);
+    });
+
     it('rings its windups in the attack\'s colour, and sends a shockwave out as it pulses', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(monolith({ windup: 'shardVolley' }), 1, LOOK);

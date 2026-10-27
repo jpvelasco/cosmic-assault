@@ -125,7 +125,7 @@ class Monolith implements BossBehaviour {
     }
   }
 
-  /** While the core is bare, a broken shard grows back every 6 s; the wait starts afresh each time it is laid bare. */
+  /** While the core is bare, a broken shard grows back on its orbit every 6 s; the wait starts afresh each time it is laid bare. */
   private regrow(boss: Readonly<BossView>, dt: number): void {
     if (boss.state !== 'fighting' || !boss.vulnerable) {
       this.regrowClock = 0;
@@ -134,11 +134,12 @@ class Monolith implements BossBehaviour {
     this.regrowClock += dt;
     if (this.regrowClock < REGROW_SECONDS || this.live() >= REGROW_CAP) return;
     this.regrowClock = 0;
-    for (const part of this.parts) {
-      if (part.hp > 0) continue;
-      part.hp = part.maxHp;
-      return;
-    }
+    const i = this.parts.findIndex((part) => part.hp <= 0);
+    const part = this.parts[i];
+    if (part === undefined) return;
+    part.hp = part.maxHp;
+    // A shard broken in flight grows back on its orbit, out of the volley that threw it.
+    this.lanes[i] = Number.NaN;
   }
 
   /** Throws up to three shards out past where the ship was and back, each in its own lane. */

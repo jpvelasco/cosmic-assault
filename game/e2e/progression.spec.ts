@@ -4,6 +4,7 @@ import {
   clickPastGuard,
   expect,
   expectMode,
+  KILL_SHOTS,
   fastForward,
   gameState,
   openBossGame,
@@ -20,8 +21,6 @@ import {
 import { STEP_SECONDS } from '../src/sim/config';
 import { BOSS_GALAXY, CLEAR_1_1_SECONDS, seedFor, TO_BOSS_FIGHT_SECONDS } from './seeds';
 
-/** More than any boss' hit points. */
-const KILL_DAMAGE = 100;
 
 test('Free play: 1-1 clears to a results card with its stars, saved as the warp starts, opens 1-2 on the map, and a reload keeps it', async ({ page }) => {
   await pinClockSeed(page, seedFor('clears-1-1'));
@@ -65,7 +64,7 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     expect((await gameState(page)).screen).toBe('playing');
-    await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_DAMAGE);
+    await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_SHOTS);
     // The killing blow ends the galaxy on the next step: the boss dies under the results card.
     await fastForward(page, STEP_SECONDS);
 
@@ -106,7 +105,7 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
     await expectMode(page, 'playing');
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
-    await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_DAMAGE);
+    await page.evaluate((n) => window.__COSMIC_ASSAULT_TEST_API__?.damageBoss(n), KILL_SHOTS);
     // The killing blow ends the galaxy on the next step: the boss dies under the results card.
     await fastForward(page, STEP_SECONDS);
 

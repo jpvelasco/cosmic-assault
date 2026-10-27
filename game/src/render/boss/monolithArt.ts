@@ -1,7 +1,7 @@
-import { TAU } from '../sim/math';
-import { mix, rgba } from './color';
-import type { Palette } from './palette';
-import { addStops, craterLayout, paintCraters, paintGlow, strokePath, tracePath, type Point } from './sprites';
+import { TAU } from '../../sim/math';
+import { mix, rgba } from '../color';
+import type { Palette } from '../palette';
+import { addStops, craterLayout, paintCraters, paintGlow, strokePath, tracePath, type Point } from '../sprites';
 
 const WHITE = '#ffffff';
 const BLACK = '#000000';

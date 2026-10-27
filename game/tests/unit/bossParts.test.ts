@@ -8,7 +8,10 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { TAU } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
+import { NO_CONTROLS } from '../../src/sim/controls';
+import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { createShip } from '../../src/sim/ship';
+import { World } from '../../src/sim/world';
 import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
@@ -223,7 +226,7 @@ describe('a boss attack under way', () => {
     expect(new Set(seen)).toEqual(new Set([null, 'shardRing']));
   });
 
-  it('shoves the ship once, on the next hazard path, never past the speed cap', () => {
+  it('shoves the ship on the next hazard path after the attack asks, never past the speed cap', () => {
     const { r, arena } = fighting(probe(5000));
     const ship = createShip(BOSS_FIELD.width / 2, 600);
     let shoved = 0;
@@ -280,6 +283,18 @@ describe('GalaxyRun with a boss that has parts', () => {
     expect(boss.hp).toBe(boss.maxHp);
   });
 
+  it('spends a shot that overlaps both a part and the core once, on the part', () => {
+    const { arena, run, boss } = galaxyRun();
+    const part = boss.parts[0] as BossPart;
+    // Part 0 sits 100 from the centre, on the core's rim: a shot 89 out touches both.
+    const at = { x: boss.x + 89, y: boss.y };
+    expect(Math.hypot(at.x - part.x, at.y - part.y)).toBeLessThan(PART_RADIUS + 3);
+    expect(boss.radius + 3).toBeGreaterThan(89);
+    expect(run.hitBoss(at.x, at.y, 3)).toBe(true);
+    expect(arena.events.map((e) => e.type)).toEqual(['bossPartHit']);
+    expect(part.hp).toBe(1);
+  });
+
   it('spends a shot on a shielded core with a deflection, not a hit', () => {
     const { arena, run, boss } = galaxyRun();
     expect(run.hitBoss(boss.x, boss.y, 3)).toBe(true);
@@ -308,5 +323,46 @@ describe('GalaxyRun with a boss that has parts', () => {
     }
     expect(pushed).toBeGreaterThan(0);
     expect(arena.ship.vx).toBeGreaterThan(0);
+  });
+
+  it('shoves nothing once the boss is beaten with a shove still to land', () => {
+    const { arena, run } = probeRun(120);
+    const steps = (): void => {
+      arena.events.length = 0;
+      arena.tick();
+      run.beginStep();
+      run.moveOwn(STEP_SECONDS, arena.ship);
+      run.step(STEP_SECONDS);
+    };
+    // Up to its windup's end, then the step its attack runs, asking for a shove the next step would apply.
+    for (let i = 0; i < Math.round(30 / STEP_SECONDS) && run.boss?.active == null; i++) steps();
+    steps();
+    const boss = run.boss;
+    if (boss?.active == null) throw new Error('the probe should attack within 30 s');
+    for (let target = bossTarget(boss); target !== null; target = bossTarget(boss)) run.hitBoss(target.x, target.y, 1);
+    expect(boss.state).toBe('dying');
+    steps();
+    expect(arena.ship.vx).toBe(0);
+    expect(arena.events.map((e) => e.type)).toContain('warpOut');
+  });
+});
+
+describe('a World with the Monolith', () => {
+  it('breaks a 1 HP shard once when two shots reach it in the same step, the second going on', () => {
+    const world = new World({ seed: 4, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] }, mode: 'free' } });
+    for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
+    const boss = world.boss;
+    const run = (world as unknown as { run: GalaxyRun }).run;
+    const part = boss?.parts[0];
+    if (boss?.state !== 'fighting' || part === undefined) throw new Error('the Monolith should be fighting 22.1 s in');
+    run.hitBoss(part.x, part.y, 1);
+    expect(part.hp).toBe(1);
+    const shots = world.projectiles as Projectile[];
+    for (let i = 0; i < 2; i++) shots.push(projectileFromShot({ x: part.x, y: part.y, vx: 0, vy: 0 }, 9000 + i));
+    const events = world.step(STEP_SECONDS, NO_CONTROLS).map((e) => e.type);
+    expect(events.filter((t) => t === 'bossPartBroken')).toHaveLength(1);
+    expect(events.filter((t) => t === 'bossPartHit')).toHaveLength(0);
+    expect(part.hp).toBe(0);
+    expect(world.projectiles.some((p) => p.id === 9000 || p.id === 9001)).toBe(true);
   });
 });
