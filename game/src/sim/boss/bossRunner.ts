@@ -390,7 +390,7 @@ export class BossRunner {
     const { left, right, up, down } = this.measure();
     if (left + right <= field.width && up + down <= field.height) return;
     throw new RangeError(
-      `${this.def.id} reaches ${String(left + right)} across and ${String(up + down)} down from its core, more than its ${String(field.width)}×${String(field.height)} field holds: shrink its reach, its orbit or its parts' radius`,
+      `${this.def.id} reaches ${String(Math.round(left + right))} across and ${String(Math.round(up + down))} down from its core, more than its ${String(field.width)}×${String(field.height)} field holds: shrink its reach, its orbit or its parts' radius`,
     );
   }
 
