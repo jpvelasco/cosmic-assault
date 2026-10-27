@@ -5,7 +5,7 @@ export interface BossDef {
   readonly name: string;
   /** Hit points in Dimension 1; `bossHp` adds the Dimension's share. */
   readonly hp: number;
-  /** Radius of the core, the only part of a boss that hurts or can be hurt. */
+  /** Radius of the core; a boss with parts (sim/boss) is struck and strikes through them too. */
   readonly radius: number;
   /** The attacks of each of its three phases, in order; a phase repeats its list. The phase changes at two thirds and one third of its HP. */
   readonly phases: readonly (readonly AttackId[])[];
@@ -15,8 +15,16 @@ export interface BossDef {
 
 const HP_PER_DIMENSION = 6;
 
-/** M5 replaces the Sentinel with a boss per Dimension. */
+/** The boss roster: the Monolith guards 1-★, and M4's Sentinel stands in for the bosses still to come. */
 export const BOSSES: Readonly<Record<BossId, BossDef>> = {
+  monolith: {
+    id: 'monolith',
+    name: 'Monolith',
+    hp: 60,
+    radius: 90,
+    phases: [['shardVolley'], ['shardVolley', 'quake'], ['quake', 'shardVolley', 'pulse']],
+    rest: [2.0, 1.5, 1.0],
+  },
   sentinel: {
     id: 'sentinel',
     name: 'Sentinel',

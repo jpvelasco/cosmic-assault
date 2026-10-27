@@ -46,7 +46,8 @@ function probe(shove = 0): Probe {
   };
   return {
     driftSpeed: 0,
-    attacks: { shardRing: spec, lunge: spec },
+    // Every attack any boss names, so the probe can stand in for any of them.
+    attacks: { shardRing: spec, lunge: spec, shardVolley: spec, quake: spec, pulse: spec },
     parts,
     reach: PART_REACH + PART_RADIUS,
     step: (ctx) => {

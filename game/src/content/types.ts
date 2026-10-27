@@ -24,11 +24,11 @@ export type FoeKind = 'splitter' | 'drone';
 /** Everything the director can spawn from its threat budget. */
 export type ThreatKind = RockKind | FoeKind;
 
-/** M5 widens this to one boss per Dimension. */
-export type BossId = 'sentinel';
+/** The bosses so far: the Monolith guards Dimension 1; the M4 placeholder Sentinel stands in for the rest. */
+export type BossId = 'sentinel' | 'monolith';
 
-/** The moves a boss draws on; M5 adds the rest of the roster's. */
-export type AttackId = 'shardRing' | 'lunge';
+/** The moves a boss draws on: the Sentinel's, then the Monolith's. */
+export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse';
 
 /**
  * How likely a kind is to be picked: `base` up to tier `from`, then rising by `step` per tier past it, never above

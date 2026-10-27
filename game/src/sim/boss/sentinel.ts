@@ -1,7 +1,6 @@
 import { clamp } from '../../content/curves';
-import { createAsteroid, type AsteroidSize } from '../asteroid';
-import { ASTEROID } from '../config';
-import { TAU } from '../math';
+import type { AsteroidSize } from '../asteroid';
+import { rockRing } from './attacks';
 import type { AttackContext, BossBehaviour, BossPhase } from './bossRunner';
 
 /** Rocks in a ring, by phase. */
@@ -12,19 +11,9 @@ const SHARD_SIZE: AsteroidSize = 2;
 const SHARD_SPEED = 1.5;
 const LUNGE_SECONDS = 0.8;
 
-/** Sends a ring of pass-through rocks out from the core, evenly spaced and turned by a random offset. */
+/** Sends a ring of pass-through rocks out from the core, more with each phase. */
 function shardRing(ctx: AttackContext): void {
-  const { arena, boss, rng } = ctx;
-  const count = RING_COUNTS[boss.phase];
-  const spacing = TAU / count;
-  const offset = rng.range(0, spacing);
-  const reach = boss.radius + ASTEROID.radii[SHARD_SIZE];
-  for (let i = 0; i < count; i++) {
-    const angle = offset + i * spacing;
-    const rock = createAsteroid(rng, boss.x + Math.cos(angle) * reach, boss.y + Math.sin(angle) * reach, SHARD_SIZE, angle, ctx.rockSpeed * SHARD_SPEED, arena.shapeRng, arena.nextId());
-    rock.transient = true;
-    arena.asteroids.push(rock);
-  }
+  rockRing(ctx, RING_COUNTS[ctx.boss.phase], SHARD_SIZE, SHARD_SPEED);
 }
 
 /** Dashes in a straight line to where the ship was when the windup began, stopping short of the field's edge. */

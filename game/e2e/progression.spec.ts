@@ -57,7 +57,7 @@ test('Free play: 1-1 clears to a results card with its stars, saved as the warp 
 });
 
 test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
-  test('a debug run beats the Sentinel and shows the results card, and leaves the save alone', async ({ page }) => {
+  test('a debug run beats the Monolith and shows the results card, and leaves the save alone', async ({ page }) => {
     await openBossGame(page);
     await page.keyboard.press('Space');
     await expectMode(page, 'playing');

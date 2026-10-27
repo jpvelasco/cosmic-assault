@@ -3,12 +3,14 @@ import { BOSS_FLASH_SECONDS, createBossPass, type BossPass } from '../../src/ren
 import { createFieldPen } from '../../src/render/fieldPen';
 import { DRIFT } from '../../src/render/palette';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
-import type { BossView } from '../../src/sim/boss/bossRunner';
+import type { BossPart, BossView } from '../../src/sim/boss/bossRunner';
 
 interface Draw {
   readonly image: unknown;
   /** The transform's x scale: the field scale times the sprite's size. */
   readonly a: number;
+  /** The transform's scale, however it is turned. */
+  readonly scale: number;
   readonly e: number;
   readonly f: number;
   readonly alpha: number;
@@ -18,6 +20,7 @@ interface Draw {
 function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
   const draws: Draw[] = [];
   let a = 1;
+  let b = 0;
   let e = 0;
   let f = 0;
   let alpha = 1;
@@ -28,13 +31,14 @@ function fakeContext(): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
       get: (_target, name) => {
         switch (name) {
           case 'setTransform':
-            return (nextA: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+            return (nextA: number, nextB: number, _c: number, _d: number, nextE: number, nextF: number) => {
               a = nextA;
+              b = nextB;
               e = nextE;
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, a, e, f, alpha });
+            return (image: unknown) => draws.push({ image, a, scale: Math.hypot(a, b), e, f, alpha });
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
@@ -193,6 +197,82 @@ describe('createBossPass', () => {
     expect(late?.alpha).toBeLessThan(early?.alpha ?? 0);
     expect(late?.a).toBeGreaterThan(early?.a ?? Infinity);
     expect(earlyWhite).toBeGreaterThan(0);
+  });
+
+  describe('the Monolith', () => {
+    const shard = (x: number, hp = 2): BossPart => ({ x, y: 330, px: x, py: 330, radius: 15, hp, maxHp: 2 });
+    const monolith = (over: Partial<BossView> = {}): BossView =>
+      boss({ id: 'monolith', radius: 90, hp: 60, maxHp: 60, vulnerable: false, parts: [shard(600), shard(640, 1), shard(680, 0)], ...over });
+    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
+
+    it('draws a rock core with fissures, and a shard for each live part, cracked once hurt, with no eye', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(monolith(), 1, LOOK);
+      const keys = keysOf(custom);
+      expect(keys).toEqual(expect.arrayContaining(['boss|monolith|core|90', 'boss|monolith|fissures|90', 'boss|monolith|shard|15', 'boss|monolith|shardCracked|15']));
+      expect(keys.filter((k) => k === 'boss|monolith|shard|15')).toHaveLength(1);
+      expect(keys.filter((k) => k === 'boss|monolith|shardCracked|15')).toHaveLength(1);
+      expect(keys.some((k) => String(k).startsWith('boss|eye|'))).toBe(false);
+      expect(keys).not.toContain('boss|core|90');
+    });
+
+    it('lights its fissures brighter, and adds a glow, once its core is exposed', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const glow = vi.spyOn(baker, 'glow');
+      pass.draw(monolith(), 1, LOOK);
+      const shielded = drawOf('boss|monolith|fissures|90', custom)?.alpha ?? 1;
+      const shieldedGlows = glow.mock.calls.length;
+      pass.draw(monolith({ vulnerable: true }), 1, LOOK);
+      const exposed = drawOf('boss|monolith|fissures|90', custom)?.alpha ?? 0;
+      expect(exposed).toBeGreaterThan(shielded + 0.3);
+      expect(glow.mock.calls.length - shieldedGlows).toBeGreaterThan(shieldedGlows);
+    });
+
+    it('flashes a shard white when a shot cracks it', () => {
+      const white = vi.spyOn(baker, 'white');
+      pass.draw(monolith(), 1, LOOK);
+      expect(white.mock.calls.map(([key]) => key)).not.toContain('boss|monolith|shard|15');
+      pass.handle([{ type: 'bossPartHit', part: 0, x: 600, y: 330, hp: 1 }]);
+      pass.draw(monolith(), 1, LOOK);
+      expect(white.mock.calls.map(([key]) => key)).toContain('boss|monolith|shard|15');
+      pass.advance(0.2, monolith());
+      white.mockClear();
+      pass.draw(monolith(), 1, LOOK);
+      expect(white).not.toHaveBeenCalled();
+    });
+
+    it('grows a shard back in, from small to full size', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const broken = monolith({ parts: [shard(600, 0)] });
+      pass.advance(0.01, broken);
+      const regrown = monolith({ parts: [shard(600)] });
+      pass.advance(0.05, regrown);
+      pass.draw(regrown, 1, LOOK);
+      const early = drawOf('boss|monolith|shard|15', custom)?.scale ?? 0;
+      pass.advance(1, regrown);
+      pass.draw(regrown, 1, LOOK);
+      const later = drawOf('boss|monolith|shard|15', custom)?.scale ?? 0;
+      expect(early).toBeLessThan(later * 0.7);
+      expect(later).toBeCloseTo(1, 6);
+    });
+
+    it('rings its windups in the attack\'s colour, and sends a shockwave out as it pulses', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(monolith({ windup: 'shardVolley' }), 1, LOOK);
+      pass.draw(monolith({ windup: 'quake' }), 1, LOOK);
+      pass.draw(monolith({ windup: 'pulse' }), 1, LOOK);
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|ring|shardVolley|90', 'boss|ring|quake|90', 'boss|ring|pulse|90']));
+      custom.mockClear();
+      const pulsing = monolith({ active: 'pulse' });
+      pass.advance(0.01, pulsing);
+      pass.draw(pulsing, 1, LOOK);
+      const near = drawOf('boss|ring|pulse|90', custom)?.a ?? 0;
+      pass.advance(0.2, pulsing);
+      pass.draw(pulsing, 1, LOOK);
+      const far = drawOf('boss|ring|pulse|90', custom)?.a ?? 0;
+      expect(near).toBeGreaterThan(0);
+      expect(far).toBeGreaterThan(near);
+    });
   });
 
   it('forgets the last fight on reset', () => {

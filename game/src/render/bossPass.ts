@@ -1,10 +1,11 @@
 import type { AttackId } from '../content/types';
-import { DYING_SECONDS, type BossPhase, type BossState, type BossView } from '../sim/boss/bossRunner';
+import { DYING_SECONDS, type BossPart, type BossPhase, type BossState, type BossView } from '../sim/boss/bossRunner';
 import type { SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
 import type { FieldPen } from './fieldPen';
 import { HIT_FLASH_SECONDS } from './hitFlash';
+import { MONOLITH_ART_REACH, paintFissures, paintMonolithCore, paintShard } from './monolithArt';
 import type { Palette } from './palette';
 import { easeOut } from './scene';
 import type { SpriteBaker } from './sprites';
@@ -22,13 +23,14 @@ export interface BossLook {
 }
 
 export interface BossPass {
-  /** A `bossHit` flashes the core. */
+  /** A `bossHit` flashes the core, a `bossPartHit` the part it struck. */
   handle(events: readonly SimEvent[]): void;
   /** Advances the flash, and the clocks of the boss's state and windup, by `dt` seconds of real time. */
   advance(dt: number, boss: Readonly<BossView> | null): void;
   /**
-   * Draws the boss `alpha` of the way from its previous position: glow, windup ring, core, eye and hit flash. Expects
-   * the field pen aimed for the frame and `source-over`, which it leaves as it found them, with alpha 1.
+   * Draws the boss `alpha` of the way from its previous position: glow, windup ring, its body (the Sentinel's core and
+   * eye, the Monolith's rock and shards) and hit flash. Expects the field pen aimed for the frame and `source-over`,
+   * which it leaves as it found them, with alpha 1.
    */
   draw(boss: Readonly<BossView> | null, alpha: number, look: BossLook): void;
   /** How bright the hit flash is now, 1 just after a hit down to 0. */
@@ -57,6 +59,22 @@ const EYE_SIZE = 0.3;
 const STUDS = 8;
 /** Room around the core's rim for its stroke. */
 const RIM_PAD = 2;
+/** The Monolith's fissures, dim behind its shield and blazing once it is bare, pulsing at this rate unless held still. */
+const FISSURE_SHIELDED = 0.3;
+const FISSURE_EXPOSED = 1;
+const FISSURE_PULSE_HZ = 2.2;
+/** The bare core's heat: a wide haze behind it and a bloom over it, as diameters in core radii. */
+const EXPOSED_HAZE_SCALE = 6.5;
+const EXPOSED_HAZE_ALPHA = 0.9;
+const EXPOSED_BLOOM_SCALE = 2.4;
+const EXPOSED_BLOOM_ALPHA = 0.4;
+/** How long a regrown shard takes to grow to full size. */
+const GROW_SECONDS = 0.4;
+/** How fast a shard tumbles on its orbit, radians per second, unless held still. */
+const SHARD_TUMBLE = 1.4;
+/** The pulse's shockwave: from the windup ring's size out to this many times it, over the pulse. */
+const SHOCKWAVE_REACH = 3.4;
+const SHOCKWAVE_SECONDS = 0.3;
 
 /** A radial gradient lit from (x, y) out to radius `r1` around the origin. */
 function radial(ctx: CanvasRenderingContext2D, x: number, y: number, r0: number, r1: number, stops: readonly (readonly [number, string])[]): CanvasGradient {
@@ -130,26 +148,57 @@ function paintRing(ctx: CanvasRenderingContext2D, r: number, color: string): voi
   ctx.stroke();
 }
 
+/** A record of `make(id)` for every attack, in `ATTACK_IDS` order. */
+function perAttack<T>(make: (id: AttackId) => T): Record<AttackId, T> {
+  return Object.fromEntries(ATTACK_IDS.map((id) => [id, make(id)])) as Record<AttackId, T>;
+}
+
+/** Every attack, once: the `satisfies` makes a new one fail to compile until it is listed. */
+const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0 } as const satisfies Record<AttackId, 0>;
+const ATTACK_IDS = Object.keys(ATTACK_ID_SET) as AttackId[];
+
+interface ArtKeys {
+  readonly core: string;
+  readonly eyes: Record<BossPhase, string>;
+  readonly rings: Record<AttackId, string>;
+  readonly monolith: string;
+  readonly fissures: string;
+}
+
 /** The cache keys of a boss's sprites at `radius`, made once per radius so drawing builds no strings. */
-function artKeys(radius: number): { readonly core: string; readonly eyes: Record<BossPhase, string>; readonly rings: Record<AttackId, string> } {
+function artKeys(radius: number): ArtKeys {
   const size = String(radius);
   return {
     core: `boss|core|${size}`,
     eyes: { 1: `boss|eye|1|${size}`, 2: `boss|eye|2|${size}`, 3: `boss|eye|3|${size}` },
-    rings: { shardRing: `boss|ring|shardRing|${size}`, lunge: `boss|ring|lunge|${size}` },
+    rings: perAttack((id) => `boss|ring|${id}|${size}`),
+    monolith: `boss|monolith|core|${size}`,
+    fissures: `boss|monolith|fissures|${size}`,
   };
 }
 
+/** The cache keys of a Monolith shard at `radius`, whole and cracked. */
+const shardKeys = (radius: number): { readonly whole: string; readonly cracked: string } => ({ whole: `boss|monolith|shard|${String(radius)}`, cracked: `boss|monolith|shardCracked|${String(radius)}` });
+
+/** Grows `list` to `length` with `fill`, or cuts it down, so it has one slot per part. */
+function fit(list: number[], length: number, fill: number): void {
+  while (list.length < length) list.push(fill);
+  list.length = length;
+}
+
 /**
- * Draws the boss from baked sprites (no `shadowBlur`): a glow, the core and an eye that follows the ship, a closing
- * ring while an attack winds up, and a white flash on each hit (the core's silhouette for 60 ms, with a glow that
+ * Draws the boss from baked sprites (no `shadowBlur`): a glow, its body (the Sentinel's core and an eye that follows
+ * the ship; the Monolith's rock, its cracks lit by whether it is bare, and its shards, each flashing white when hit and
+ * growing in when it grows back), a closing ring while an attack winds up, a shockwave as it pulses, and a white flash on each hit (the core's silhouette for 60 ms, with a glow that
  * lingers). The core fades in through the intro and out, whitening, as it dies. Its own sprite keys and painters are made once per radius, and `baker.glow` looks its key up in the
  * baker's key table (built once per colour and size bucket), so a frame of drawing builds no strings or closures.
  */
 export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, baker: SpriteBaker, palette: Palette): BossPass {
   const eyeColors: Readonly<Record<BossPhase, string>> = { 1: palette.accent[0], 2: palette.ring, 3: palette.shot };
-  const ringColors: Readonly<Record<AttackId, string>> = { shardRing: palette.shot, lunge: palette.ring };
-  /** The radius the sprites below are keyed and painted for; the Sentinel keeps one, so they are made once. */
+  const ringColors: Readonly<Record<AttackId, string>> = { shardRing: palette.shot, lunge: palette.ring, shardVolley: palette.accent[0], quake: palette.ring, pulse: palette.accent[2] };
+  /** The Monolith's cracks and bare-core glow: molten, against its cool rock. */
+  const fissureColor = palette.ring;
+  /** The radius the sprites below are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;
   let keys = artKeys(radius);
   const paintCoreAt = (c: CanvasRenderingContext2D): void => {
@@ -162,12 +211,34 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
     paintRing(c, radius, ringColors[attack]);
   };
   const eyePainters = { 1: eyePainter(1), 2: eyePainter(2), 3: eyePainter(3) };
-  const ringPainters = { shardRing: ringPainter('shardRing'), lunge: ringPainter('lunge') };
+  const ringPainters = perAttack(ringPainter);
+  const paintMonolithAt = (c: CanvasRenderingContext2D): void => {
+    paintMonolithCore(c, radius, palette);
+  };
+  const paintFissuresAt = (c: CanvasRenderingContext2D): void => {
+    paintFissures(c, radius, fissureColor);
+  };
+  /** The shard radius the shard sprites are keyed and painted for. */
+  let shardRadius = 0;
+  let shards = shardKeys(shardRadius);
+  const shardPainter = (cracked: boolean) => (c: CanvasRenderingContext2D): void => {
+    paintShard(c, shardRadius, palette, fissureColor, cracked);
+  };
+  const paintWholeShard = shardPainter(false);
+  const paintCrackedShard = shardPainter(true);
   let flash = 0;
   let state: BossState | null = null;
   let stateClock = 0;
   let windup: AttackId | null = null;
   let windupClock = 0;
+  let active: AttackId | null = null;
+  let activeClock = 0;
+  /** Real seconds of the fight so far, for the fissures' pulse and the shards' tumble. */
+  let time = 0;
+  /** Per part: seconds of hit flash left, seconds since it last grew back, and whether it was live last frame. */
+  const partFlash: number[] = [];
+  const partGrowth: number[] = [];
+  const partLive: number[] = [];
 
   /** How visible the core is: fading in through the intro, out through dying. */
   function presence(current: BossState): number {
@@ -176,29 +247,120 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
     return current === 'dying' ? Math.max(0, 1 - stateClock / DYING_SECONDS) : 1;
   }
 
-  function drawRing(attack: AttackId, x: number, y: number, r: number, still: boolean): void {
-    const closing = Math.max(0, 1 - windupClock / RING_CLOSE_SECONDS);
-    const size = still ? 1.1 : 1 + RING_CLOSE * closing;
-    ctx.globalAlpha = still ? 0.85 : (0.7 + 0.3 * Math.sin(windupClock * TAU * RING_PULSE_HZ)) * (1 - 0.5 * closing);
+  function blitRing(attack: AttackId, x: number, y: number, r: number, size: number): void {
     pen.place(x, y, size, 0);
     pen.blit(baker.custom(keys.rings[attack], r * RING_REACH, ringPainters[attack]));
   }
 
+  function drawRing(attack: AttackId, x: number, y: number, r: number, still: boolean): void {
+    const closing = Math.max(0, 1 - windupClock / RING_CLOSE_SECONDS);
+    ctx.globalAlpha = still ? 0.85 : (0.7 + 0.3 * Math.sin(windupClock * TAU * RING_PULSE_HZ)) * (1 - 0.5 * closing);
+    blitRing(attack, x, y, r, still ? 1.1 : 1 + RING_CLOSE * closing);
+  }
+
+  /** The pulse's ring racing outward and fading; held at one size, dimmer, under reduced motion. */
+  function drawShockwave(x: number, y: number, r: number, shown: number, still: boolean): void {
+    const t = Math.min(1, activeClock / SHOCKWAVE_SECONDS);
+    ctx.globalAlpha = shown * (still ? 0.5 : 1 - t);
+    blitRing('pulse', x, y, r, still ? SHOCKWAVE_REACH / 2 : 1 + (SHOCKWAVE_REACH - 1) * easeOut(t));
+  }
+
+  /** A core's sprite, or its white silhouette for the first moments of a hit's flash. */
+  function blitCore(key: string, half: number, paint: (c: CanvasRenderingContext2D) => void): void {
+    const core = baker.custom(key, half, paint);
+    pen.blit(flash > TINT_ABOVE ? (baker.white(key) ?? core) : core);
+  }
+
+  /** The Sentinel's armoured core and its eye, which looks toward the ship. */
+  function drawSentinel(boss: Readonly<BossView>, x: number, y: number, size: number, look: BossLook): void {
+    const r = boss.radius;
+    pen.place(x, y, size, 0);
+    blitCore(keys.core, r + RIM_PAD, paintCoreAt);
+    const dx = look.aimX - x;
+    const dy = look.aimY - y;
+    const reach = (EYE_REACH * r * size) / Math.max(1, Math.hypot(dx, dy));
+    pen.place(x + dx * reach, y + dy * reach, size, 0);
+    pen.blit(baker.custom(keys.eyes[boss.phase], r * EYE_SIZE + RIM_PAD, eyePainters[boss.phase]));
+  }
+
+  /** The Monolith's rock, its cracks lit dim or blazing by whether it is bare, and its shards. */
+  function drawMonolith(boss: Readonly<BossView>, x: number, y: number, size: number, shown: number, alpha: number, look: BossLook): void {
+    const r = boss.radius;
+    pen.place(x, y, size, 0);
+    blitCore(keys.monolith, r * MONOLITH_ART_REACH + RIM_PAD, paintMonolithAt);
+    const pulse = look.still ? 1 : 0.8 + 0.2 * Math.sin(time * TAU * FISSURE_PULSE_HZ);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = shown * (boss.vulnerable ? FISSURE_EXPOSED * pulse : FISSURE_SHIELDED);
+    pen.blit(baker.custom(keys.fissures, r + RIM_PAD, paintFissuresAt));
+    if (boss.vulnerable) {
+      ctx.globalAlpha = shown * EXPOSED_BLOOM_ALPHA * pulse * look.glow;
+      pen.blit(baker.glow(fissureColor, r * EXPOSED_BLOOM_SCALE));
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = shown;
+    const { parts } = boss;
+    for (let i = 0; i < parts.length; i++) drawShard(parts[i] as BossPart, i, alpha, x, y, look.still);
+  }
+
+  /** A live shard `alpha` of the way from its previous position, turned outward from the core and tumbling. */
+  function drawShard(part: Readonly<BossPart>, i: number, alpha: number, coreX: number, coreY: number, still: boolean): void {
+    if (part.hp <= 0) return;
+    if (part.radius !== shardRadius) {
+      shardRadius = part.radius;
+      shards = shardKeys(shardRadius);
+    }
+    const x = part.px + (part.x - part.px) * alpha;
+    const y = part.py + (part.y - part.py) * alpha;
+    const turn = Math.atan2(y - coreY, x - coreX) + (still ? 0 : time * SHARD_TUMBLE);
+    const scale = easeOut(Math.min(1, (partGrowth[i] ?? GROW_SECONDS) / GROW_SECONDS));
+    pen.place(x, y, Math.cos(turn) * scale, Math.sin(turn) * scale);
+    const cracked = part.hp < part.maxHp;
+    const key = cracked ? shards.cracked : shards.whole;
+    const sprite = baker.custom(key, shardRadius + RIM_PAD, cracked ? paintCrackedShard : paintWholeShard);
+    pen.blit((partFlash[i] ?? 0) > 0 ? (baker.white(key) ?? sprite) : sprite);
+  }
+
+  /** Counts each part's flash down and its growth up, starting the growth afresh for a part that has just grown back. */
+  function advanceParts(dt: number, parts: readonly Readonly<BossPart>[]): void {
+    const fresh = partLive.length !== parts.length;
+    fit(partFlash, parts.length, 0);
+    fit(partGrowth, parts.length, GROW_SECONDS);
+    fit(partLive, parts.length, 1);
+    for (let i = 0; i < parts.length; i++) {
+      const live = (parts[i]?.hp ?? 0) > 0 ? 1 : 0;
+      if (live === 1 && partLive[i] === 0 && !fresh) partGrowth[i] = 0;
+      partLive[i] = live;
+      partGrowth[i] = (partGrowth[i] ?? 0) + dt;
+      partFlash[i] = Math.max(0, (partFlash[i] ?? 0) - dt);
+    }
+  }
+
   return {
     handle(events) {
-      for (const event of events) if (event.type === 'bossHit') flash = 1;
+      for (const event of events) {
+        if (event.type === 'bossHit') flash = 1;
+        else if (event.type === 'bossPartHit') {
+          fit(partFlash, Math.max(partFlash.length, event.part + 1), 0);
+          partFlash[event.part] = HIT_FLASH_SECONDS;
+        }
+      }
     },
     advance(dt, boss) {
       flash = Math.max(0, flash - dt / BOSS_FLASH_SECONDS);
       if (boss === null) {
         state = null;
         windup = null;
+        active = null;
         return;
       }
+      time += dt;
       stateClock = boss.state === state ? stateClock + dt : 0;
       state = boss.state;
       windupClock = boss.windup === windup ? windupClock + dt : 0;
       windup = boss.windup;
+      activeClock = boss.active === active ? activeClock + dt : 0;
+      active = boss.active;
+      advanceParts(dt, boss.parts);
     },
     draw(boss, alpha, look) {
       if (boss === null || boss.state === 'down') return;
@@ -212,21 +374,21 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       const shown = presence(boss.state);
       const dying = boss.state === 'dying' && boss.state === state ? stateClock / DYING_SECONDS : 0;
       const size = boss.state === 'intro' ? 0.7 + 0.3 * shown : 1 + 0.12 * dying;
+      const monolith = boss.id === 'monolith';
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = GLOW_ALPHA * look.glow * shown;
       pen.place(x, y, size, 0);
-      pen.blit(baker.glow(palette.accent[1], r * GLOW_SCALE));
+      pen.blit(baker.glow(monolith ? palette.accent[0] : palette.accent[1], r * GLOW_SCALE));
+      if (monolith && boss.vulnerable && boss.state === 'fighting') {
+        ctx.globalAlpha = EXPOSED_HAZE_ALPHA * look.glow * shown;
+        pen.blit(baker.glow(fissureColor, r * EXPOSED_HAZE_SCALE));
+      }
       if (boss.windup !== null) drawRing(boss.windup, x, y, r, look.still);
+      if (boss.active === 'pulse' && active === 'pulse') drawShockwave(x, y, r, shown, look.still);
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = shown;
-      pen.place(x, y, size, 0);
-      const core = baker.custom(keys.core, r + RIM_PAD, paintCoreAt);
-      pen.blit(flash > TINT_ABOVE ? (baker.white(keys.core) ?? core) : core);
-      const dx = look.aimX - x;
-      const dy = look.aimY - y;
-      const reach = (EYE_REACH * r * size) / Math.max(1, Math.hypot(dx, dy));
-      pen.place(x + dx * reach, y + dy * reach, size, 0);
-      pen.blit(baker.custom(keys.eyes[boss.phase], r * EYE_SIZE + RIM_PAD, eyePainters[boss.phase]));
+      if (monolith) drawMonolith(boss, x, y, size, shown, alpha, look);
+      else drawSentinel(boss, x, y, size, look);
       const white = Math.max(flash * FLASH_ALPHA, dying);
       if (white > 0) {
         ctx.globalCompositeOperation = 'lighter';
@@ -244,6 +406,11 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       flash = 0;
       state = null;
       windup = null;
+      active = null;
+      time = 0;
+      partFlash.length = 0;
+      partGrowth.length = 0;
+      partLive.length = 0;
     },
   };
 }

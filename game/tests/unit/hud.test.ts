@@ -307,7 +307,7 @@ describe('createHud', () => {
     hud.draw(ctx, galaxyWorld({ galaxy: '1-6', timeLeft: 0, boss: { hp: 12 } }), 0);
     expect(hud.pill('timer')).toBeNull();
     expect(hud.pill('boss')).not.toBeNull();
-    expect(texts).toContain('SENTINEL');
+    expect(texts).toContain('MONOLITH');
     // Once it is down the bar goes too, as the ship warps out.
     hud.draw(ctx, galaxyWorld({ galaxy: '1-6', timeLeft: 0, boss: { hp: 0, state: 'down' } }), 0);
     expect(hud.pill('boss')).toBeNull();

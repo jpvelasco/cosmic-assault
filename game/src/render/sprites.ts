@@ -269,7 +269,7 @@ function paintAsteroid(ctx: CanvasRenderingContext2D, a: Readonly<Asteroid>, p: 
 }
 
 /** Dark pits with a lit lower lip, as the light falls from the upper left onto the far wall. */
-function paintCraters(ctx: CanvasRenderingContext2D, craters: readonly Crater[], p: Palette): void {
+export function paintCraters(ctx: CanvasRenderingContext2D, craters: readonly Crater[], p: Palette): void {
   const pit = rgba(mix(p.rock[2], '#000000', 0.45), 0.48);
   const lip = rgba(mix(p.rock[0], WHITE, 0.35), 0.2);
   for (const c of craters) {

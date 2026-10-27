@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId, PickupId, WeaponTier } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
+import { bossTarget } from '../../src/sim/boss/bossRunner';
 import { PICKUP, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -145,7 +146,8 @@ describe('a kill drops a pickup', () => {
   it('does not drop for a beaten boss', () => {
     const w = galaxyWorld({ seed: seedDropping('shield'), galaxy: calm('1-6') });
     const log = play(w, 23);
-    while (w.boss?.state === 'fighting') w['run']?.hitBoss(w.boss.x, w.boss.y, 1);
+    const target = () => (w.boss === null ? null : bossTarget(w.boss));
+    for (let t = target(); t !== null; t = target()) w['run']?.hitBoss(t.x, t.y, 1);
     log.push(...play(w, 3));
     expect(w.boss?.hp).toBe(0);
     expect(ofType(log, 'bossDown')).toHaveLength(1);
