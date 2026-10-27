@@ -2,6 +2,7 @@ import type { GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
+import type { Bolt } from '../foes/bolts';
 import type { Foe } from '../foes/foe';
 import type { Moving } from '../math';
 import type { Rng } from '../rng';
@@ -25,6 +26,8 @@ export interface Bodies {
   readonly ship: Ship;
   readonly rocks: Asteroid[];
   readonly foes: readonly Foe[];
+  /** The galaxy's hostile bolts: a rift jump may leave the ship in one's path, which grants it a windup's grace. */
+  readonly bolts: readonly Bolt[];
 }
 
 /** What every hazard shows the renderer, the HUD and the bots: where it is, and how long until it changes. */

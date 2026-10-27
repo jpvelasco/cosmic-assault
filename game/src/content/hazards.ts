@@ -48,10 +48,11 @@ export const DANGER_ZONE: { readonly maxZones: 2; readonly side: readonly [numbe
 /**
  * A warp rift event shows one pair of mouths per intensity, at most `maxPairs`. A body whose edge reaches a mouth leaves
  * by the paired one. The two mouths of a pair lie at least `apart` of the field's width apart (a share of its width),
- * and every mouth keeps `inset` from the field's edges, so a body sent out lands near the field. `drawn` is the radius a
- * mouth's swirl is drawn at, which the mouths keep clear of the HUD and the thumb corners.
+ * and every mouth keeps `inset` from the field's edges, so a body sent out lands near the field. A body that has jumped
+ * rests `rest` seconds before it can jump again, so no body hops between pairs faster than that. `drawn` is the radius a
+ * mouth's swirl is drawn at, which the mouths keep clear of the HUD and the thumb corners where the field allows it.
  */
-export const WARP_RIFT = { maxPairs: 2, radius: 30, drawn: 48, apart: 0.4, inset: 60 } as const;
+export const WARP_RIFT = { maxPairs: 2, radius: 30, drawn: 48, apart: 0.4, inset: 60, rest: 0.25 } as const;
 
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };

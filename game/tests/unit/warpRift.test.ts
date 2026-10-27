@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { FOES } from '../../src/content/foes';
 import { WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import { MOUTH_SPACING, SHIP_SPACING } from '../../src/sim/hazards/warpRift';
+import type { Bolt } from '../../src/sim/foes/bolts';
+import { MOUTH_SPACING } from '../../src/sim/hazards/warpRift';
 import { wrappedDistance } from '../../src/sim/wrap';
 import type { GalaxyEvent } from '../../src/content/types';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -78,7 +79,9 @@ describe('warp rift placement', () => {
       for (let seed = 1; seed <= 40; seed++) {
         const r = rig({ seed, field });
         const warnings = stepTo(r, field, 20).filter((l) => l.event.type === 'riftWarning').map((l) => l.event);
-        expect(warnings, `${String(field.width)} seed ${String(seed)}`).toHaveLength(2);
+        // A crowded 4:3 field may drop a second pair (never a first); the wider fields always place both.
+        expect(warnings.length, `${String(field.width)} seed ${String(seed)}`).toBeGreaterThanOrEqual(1);
+        if (field.width > FIELD_43.width) expect(warnings, `${String(field.width)} seed ${String(seed)}`).toHaveLength(2);
         for (const w of warnings) {
           if (w.type !== 'riftWarning') continue;
           for (const [x, y] of [[w.x, w.y], [w.toX, w.toY]] as const) {
@@ -111,7 +114,7 @@ describe('warp rift placement', () => {
             for (const b of boxes) {
               const dx = Math.max(Math.abs(x - b.x) - b.w / 2, 0);
               const dy = Math.max(Math.abs(y - b.y) - b.h / 2, 0);
-              expect(Math.hypot(dx, dy), `box ${String(field.width)} seed ${String(seed)}`).toBeGreaterThanOrEqual(WARP_RIFT.drawn);
+              expect(Math.hypot(dx, dy), `box ${String(field.width)} seed ${String(seed)}`).toBeGreaterThanOrEqual(WARP_RIFT.radius);
             }
           }
         }
@@ -232,6 +235,8 @@ describe('warp rift chaining', () => {
   /** Every body radius a jump can carry: the ship, a small rock, a foe, and a large rock. */
   const RADII = [PLAYER.radius, 15, 40, ASTEROID.radii[0]];
   const HEADINGS = 16;
+  /** A quarter second in fixed steps: a body that strobes between two pairs would jump again within it. */
+  const QUARTER_SECOND_STEPS = 30;
 
   /** The least distance between a mouth of one pair and a mouth of the other: the spacing a configuration actually has. */
   function leastBetweenPairs(pairs: readonly RiftState[]): number {
@@ -243,51 +248,49 @@ describe('warp rift chaining', () => {
     return least;
   }
 
-  it('spaces the mouths of different pairs by the largest exit reach where the field allows it, and by the ship bound where it does not', () => {
+  /** Each rock a test makes has its own id, since a body that has jumped rests under its id. */
+  let nextRockId = 1000;
+  /** A rock at `entry`, heading `angle` at 100 units a second, of `radius`. */
+  const rockAt = (entry: { x: number; y: number }, angle: number, radius: number): Asteroid =>
+    ({ id: nextRockId++, x: entry.x, y: entry.y, px: entry.x, py: entry.y, vx: Math.cos(angle) * 100, vy: Math.sin(angle) * 100, radius, size: 0 }) as unknown as Asteroid;
+
+  it('places a second pair only at MOUTH_SPACING or not at all, at 4:3, 16:9 and 21:9', () => {
     expect(MOUTH_SPACING).toBe(2 * WARP_RIFT.radius + 2 * ASTEROID.radii[0] + 2);
-    expect(SHIP_SPACING).toBe(2 * WARP_RIFT.radius + 2 * PLAYER.radius + 2);
     for (const field of [FIELD_43, FIELD_169, FIELD_219]) {
       for (let seed = 1; seed <= 30; seed++) {
         const r = rig({ seed, field, intensity: 2, ship: { x: 5, y: 5 } });
         stepTo(r, field, 22);
         const pairs = riftStates(r);
-        expect(pairs, `${String(field.width)} seed ${String(seed)}`).toHaveLength(2);
-        const least = leastBetweenPairs(pairs);
-        expect(least, `${String(field.width)} seed ${String(seed)}`).toBeGreaterThanOrEqual(SHIP_SPACING);
-        if (field.width > FIELD_43.width) expect(least, `${String(field.width)} seed ${String(seed)}`).toBeGreaterThanOrEqual(MOUTH_SPACING);
+        const where = `${String(field.width)} seed ${String(seed)}`;
+        if (pairs.length === 2) expect(leastBetweenPairs(pairs), where).toBeGreaterThanOrEqual(MOUTH_SPACING);
+        if (field.width > FIELD_43.width) expect(pairs, where).toHaveLength(2);
       }
     }
   });
 
-  it('carries a body out of every mouth, along every heading, once, and never into another mouth whose reach the spacing allows it to clear, at 4:3, 16:9 and 21:9', () => {
+  it('carries a body out of every mouth, along every heading, for every body radius, once and never into another mouth, at 4:3, 16:9 and 21:9', () => {
     for (const field of [FIELD_43, FIELD_169, FIELD_219]) {
       for (let seed = 1; seed <= 12; seed++) {
         const r = rig({ seed, field, intensity: 2, ship: { x: 5, y: 5 } });
         stepTo(r, field, 22);
         const pairs = riftStates(r);
-        const least = leastBetweenPairs(pairs);
-        // A body of radius `b` leaving a mouth lands `R + b + gap` out, so no mouth of the other pair is within its reach
-        // (`R + b`) when `2R + 2b + gap ≤ least`: the largest such body is the one the spacing must allow.
-        const safeRadius = (least - 2 * WARP_RIFT.radius - 2) / 2;
-        const mouths = pairs.flatMap((pair) => [
-          { x: pair.x, y: pair.y, to: { x: pair.toX, y: pair.toY } },
-          { x: pair.toX, y: pair.toY, to: { x: pair.x, y: pair.y } },
-        ]);
+        if (pairs.length < 2) continue;
         const all = pairs.flatMap((pair) => [
           { x: pair.x, y: pair.y },
           { x: pair.toX, y: pair.toY },
         ]);
+        const mouths = pairs.flatMap((pair) => [
+          { x: pair.x, y: pair.y, to: { x: pair.toX, y: pair.toY } },
+          { x: pair.toX, y: pair.toY, to: { x: pair.x, y: pair.y } },
+        ]);
         for (const entry of mouths)
           for (const radius of RADII)
             for (let h = 0; h < HEADINGS; h++) {
-              const angle = (h * 2 * Math.PI) / HEADINGS;
-              const rock = { id: 900, x: entry.x, y: entry.y, px: entry.x, py: entry.y, vx: Math.cos(angle) * 100, vy: Math.sin(angle) * 100, radius, size: 0 } as unknown as Asteroid;
+              const rock = rockAt(entry, (h * 2 * Math.PI) / HEADINGS, radius);
               const out: SimEvent[] = [];
               r.hazards.move(DT, r.ship, [rock], [], out);
-              const jumps = out.filter((e) => e.type === 'riftJump' && !e.ship);
               const where = `${String(field.width)} seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`;
-              expect(jumps, where).toHaveLength(1);
-              if (radius > safeRadius) continue;
+              expect(out.filter((e) => e.type === 'riftJump' && !e.ship), where).toHaveLength(1);
               for (const m of all) {
                 if (m.x === entry.to.x && m.y === entry.to.y) continue;
                 expect(wrappedDistance(rock, m, field), where).toBeGreaterThanOrEqual(WARP_RIFT.radius + radius);
@@ -296,6 +299,36 @@ describe('warp rift chaining', () => {
       }
     }
   });
+
+  it('never carries a body through a second pair more than once in any quarter second, over two seconds of motion, from every exit of every 4:3 configuration', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const r = rig({ seed, field: FIELD_43, intensity: 2, ship: { x: 5, y: 5 } });
+      stepTo(r, FIELD_43, 22);
+      const entries = riftStates(r).flatMap((pair) => [
+        { x: pair.x, y: pair.y },
+        { x: pair.toX, y: pair.toY },
+      ]);
+      for (const entry of entries)
+        for (const radius of RADII)
+          for (let h = 0; h < HEADINGS; h++) {
+            const rock = rockAt(entry, (h * 2 * Math.PI) / HEADINGS, radius);
+            const jumpSteps: number[] = [];
+            for (let step = 0; step < 240; step++) {
+              const out: SimEvent[] = [];
+              const now = 22 + (step + 1) * DT;
+              r.hazards.step(now, FIELD_43, out);
+              rock.px = rock.x;
+              rock.py = rock.y;
+              r.hazards.move(DT, r.ship, [rock], [], out);
+              if (out.some((e) => e.type === 'riftJump' && !e.ship)) jumpSteps.push(step);
+              rock.x += rock.vx * DT;
+              rock.y += rock.vy * DT;
+            }
+            const gaps = jumpSteps.slice(1).map((step, i) => step - (jumpSteps[i] ?? 0));
+            expect(Math.min(Infinity, ...gaps), `seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`).toBeGreaterThanOrEqual(QUARTER_SECOND_STEPS);
+          }
+    }
+  }, 120_000);
 });
 
 describe('warp rift exit grace', () => {
@@ -346,6 +379,44 @@ describe('warp rift exit grace', () => {
     r.ship.vx = 100;
     r.ship.vy = 0;
     r.hazards.move(DT, r.ship, [], [], []);
+    expect(r.ship.invulnerable).toBe(false);
+  });
+
+  it('grants the same grace when a hostile bolt would reach the ship within a windup of its jump', () => {
+    const { r, pair } = openRift(24);
+    r.ship.x = pair.x;
+    r.ship.y = pair.y;
+    r.ship.vx = 100;
+    r.ship.vy = 0;
+    // The exit is 42 east of the mouth; a bolt 60 further east flies back at the ship at 230 units a second.
+    const bolt = { id: 801, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: -230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
+    r.hazards.move(DT, r.ship, [], [], [], [bolt]);
+    expect(r.ship.invulnerable).toBe(true);
+    expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
+  });
+
+  it('grants the same grace when an armed mine\'s blast would reach the ship before its windup ends', () => {
+    const { r, pair } = openRift(25);
+    r.ship.x = pair.x;
+    r.ship.y = pair.y;
+    r.ship.vx = 100;
+    r.ship.vy = 0;
+    // The mine lies 60 past the exit and blasts in 0.2 s; its reach (80) and the ship's radius (10) cover the gap.
+    const mine = { id: 802, kind: 'mine', x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 0.2, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
+    r.hazards.move(DT, r.ship, [], [mine], []);
+    expect(r.ship.invulnerable).toBe(true);
+    expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
+  });
+
+  it('grants nothing for a mine whose blast falls after the windup, or for a bolt that flies away', () => {
+    const { r, pair } = openRift(26);
+    r.ship.x = pair.x;
+    r.ship.y = pair.y;
+    r.ship.vx = 100;
+    r.ship.vy = 0;
+    const late = { id: 803, kind: 'mine', x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 1, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
+    const away = { id: 804, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
+    r.hazards.move(DT, r.ship, [], [late], [], [away]);
     expect(r.ship.invulnerable).toBe(false);
   });
 });

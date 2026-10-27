@@ -1,6 +1,7 @@
 import { clamp } from '../../content/curves';
 import { MIN_WINDUP_SECONDS } from '../../content/pacingRules';
 import { HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
+import { MINE } from '../../content/foes';
 import type { GalaxyEvent } from '../../content/types';
 import { ASTEROID, PLAYER } from '../config';
 import type { SimEvent } from '../events';
@@ -25,13 +26,6 @@ const EXIT_GAP = 2;
  * that is `2·radius + 2·body + EXIT_GAP` apart.
  */
 export const MOUTH_SPACING = 2 * WARP_RIFT.radius + 2 * ASTEROID.radii[0] + EXIT_GAP;
-/**
- * The least distance a second pair may sit at on a crowded field where `MOUTH_SPACING` will not fit (at 4:3, about a
- * fifth of second pairs otherwise): the ship's bound, for a ship leaving one mouth lands `radius + PLAYER.radius + EXIT_GAP`
- * out, past the reach of the other. A large rock leaving such a pair may then hop to the other on a later step, never
- * within the same one.
- */
-export const SHIP_SPACING = 2 * WARP_RIFT.radius + 2 * PLAYER.radius + EXIT_GAP;
 
 /** A pair of mouths, as the schedule holds it: one hazard for both, its mouths at (x, y) and (toX, toY). */
 interface Pair extends RiftState {
@@ -42,6 +36,9 @@ interface Pair extends RiftState {
   toY: number;
   remaining: number;
 }
+
+/** The id the ship rests under: rocks and foes take ids from the arena, which start at 1. */
+const SHIP_KEY = 0;
 
 /** A body the rift may carry: its place, velocity and previous pose, which a jump resets. */
 interface Mover {
@@ -55,17 +52,17 @@ interface Mover {
 
 /**
  * The spots a mouth may take on a field: on the grid, inside the inset, clear of every keep-out circle (the centre, the
- * ship and any respawn point, all `setup.keepOuts`) by the mouth's own radius, and of the HUD and thumb corners by its
- * drawn radius, so its swirl never sits under them.
+ * ship and any respawn point, all `setup.keepOuts`) by the mouth's own radius, and of the HUD and thumb corners by
+ * `boxClearance`: the drawn radius, so a swirl stays out from under them, or else the hitbox radius alone.
  */
-function clearSpots(field: Field, circles: readonly Circle[]): { x: number; y: number }[] {
+function clearSpots(field: Field, circles: readonly Circle[], boxClearance: number): { x: number; y: number }[] {
   const boxes = zoneKeepOutBoxes(field);
   const spots: { x: number; y: number }[] = [];
-  const { inset, drawn } = WARP_RIFT;
+  const { inset } = WARP_RIFT;
   for (let y = inset; y <= field.height - inset; y += GRID_STEP) {
     for (let x = inset; x <= field.width - inset; x += GRID_STEP) {
       if (circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r + WARP_RIFT.radius)) continue;
-      if (boxes.some((box: ZoneBox) => zoneClearance(field, box, x, y) < drawn)) continue;
+      if (boxes.some((box: ZoneBox) => zoneClearance(field, box, x, y) < boxClearance)) continue;
       spots.push({ x, y });
     }
   }
@@ -107,6 +104,10 @@ export class WarpRifts implements Hazard {
   private readonly schedule: HazardSchedule<Pair>;
   /** The field the mouths lie in, as of the last step or resize; null before the first step. */
   private field: Field | null = null;
+  /** The galaxy's seconds as of the last step. */
+  private elapsed = 0;
+  /** Bodies that have jumped, by id, and the seconds each may jump again at: a body rests `WARP_RIFT.rest` after a jump. */
+  private readonly rested = new Map<number, number>();
 
   constructor({ events, rng, nextId, keepOuts }: HazardSetup) {
     this.rng = rng;
@@ -131,6 +132,7 @@ export class WarpRifts implements Hazard {
 
   step(elapsed: number, field: Field, out: SimEvent[]): void {
     this.field = field;
+    this.elapsed = elapsed;
     this.schedule.step(elapsed, field, out);
   }
 
@@ -151,24 +153,34 @@ export class WarpRifts implements Hazard {
   /**
    * Carries every body that reaches an open mouth to the other one of its pair, the ship first. A jump that leaves the ship
    * touching a body, or about to, grants the ship its grace: the ship's own jump checks every body, a body's jump checks
-   * that body.
+   * that body. A ship's jump also checks the hostile bolts and the armed mines (a blast within the windup) for the same.
    */
   carry(bodies: Bodies, out: SimEvent[]): void {
     const { field } = this;
     if (field === null) return;
+    for (const [id, until] of this.rested) if (until <= this.elapsed) this.rested.delete(id);
     const { ship } = bodies;
-    const shipJumped = this.carryBody(field, ship, PLAYER.radius, true, out);
-    for (const rock of bodies.rocks) this.carryOther(field, ship, rock, rock.radius, shipJumped, true, out);
+    const shipJumped = this.carryBody(field, ship, PLAYER.radius, SHIP_KEY, true, out);
+    for (const rock of bodies.rocks) this.carryOther(field, ship, rock, rock.radius, rock.id, shipJumped, true, out);
     // A phaser that is warning is on its way to its blink spot: carrying it would leave its blink spot where it is not.
-    for (const foe of bodies.foes) this.carryOther(field, ship, foe, foe.radius, shipJumped, !(foe.kind === 'phaser' && foe.charging), out);
+    for (const foe of bodies.foes) this.carryOther(field, ship, foe, foe.radius, foe.id, shipJumped, !(foe.kind === 'phaser' && foe.charging), out);
+    if (!shipJumped) return;
+    for (const bolt of bodies.bolts) this.grace(field, ship, bolt, bolt.radius, MIN_WINDUP_SECONDS);
+    for (const foe of bodies.foes) if (foe.kind === 'mine' && foe.charging && foe.timer <= MIN_WINDUP_SECONDS) this.grace(field, ship, foe, MINE.blastRadius, foe.timer);
   }
 
-  /** Warns of the next pairs an event shows: `min(intensity, 2)` of them, each placed where a pair fits, or not at all. */
+  /**
+   * Warns of the next pairs an event shows: `min(intensity, 2)` of them. Each is placed `MOUTH_SPACING` from the mouths
+   * already placed, first on the spots whose corner clearance is the drawn radius, then on those cleared by the hitbox
+   * radius only. A pair that fits neither is dropped: no pair is ever placed closer than `MOUTH_SPACING`.
+   */
   private warn(event: GalaxyEvent, elapsed: number, field: Field, into: Pair[], out: SimEvent[]): void {
-    const spots = clearSpots(field, this.keepOuts(field));
+    const circles = this.keepOuts(field);
+    const drawnSpots = clearSpots(field, circles, WARP_RIFT.drawn);
+    const hitboxSpots = clearSpots(field, circles, WARP_RIFT.radius);
     const count = Math.min(event.intensity, WARP_RIFT.maxPairs);
     for (let i = 0; i < count; i++) {
-      const pair = this.place(elapsed, event, field, spots, into, MOUTH_SPACING) ?? this.place(elapsed, event, field, spots, into, SHIP_SPACING);
+      const pair = this.place(elapsed, event, field, drawnSpots, into) ?? this.place(elapsed, event, field, hitboxSpots, into);
       if (pair === null) continue;
       into.push(pair);
       out.push({ type: 'riftWarning', id: pair.id, x: pair.x, y: pair.y, toX: pair.toX, toY: pair.toY });
@@ -176,12 +188,12 @@ export class WarpRifts implements Hazard {
   }
 
   /**
-   * A pair drawn from the clear `spots`: its first mouth from those at least `spacing` from every mouth already placed, its
-   * second from those also `apart` of the field's width from the first. Null if no pair fits at this spacing.
+   * A pair drawn from the clear `spots`: its first mouth from those at least `MOUTH_SPACING` from every mouth already
+   * placed, its second from those also `apart` of the field's width from the first. Null if no pair fits.
    */
-  private place(elapsed: number, event: GalaxyEvent, field: Field, spots: readonly { x: number; y: number }[], placed: readonly Pair[], spacing: number): Pair | null {
+  private place(elapsed: number, event: GalaxyEvent, field: Field, spots: readonly { x: number; y: number }[], placed: readonly Pair[]): Pair | null {
     const far = WARP_RIFT.apart * field.width;
-    const free = spots.filter((s) => placed.every((p) => Math.hypot(s.x - p.x, s.y - p.y) >= spacing && Math.hypot(s.x - p.toX, s.y - p.toY) >= spacing));
+    const free = spots.filter((s) => placed.every((p) => Math.hypot(s.x - p.x, s.y - p.y) >= MOUTH_SPACING && Math.hypot(s.x - p.toX, s.y - p.toY) >= MOUTH_SPACING));
     if (free.length === 0) return null;
     for (let i = 0; i < TRIES; i++) {
       const a = free[this.rng.int(0, free.length)];
@@ -196,24 +208,27 @@ export class WarpRifts implements Hazard {
   }
 
   /** Carries a rock or foe, then grants the ship its grace if this jump, or the ship's, leaves them touching it. */
-  private carryOther(field: Field, ship: Readonly<Ship>, body: Mover & { readonly radius: number }, radius: number, shipJumped: boolean, carriable: boolean, out: SimEvent[]): void {
-    const jumped = carriable && this.carryBody(field, body, radius, false, out);
-    if (shipJumped || jumped) this.graceIfTouching(field, ship, body, radius);
+  private carryOther(field: Field, ship: Readonly<Ship>, body: Mover, radius: number, id: number, shipJumped: boolean, carriable: boolean, out: SimEvent[]): void {
+    const jumped = carriable && this.carryBody(field, body, radius, id, false, out);
+    if (shipJumped || jumped) this.grace(field, ship, body, radius, MIN_WINDUP_SECONDS);
   }
 
-  /** Sends `body` out of the other mouth of the first open pair it reaches, once; true if one did. */
-  private carryBody(field: Field, body: Mover, radius: number, ship: boolean, out: SimEvent[]): boolean {
+  /**
+   * Sends `body` (keyed `id`) out of the other mouth of the first open pair it reaches, once, and not again until it has
+   * rested; true if it jumped.
+   */
+  private carryBody(field: Field, body: Mover, radius: number, id: number, ship: boolean, out: SimEvent[]): boolean {
+    if ((this.rested.get(id) ?? -Infinity) > this.elapsed) return false;
     const reach = WARP_RIFT.radius + radius;
     for (const pair of this.schedule.live) {
       if (pair.stage !== 'active') continue;
       if (near(field, body, pair.x, pair.y, reach)) {
         this.jump(pair, field, body, radius, pair.x, pair.y, pair.toX, pair.toY, ship, out);
-        return true;
-      }
-      if (near(field, body, pair.toX, pair.toY, reach)) {
+      } else if (near(field, body, pair.toX, pair.toY, reach)) {
         this.jump(pair, field, body, radius, pair.toX, pair.toY, pair.x, pair.y, ship, out);
-        return true;
-      }
+      } else continue;
+      this.rested.set(id, this.elapsed + WARP_RIFT.rest);
+      return true;
     }
     return false;
   }
@@ -240,9 +255,9 @@ export class WarpRifts implements Hazard {
     out.push({ type: 'riftJump', id: pair.id, x: fromX, y: fromY, toX, toY, ship });
   }
 
-  /** Grants the ship its invulnerability for a windup if `body` touches it now, or will within one. */
-  private graceIfTouching(field: Field, ship: Ship, body: Mover, radius: number): void {
-    if (!touchesWithin(field, ship, body, radius, MIN_WINDUP_SECONDS)) return;
+  /** Grants the ship its invulnerability for a windup if `body` (of `radius`) reaches it within `seconds`. */
+  private grace(field: Field, ship: Ship, body: Mover, radius: number, seconds: number): void {
+    if (!touchesWithin(field, ship, body, radius, seconds)) return;
     ship.invulnerable = true;
     ship.invulnerableFor = Math.max(ship.invulnerableFor, MIN_WINDUP_SECONDS);
   }

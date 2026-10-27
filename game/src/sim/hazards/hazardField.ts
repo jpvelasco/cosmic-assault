@@ -5,11 +5,14 @@ import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
+import type { Bolt } from '../foes/bolts';
 import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
 import { DangerZones } from './dangerZone';
+
+const NO_BOLTS: readonly Bolt[] = [];
 import { ForceField } from './forceField';
 import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
@@ -89,11 +92,12 @@ export class HazardField {
    * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
    * invulnerability spares the ship collisions, not physics.
    */
-  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[]): void {
-    const bodies = (this.bodies ??= { ship, rocks, foes });
+  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: readonly Bolt[] = NO_BOLTS): void {
+    const bodies = (this.bodies ??= { ship, rocks, foes, bolts });
     bodies.ship = ship;
     bodies.rocks = rocks;
     bodies.foes = foes;
+    bodies.bolts = bolts;
     for (const hazard of this.hazards) hazard.pull?.(dt, bodies);
     const pull = shipPullAt(this.list, ship.x, ship.y, dt, this.shipPull);
     if (pull.x !== 0 || pull.y !== 0) nudge(ship, pull.x, pull.y, WELL_SPEED_CAP);
