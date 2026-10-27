@@ -32,6 +32,8 @@ const RETREAT_SECONDS = 3;
 const LAUNCH_GAP = 6;
 const LAUNCH_SPACING = 36;
 const LAUNCH_FAN = 0.3;
+/** Launch slots along each side of the hull past its wingtips, at the least: room for a wave a ship tucked at a corner leaves short. */
+const END_SLOTS_A_SIDE = 5;
 /** Rocks in a broadside line, by phase, and how far apart along it. */
 const BROADSIDE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 3, 2: 4, 3: 5 };
 const BROADSIDE_SPACING = 90;
@@ -144,7 +146,8 @@ class HiveCarrier implements BossBehaviour {
     this.closesAt = arena.elapsed() + HANGAR_OPEN_SECONDS;
     const count = Math.min(LAUNCH_WAVES[boss.phase], DRONE_CAP - this.foes.launched);
     let launched = 0;
-    for (let slot = 0; launched < count && slot < 3 * count; slot++) {
+    const slots = count + 2 * Math.max(count, END_SLOTS_A_SIDE);
+    for (let slot = 0; launched < count && slot < slots; slot++) {
       const heading = launchSlot(boss, slot, count, spot);
       if (!clearSlot(spot, arena.field(), arena.ship, ASTEROID.safeRadius)) continue;
       if (!this.foes.launch('drone', spot.x, spot.y, heading)) return;
@@ -155,8 +158,9 @@ class HiveCarrier implements BossBehaviour {
 
 /**
  * Writes into `out` where launch slot `slot` of a `count`-drone wave is, and returns the heading its drone leaves on.
- * The first `count` slots fan out across the hangar mouth; the next `2 x count` line the hull's long axis out from its
- * wingtips, alternating sides, so either side alone has room for a whole wave, and send their drones straight ahead.
+ * The first `count` slots fan out across the hangar mouth; the rest line the hull's long axis out from its wingtips,
+ * alternating sides, and send their drones straight ahead. `launch` gives each side at least `count` of them, so either
+ * side alone has room for a whole wave.
  */
 export function launchSlot(boss: Readonly<BossView>, slot: number, count: number, out: Point): number {
   const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;

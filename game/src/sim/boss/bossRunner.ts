@@ -25,13 +25,18 @@ export type PartHitResult = 'blocked' | 'hit' | 'broken';
 
 /** How far inside the field's edges a ship respawns clear of a boss. */
 export const RESPAWN_INSET = 60;
+/**
+ * The lowest a ship respawns in a boss galaxy, as a share of the field height: above the band the HUD's boss bar sits
+ * in along the bottom (render/hud.ts), on every screen.
+ */
+export const RESPAWN_LOWEST_SHARE = 0.8;
 
 /**
- * Where a ship can respawn at least `clearance` from a core at `core`: bottom-centre, a little inside the edge, or if
- * the core has drifted too near it, the inset corner farthest from the core.
+ * Where a ship can respawn at least `clearance` from a core at `core`: low in the middle, at `RESPAWN_LOWEST_SHARE` of
+ * the height, or if the core has drifted too near it, the corner farthest from the core, as low or as near the top.
  */
 export function clearSpot(core: Readonly<Point>, clearance: number, field: Field): Point {
-  const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height - RESPAWN_INSET];
+  const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height * RESPAWN_LOWEST_SHARE];
   const spot = { x: field.width / 2, y: bottom };
   if (Math.hypot(spot.x - core.x, spot.y - core.y) >= clearance) return spot;
   spot.x = Math.abs(core.x - left) > Math.abs(core.x - right) ? left : right;

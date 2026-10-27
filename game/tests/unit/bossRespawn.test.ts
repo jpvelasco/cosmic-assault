@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
-import { clearSpot, RESPAWN_INSET } from '../../src/sim/boss/bossRunner';
+import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE } from '../../src/sim/boss/bossRunner';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
@@ -17,7 +17,7 @@ const NARROW: Field = { width: 960, height: 720 };
 const MONOLITH_CLEARANCE = 133 + PLAYER.radius + ASTEROID.safeRadius;
 
 function inside(spot: { x: number; y: number }, field: Field): boolean {
-  return spot.x >= RESPAWN_INSET && spot.x <= field.width - RESPAWN_INSET && spot.y >= RESPAWN_INSET && spot.y <= field.height - RESPAWN_INSET;
+  return spot.x >= RESPAWN_INSET && spot.x <= field.width - RESPAWN_INSET && spot.y >= RESPAWN_INSET && spot.y <= field.height * RESPAWN_LOWEST_SHARE;
 }
 
 const calm = (id: GalaxyId): GalaxyDef => ({ ...galaxyById(id), kinds: MUTED_KINDS, events: [] });
@@ -35,8 +35,9 @@ describe('clearSpot', () => {
     expect(inside(spot, field)).toBe(true);
   });
 
-  it('prefers bottom-centre, and otherwise goes as far from the core as the field allows', () => {
-    expect(clearSpot({ x: 640, y: 201.6 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: 640, y: BOSS_FIELD.height - RESPAWN_INSET });
+  it('prefers low in the middle, no lower than 0.8 of the height, and otherwise goes as far from the core as the field allows', () => {
+    expect(RESPAWN_LOWEST_SHARE).toBe(0.8);
+    expect(clearSpot({ x: 640, y: 201.6 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: 640, y: BOSS_FIELD.height * 0.8 });
     expect(clearSpot({ x: 700, y: 587 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: RESPAWN_INSET, y: RESPAWN_INSET });
   });
 });

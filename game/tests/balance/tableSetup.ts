@@ -1,8 +1,8 @@
 import { clearRows, formatTable, readRows } from './targets';
 
 /**
- * Clears the rows of an earlier run before the galaxy files play, and prints the whole table once they have, passing
- * or failing, so every run of the balance suite reports its rates.
+ * Before the galaxy files play, keeps the last run's rows as the previous run's and starts afresh; once they have,
+ * prints the whole table, passing or failing, so every run of the balance suite reports its rates.
  */
 export default function setup(): () => void {
   clearRows();

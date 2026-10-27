@@ -4,11 +4,14 @@ import { Pilot } from '../../src/bot/expert';
 import { idleIntent } from '../../src/bot/hands';
 import { createView, readView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
+import type { AttackId } from '../../src/content/types';
 import { MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
 import type { BossView } from '../../src/sim/boss/behaviour';
 import { VOLLEY_REACH } from '../../src/sim/boss/monolith';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Foe } from '../../src/sim/foes/foe';
+import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import { turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
@@ -23,6 +26,40 @@ const TELEGRAPH_DODGE_CHANCE = 0.85;
 /** Sets the staged boss's windup, keeping the rest of it. */
 function windUp(view: BotView, windup: BossView['windup']): void {
   view.boss = { ...(view.boss as BossView), windup };
+}
+
+/** A tiny pass-through rock `id` at (x, y), flying at 250 units/s along `angle`. */
+function flyingRock(id: number, x: number, y: number, angle: number): Asteroid {
+  const rock = createAsteroid(createRng(id), x, y, 3, angle, 1, createRng(1), id);
+  rock.vx = Math.cos(angle) * 250;
+  rock.vy = Math.sin(angle) * 250;
+  rock.transient = true;
+  return rock;
+}
+
+/** A small boss above the ship, far enough that its body is never the danger. */
+const SMALL_BOSS = { at: { x: SCENE_SHIP.x, y: SCENE_SHIP.y - 210 }, radius: 30 } as const;
+
+/**
+ * The share of 1000 threats the casual dodges, each staged by `place` (given a fresh id) after the boss has wound up
+ * `windup` for two steps: in danger at once, with one choice held for three judgements, and then a calm field.
+ */
+function dodgeRate(seed: number, windup: AttackId | null, place: (view: BotView, id: number) => void): number {
+  const pilot = createCasualPilot(createRng(seed));
+  const intent = idleIntent();
+  const trials = 1000;
+  let dodged = 0;
+  for (let i = 0; i < trials; i++) {
+    const view = stage(sceneView(), { ...SMALL_BOSS, windup });
+    for (let step = 0; step < 2; step++) pilot.plan(view, intent);
+    place(view, i + 1);
+    const choices = new Set<boolean>();
+    for (let step = 0; step < 6; step++) choices.add(pilot.plan(view, intent).thrust);
+    expect(choices.size).toBe(1);
+    if (choices.has(true)) dodged++;
+    for (let step = 0; step < 2; step++) pilot.plan(stage(sceneView(), SMALL_BOSS), intent);
+  }
+  return dodged / trials;
 }
 
 /** A drone `id` 100 units to the ship's right, flying straight at it. */
@@ -124,27 +161,57 @@ describe("the casual bot's handicaps", () => {
   });
 
   it('dodges the drones a telegraphed launch sends out at the launch\'s 85%, and other drones at the episode\'s 60%', () => {
-    const rate = (launched: boolean, seed: number): number => {
-      const pilot = createCasualPilot(createRng(seed));
-      const intent = idleIntent();
-      const waves = 1000;
-      let dodged = 0;
-      for (let i = 0; i < waves; i++) {
-        // The launch winds up with nothing yet in reach; its wave appears as it runs, while the boss rests.
-        const view = stage(sceneView(), { windup: launched ? 'launch' : null });
-        for (let step = 0; step < 2; step++) pilot.plan(view, intent);
-        windUp(view, null);
-        view.foes = [oncoming(i + 1)];
-        const choices = new Set<boolean>();
-        for (let step = 0; step < 6; step++) choices.add(pilot.plan(view, intent).thrust);
-        expect(choices.size).toBe(1);
-        if (choices.has(true)) dodged++;
-        for (let step = 0; step < 2; step++) pilot.plan(stage(sceneView(), {}), intent);
-      }
-      return dodged / waves;
+    // The launch winds up with nothing yet in reach; its wave appears as it runs, while the boss rests.
+    const wave = (view: BotView, id: number): void => {
+      windUp(view, null);
+      view.foes = [oncoming(id)];
     };
-    expect(Math.abs(rate(true, 13) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
-    expect(Math.abs(rate(false, 13) - DODGE_CHANCE)).toBeLessThan(0.05);
+    expect(Math.abs(dodgeRate(13, 'launch', wave) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+    expect(Math.abs(dodgeRate(13, null, wave) - DODGE_CHANCE)).toBeLessThan(0.05);
+  });
+
+  it('judges the rocks a telegraphed attack sends out on the attack\'s 85% roll', () => {
+    // The quake has run: its ring forms at the rim, and the boss rests. One of its rocks flies straight at the ship.
+    const rate = dodgeRate(17, 'quake', (view, id) => {
+      windUp(view, null);
+      view.asteroids = [flyingRock(id, SMALL_BOSS.at.x, SMALL_BOSS.at.y + SMALL_BOSS.radius + 15, Math.PI / 2)];
+    });
+    expect(Math.abs(rate - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+  });
+
+  it('judges a rock that comes unannounced on the episode\'s 60% roll, even while an attack winds up', () => {
+    // The quake is still winding up, and a rock from the side, nowhere near the boss, flies at the ship.
+    const rate = dodgeRate(17, 'quake', (view, id) => {
+      view.asteroids = [flyingRock(id, SCENE_SHIP.x + 160, SCENE_SHIP.y, Math.PI)];
+    });
+    expect(Math.abs(rate - DODGE_CHANCE)).toBeLessThan(0.05);
+  });
+
+  it('tags every drone and rock a real Hive Carrier sends out with its attack\'s roll, as the fight runs', () => {
+    // A calm 2-★ spawns nothing of its own, and an idle ship shoots nothing: what appears on the step an attack runs is the carrier's.
+    const galaxy = { ...galaxyById('2-6'), kinds: MUTED_KINDS, events: [] };
+    const world = new World({ seed: 2, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'rank' }, startLives: 5 });
+    const pilot = createCasualPilot(createRng(3));
+    const intent = idleIntent();
+    const view = createView(world);
+    const known = new Set<number>();
+    const sent = { drone: 0, rock: 0 };
+    for (let step = 0; step * STEP_SECONDS < 50 && world.status === 'playing'; step++) {
+      const attacking = world.boss !== null && (world.boss.windup !== null || world.boss.active !== null);
+      world.step(STEP_SECONDS, NO_CONTROLS);
+      pilot.plan(readView(world, view), intent);
+      for (const [kind, things] of [['drone', view.foes], ['rock', view.asteroids]] as const) {
+        for (const { id } of things) {
+          if (known.has(id)) continue;
+          known.add(id);
+          if (!attacking) continue;
+          expect(pilot.attackRoll(id), `${kind} ${String(id)}`).not.toBeNull();
+          sent[kind]++;
+        }
+      }
+    }
+    expect(sent.drone).toBeGreaterThan(0);
+    expect(sent.rock).toBeGreaterThan(0);
   });
 
   it('the expert dodges every such episode, so the casual\'s misses are its handicap', () => {

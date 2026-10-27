@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { GALAXIES, galaxyById, galaxyLabel, galaxyOrdinal } from '../../src/content/galaxies';
@@ -16,13 +16,14 @@ const TREND_FROM = 90;
 const TREND_TO = 35;
 const TREND_BAND = 15;
 /**
- * Galaxies held to a floor of their own instead of the trend band, in percent. 2-★: the casual's deaths in the Hive
- * Carrier's fight are spread over its drones, which it dodges only as the 60% it gives anything unannounced, the
- * fragments of the approach's rocks, the broadsides' fragments and the retreat's sweep; no carrier that still reads as
- * a boss, and that the expert beats inside 120 s on every seed, lets it clear the 54% the band asks. This is the rate
- * measured for the shipped carrier, pending the owner's ruling on the target.
+ * Galaxies held to a floor of their own instead of the trend band, in percent. 2-★: the casual dodges each of the Hive
+ * Carrier's telegraphed attacks, and the drones and rocks they send out, on its 85% roll, but over 40 seeds the fight
+ * still costs it about as many lives to the fragments of rocks, which come unannounced, as to drones, broadside rocks
+ * and the hull itself, each dodged through its 0.3 s delay. No carrier that still reads as a boss,
+ * and that the expert beats inside 120 s on every seed, lets it clear the 54% the band asks. This is the rate measured
+ * for the shipped carrier (the owner may veto the target change).
  */
-const CASUAL_FLOORS: Readonly<Partial<Record<GalaxyId, number>>> = { '2-6': 47.5 };
+const CASUAL_FLOORS: Readonly<Partial<Record<GalaxyId, number>>> = { '2-6': 50 };
 /** An idle ship must live this long in 1-1, and a casual player clear it this often. */
 const FIRST_STATUE_SECONDS = 20;
 const FIRST_CASUAL_PERCENT = 90;
@@ -38,6 +39,8 @@ const EXPERT_THREE_STAR_SHARE = 0.7;
 const GALAXY_TIMEOUT_MS = 600_000;
 
 const ROWS_DIR = new URL('../../test-results/balance/', import.meta.url);
+/** The rows of the run before, kept to name the seeds that flipped since. */
+const PREVIOUS_DIR = new URL('../../test-results/balance-previous/', import.meta.url);
 
 /** What the bots did in one galaxy, as the table prints it. */
 export interface Row {
@@ -52,6 +55,8 @@ export interface Row {
   /** For a boss galaxy: the expert's kills within 120 s of the boss's arrival, and its slowest kill. */
   readonly bossKills?: number;
   readonly slowestKill?: number;
+  /** The seeds behind the rates: the casual's clears, and the expert's losses and runs short of 3 stars. */
+  readonly seeds: { readonly casualCleared: readonly number[]; readonly expertLost: readonly number[]; readonly expertBelowThreeStars: readonly number[] };
 }
 
 /** The casual clear rate the trend line expects of galaxy `id`, in percent. */
@@ -114,26 +119,60 @@ export function formatTable(rows: readonly Row[]): string {
   return [head, ...body].map((cells) => cells.map((c, i) => c.padEnd(widths[i] ?? 0)).join(' | ')).join('\n');
 }
 
-/** Forgets the rows of an earlier run. */
+/** Keeps the last run's rows as the previous run's, and starts this run's afresh. */
 export function clearRows(): void {
-  rmSync(ROWS_DIR, { recursive: true, force: true });
-}
-
-/** The rows the galaxy files wrote, in galaxy order. */
-export function readRows(): Row[] {
-  let names: string[];
-  try {
-    names = readdirSync(ROWS_DIR);
-  } catch {
-    return [];
+  if (existsSync(ROWS_DIR)) {
+    rmSync(PREVIOUS_DIR, { recursive: true, force: true });
+    renameSync(ROWS_DIR, PREVIOUS_DIR);
   }
-  const rows = names.map((name) => JSON.parse(readFileSync(new URL(name, ROWS_DIR), 'utf8')) as Row);
-  return rows.sort((a, b) => galaxyOrdinal(a.id) - galaxyOrdinal(b.id));
+  mkdirSync(ROWS_DIR, { recursive: true });
 }
 
+function readRow(dir: URL, id: GalaxyId): Row | null {
+  const file = new URL(`${id}.json`, dir);
+  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Row) : null;
+}
+
+/** The rows this run's galaxy files wrote, in galaxy order. */
+export function readRows(): Row[] {
+  const ids = existsSync(ROWS_DIR) ? readdirSync(ROWS_DIR).map((name) => name.replace(/\.json$/, '') as GalaxyId) : [];
+  return ids.flatMap((id) => readRow(ROWS_DIR, id) ?? []).sort((a, b) => galaxyOrdinal(a.id) - galaxyOrdinal(b.id));
+}
+
+/** Writes `row` whole, by renaming, so a galaxy file reading it never sees half of it. */
 function writeRow(row: Row): void {
-  mkdirSync(ROWS_DIR, { recursive: true });
-  writeFileSync(new URL(`${row.id}.json`, ROWS_DIR), JSON.stringify(row));
+  const file = new URL(`${row.id}.json`, ROWS_DIR);
+  const part = new URL(`${row.id}.part`, ROWS_DIR);
+  writeFileSync(part, JSON.stringify(row));
+  renameSync(part, file);
+}
+
+/** The seeds in one list and not the other, either way round. */
+const flipped = (now: readonly number[], then: readonly number[]): number[] => BALANCE_SEEDS.filter((seed) => now.includes(seed) !== then.includes(seed));
+
+/** The seeds behind `row`, and those that changed since the previous run, for a failure message. */
+function seedReport(row: Row): string {
+  const { casualCleared, expertLost, expertBelowThreeStars } = row.seeds;
+  const lines = [
+    `casual lost on seeds ${BALANCE_SEEDS.filter((seed) => !casualCleared.includes(seed)).join(', ') || 'none'}`,
+    `expert lost on ${expertLost.join(', ') || 'none'}; short of 3 stars on ${expertBelowThreeStars.join(', ') || 'none'}`,
+  ];
+  const then = readRow(PREVIOUS_DIR, row.id);
+  if (then !== null) {
+    lines.push(`flipped since the previous run: casual ${flipped(casualCleared, then.seeds.casualCleared).join(', ') || 'none'}; expert ${flipped(expertLost, then.seeds.expertLost).join(', ') || 'none'}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * What another galaxy's file found for `profile`: its row if it has written one this run, else played here. Either
+ * way the number is the same, since every run replays exactly; reading it only saves the replay.
+ */
+function rateOf(id: GalaxyId, profile: 'casual' | 'statue'): number {
+  const row = readRow(ROWS_DIR, id);
+  if (row !== null) return profile === 'casual' ? row.casual : row.statue;
+  const runs = play(id, profile);
+  return profile === 'casual' ? clearRate(runs) : survival(runs);
 }
 
 /** Plays galaxy `id` with all three bots over the 40 seeds and asserts every target that applies to it. */
@@ -155,6 +194,7 @@ export function pinTargets(id: GalaxyId): void {
       statue = play(id, 'statue');
       expert = play(id, 'expert');
       const kills = expert.flatMap((r) => (r.result.bossKillTime === undefined ? [] : [r.result.bossKillTime]));
+      const seedsWhere = (runs: readonly Played[], keep: (r: RunResult) => boolean): number[] => BALANCE_SEEDS.filter((_, i) => keep((runs[i] as Played).result));
       row = {
         id,
         casual: clearRate(casual),
@@ -163,9 +203,14 @@ export function pinTargets(id: GalaxyId): void {
         expertClears: expert.filter((r) => r.result.cleared).length,
         expertThreeStars: expert.filter((r) => r.result.stars === 3).length,
         ...(galaxy.kind === 'boss' ? { bossKills: kills.filter((t) => t <= BOSS_KILL_SECONDS).length, slowestKill: Math.max(0, ...kills) } : {}),
+        seeds: {
+          casualCleared: seedsWhere(casual, (r) => r.cleared),
+          expertLost: seedsWhere(expert, (r) => !r.cleared),
+          expertBelowThreeStars: seedsWhere(expert, (r) => r.stars !== 3),
+        },
       };
       writeRow(row);
-      shown = `\n${formatTable([row])}`;
+      shown = `\n${formatTable([row])}\n${seedReport(row)}`;
     }, GALAXY_TIMEOUT_MS);
 
     const floor = CASUAL_FLOORS[id];
@@ -201,14 +246,14 @@ export function pinTargets(id: GalaxyId): void {
 
     if (before !== null && !afterBoss) {
       it(`keeps an idle ship alive no longer than in ${galaxyLabel(before)}`, () => {
-        const earlier = survival(play(before, 'statue'));
+        const earlier = rateOf(before, 'statue');
         expect(row.statue, `${galaxyLabel(before)} lasted ${fixed(earlier)} s${shown}`).toBeLessThanOrEqual(earlier);
       }, GALAXY_TIMEOUT_MS);
     }
 
     if (before !== null && afterBoss) {
       it(`eases off after ${galaxyLabel(before)}: the casual clears it more often than the boss galaxy`, () => {
-        const boss = clearRate(play(before, 'casual'));
+        const boss = rateOf(before, 'casual');
         expect(row.casual, `${galaxyLabel(before)}: ${fixed(boss)}%${shown}`).toBeGreaterThan(boss);
       }, GALAXY_TIMEOUT_MS);
     }
@@ -218,7 +263,8 @@ export function pinTargets(id: GalaxyId): void {
         expect(row.bossKills, shown).toBe(BALANCE_SEEDS.length);
       });
 
-      it('has the boss take at least one life off an idle ship on every seed', () => {
+      // The window is the whole fight a run allows, 300 s: the target sets the boss no time limit for this.
+      it('has the boss take at least one life off an idle ship on every seed, at any time in the fight', () => {
         for (const [i, r] of statue.entries()) expect(r.lostToBoss, `seed ${String(BALANCE_SEEDS[i])}${shown}`).toBeGreaterThanOrEqual(1);
       });
     }

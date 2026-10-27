@@ -392,7 +392,8 @@ describe('the Hive Carrier keeps clear of a fresh ship', () => {
       for (const e of spawned) expect(e.x >= 0 && e.x <= BOSS_FIELD.width && e.y >= 0 && e.y <= BOSS_FIELD.height, `drone at ${String(e.x)}, ${String(e.y)}`).toBe(true);
       if (rig.arena.events.some((e) => e.type === 'hangarOpen')) {
         const count = Math.min(LAUNCH_WAVES[view.phase], DRONE_CAP - alive);
-        for (let i = 0; i < 3 * count; i++) {
+        // The hangar's slots and the first slot past each wingtip.
+        for (let i = 0; i < count + 2; i++) {
           launchSlot(view, i, count, slot);
           if (slot.x < 0) offField++;
         }
@@ -402,6 +403,32 @@ describe('the Hive Carrier keeps clear of a fresh ship', () => {
       if (rig.foes.launched >= DRONE_CAP) rig.foes.clear();
     });
     expect(offField, 'the scene should put a slot off the field').toBeGreaterThan(0);
+  });
+
+  it('sends a whole wave out past a ship tucked at the hull\'s corner, with the carrier against a wall', () => {
+    const rig = fighting(1);
+    const { view } = rig.r;
+    // Facing down at the left wall: the left wingtip is off the field, and a ship at the hull's lower right corner is
+    // within the safe radius of the hangar's slot, the right wingtip and the next few slots out along the hull.
+    const pin = (): void => {
+      Object.assign(view, { x: view.radius, facing: Math.PI / 2 });
+      Object.assign(rig.arena.ship, { x: view.radius + 90, y: view.y + 110 });
+    };
+    pin();
+    let alive = 0;
+    let waves = 0;
+    runFor(stepper(rig.r), rig.arena, 30, () => {
+      const spawned = rig.arena.events.filter((e) => e.type === 'foeSpawned');
+      for (const e of spawned) expect(Math.hypot(e.x - rig.arena.ship.x, e.y - rig.arena.ship.y)).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
+      if (rig.arena.events.some((e) => e.type === 'hangarOpen')) {
+        waves++;
+        expect(spawned.length).toBe(Math.min(LAUNCH_WAVES[view.phase], DRONE_CAP - alive));
+      }
+      if (rig.foes.launched >= DRONE_CAP) rig.foes.clear();
+      alive = rig.foes.launched;
+      pin();
+    });
+    expect(waves).toBeGreaterThan(1);
   });
 
   it('forms no drone or broadside rock outside the field, even cruising against a wall', () => {

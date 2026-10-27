@@ -23,8 +23,10 @@ const TELEGRAPH_DODGE_CHANCE = 0.85;
  * threat that passes during it: a casual that rolls "no" ignores the lot until the field calms, and one that rolls
  * "yes" dodges them all. Rolling every step would dodge nearly always.
  *
- * A boss attack is rolled for once, as its windup begins, and that roll decides instead until the attack is over. The
- * dodge still waits out the 0.3 s delay, so a short windup can land a hit that a long one would not.
+ * A boss attack is rolled for once, as its windup begins, and that roll decides for what the attack threatens with:
+ * its lane and the boss's bodies while it lasts, and the rocks and drones it sends out. Rocks and drones that come
+ * unannounced, even mid-attack, keep the episode's roll. The dodge still waits out the 0.3 s delay, so a short windup
+ * can land a hit that a long one would not.
  */
 export function createCasualPilot(rng: Rng): Pilot {
   return new Pilot({ rng, dodgeChance: DODGE_CHANCE, telegraphDodgeChance: TELEGRAPH_DODGE_CHANCE, aimWobble: AIM_WOBBLE });

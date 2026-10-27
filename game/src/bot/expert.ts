@@ -3,8 +3,7 @@ import type { AttackId } from '../content/types';
 import type { BossView, Point } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
 import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
-import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
-import type { Foe } from '../sim/foes/foe';
+import { ASTEROID, PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import { wellAcceleration } from '../sim/hazards/gravityWell';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
@@ -67,9 +66,15 @@ const STATION_INSET = 60;
 /** How near the lead its nose must be for it to fire at a boss. */
 const BOSS_FIRE_ARC = 0.2;
 
-/** Whether foe `id` is still on the field. */
-function isLive(foes: readonly Readonly<Foe>[], id: number): boolean {
-  for (const foe of foes) if (foe.id === id) return foe.hp > 0;
+/**
+ * A rock appearing within this far of a fighting boss's rim as one of its attacks runs is that attack's: a quake's
+ * ring, a broadside's line or a shard ring form at the rim. A shot rock's fragments form where the shot struck.
+ */
+const ATTACK_ROCK_REACH = ASTEROID.radii[0];
+
+/** Whether `id` is still on the field among `things`. */
+function onField(things: readonly Readonly<{ id: number }>[], id: number): boolean {
+  for (const thing of things) if (thing.id === id) return true;
   return false;
 }
 
@@ -92,8 +97,8 @@ export interface PilotOptions {
   readonly dodgeChance?: number;
   /**
    * The chance it dodges a boss's telegraphed attack, rolled once as its windup begins; at 1 it always dodges and draws
-   * nothing. From the windup until the attack is over, this roll, not the episode's, decides whether it dodges; so it
-   * does afterwards whenever the nearest danger is a drone the attack launched.
+   * nothing. The roll decides for what the attack threatens with: its lane and the boss's bodies while it lasts, and the
+   * rocks and drones it sends out for as long as they fly. Everything else is judged on the episode's roll.
    */
   readonly telegraphDodgeChance?: number;
   /** Radians its aim strays either way, redrawn every half second; at 0 it aims true and draws nothing. */
@@ -120,7 +125,7 @@ export class Pilot {
   private readonly reach: number[] = [];
   /** A boss's bodies and its strike lane: worth keeping out of even while the ship cannot be hurt. */
   private readonly solid: boolean[] = [];
-  /** For a drone a telegraphed launch sent out, whether that launch was to be dodged; null for any other threat. */
+  /** For a threat a telegraphed attack made, whether that attack was to be dodged; null for any other threat. */
   private readonly rolled: (boolean | null)[] = [];
   private count = 0;
   /** Seconds until the ship can be hurt by anything but a solid threat. */
@@ -139,11 +144,11 @@ export class Pilot {
   /** Whether it dodges in the danger episode under way, and in the boss attack under way. */
   private dodging = true;
   private dodgingStrike = true;
-  /** The drones a telegraphed launch sent out, by id, and whether that launch was to be dodged. */
-  private readonly waveIds: number[] = [];
-  private readonly waveDodging: boolean[] = [];
-  /** The highest foe id seen so far: a foe above it is new. */
-  private foeMark = 0;
+  /** The rocks and drones telegraphed attacks sent out, by id, and whether each attack was to be dodged. */
+  private readonly spawnIds: number[] = [];
+  private readonly spawnDodging: boolean[] = [];
+  /** The highest rock or foe id seen so far: one above it is new. */
+  private idMark = 0;
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
@@ -212,12 +217,8 @@ export class Pilot {
     return this.inDanger;
   }
 
-  /**
-   * Whether it dodges the danger it is in: as it rolled for the boss attack under way, else for the launch that sent
-   * out the drone nearest it, else for the episode.
-   */
+  /** Whether it dodges the danger it is in: as it rolled for the attack that made the nearest threat, else for the episode. */
   private willDodge(): boolean {
-    if (this.strike !== null) return this.dodgingStrike;
     return this.nearestRolled ?? this.dodging;
   }
 
@@ -294,7 +295,9 @@ export class Pilot {
    * forgets it once the attack is over; and while a pulse winds up, when its shove will land.
    */
   private trackStrike(view: Readonly<BotView>): void {
-    this.trackWave(view);
+    // First, while the attack that ran last step is still remembered: an attack with no active time (a launch, a quake,
+    // a broadside) sends out its drones or rocks on the step it ends, so they first show in a view with no attack on.
+    this.trackSpawns(view);
     const boss = view.boss;
     const attack = boss === null ? null : (boss.windup ?? boss.active);
     if (attack === null) {
@@ -310,33 +313,44 @@ export class Pilot {
   }
 
   /**
-   * Keeps the launched drones still alive, and adds the new drones that appear while a launch is under way, with the
-   * launch's roll.
+   * Forgets the attacks' rocks and drones that have left the field, and notes the new ones the attack under way sends
+   * out, with its roll: a launch's drones, and the rocks that form at the boss's rim.
    */
-  private trackWave(view: Readonly<BotView>): void {
-    const { waveIds, waveDodging } = this;
+  private trackSpawns(view: Readonly<BotView>): void {
+    const { spawnIds, spawnDodging } = this;
     let kept = 0;
-    for (let i = 0; i < waveIds.length; i++) {
-      if (!isLive(view.foes, waveIds[i] ?? 0)) continue;
-      waveIds[kept] = waveIds[i] ?? 0;
-      waveDodging[kept++] = waveDodging[i] ?? true;
+    for (let i = 0; i < spawnIds.length; i++) {
+      const id = spawnIds[i] ?? 0;
+      if (!onField(view.foes, id) && !onField(view.asteroids, id)) continue;
+      spawnIds[kept] = id;
+      spawnDodging[kept++] = spawnDodging[i] ?? true;
     }
-    waveIds.length = waveDodging.length = kept;
-    let mark = this.foeMark;
+    spawnIds.length = spawnDodging.length = kept;
+    let mark = this.idMark;
     for (const foe of view.foes) {
-      if (foe.id <= this.foeMark) continue;
+      if (foe.id <= this.idMark) continue;
       mark = Math.max(mark, foe.id);
-      if (this.strike !== 'launch' || foe.kind !== 'drone') continue;
-      waveIds.push(foe.id);
-      waveDodging.push(this.dodgingStrike);
+      if (this.strike === 'launch' && foe.kind === 'drone') this.noteSpawn(foe.id);
     }
-    this.foeMark = mark;
+    const boss = view.boss;
+    for (const rock of view.asteroids) {
+      if (rock.id <= this.idMark) continue;
+      mark = Math.max(mark, rock.id);
+      if (this.strike === null || boss === null || rock.transient !== true) continue;
+      if (Math.hypot(rock.x - boss.x, rock.y - boss.y) <= boss.radius + ATTACK_ROCK_REACH) this.noteSpawn(rock.id);
+    }
+    this.idMark = mark;
   }
 
-  /** The launch roll of a drone a telegraphed launch sent out, or null for any other foe. */
-  private waveRoll(id: number): boolean | null {
-    const at = this.waveIds.indexOf(id);
-    return at < 0 ? null : (this.waveDodging[at] ?? null);
+  private noteSpawn(id: number): void {
+    this.spawnIds.push(id);
+    this.spawnDodging.push(this.dodgingStrike);
+  }
+
+  /** The roll of the attack that sent out rock or drone `id`, or null for one no attack made. */
+  attackRoll(id: number): boolean | null {
+    const at = this.spawnIds.indexOf(id);
+    return at < 0 ? null : (this.spawnDodging[at] ?? null);
   }
 
   /** Lists every threat that could come near the ship over the look-ahead, relative to it. */
@@ -346,10 +360,10 @@ export class Pilot {
     this.harmlessFor = ship.invulnerable ? ship.invulnerableFor : 0;
     for (const rock of view.asteroids) {
       const slack = boss !== null && rock.transient === true ? BOSS_ROCK_SLACK : 0;
-      this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius - slack, false);
+      this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius - slack, false, this.attackRoll(rock.id));
     }
     for (const foe of view.foes) {
-      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.waveRoll(foe.id));
+      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.attackRoll(foe.id));
     }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
@@ -367,12 +381,15 @@ export class Pilot {
     const dx = clamp(this.strikeX, boss.radius, field.width - boss.radius) - boss.x;
     const dy = clamp(this.strikeY, boss.radius, field.height - boss.radius) - boss.y;
     const circles = Math.max(1, Math.ceil(Math.hypot(dx, dy) / radius));
-    for (let i = 1; i <= circles; i++) this.addThreat(view, boss.x + (dx * i) / circles, boss.y + (dy * i) / circles, 0, 0, radius, true);
+    for (let i = 1; i <= circles; i++) this.addThreat(view, boss.x + (dx * i) / circles, boss.y + (dy * i) / circles, 0, 0, radius, true, this.dodgingStrike);
   }
 
-  /** A solid boss body, its velocity read from its pose before the latest step. */
+  /**
+   * A solid boss body, its velocity read from its pose before the latest step: judged on the attack's roll while one is
+   * under way, a shard in a volley say, and on the episode's between attacks.
+   */
   private addBody(view: Readonly<BotView>, body: Readonly<{ x: number; y: number; px: number; py: number }>, radius: number): void {
-    this.addThreat(view, body.x, body.y, (body.x - body.px) / STEP_SECONDS, (body.y - body.py) / STEP_SECONDS, radius, true);
+    this.addThreat(view, body.x, body.y, (body.x - body.px) / STEP_SECONDS, (body.y - body.py) / STEP_SECONDS, radius, true, this.strike === null ? null : this.dodgingStrike);
   }
 
   /** Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. */
