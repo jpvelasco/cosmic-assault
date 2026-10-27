@@ -94,7 +94,7 @@ export class GalaxyRun implements Spawner {
     this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId());
     this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
-    this.blastScene = { arena, foes: this.foes, boss: () => this.bossRunner, score: (base) => this.scoreKill(base), hitCore: this.hitCore.bind(this), hitPart: this.hitPart.bind(this) };
+    this.blastScene = { arena, foes: this.foes, boss: () => this.bossRunner, hitCore: this.hitCore.bind(this), hitPart: this.hitPart.bind(this) };
   }
 
   get phase(): Phase {

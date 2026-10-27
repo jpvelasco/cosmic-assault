@@ -13,6 +13,7 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { comboMultiplier } from '../../src/sim/scoring';
 import { createShip } from '../../src/sim/ship';
+import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
@@ -347,6 +348,18 @@ describe('GalaxyRun with a boss that has parts', () => {
     expect(arena.ship.vx).toBe(0);
     expect(arena.events.map((e) => e.type)).toContain('warpOut');
   });
+  it('stops a piercing shot on a part and on the shielded core, whatever pierces it has left', () => {
+    const { arena, run, boss } = galaxyRun();
+    const shots = new PlayerShots(arena.events, () => 9000);
+    const targets: ShotTargets = { rocks: [], foes: () => [], aim: () => null, hitBoss: (x, y, r) => run.hitBoss(x, y, r), hitFoe: () => -1, hitRock: () => -1 };
+    const part = boss.parts[0] as BossPart;
+    for (const at of [part, boss]) shots.fire([{ x: at.x, y: at.y, vx: 0, vy: 0 }], arena.ship, { pierce: 3, homingEvery: 0, wingman: false });
+    shots.collide(targets);
+    expect(shots.list).toEqual([]);
+    expect(part.hp).toBe(1);
+    expect(ofType(arena.events, 'bossDeflected')).toHaveLength(1);
+  });
+
   describe('a blast', () => {
     /** The probe fighting, the ship `below` units under its core, and the parts named broken first. */
     function blastRig(below: number, broken: readonly number[] = []) {

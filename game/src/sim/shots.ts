@@ -22,8 +22,8 @@ export interface ShotRules {
 
 /** What the player's shots can seek and strike: the World's rocks, and its ruleset's foes and boss. */
 export interface ShotTargets {
-  readonly rocks: readonly Readonly<Point>[];
-  foes(): readonly Readonly<Point & { readonly hp: number }>[];
+  readonly rocks: readonly Readonly<Point & { readonly id: number }>[];
+  foes(): readonly Readonly<Point & { readonly id: number; readonly hp: number }>[];
   /** Where a shot harms the boss now (`bossTarget`), or null. */
   aim(): Readonly<Point> | null;
   /** A shot at (x, y) has reached the boss, core or part, if true: it is spent, however much it pierces. */
@@ -117,13 +117,16 @@ export class PlayerShots {
     this.events.push({ type: 'shot', x: shot.x, y: shot.y });
   }
 
-  /** Turns `p` toward the nearest target within `HOMING.range` and `HOMING.cone` of its heading, keeping its speed. */
+  /**
+   * Turns `p` toward the nearest target within `HOMING.range` and `HOMING.cone` of its heading, keeping its speed. A
+   * piercing shot passes over what it has already struck, which it can no longer hurt.
+   */
   private steer(p: Projectile, dt: number, field: Field, targets: ShotTargets): void {
     const heading = Math.atan2(p.vy, p.vx);
     this.seekD2 = HOMING.range * HOMING.range;
     let found = false;
-    for (const rock of targets.rocks) found = this.consider(p, heading, field, rock) || found;
-    for (const foe of targets.foes()) if (foe.hp > 0) found = this.consider(p, heading, field, foe) || found;
+    for (const rock of targets.rocks) if (!p.struck.includes(rock.id)) found = this.consider(p, heading, field, rock) || found;
+    for (const foe of targets.foes()) if (foe.hp > 0 && !p.struck.includes(foe.id)) found = this.consider(p, heading, field, foe) || found;
     const aim = targets.aim();
     if (aim !== null) found = this.consider(p, heading, field, aim) || found;
     if (!found) return;

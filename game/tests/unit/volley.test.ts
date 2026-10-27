@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER, VOLLEY, WEAPON_SPREAD } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
-import { shotRulesFor, triggerShots, weaponFor, type TimedFlags } from '../../src/sim/pickups/volley';
-import { createShip, stepShip, type Barrel } from '../../src/sim/ship';
+import { shotRulesFor, weaponFor, type TimedFlags } from '../../src/sim/pickups/volley';
+import { createShip, stepShip, type Barrel, type Weapon } from '../../src/sim/ship';
+import { PlayerShots, type ShotRules } from '../../src/sim/shots';
 import type { WeaponTier } from '../../src/content/types';
 
 const NONE: TimedFlags = { doubleShot: false, rapidFire: false, spreadLaser: false, piercingBeam: false, homingMissiles: false, wingman: false };
 const TIERS: readonly WeaponTier[] = [0, 1, 2, 3];
 const FIELD = { width: 1280, height: 720 };
+
+/** The projectiles one pull of the trigger makes through the sim's own firing path: `stepShip`'s volley, then `PlayerShots.fire`. */
+function triggerShots(weapon: Weapon, rules: ShotRules): number {
+  const ship = createShip(640, 360);
+  const shots = new PlayerShots([], () => 0);
+  shots.fire(stepShip(ship, { ...NO_CONTROLS, fire: true }, 1 / 120, FIELD, weapon), ship, rules);
+  return shots.list.length;
+}
 
 const angles = (barrels: readonly Barrel[]): number[] => barrels.map((b) => b.angle);
 const sortedBy = (barrels: readonly Barrel[]): string[] => barrels.map((b) => `${String(b.angle)}@${String(b.lateral)}`).sort();

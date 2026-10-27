@@ -6,7 +6,7 @@ import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
-import { rescalePose } from '../wrap';
+import { overlapsAcrossWrap, rescalePose } from '../wrap';
 import { DRONE } from './drone';
 import { FoePool, type Foe, type FoeBehaviour, type FoeWorld } from './foe';
 import { SPLITTER } from './splitter';
@@ -140,9 +140,10 @@ export class FoeField implements FoeWorld, BossFoes {
     return foe.id;
   }
 
-  /** A blast of `radius` at (x, y): every foe it reaches is destroyed for score, leaving nothing behind and dropping nothing. */
+  /** A blast of `radius` at (x, y): every foe it reaches across the wrap is destroyed for score, leaving nothing behind and dropping nothing. */
   blast(x: number, y: number, radius: number): void {
-    for (const foe of this.pool.live) if (foe.hp > 0 && circlesOverlap(x, y, radius, foe.x, foe.y, foe.radius)) this.kill(foe, false);
+    const field = this.arena.field();
+    for (const foe of this.pool.live) if (foe.hp > 0 && overlapsAcrossWrap(field, x, y, radius, foe.x, foe.y, foe.radius)) this.kill(foe, false);
     this.pool.sweep();
   }
 

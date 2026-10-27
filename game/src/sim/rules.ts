@@ -45,6 +45,8 @@ export interface Arena {
   lives(): number;
   nextId(): number;
   award(points: number): void;
+  /** Scores `rock`, destroyed in play, through the ruleset's `scoreKill` and reports it; the caller takes it off the field. */
+  scoreRock(rock: Readonly<Asteroid>): void;
   setStatus(status: 'warping' | 'cleared'): void;
 }
 

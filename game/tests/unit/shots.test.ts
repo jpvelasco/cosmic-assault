@@ -189,6 +189,17 @@ describe('a homing shot', () => {
     expect(Math.atan2(p?.vy ?? 0, p?.vx ?? 1)).toBeGreaterThan(0);
   });
 
+  it('passes over a foe it has already struck, which it can no longer hurt', () => {
+    const { shots: s } = shots();
+    s.fire([shot(), shot(), shot(100, 100)], SHIP, { ...HOMING_RULES, pierce: 3 });
+    const p = s.list[2];
+    if (p === undefined) throw new Error('no homing shot');
+    p.struck.push(8);
+    const struckFoe = { id: 8, x: 250, y: 30, hp: 5, radius: 30 } as Foe;
+    s.move(DT, FIELD, targets({ foes: () => [struckFoe] }));
+    expect(p.vy).toBe(0);
+  });
+
   it('flies straight when it is not homing', () => {
     const { shots: s } = shots();
     s.fire([shot(100, 100)], SHIP, PLAIN);

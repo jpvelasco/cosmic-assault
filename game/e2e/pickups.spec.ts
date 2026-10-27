@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { PICKUPS } from '../src/content/pickups';
 import type { PickupId } from '../src/content/types';
 import { STEP_SECONDS } from '../src/sim/config';
-import { expect, expectMode, fastForward, gameState, grantPickup, nextFrames, openFreshGame, openGame, pinClockSeed, playFreeGalaxy, storedSave, test, toastOf, waitForBridge } from './fixtures';
+import { expect, expectMode, fastForward, gameState, grantPickup, nextFrames, openFreshGame, openGame, pinClockSeed, playFreeGalaxy, shotsPerVolley, storedSave, test, toastOf, waitForBridge } from './fixtures';
 import { seedFor } from './seeds';
 
 /** Starts the default debug run in 1-1 and holds fire, so a volley can be counted. */
@@ -18,22 +18,6 @@ async function startFiring(page: Page): Promise<void> {
 async function collect(page: Page, kind: PickupId): Promise<void> {
   await grantPickup(page, kind);
   await fastForward(page, STEP_SECONDS);
-}
-
-/** Shots in the next volley: steps until the ship fires, then returns how many shots that one step added. The fire key must be held. */
-function shotsPerVolley(page: Page): Promise<number> {
-  return page.evaluate((step) => {
-    const api = window.__COSMIC_ASSAULT_TEST_API__;
-    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
-    // A volley comes every 0.32 s at most, so 0.5 s of steps always holds one.
-    for (let waited = 0; waited < 0.5; waited += step) {
-      const before = api.getState().events.shot ?? 0;
-      api.fastForward(step);
-      const added = (api.getState().events.shot ?? 0) - before;
-      if (added > 0) return added;
-    }
-    throw new Error('The ship fired nothing in 0.5 s with fire held; hold the fire key before counting a volley');
-  }, STEP_SECONDS);
 }
 
 /** Pickups that run on a timer, each with the shots one trigger fires once it is collected (only Double Shot, Spread Laser and the Wingman add shots). */

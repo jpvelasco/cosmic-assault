@@ -322,6 +322,9 @@ export class World {
       award: (points) => {
         this.scoreValue += points;
       },
+      scoreRock: (rock) => {
+        this.scoreRock(rock);
+      },
       setStatus: (status) => {
         this.statusValue = status;
       },
@@ -415,11 +418,15 @@ export class World {
     const index = this.lastOverlap(x, y, radius);
     if (index < 0) return -1;
     const a = this.markBroken(index);
+    this.scoreRock(a);
+    this.rules.rockKilled?.(a);
+    return a.id;
+  }
+
+  private scoreRock(a: Readonly<Asteroid>): void {
     const points = this.rules.scoreKill(ASTEROID.scores[a.size]);
     this.scoreValue += points;
     this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
-    this.rules.rockKilled?.(a);
-    return a.id;
   }
 
   /** Removes broken asteroids and appends their children in break order, like the live splice-and-push. */

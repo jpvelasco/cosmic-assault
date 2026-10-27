@@ -15,8 +15,8 @@ const CENTRE = { x: 640, y: 360, angle: -Math.PI / 2 };
 const calm = (galaxy: GalaxyDef = galaxyById('5-2')): GalaxyDef => ({ ...galaxy, kinds: MUTED_KINDS, events: [] });
 const still = (x: number, y: number, size: AsteroidSize) => ({ x, y, size, angle: 0, speedMultiplier: 0 });
 
-function world(rocks: ReturnType<typeof still>[] = []): World {
-  return new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'free' }, initialShip: CENTRE, initialAsteroids: rocks });
+function world(rocks: ReturnType<typeof still>[] = [], ship: { x: number; y: number; angle: number } = CENTRE): World {
+  return new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'free' }, initialShip: ship, initialAsteroids: rocks });
 }
 
 function run(w: World) {
@@ -96,6 +96,26 @@ describe('a Field Bomb', () => {
     expect(w.foes.map((f) => f.x)).toEqual([640 + 220 + 30 + 1]);
     expect(w.asteroids).toEqual([]);
     expect(roll).not.toHaveBeenCalled();
+  });
+});
+
+describe('a blast across the wrap', () => {
+  it('reaches a rock and a foe just across the field\'s edges from a ship beside them, as the wrap measures them', () => {
+    // The ship sits 20 in from the right edge; the rock 40 past the left edge is 80 away across the wrap band.
+    const w = world([still(-40, 360, 3), still(640, 360, 3)], { x: 1260, y: 360, angle: 0 });
+    const foes = run(w)['foes'];
+    const foe = foes.acquire('drone');
+    if (foe === null) throw new Error('foe pool full');
+    Object.assign(foe, { x: 1260, y: -30 });
+    foes.commit(foe);
+    const events = collectAtShip(w, 'fieldBomb');
+    expect(ofType(events, 'asteroidDestroyed').map((e) => e.x)).toEqual([-40]);
+    expect(w.asteroids.map((a) => a.x)).toEqual([640]);
+    expect(w.foes).toHaveLength(1);
+    // 20 above the bottom edge, the foe 30 past the top edge is 90 away.
+    w['shipState'].y = 700;
+    collectAtShip(w, 'fieldBomb');
+    expect(w.foes).toEqual([]);
   });
 });
 

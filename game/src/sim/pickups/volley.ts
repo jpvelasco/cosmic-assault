@@ -44,6 +44,3 @@ export function shotRulesFor(flags: TimedFlags): ShotRules {
     wingman: flags.wingman,
   };
 }
-
-/** How many projectiles one pull of the trigger makes: the ship's volley, and the Wingman's shot beside it. */
-export const triggerShots = (weapon: Weapon, rules: ShotRules): number => weapon.barrels.length + (rules.wingman ? 1 : 0);

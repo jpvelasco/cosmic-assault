@@ -34,6 +34,7 @@ const diffLine = '        run: diff -r website _site --exclude next\n';
 const nodeVersionLine = '          node-version-file: .nvmrc\n';
 const e2eStep = '        run: npm run test:e2e\n';
 const unitStep = '        run: npm test\n';
+const digestStep = '        run: npm run test:digests\n';
 const buildStep = '        run: npm run build\n';
 const noBridgeStep = '        run: npm run check:no-bridge\n';
 const buildE2eStep = '        run: npm run build:e2e\n';
@@ -73,6 +74,17 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
     'continue-on-error is not allowed in the game/legacy jobs',
   ],
   ['deleted unit test step', (t) => replaceOnce(t, unitStep, ''), 'the game job must run "npm test"'],
+  ['deleted expert digest step', (t) => replaceOnce(t, digestStep, ''), 'the game job must run "npm run test:digests"'],
+  [
+    'expert digests moved to the balance job',
+    (t) => replaceOnce(replaceOnce(t, digestStep, ''), balanceStep, `${balanceStep}${digestStep}`),
+    'the game job must run "npm run test:digests"',
+  ],
+  [
+    'expert digests left to continue on error',
+    (t) => replaceOnce(t, digestStep, `${digestStep}        continue-on-error: true\n`),
+    'continue-on-error is not allowed in the game/legacy jobs',
+  ],
   ['deleted e2e step', (t) => replaceOnce(t, e2eStep, ''), 'the game job must run "npm run test:e2e"'],
   ['deleted no-bridge check', (t) => replaceOnce(t, noBridgeStep, ''), 'the game job must run "npm run check:no-bridge"'],
   ['deleted e2e build', (t) => replaceOnce(t, buildE2eStep, ''), 'the game job must run "npm run build:e2e"'],

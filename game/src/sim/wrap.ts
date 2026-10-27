@@ -51,3 +51,11 @@ export function wrapDelta(delta: number, size: number, margin: number = WRAP_MAR
   if (delta > period / 2) return delta - period;
   return delta < -period / 2 ? delta + period : delta;
 }
+
+/** Whether two circles overlap, their offset measured across the wrap band as `wrapDelta` measures it. */
+export function overlapsAcrossWrap(field: Field, ax: number, ay: number, ar: number, bx: number, by: number, br: number): boolean {
+  const dx = wrapDelta(bx - ax, field.width);
+  const dy = wrapDelta(by - ay, field.height);
+  const reach = ar + br;
+  return dx * dx + dy * dy < reach * reach;
+}

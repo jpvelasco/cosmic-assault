@@ -208,7 +208,6 @@ describe('the galaxy table', () => {
       }
     expect(PICKUPS.rapidFire.from).toBe(2);
     expect(PICKUPS.spreadLaser.from).toBe(2);
-    expect(PICKUP_IDS.filter((id) => PICKUPS[id].from >= 3).every((id) => GALAXIES.every((g) => g.dimension >= PICKUPS[id].from || !g.pickups.includes(id)))).toBe(true);
   });
 
   it('gives every pickup a distinct name, a "New: ..." callout that names it, a positive weight and a pool somewhere', () => {

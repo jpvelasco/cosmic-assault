@@ -221,7 +221,8 @@ and `tests/test-results/` and are ignored by Git.
   configuration or coverage upload is currently committed.
 - `.github/workflows/ci.yml` is the only workflow. It runs on pull requests to
   `main`, pushes to `main`, and manual dispatch. Job `game` runs the `game/`
-  workflow guard, lint, typecheck, unit tests, release build, base check,
+  workflow guard, lint, typecheck, unit tests, the expert D1–D2 digests
+  (`npm run test:digests`, one file of the balance suite), release build, base check,
   no-test-bridge check, e2e build, and e2e tests (the `chromium-desktop` and
   `mobile-landscape` projects against `dist-e2e/`, plus the `release-smoke`
   project against `dist/`);

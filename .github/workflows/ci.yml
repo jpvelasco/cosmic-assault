@@ -50,6 +50,11 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # The expert's whole D1–D2 runs: the only pins of D2's late phases, clears and boss kills, so they gate merges
+      # here although they live in the balance suite (which the balance job also runs, as a report).
+      - name: Expert D1–D2 digests
+        run: npm run test:digests
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
