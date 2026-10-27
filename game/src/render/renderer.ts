@@ -2,6 +2,7 @@ import type { PaletteId } from '../content/types';
 import type { Asteroid } from '../sim/asteroid';
 import type { SimEvent } from '../sim/events';
 import { isPositiveFiniteSize, type Field } from '../sim/field';
+import { enemyTimeScale } from '../sim/pickups/effects';
 import { createRng, deriveSeed } from '../sim/rng';
 import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
@@ -117,7 +118,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const pen = createFieldPen(ctx);
   const particlePass = createParticlePass(ctx, pen, baker, particles);
   const hud = createHud(palette);
-  const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0 };
+  const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0, field: { width: 0, height: 0 } };
   const scene: { -readonly [K in keyof SceneLook]: SceneLook[K] } = { glow: 1, still: false, time: 0, visual: UNIT_VISUAL };
   const copies = new Float64Array(6);
   const pose = { x: 0, y: 0, angle: 0 };
@@ -273,6 +274,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     bossLook.still = effects.reducedMotion;
     bossLook.aimX = world.ship.x;
     bossLook.aimY = world.ship.y;
+    bossLook.field = world.field;
     passes.boss.draw(world.boss, alpha, bossLook);
   }
 
@@ -357,7 +359,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     hitFlash.step(dt);
     passes.pickup.advance(dt);
     particles.step(dt);
-    passes.boss.advance(dt, world.boss);
+    passes.boss.advance(dt, world.boss, enemyTimeScale(world.effects));
   }
 
   function freeRun(): void {

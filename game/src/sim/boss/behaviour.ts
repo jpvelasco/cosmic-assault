@@ -57,6 +57,8 @@ export interface BossView {
   target: Readonly<Point> | null;
   /** The attack winding up or running, as the bots read it, else null; the same object each time that attack comes round. */
   threat: Readonly<BossThreat> | null;
+  /** Where the ship was as the latest windup began, which an attack aimed at it fires at; one point, moved in place. */
+  readonly aim: Point;
 }
 
 /** What an attack sees and may change. Refilled in place every step. */
@@ -87,11 +89,15 @@ export interface AttackContext {
 }
 
 /**
- * How an attack threatens the ship beyond the rocks, foes and bolts it sends out, which carry `fromAttack`: declared as
- * data, so a bot reads any boss's attack without knowing the boss.
+ * How an attack threatens the ship beyond the rocks, foes and bolts it sends out, which carry `fromAttack` once made, or
+ * where what it will send out flies, declared for its windup: data, so a bot reads any boss's attack without knowing
+ * the boss.
  */
 export type AttackThreat =
-  /** It sends the core, or its parts, down the lane from the core to where the ship was as its windup began, reaching `reach` either side of that line; 'core' reaches the core's radius. */
+  /**
+   * It sends the core, or its parts, down the lane from the core to where the ship was as its windup began, or fires
+   * bolts that converge on that point, reaching `reach` either side of that line; 'core' reaches the core's radius.
+   */
   | { readonly kind: 'lane'; readonly reach: number | 'core' }
   /** As it goes active it shoves the ship straight away from the core, `speed` at the core's rim and fading to none `reach` beyond it: `radialShove`. */
   | { readonly kind: 'shove'; readonly speed: number; readonly reach: number }

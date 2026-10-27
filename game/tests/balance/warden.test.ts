@@ -6,13 +6,13 @@ import { PLAYER } from '../../src/sim/config';
 import { BALANCE_SEEDS } from '../helpers/botRuns';
 import { ringGaps, wardenGaps } from '../helpers/ringGaps';
 
-/** The expert beats each boss within this long of its arrival (the balance targets); the Task 7 brief allows 150 s. */
+/** The expert beats each boss within this long of its arrival; the longer limit is reported alongside. */
 const KILL_SECONDS = 120;
-const BRIEF_KILL_SECONDS = 150;
-/** Each of the ring's two gaps stays at least this wide at every step (RF 4). */
+const LONG_KILL_SECONDS = 150;
+/** Each of the ring's two gaps stays at least this wide at every step. */
 const WIDE_GAP = 50;
 const GALAXY = galaxyById('3-6');
-const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + BRIEF_KILL_SECONDS;
+const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + LONG_KILL_SECONDS;
 /** 40 whole boss fights a bot. */
 const TIMEOUT_MS = 600_000;
 
@@ -65,7 +65,7 @@ describe('the Warden on 3-★, over 40 seeds', { timeout: TIMEOUT_MS }, () => {
     statue = BALANCE_SEEDS.map((seed) => fight(seed, 'statue'));
   }, TIMEOUT_MS);
 
-  it('keeps both gaps at least 50 wide at every step of every expert fight, and no opening the ship might just squeeze through (RF 4)', () => {
+  it('keeps both gaps at least 50 wide at every step of every expert fight, and no opening the ship might just squeeze through', () => {
     for (const f of expert) {
       expect(f.narrowestGap, `seed ${String(f.seed)}`).toBeGreaterThanOrEqual(WIDE_GAP);
       expect(f.halfOpen, `seed ${String(f.seed)}`).toBe(0);
@@ -74,7 +74,7 @@ describe('the Warden on 3-★, over 40 seeds', { timeout: TIMEOUT_MS }, () => {
 
   it('is killed by the expert within 120 s of its arrival on all 40 seeds', () => {
     const killed = killedWithin(expert, KILL_SECONDS);
-    console.info(`Warden: expert kills within ${String(KILL_SECONDS)} s on ${String(killed.length)}/40, within ${String(BRIEF_KILL_SECONDS)} s on ${String(killedWithin(expert, BRIEF_KILL_SECONDS).length)}/40\n${summary(expert)}`);
+    console.info(`Warden: expert kills within ${String(KILL_SECONDS)} s on ${String(killed.length)}/40, within ${String(LONG_KILL_SECONDS)} s on ${String(killedWithin(expert, LONG_KILL_SECONDS).length)}/40\n${summary(expert)}`);
     expect(killed.length, summary(expert)).toBe(BALANCE_SEEDS.length);
   });
 

@@ -40,9 +40,18 @@ export function nearestParts(parts: readonly Readonly<BossPart>[], x: number, y:
 }
 
 /**
+ * The farthest out a ring of turrets of `turretRadius` about `core` may stretch and stay inside `field`, but never less
+ * than its own `radius`: an attack stretching it toward a wall stops short of the wall.
+ */
+export function stretchRoom(core: Readonly<Point>, field: Field, radius: number, turretRadius: number): number {
+  return Math.max(radius, Math.min(core.x, core.y, field.width - core.x, field.height - core.y) - turretRadius);
+}
+
+/**
  * A ring of turrets about a boss's core: a turret in every slot but the gaps, each a part of the boss. It turns at its
  * phase's speed and grows a broken turret back every `regrowSeconds`, never in a gap and never near the ship. An attack
- * may turn it at a multiple of that speed (`turn`) or stretch it to another radius (`stretch`) for the step it runs.
+ * may turn it at a multiple of that speed (`turn`) or stretch it to another radius (`stretch`, kept inside the field by
+ * `stretchRoom`) for the step it runs.
  * Its bearing is drawn from the fight's stream; nothing else is.
  */
 export class TurretRing {
@@ -91,7 +100,9 @@ export class TurretRing {
   /** Turns the ring, grows a turret back in the fight, and puts every turret in its slot; then forgets what the attack asked. */
   step(ctx: AttackContext): void {
     const { boss, dt } = ctx;
+    const { radius, turretRadius } = this.options;
     this.spin = (this.spin + this.options.speeds[boss.phase] * this.speedFactor * dt) % TAU;
+    this.radius = Math.min(this.radius, stretchRoom(boss, ctx.arena.field(), radius, turretRadius));
     this.regrow(ctx);
     this.placeAll(boss.x, boss.y);
     this.speedFactor = 1;

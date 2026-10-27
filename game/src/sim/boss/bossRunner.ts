@@ -80,6 +80,7 @@ export class BossRunner {
       facing: FACING_DOWN,
       target: null,
       threat: null,
+      aim: { x: home.x, y: home.y },
     };
     const heading = setup.rng.range(0, TAU);
     this.dx = Math.cos(heading) * behaviour.driftSpeed;
@@ -104,15 +105,17 @@ export class BossRunner {
     return this.behaviour.reach ?? this.view.radius;
   }
 
-  /** Stretches the core, its parts, its target and the points an attack under way aims at, to the new field like every other entity. */
+  /** Stretches the core, its parts, its target, the windup's aim and the points an attack under way starts from, to the new field like every other entity. */
   resize(old: Field, field: Field): void {
     const { view, context } = this;
     for (const body of [view, ...view.parts]) rescalePose(body, old, field);
     this.refresh();
+    view.aim.x = rescale(view.aim.x, old.width, field.width);
+    view.aim.y = rescale(view.aim.y, old.height, field.height);
     if (context === null) return;
-    context.aimX = rescale(context.aimX, old.width, field.width);
+    context.aimX = view.aim.x;
+    context.aimY = view.aim.y;
     context.fromX = rescale(context.fromX, old.width, field.width);
-    context.aimY = rescale(context.aimY, old.height, field.height);
     context.fromY = rescale(context.fromY, old.height, field.height);
   }
 
@@ -327,8 +330,8 @@ export class BossRunner {
     view.windup = attack;
     view.threat = this.threats.get(attack) ?? null;
     const ctx = this.contextFor(arena);
-    ctx.aimX = arena.ship.x;
-    ctx.aimY = arena.ship.y;
+    ctx.aimX = view.aim.x = arena.ship.x;
+    ctx.aimY = view.aim.y = arena.ship.y;
     arena.events.push({ type: 'bossWindup', attack, x: view.x, y: view.y });
   }
 

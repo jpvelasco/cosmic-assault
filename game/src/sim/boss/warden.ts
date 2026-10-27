@@ -28,10 +28,12 @@ export const LOCK_TURRETS = 2;
 export const LOCK_BOLTS = 3;
 const LOCK_SPREAD = 0.3;
 /**
- * How far either side of the line from the core to where the ship was the lock-on reaches, declared to the bots: its fan's
- * half-width about 235 units out from the turret that fires it, plus a bolt.
+ * How far from its turret the lock-on's fan is declared to the bots at its full width: a design distance, past where a
+ * ship fighting the core usually stands. Nearer the turret the fan is narrower than declared, which errs safe.
  */
-const LOCK_REACH = Math.sin(LOCK_SPREAD / 2) * 235 + BOLT.radius;
+const LOCK_RANGE = 300;
+/** How far either side of the line from the core to the lock-on's aim its bolts fly: the fan's half-width at `LOCK_RANGE`, plus a bolt. */
+const LOCK_REACH = Math.sin(LOCK_SPREAD / 2) * LOCK_RANGE + BOLT.radius;
 /** A spin turns the ring backward at this multiple of its speed, for this long. */
 export const SPIN_FACTOR = 2;
 export const SPIN_SECONDS = 2;

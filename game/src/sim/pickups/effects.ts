@@ -7,6 +7,9 @@ import type { Weapon } from '../ship';
 import type { ShotRules } from '../shots';
 import { shotRulesFor, weaponFor } from './volley';
 
+/** The share of real time the foes, the rocks and the boss run at, from the seconds left of each timed effect: half while Time Warp runs. */
+export const enemyTimeScale = (left: Readonly<Record<TimedPickupId, number>>): number => (left.timeWarp > 0 ? TIME_WARP_SCALE : 1);
+
 /** What the ship fires with and what its shots carry, rebuilt together. */
 interface Armament {
   readonly weapon: Weapon;
@@ -49,9 +52,9 @@ export class Loadout {
     return this.armament().rules;
   }
 
-  /** The share of real time the foes, the rocks and the boss run at: half while Time Warp runs. */
+  /** The share of real time the foes, the rocks and the boss run at: `enemyTimeScale`. */
   get timeScale(): number {
-    return this.left.timeWarp > 0 ? TIME_WARP_SCALE : 1;
+    return enemyTimeScale(this.left);
   }
 
   collect(kind: PickupId): void {

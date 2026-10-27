@@ -1,4 +1,5 @@
 import type { BossPart, BossView, Point } from '../../sim/boss/behaviour';
+import type { Field } from '../../sim/field';
 import type { SimEvent } from '../../sim/events';
 import type { FieldPen } from '../fieldPen';
 import type { Palette } from '../palette';
@@ -11,6 +12,8 @@ export interface BossLook {
   readonly still: boolean;
   readonly aimX: number;
   readonly aimY: number;
+  /** The field the boss is drawn on. */
+  readonly field: Field;
 }
 
 /** Where and how the boss pass draws a boss's body this frame; one object, refilled in place. */
@@ -26,6 +29,8 @@ export interface BossFrame {
   alpha: number;
   /** Whether the core shows its white silhouette, in the first moments of a hit's flash. */
   tinted: boolean;
+  /** Seconds of the boss's own time the windup under way has run; 0 between attacks. */
+  windupAge: number;
   look: BossLook;
 }
 

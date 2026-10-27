@@ -11,13 +11,16 @@ import { crosses } from '../../src/sim/boss/attacks';
 import { BossArena } from '../../src/sim/boss/bossArena';
 import { bossClearance } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
+import { stretchRoom } from '../../src/sim/boss/turretRing';
 import { createWarden, LOCK_BOLTS, LOCK_TURRETS, PULSE_RADIUS, PULSE_SECONDS, SPIN_FACTOR, SPIN_SECONDS, VOLLEY_REPEAT, WARDEN_RING } from '../../src/sim/boss/warden';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { TAU, turnBetween } from '../../src/sim/math';
 import { createRng, deriveSeed } from '../../src/sim/rng';
+import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { World } from '../../src/sim/world';
+import { rescale } from '../../src/sim/wrap';
 import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 import { ringGaps, wardenGapBearings, wardenGaps } from '../helpers/ringGaps';
@@ -29,7 +32,7 @@ const APPROACH = 20;
 const SLOT = TAU / WARDEN_RING.slots;
 /** Room either side of a ship flying a straight line through a gap. */
 const PATH_MARGIN = 10;
-/** The widest gap round the ring must stay at least this wide (RF 4). */
+/** Each of the ring's two gaps must stay at least this wide. */
 const WIDE_GAP = 50;
 
 interface Rig {
@@ -190,15 +193,18 @@ describe('the Warden\'s turret ring', () => {
     const rig = fighting(3);
     woundTo(rig.r, 20);
     let checked = 0;
+    /** The least room any live turret left beside a path out through a gap, past its own radius. */
+    let room = Infinity;
     runFor(stepper(rig), rig.arena, 30, () => {
       const { view } = rig.r;
       for (const gap of wardenGapBearings(view)) {
         const far = { x: view.x + Math.cos(gap) * 400, y: view.y + Math.sin(gap) * 400 };
-        for (const part of live(view)) expect(toSegment(part.x, part.y, view.x, view.y, far.x, far.y)).toBeGreaterThan(part.radius + PLAYER.radius + PATH_MARGIN);
+        for (const part of live(view)) room = Math.min(room, toSegment(part.x, part.y, view.x, view.y, far.x, far.y) - part.radius);
         checked++;
       }
     });
     expect(checked).toBeGreaterThan(0);
+    expect(room).toBeGreaterThan(PLAYER.radius + PATH_MARGIN);
   });
 
   it('rotates its gaps the same way for the same seed', () => {
@@ -221,32 +227,48 @@ describe('the Warden\'s regrowth', () => {
     Object.assign(rig.arena.ship, { x: 60, y: 660 });
     for (const i of [0, 3, 6, 9]) while ((r.view.parts[i] as BossPart).hp > 0) r.hitPart(i, 1);
     const counts: number[] = [];
+    /** The nearest any live turret came to a gap slot's bearing. */
+    let nearestGap = Infinity;
     runFor(stepper(rig), rig.arena, 40, () => {
       counts.push(live(r.view).length);
       const gaps = wardenGapBearings(r.view);
-      for (const part of live(r.view)) for (const gap of gaps) expect(Math.abs(turnBetween(gap, bearingOf(r.view, part)))).toBeGreaterThan(SLOT / 2);
+      for (const part of live(r.view)) for (const gap of gaps) nearestGap = Math.min(nearestGap, Math.abs(turnBetween(gap, bearingOf(r.view, part))));
     });
+    expect(nearestGap).toBeGreaterThan(SLOT / 2);
     const regrownAt = counts.flatMap((n, i) => (i > 0 && n > (counts[i - 1] ?? 0) ? [Math.round((i + 1) * STEP_SECONDS)] : []));
     expect(regrownAt).toEqual([8, 16, 24, 32]);
     expect(counts.at(-1)).toBe(14);
     for (const part of r.view.parts) expect(Math.hypot(part.x - r.view.x, part.y - r.view.y)).toBeCloseTo(120, 6);
   });
 
-  it('grows no turret within the safe radius of the ship', () => {
+  it('grows no turret within the safe radius of the ship, and holds one back while the ship sits on its slot\'s path', () => {
     const rig = fighting();
-    const { r } = rig;
-    for (let i = 0; i < r.view.parts.length; i++) while ((r.view.parts[i] as BossPart).hp > 0) r.hitPart(i, 1);
-    runFor(stepper(rig), rig.arena, 60, () => {
-      // Keep the ship parked on the ring's path, just outside it.
-      Object.assign(rig.arena.ship, { x: r.view.x, y: r.view.y + WARDEN_RING.radius + 40 });
-      for (const part of live(r.view)) {
-        if (part.hp === part.maxHp && Math.hypot(part.x - rig.arena.ship.x, part.y - rig.arena.ship.y) < ASTEROID.safeRadius) {
-          // A turret may turn toward the ship once grown, but never forms near it: check it was not grown this step.
-          expect(Math.hypot(part.px - rig.arena.ship.x, part.py - rig.arena.ship.y)).toBeLessThan(ASTEROID.safeRadius + 5);
-        }
-      }
+    const { r, arena } = rig;
+    // The ship waits just outside the ring, straight below the core, wherever the core drifts.
+    const below = Math.PI / 2;
+    const park = (): void => {
+      Object.assign(arena.ship, { x: r.view.x + Math.cos(below) * (WARDEN_RING.radius + 40), y: r.view.y + Math.sin(below) * (WARDEN_RING.radius + 40) });
+    };
+    park();
+    // Break the turret the ring will have turned to just below the core when it is due to grow back, 8 s on.
+    const due = below - WARDEN_RING.speeds[1] * WARDEN_RING.regrowSeconds;
+    const parts = r.view.parts;
+    const late = parts.reduce((best, p, i) => (Math.abs(turnBetween(due, bearingOf(r.view, p))) < Math.abs(turnBetween(due, bearingOf(r.view, parts[best] as BossPart))) ? i : best), 0);
+    while ((parts[late] as BossPart).hp > 0) r.hitPart(late, 1);
+    const brokenAt = arena.elapsed();
+    const was = parts.map((p) => p.hp);
+    const grown: { part: number; at: number; clearance: number }[] = [];
+    runFor(stepper(rig), arena, 20, () => {
+      parts.forEach((p, i) => {
+        if (was[i] === 0 && p.hp === p.maxHp) grown.push({ part: i, at: arena.elapsed(), clearance: Math.hypot(p.x - arena.ship.x, p.y - arena.ship.y) });
+        was[i] = p.hp;
+      });
+      park();
     });
-    expect(live(r.view).length).toBeGreaterThan(0);
+    expect(grown.map((g) => g.part)).toEqual([late]);
+    for (const g of grown) expect(g.clearance).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
+    // Due at 8 s, it waited for its slot to turn clear of the ship.
+    expect((grown[0]?.at ?? 0) - brokenAt).toBeGreaterThan(WARDEN_RING.regrowSeconds + 1);
   });
 });
 
@@ -273,14 +295,14 @@ describe('the Warden\'s core', () => {
     expect(r.touches(r.view.x + Math.cos(gap) * 120, r.view.y + Math.sin(gap) * 120, PLAYER.radius)).toBe(false);
   });
 
-  it('drifts at 10 units a second, keeping the whole ring inside the field', () => {
+  it('drifts at 10 units a second, keeping the whole ring inside the field, pulses included', () => {
     const rig = fighting(2);
+    woundTo(rig.r, 20);
     let moved = 0;
     const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
     runFor(stepper(rig), rig.arena, 60, () => {
       const { view } = rig.r;
       if (view.active === null && view.windup === null) moved = Math.max(moved, Math.hypot(view.x - view.px, view.y - view.py) / STEP_SECONDS);
-      if (view.active === 'ringPulse') return;
       for (const p of live(view)) {
         bounds.left = Math.min(bounds.left, p.x - p.radius);
         bounds.top = Math.min(bounds.top, p.y - p.radius);
@@ -297,6 +319,17 @@ describe('the Warden\'s core', () => {
 });
 
 describe('the Warden\'s attacks', () => {
+  it('shows where the ship was as each windup began, which an aimed attack fires at, and stretches it with the field', () => {
+    const rig = fighting();
+    Object.assign(rig.arena.ship, { x: 900, y: 560 });
+    runFor(stepper(rig), rig.arena, 3, () => {
+      if (rig.r.view.windup !== null) Object.assign(rig.arena.ship, { x: 100, y: 650 });
+    });
+    expect(rig.r.view.aim).toEqual({ x: 900, y: 560 });
+    rig.r.resize(BOSS_FIELD, { width: 1600, height: 720 });
+    expect(rig.r.view.aim).toEqual({ x: rescale(900, 1280, 1600), y: 560 });
+  });
+
   it('runs each phase\'s list in order', () => {
     const order = (hp: number): AttackId[] => {
       const rig = fighting(4);
@@ -413,17 +446,32 @@ describe('the Warden\'s attacks', () => {
     expect(spinSteps * STEP_SECONDS).toBeCloseTo(SPIN_SECONDS, 1);
   });
 
-  it('pulses its ring out to 220 and back over 2.4 s, declaring the band it sweeps', () => {
+  it('pulses its ring out to 220 and back over 2.4 s, stopping short of a wall, declaring the band it sweeps', () => {
     expect([PULSE_RADIUS, PULSE_SECONDS]).toEqual([220, 2.4]);
     expect(ATTACKS.ringPulse.threat).toEqual({ kind: 'ring', radius: 170, reach: 50 + 16, around: 'core' });
     const rig = fighting();
     woundTo(rig.r, 20);
     const radii: number[] = [];
+    const rooms: number[] = [];
     runFor(stepper(rig), rig.arena, 6, () => {
-      if (rig.r.view.active === 'ringPulse') radii.push(ringRadius(rig.r.view));
+      if (rig.r.view.active !== 'ringPulse') return;
+      radii.push(ringRadius(rig.r.view));
+      rooms.push(stretchRoom(rig.r.view, BOSS_FIELD, WARDEN_RING.radius, WARDEN_RING.turretRadius));
     });
     expect(radii.length * STEP_SECONDS).toBeCloseTo(PULSE_SECONDS, 1);
-    expect(Math.max(...radii)).toBeCloseTo(220, 1);
+    // Out to 220, or short of the wall it would cross: the core starts the fight 201.6 below the top.
+    const peak = radii.indexOf(Math.max(...radii));
+    expect(rooms[peak]).toBeLessThan(PULSE_RADIUS);
+    expect(radii[peak]).toBeCloseTo(rooms[peak] ?? 0, 6);
+    // With room to spare, mid-field, it reaches the full 220.
+    const mid = fighting();
+    woundTo(mid.r, 20);
+    Object.assign(mid.r.view, { x: 640, y: 360 });
+    let widest = 0;
+    runFor(stepper(mid), mid.arena, 6, () => {
+      if (mid.r.view.active === 'ringPulse') widest = Math.max(widest, ringRadius(mid.r.view));
+    });
+    expect(widest).toBeCloseTo(PULSE_RADIUS, 1);
     expect(radii.at(-1) ?? 0).toBeLessThan(121);
     expect(ringRadius(rig.r.view)).toBeCloseTo(120, 9);
   });
@@ -543,13 +591,14 @@ describe('the Warden in 3-★', () => {
     expect(respawns).toBeGreaterThan(0);
   });
 
-  it('ends the galaxy on the killing blow (R26)', () => {
+  it('ends the galaxy on the step of the killing blow', () => {
     const w = world(1);
     while (w.boss?.state !== 'fighting') w.step(STEP_SECONDS, NO_CONTROLS);
     const boss = w.boss;
-    w['run']?.bosses.hitCore(boss.hp, boss.x, boss.y);
+    // A shot for each of its HP, all on the core, through a world's own shots.
+    for (let i = 0; i < boss.hp; i++) (w.projectiles as Projectile[]).push(projectileFromShot({ x: boss.x, y: boss.y, vx: 0, vy: 0 }, 9000 + i));
     const events = w.step(STEP_SECONDS, NO_CONTROLS);
-    expect(events.some((e) => e.type === 'galaxyCleared')).toBe(true);
+    expect(events.filter((e) => e.type === 'bossDown' || e.type === 'galaxyCleared').map((e) => e.type)).toEqual(['bossDown', 'galaxyCleared']);
   });
 
   it('fires its bolts at the bolts\' own speed, from the pool, and never more than it holds', () => {

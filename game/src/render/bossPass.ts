@@ -23,8 +23,11 @@ export const BOSS_FLASH_SECONDS = 0.12;
 export interface BossPass {
   /** A `bossHit` flashes the core; the boss's drawer hears every event too (a `bossPartHit` flashes the part it struck). */
   handle(events: readonly SimEvent[]): void;
-  /** Advances the flash, the clocks of the boss's state, windup and attack, and its drawer, by `dt` seconds of real time. */
-  advance(dt: number, boss: Readonly<BossView> | null): void;
+  /**
+   * Advances the flash, the clocks of the boss's state and attack, and its drawer, by `dt` seconds of real time, and the
+   * windup's clock by the boss's own time, which runs at `timeScale` of real time (Time Warp slows it).
+   */
+  advance(dt: number, boss: Readonly<BossView> | null, timeScale?: number): void;
   /**
    * Draws the boss `alpha` of the way from its previous position: glow, windup ring or shockwave, its drawer's body, and
    * hit flash. Expects the field pen aimed for the frame and `source-over`, which it leaves as it found them, with alpha 1.
@@ -109,7 +112,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
     retreat: palette.accent[2],
     turretVolley: palette.accent[0],
     lockOn: palette.ring,
-    spin: palette.accent[1],
+    spin: palette.spark,
     ringPulse: palette.accent[2],
   };
   /** The radius the rings are keyed and painted for; a boss keeps one, so they are made once a fight. */
@@ -118,7 +121,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
   const ringPainters = perAttack((attack) => (c: CanvasRenderingContext2D): void => {
     paintRing(c, radius, ringColors[attack]);
   });
-  const frame: BossFrame = { x: 0, y: 0, size: 1, shown: 1, alpha: 1, tinted: false, look: { glow: 1, still: false, aimX: 0, aimY: 0 } };
+  const frame: BossFrame = { x: 0, y: 0, size: 1, shown: 1, alpha: 1, tinted: false, windupAge: 0, look: { glow: 1, still: false, aimX: 0, aimY: 0, field: { width: 0, height: 0 } } };
   let flash = 0;
   let state: BossState | null = null;
   let stateClock = 0;
@@ -159,7 +162,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
         for (const drawer of allDrawers) drawer.handle?.(event);
       }
     },
-    advance(dt, boss) {
+    advance(dt, boss, timeScale = 1) {
       flash = Math.max(0, flash - dt / BOSS_FLASH_SECONDS);
       if (boss === null) {
         state = null;
@@ -169,7 +172,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       }
       stateClock = boss.state === state ? stateClock + dt : 0;
       state = boss.state;
-      windupClock = boss.windup === windup ? windupClock + dt : 0;
+      windupClock = boss.windup === windup ? windupClock + dt * timeScale : 0;
       windup = boss.windup;
       activeClock = boss.active === active ? activeClock + dt : 0;
       active = boss.active;
@@ -191,6 +194,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       frame.shown = shown;
       frame.alpha = alpha;
       frame.tinted = flash > TINT_ABOVE;
+      frame.windupAge = boss.windup !== null && boss.windup === windup ? windupClock : 0;
       frame.look = look;
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = GLOW_ALPHA * look.glow * shown;

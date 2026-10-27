@@ -1,6 +1,6 @@
-import type { AttackId, PaletteId } from '../../content/types';
+import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
-import { nearestParts } from '../../sim/boss/turretRing';
+import { nearestParts, stretchRoom } from '../../sim/boss/turretRing';
 import { LOCK_TURRETS, PULSE_RADIUS, WARDEN_RING } from '../../sim/boss/warden';
 import { TAU } from '../../sim/math';
 import { blitCore, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
@@ -57,7 +57,7 @@ const damageOf = (part: Readonly<BossPart>): number => Math.min(DAMAGE_STATES - 
 export const wardenDrawer: DrawerFactory = (kit) => {
   const { ctx, pen, baker, palette } = kit;
   const hostile = palette.accent[0];
-  const spinColor = palette.accent[1];
+  const spinColor = palette.spark;
   const pulseColor = palette.accent[2];
   const lockColor = palette.ring;
   const rings = ringKeys(palette.id);
@@ -93,11 +93,9 @@ export const wardenDrawer: DrawerFactory = (kit) => {
   const locking: number[] = [];
   let time = 0;
   /** The attack winding up and for how long, in real seconds. */
-  let windup: AttackId | null = null;
-  let windupClock = 0;
 
   /** How far the windup under way has come, 0 to 1, over its declared length. */
-  const charge = (boss: Readonly<BossView>): number => Math.min(1, windupClock / (boss.threat?.windup ?? 1));
+  const charge = (boss: Readonly<BossView>, frame: Readonly<BossFrame>): number => Math.min(1, frame.windupAge / (boss.threat?.windup ?? 1));
   /** A warning's flicker, steady under reduced motion. */
   const flicker = (still: boolean): number => (still ? 1 : 0.75 + 0.25 * Math.sin(time * TAU * WARN_PULSE_HZ));
 
@@ -117,7 +115,7 @@ export const wardenDrawer: DrawerFactory = (kit) => {
     const spinning = boss.windup === 'spin' || boss.active === 'spin';
     if (!spinning) return;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = frame.shown * (boss.active === 'spin' ? 1 : charge(boss)) * flicker(frame.look.still);
+    ctx.globalAlpha = frame.shown * (boss.active === 'spin' ? 1 : charge(boss, frame)) * flicker(frame.look.still);
     pen.blit(baker.custom(rings.spin, WARDEN_RING.radius + GHOST_PAD, paintSpinAt));
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = frame.shown;
@@ -158,7 +156,7 @@ export const wardenDrawer: DrawerFactory = (kit) => {
     const { parts } = boss;
     const still = frame.look.still;
     // Every warning shows from the windup's first frame, and brightens to full as it nears.
-    const strength = (CHARGE_FLOOR + (1 - CHARGE_FLOOR) * charge(boss)) * flicker(still);
+    const strength = (CHARGE_FLOOR + (1 - CHARGE_FLOOR) * charge(boss, frame)) * flicker(still);
     ctx.globalCompositeOperation = 'lighter';
     if (boss.windup === 'turretVolley') {
       for (const part of parts) if (part.hp > 0) drawCharging(part, frame, cx, cy, part.radius * BARREL_REACH, hostile, part.radius * MUZZLE_GLOW_SCALE, strength * MUZZLE_GLOW_ALPHA);
@@ -171,11 +169,14 @@ export const wardenDrawer: DrawerFactory = (kit) => {
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = frame.shown * strength;
       const spin = still ? 0 : time * 2;
-      pen.place(frame.look.aimX, frame.look.aimY, Math.cos(spin), Math.sin(spin));
+      // On the spot the bolts will fly to: where the ship was as the windup began, not where it is now.
+      pen.place(boss.aim.x, boss.aim.y, Math.cos(spin), Math.sin(spin));
       pen.blit(baker.custom(rings.reticle, RETICLE_RADIUS * 1.3 + RIM_PAD, paintReticleAt));
     } else if (boss.windup === 'ringPulse') {
       ctx.globalAlpha = frame.shown * strength;
-      placeRing(first, frame, cx, cy, 1);
+      // As far out as the pulse will reach: its full radius, or short of a wall it would cross.
+      const reach = Math.min(PULSE_RADIUS, stretchRoom(boss, frame.look.field, WARDEN_RING.radius, WARDEN_RING.turretRadius));
+      placeRing(first, frame, cx, cy, reach / PULSE_RADIUS);
       pen.blit(baker.custom(rings.ghost, PULSE_RADIUS + GHOST_PAD, paintGhostAt));
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -212,8 +213,6 @@ export const wardenDrawer: DrawerFactory = (kit) => {
     },
     advance(dt, boss) {
       time += dt;
-      windupClock = boss.windup === windup ? windupClock + dt : 0;
-      windup = boss.windup;
       clocks.advance(dt, boss.parts);
     },
     handle(event) {
@@ -221,8 +220,6 @@ export const wardenDrawer: DrawerFactory = (kit) => {
     },
     reset() {
       time = 0;
-      windup = null;
-      windupClock = 0;
       clocks.reset();
     },
   };

@@ -74,16 +74,16 @@ const fakeCanvas = (): unknown => {
 
 const boss = (over: Partial<BossView> = {}): BossView => bossView({ y: 200, px: 600, ...over });
 
-/** The Warden's 14 turrets about (640, 200), still, slot 0 (its first gap) at bearing `turn`, the ring at `radius`. */
-function wardenRing(turn = 0, radius = WARDEN_RING.radius): BossPart[] {
+/** The Warden's 14 turrets about (640, `cy`), still, slot 0 (its first gap) at bearing `turn`, the ring at `radius`. */
+function wardenRing(turn = 0, radius = WARDEN_RING.radius, cy = 200): BossPart[] {
   const slots = Array.from({ length: WARDEN_RING.slots }, (_, slot) => slot).filter((slot) => !WARDEN_RING.gaps.includes(slot));
   return slots.map((slot) => {
     const a = turn + (slot * 2 * Math.PI) / WARDEN_RING.slots;
-    const [x, y] = [640 + Math.cos(a) * radius, 200 + Math.sin(a) * radius];
+    const [x, y] = [640 + Math.cos(a) * radius, cy + Math.sin(a) * radius];
     return { x, y, px: x, py: y, radius: 16, hp: 3, maxHp: 3 };
   });
 }
-const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600 };
+const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600, field: { width: 1280, height: 720 } };
 
 describe('createBossPass', () => {
   let baker: SpriteBaker;
@@ -543,20 +543,42 @@ describe('createBossPass', () => {
       expect(later[0]?.alpha ?? 0).toBeGreaterThan((early[0]?.alpha ?? 1) * 1.5);
     });
 
-    it('lights the two turrets nearest the ship and puts a reticle on the ship as a lock-on winds up', () => {
+    it('brightens its warnings with the boss\'s own time, so a slowed windup brightens as slowly', () => {
+      const glow = vi.spyOn(baker, 'glow');
+      const winding = warden({ windup: 'turretVolley', threat: { attack: 'turretVolley', windup: 0.6, kind: 'none', reach: 0, speed: 0 } });
+      const alphaAfter = (seconds: number, timeScale: number): number => {
+        pass.reset();
+        pass.advance(0.01, warden(), timeScale);
+        pass.advance(0.001, winding, timeScale);
+        pass.advance(seconds, winding, timeScale);
+        const from = draws.length;
+        pass.draw(winding, 1, { ...LOOK, still: true });
+        return muzzles(glow, from)[0]?.alpha ?? 0;
+      };
+      expect(alphaAfter(0.4, 0.5)).toBeCloseTo(alphaAfter(0.2, 1), 2);
+      expect(alphaAfter(0.4, 0.5)).toBeLessThan(alphaAfter(0.4, 1));
+    });
+
+    it('lights the two turrets nearest the ship, and marks where the lock-on will fire, which stays put as the ship moves', () => {
       const custom = vi.spyOn(baker, 'custom');
       const glow = vi.spyOn(baker, 'glow');
-      const look = { ...LOOK, aimX: 640, aimY: 600 };
-      pass.draw(warden({ windup: 'lockOn' }), 1, look);
+      const locking = warden({ windup: 'lockOn', aim: { x: 640, y: 600 } });
+      pass.draw(locking, 1, { ...LOOK, aimX: 640, aimY: 600 });
       expect(muzzles(glow)).toHaveLength(2);
       const reticle = drawOf('boss|drift|warden|reticle', custom);
       expect([reticle?.e, reticle?.f]).toEqual([640, 600]);
+      pass.draw(locking, 1, { ...LOOK, aimX: 900, aimY: 500 });
+      const after = drawOf('boss|drift|warden|reticle', custom);
+      expect([after?.e, after?.f]).toEqual([640, 600]);
     });
 
     it('rings the space a pulse will sweep with a ghost ring, and lights the track through a spin', () => {
       const custom = vi.spyOn(baker, 'custom');
-      pass.draw(warden({ windup: 'ringPulse' }), 1, LOOK);
+      // Mid-field the ghost shows the full 220; 200 below the top, the pulse stops short of the wall, and so does the ghost.
+      pass.draw(warden({ windup: 'ringPulse', y: 400, py: 400, parts: wardenRing(0, 120, 400) }), 1, LOOK);
       expect(drawOf('boss|drift|warden|ghost|220', custom)?.scale).toBeCloseTo(1, 6);
+      pass.draw(warden({ windup: 'ringPulse' }), 1, LOOK);
+      expect(drawOf('boss|drift|warden|ghost|220', custom)?.scale).toBeCloseTo((200 - 16) / 220, 6);
       pass.draw(warden({ windup: 'spin' }), 1, LOOK);
       pass.draw(warden({ active: 'spin' }), 1, LOOK);
       expect(keysOf(custom).filter((k) => k === 'boss|drift|warden|spinBand|120')).toHaveLength(2);
