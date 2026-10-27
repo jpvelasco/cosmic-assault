@@ -40,8 +40,8 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
     deps.redraw();
   };
   /**
-   * One shot through the galaxy rules (private on World, reached by name here) where it does harm: the core, or while
-   * it is shielded a live part. False if the boss is not fighting.
+   * One shot through the galaxy rules (private on World, reached by name here) where it does harm (`bossTarget`). False
+   * if the boss is not fighting, or no shot can hurt it now.
    */
   const strikeBoss = (): boolean => {
     const { world } = run;
@@ -53,7 +53,7 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
   e2e.e2eDamageBoss = (damage) => {
     let struck = 0;
     while (struck < damage && strikeBoss()) struck++;
-    if (struck === 0) throw new Error('No boss is fighting: fast-forward through the approach and the 2 s intro, and pass a damage of at least 1');
+    if (struck === 0) throw new Error('No boss is fighting where a shot can hurt it: fast-forward through the approach and the 2 s intro (for the Hive Carrier, on to a launch, which opens its hangar), and pass a damage of at least 1');
     deps.redraw();
   };
 }

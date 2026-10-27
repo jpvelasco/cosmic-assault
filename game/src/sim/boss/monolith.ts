@@ -2,7 +2,8 @@ import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
 import { TAU } from '../math';
 import { rockRing } from './attacks';
-import { bossHome, type AttackContext, type AttackSpec, type BossBehaviour, type BossPart, type BossPhase, type BossSetup, type BossView } from './bossRunner';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from './behaviour';
+import { bossHome } from './bossRunner';
 
 /** How many shards it starts with, least and most. */
 export const SHARD_COUNTS = [8, 12] as const;

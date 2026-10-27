@@ -1,4 +1,4 @@
-import type { BossPhase } from '../../sim/boss/bossRunner';
+import type { BossPhase } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
 import { mix, rgba } from '../color';
 import type { Palette } from '../palette';

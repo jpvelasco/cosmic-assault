@@ -52,6 +52,8 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
   bossPartBroken: { type: 'bossPartBroken', part: 0, x: 0, y: 0 },
   bossExposed: { type: 'bossExposed', x: 0, y: 0 },
   bossShielded: { type: 'bossShielded', x: 0, y: 0 },
+  hangarOpen: { type: 'hangarOpen', x: 0, y: 0 },
+  hangarClose: { type: 'hangarClose', x: 0, y: 0 },
 };
 
 /** The step a boss dies on: it goes down, the galaxy warps out (clearing the field for 0 points) and is cleared. */

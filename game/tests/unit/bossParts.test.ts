@@ -363,6 +363,6 @@ describe('a World with the Monolith', () => {
     expect(events.filter((t) => t === 'bossPartBroken')).toHaveLength(1);
     expect(events.filter((t) => t === 'bossPartHit')).toHaveLength(0);
     expect(part.hp).toBe(0);
-    expect(world.projectiles.some((p) => p.id === 9000 || p.id === 9001)).toBe(true);
+    expect(world.projectiles.filter((p) => p.id === 9000 || p.id === 9001)).toHaveLength(1);
   });
 });

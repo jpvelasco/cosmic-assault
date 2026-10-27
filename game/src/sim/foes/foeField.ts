@@ -1,5 +1,6 @@
 import { FOES } from '../../content/foes';
 import type { FoeKind } from '../../content/types';
+import type { BossFoes } from '../boss/behaviour';
 import { circlesOverlap, SpatialHash } from '../collision';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
@@ -26,11 +27,14 @@ export interface FoeHooks {
 
 /**
  * The foes on a galaxy's field: they arrive, move, take hits and are destroyed. They are not asteroids: they have
- * hit points, and score by their kind. Shots and the ship find them through a spatial hash rebuilt each step.
+ * hit points, and score by their kind. Shots and the ship find them through a spatial hash rebuilt each step. A boss
+ * launches its own foes into the same pool, and counts those still alive.
  */
-export class FoeField implements FoeWorld {
+export class FoeField implements FoeWorld, BossFoes {
   private readonly pool = new FoePool(FOE_CAPACITY);
   private readonly hash = new SpatialHash(HASH_CELL_SIZE);
+  /** The ids of the live foes a boss launched. */
+  private readonly bossIds = new Set<number>();
   /** The circle the running query is for; the visit function reads it, so a query allocates nothing. */
   private queryX = 0;
   private queryY = 0;
@@ -62,6 +66,11 @@ export class FoeField implements FoeWorld {
     return this.pool.cost;
   }
 
+  /** How many of the foes a boss launched are alive. */
+  get launched(): number {
+    return this.bossIds.size;
+  }
+
   acquire(kind: FoeKind): Foe | null {
     return this.pool.acquire(kind, this.arena.nextId());
   }
@@ -77,6 +86,21 @@ export class FoeField implements FoeWorld {
   /** Brings in `count` foes of `kind`. */
   spawn(kind: FoeKind, count: number, speedMultiplier: number): void {
     BEHAVIOURS[kind].spawn(this, count, speedMultiplier);
+  }
+
+  /** A boss's foe of `kind` arrives at (x, y), heading `heading` at its kind's speed; false with the pool full. Draws from no stream. */
+  launch(kind: FoeKind, x: number, y: number, heading: number): boolean {
+    const foe = this.acquire(kind);
+    if (foe === null) return false;
+    const { speed } = FOES[kind];
+    foe.x = x;
+    foe.y = y;
+    foe.rotation = heading;
+    foe.vx = Math.cos(heading) * speed;
+    foe.vy = Math.sin(heading) * speed;
+    this.bossIds.add(foe.id);
+    this.commit(foe);
+    return true;
   }
 
   /** Moves every foe and indexes it for the collisions that follow. */
@@ -128,6 +152,7 @@ export class FoeField implements FoeWorld {
   clear(): void {
     for (const foe of this.pool.live) this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points: 0 });
     this.pool.clear();
+    this.bossIds.clear();
   }
 
   /** Stretches every foe's place to the new field, like the World's other entities. */
@@ -141,6 +166,7 @@ export class FoeField implements FoeWorld {
   }
 
   private destroy(foe: Foe, points: number): void {
+    this.bossIds.delete(foe.id);
     this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points });
     BEHAVIOURS[foe.kind].destroyed?.(foe, this);
   }

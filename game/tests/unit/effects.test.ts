@@ -136,6 +136,12 @@ describe('burstFor', () => {
     expect(burstFor({ type: 'gameOver', score: 10 }, DRIFT)).toBeNull();
   });
 
+  it('glances a shot off a boss with a few sparks, and leaves its hangar opening and closing to the boss\'s drawer', () => {
+    expect(burstFor({ type: 'bossDeflected', x: 0, y: 0 }, DRIFT)).toMatchObject({ sparks: 3, shards: 0, rings: 0, shake: 0, flash: 0 });
+    expect(burstFor({ type: 'hangarOpen', x: 0, y: 0 }, DRIFT)).toBeNull();
+    expect(burstFor({ type: 'hangarClose', x: 0, y: 0 }, DRIFT)).toBeNull();
+  });
+
   it('pops a ring and sparks where a pickup drops, and as one is collected; a lapsed pickup or effect is quiet', () => {
     const drop = burstFor({ type: 'pickupDropped', id: 1, kind: 'shield', x: 0, y: 0 }, DRIFT);
     const take = burstFor({ type: 'pickupCollected', id: 1, kind: 'shield' }, DRIFT);

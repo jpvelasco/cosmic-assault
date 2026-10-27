@@ -1,7 +1,7 @@
 import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
 import { rockRing } from './attacks';
-import type { AttackContext, BossBehaviour, BossPhase } from './bossRunner';
+import type { AttackContext, BossBehaviour, BossPhase } from './behaviour';
 
 /** Rocks in a ring, by phase. */
 const RING_COUNTS: Readonly<Record<BossPhase, number>> = { 1: 6, 2: 8, 3: 10 };

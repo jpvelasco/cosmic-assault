@@ -1,4 +1,4 @@
-import type { BossPart, BossView } from '../../sim/boss/bossRunner';
+import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
 import { HIT_FLASH_SECONDS } from '../hitFlash';
 import { easeOut } from '../scene';

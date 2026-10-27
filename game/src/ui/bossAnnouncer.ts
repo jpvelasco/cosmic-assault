@@ -3,7 +3,7 @@ import type { SimEvent } from '../sim/events';
 import { element } from './dom';
 
 export interface BossAnnouncer {
-  /** Announces a boss arriving, changing phase, its core exposed or shielded and its going down, and clears as a galaxy starts; other events say nothing. */
+  /** Announces a boss arriving, changing phase, its core exposed or shielded, its hangar open or closed and its going down, and clears as a galaxy starts; other events say nothing. */
   handle(events: readonly SimEvent[]): void;
   dispose(): void;
 }
@@ -33,6 +33,10 @@ export function createBossAnnouncer(root: HTMLElement): BossAnnouncer {
           el.textContent = `${name}'s core is exposed`;
         } else if (event.type === 'bossShielded') {
           el.textContent = `${name}'s core is shielded again`;
+        } else if (event.type === 'hangarOpen') {
+          el.textContent = `${name}'s hangar is open`;
+        } else if (event.type === 'hangarClose') {
+          el.textContent = `${name}'s hangar is closed`;
         } else if (event.type === 'bossDown') {
           el.textContent = `${BOSSES[event.id].name} down`;
         }

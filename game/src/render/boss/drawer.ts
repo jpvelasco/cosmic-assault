@@ -1,4 +1,4 @@
-import type { BossView } from '../../sim/boss/bossRunner';
+import type { BossView } from '../../sim/boss/behaviour';
 import type { SimEvent } from '../../sim/events';
 import type { FieldPen } from '../fieldPen';
 import type { Palette } from '../palette';

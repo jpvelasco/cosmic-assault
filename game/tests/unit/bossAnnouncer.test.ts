@@ -73,6 +73,16 @@ describe('createBossAnnouncer', () => {
     expect(el?.textContent).toBe('Sentinel\'s core is shielded again');
   });
 
+  it('says when the Hive Carrier\'s hangar opens and closes', () => {
+    const announcer = createBossAnnouncer(root);
+    const el = made[0];
+    announcer.handle([{ type: 'bossIntro', id: 'sentinel' }]);
+    announcer.handle([{ type: 'hangarOpen', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Sentinel\'s hangar is open');
+    announcer.handle([{ type: 'hangarClose', x: 0, y: 0 }]);
+    expect(el?.textContent).toBe('Sentinel\'s hangar is closed');
+  });
+
   it('clears its text as a galaxy starts, so a retry announces the same boss again', () => {
     const announcer = createBossAnnouncer(root);
     const el = made[0];

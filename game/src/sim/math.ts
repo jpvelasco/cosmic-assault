@@ -1,6 +1,13 @@
 /** A full turn in radians. */
 export const TAU = Math.PI * 2;
 
+/** The signed turn from heading `from` to `to`, in (-π, π]. */
+export function turnBetween(from: number, to: number): number {
+  const turn = (to - from) % TAU;
+  if (turn > Math.PI) return turn - TAU;
+  return turn <= -Math.PI ? turn + TAU : turn;
+}
+
 /** Absorbs float residue from summing dt steps, so a time boundary fires on the step it is reached. */
 export const TIME_EPSILON = 1e-9;
 

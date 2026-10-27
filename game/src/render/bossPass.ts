@@ -1,5 +1,6 @@
 import type { AttackId, BossId } from '../content/types';
-import { DYING_SECONDS, type BossState, type BossView } from '../sim/boss/bossRunner';
+import type { BossState, BossView } from '../sim/boss/behaviour';
+import { DYING_SECONDS } from '../sim/boss/bossRunner';
 import type { SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { radial, type BossDrawer, type BossFrame, type BossLook, type DrawerFactory } from './boss/drawer';

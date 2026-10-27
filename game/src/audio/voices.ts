@@ -303,6 +303,17 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
     tone(bed, out, { type: 'square', from: 520, to: 200, start: t, duration: 0.28, peak: 0.07 });
     tone(bed, out, { type: 'sine', from: 140, to: 60, start: t + 0.2, duration: 0.25, peak: 0.22 });
   },
+  // A hangar opening: a hydraulic hiss under a servo whine climbing as the doors part.
+  hangarOpen: (bed, out, t) => {
+    noiseBurst(bed, out, { filter: 'highpass', from: 1800, to: 5200, start: t, duration: 0.4, peak: 0.08 });
+    tone(bed, out, { type: 'sawtooth', from: 160, to: 420, start: t, duration: 0.42, peak: 0.05, attack: 0.05 });
+  },
+  // A hangar closing: the servo winding down onto a heavy latch.
+  hangarClose: (bed, out, t) => {
+    tone(bed, out, { type: 'sawtooth', from: 380, to: 150, start: t, duration: 0.3, peak: 0.05 });
+    noiseBurst(bed, out, { filter: 'lowpass', from: 900, to: 200, start: t + 0.26, duration: 0.12, peak: 0.2 });
+    tone(bed, out, { type: 'sine', from: 110, to: 55, start: t + 0.26, duration: 0.18, peak: 0.2 });
+  },
 };
 
 /** A sound that plays until it is stopped. */

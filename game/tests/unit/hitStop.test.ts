@@ -35,6 +35,11 @@ describe('hitStopFor', () => {
     expect(hitStopFor({ type: 'bossDeflected', x: 0, y: 0 })).toBe(0);
   });
 
+  it('never freezes as a hangar opens or closes, which happens after every drone launch', () => {
+    expect(hitStopFor({ type: 'hangarOpen', x: 0, y: 0 })).toBe(0);
+    expect(hitStopFor({ type: 'hangarClose', x: 0, y: 0 })).toBe(0);
+  });
+
   it('never freezes for a large rock the warp clears for 0 points', () => {
     expect(hitStopFor(destroyed(0, 0))).toBe(0);
   });

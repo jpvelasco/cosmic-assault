@@ -1,13 +1,15 @@
 import type { BossDef } from '../../content/bosses';
 import { clamp } from '../../content/curves';
 import { BOSS_INTRO_SECONDS } from '../../content/pacingRules';
-import type { AttackId, BossId } from '../../content/types';
+import type { AttackId } from '../../content/types';
 import { circlesOverlap } from '../collision';
 import type { Field } from '../field';
 import { nudge, TAU, TIME_EPSILON, type Moving } from '../math';
-import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 import { rescale } from '../wrap';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
+
+export type { AttackContext, AttackSpec, BossBehaviour, BossFactory, BossFoes, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
 
 /** The shortest telegraph an attack may have: players need this long to see it coming. */
 export const MIN_WINDUP_SECONDS = 0.35;
@@ -18,112 +20,10 @@ const HOME_HEIGHT_SHARE = 0.28;
 /** The most speed a boss's shove leaves the ship with, in units per second; a ship already faster only keeps from gaining. */
 export const MAX_SHOVE_SPEED = 300;
 
-export type BossState = 'intro' | 'fighting' | 'dying' | 'down';
-export type BossPhase = 1 | 2 | 3;
 /** What a blow on the core did: nothing outside the fight ('blocked') or while it is shielded ('deflected'). */
 export type HitResult = 'blocked' | 'deflected' | 'hit' | 'killed';
 /** What a blow on a part did: nothing outside the fight ('blocked'), or it took HP off the part, perhaps the last. */
 export type PartHitResult = 'blocked' | 'hit' | 'broken';
-
-/**
- * A piece of a boss apart from its core, an orbiting shard say, with HP of its own. Parts are pooled: one at 0 HP is
- * broken, so it is neither drawn nor struck, until its behaviour sets its HP again.
- */
-export interface BossPart {
-  x: number;
-  y: number;
-  /** Position before the latest step, for interpolated drawing. */
-  px: number;
-  py: number;
-  radius: number;
-  hp: number;
-  maxHp: number;
-}
-
-/** What the renderer sees of a boss: one object, updated in place by `BossRunner.step`. */
-export interface BossView {
-  readonly id: BossId;
-  x: number;
-  y: number;
-  /** Position before the latest step, for interpolated drawing. */
-  px: number;
-  py: number;
-  radius: number;
-  hp: number;
-  maxHp: number;
-  phase: BossPhase;
-  state: BossState;
-  /** The attack being telegraphed, else null. */
-  windup: AttackId | null;
-  /** The attack running, its windup over, else null. */
-  active: AttackId | null;
-  /** Whether a blow on the core can hurt it now, the intro and dying aside; false while its behaviour shields it. */
-  vulnerable: boolean;
-  /** Its behaviour's parts, the same objects for the whole fight; none for most bosses. */
-  readonly parts: readonly BossPart[];
-}
-
-/** What an attack sees and may change. Refilled in place every step. */
-export interface AttackContext {
-  arena: Arena;
-  readonly rng: Rng;
-  readonly rockSpeed: number;
-  /** The boss; an attack may move its core. */
-  readonly boss: BossView;
-  /** This step's length. */
-  dt: number;
-  /** Seconds since the attack went active, before this step. */
-  age: number;
-  /** Where the ship was when the windup began. */
-  aimX: number;
-  aimY: number;
-  /** Where the core was when the attack went active. */
-  fromX: number;
-  fromY: number;
-  /**
-   * A change to the ship's velocity an attack asks for, in units per second. The runner applies it on the next step's
-   * hazard path, capped at `MAX_SHOVE_SPEED`, and zeroes it.
-   */
-  shoveX: number;
-  shoveY: number;
-}
-
-export interface AttackSpec {
-  /** Seconds of telegraph, at least `MIN_WINDUP_SECONDS`. The attack does nothing until it ends. */
-  readonly windup: number;
-  /** Seconds the attack runs for; 0 runs it once. */
-  readonly active: number;
-  /** Called every step of the active time. */
-  run(ctx: AttackContext): void;
-}
-
-/** How a boss acts: the attacks its definition names, and how fast its core drifts between them. */
-export interface BossBehaviour {
-  /** At least every attack its definition's phases name. */
-  readonly attacks: Readonly<Partial<Record<AttackId, AttackSpec>>>;
-  /** px per second. */
-  readonly driftSpeed: number;
-  /** Its parts, which the runner shows on the view, steps the previous poses of, rescales and strikes. None if absent. */
-  readonly parts?: readonly BossPart[];
-  /** How far from the core's centre the boss reaches, parts included; its drift keeps that much inside the field. The core radius if absent. */
-  readonly reach?: number;
-  /** Runs at the end of every step until the boss is down, after its core has drifted or attacked: it moves its parts, say. */
-  step?(ctx: AttackContext): void;
-  /** Whether a blow on the core can hurt it now; always, if absent. Asked after every step and every part hit. */
-  vulnerable?(boss: Readonly<BossView>): boolean;
-}
-
-/** Makes a fight's behaviour, which may keep state of its own, from the fight's setup. */
-export type BossFactory = (setup: BossSetup) => BossBehaviour;
-
-export interface BossSetup {
-  readonly maxHp: number;
-  /** The 'boss' stream: the drift heading and whatever an attack draws. */
-  readonly rng: Rng;
-  /** Multiplier for the speed of rocks an attack launches. */
-  readonly rockSpeed: number;
-  readonly field: Field;
-}
 
 /** How far inside the field's edges a ship respawns clear of a boss. */
 export const RESPAWN_INSET = 60;
@@ -132,7 +32,7 @@ export const RESPAWN_INSET = 60;
  * Where a ship can respawn at least `clearance` from a core at `core`: bottom-centre, a little inside the edge, or if
  * the core has drifted too near it, the inset corner farthest from the core.
  */
-export function clearSpot(core: Readonly<{ x: number; y: number }>, clearance: number, field: Field): { x: number; y: number } {
+export function clearSpot(core: Readonly<Point>, clearance: number, field: Field): Point {
   const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height - RESPAWN_INSET];
   const spot = { x: field.width / 2, y: bottom };
   if (Math.hypot(spot.x - core.x, spot.y - core.y) >= clearance) return spot;
@@ -142,7 +42,7 @@ export function clearSpot(core: Readonly<{ x: number; y: number }>, clearance: n
 }
 
 /** Where a boss arrives in `field`. */
-export function bossHome(field: Field): { readonly x: number; readonly y: number } {
+export function bossHome(field: Field): Readonly<Point> {
   return { x: field.width / 2, y: field.height * HOME_HEIGHT_SHARE };
 }
 
@@ -151,13 +51,22 @@ function phaseFor(hp: number, maxHp: number): BossPhase {
   return hp * 3 <= maxHp * 2 ? 2 : 1;
 }
 
-/** Where a shot does harm now: the core if it can be hurt, else a live part, and nowhere outside the fight. */
-export function bossTarget(view: Readonly<BossView>): Readonly<{ x: number; y: number }> | null {
-  if (view.state !== 'fighting') return null;
+/** Where a shot does harm now: wherever the boss's behaviour says, by default the core if it can be hurt, else a live part; nowhere outside the fight. */
+export function bossTarget(view: Readonly<BossView>): Readonly<Point> | null {
+  return view.state === 'fighting' ? view.target : null;
+}
+
+/** Where a shot harms a boss whose behaviour does not say: the core if it can be hurt, else its first live part. */
+function coreOrPart(view: Readonly<BossView>): Readonly<Point> | null {
   if (view.vulnerable) return view;
   for (const part of view.parts) if (part.hp > 0) return part;
   return null;
 }
+
+/** How a boss announces its core opening and closing, unless its behaviour says otherwise. */
+const CORE_EXPOSURE: Exposure = { opened: 'bossExposed', closed: 'bossShielded' };
+/** Where a boss faces until its behaviour turns it: down the field, toward the ship's side. */
+const FACING_DOWN = Math.PI / 2;
 
 function assertAttacks(def: BossDef, behaviour: BossBehaviour): void {
   def.phases.forEach((list, i) => {
@@ -224,11 +133,13 @@ export class BossRunner {
       active: null,
       vulnerable: true,
       parts: behaviour.parts ?? [],
+      facing: FACING_DOWN,
+      target: null,
     };
     const heading = setup.rng.range(0, TAU);
     this.dx = Math.cos(heading) * behaviour.driftSpeed;
     this.dy = Math.sin(heading) * behaviour.driftSpeed;
-    this.shownVulnerable = this.refreshVulnerable();
+    this.shownVulnerable = this.refresh();
   }
 
   get hp(): number {
@@ -248,7 +159,7 @@ export class BossRunner {
     return this.behaviour.reach ?? this.view.radius;
   }
 
-  /** Stretches the core, its parts and the points an attack under way aims at, to the new field like every other entity. */
+  /** Stretches the core, its parts, its target and the points an attack under way aims at, to the new field like every other entity. */
   resize(old: Field, field: Field): void {
     const { view, context } = this;
     for (const body of [view, ...view.parts]) {
@@ -257,6 +168,7 @@ export class BossRunner {
       body.y = rescale(body.y, old.height, field.height);
       body.py = rescale(body.py, old.height, field.height);
     }
+    this.refresh();
     if (context === null) return;
     context.aimX = rescale(context.aimX, old.width, field.width);
     context.fromX = rescale(context.fromX, old.width, field.width);
@@ -285,15 +197,15 @@ export class BossRunner {
   }
 
   /**
-   * Takes `damage` off its HP and returns what came of it: 'blocked' outside the fight (intro, dying, down),
-   * 'deflected' while its core is shielded, 'killed' for the blow that empties it. Phase changes are announced by the
-   * next `step`.
+   * Takes `damage` off its HP for a blow landing at (x, y), the core's centre if not given, and returns what came of it:
+   * 'blocked' outside the fight (intro, dying, down), 'deflected' while its core is shielded or off its weak point,
+   * 'killed' for the blow that empties it. Phase changes are announced by the next `step`.
    */
-  hit(damage: number): HitResult {
+  hit(damage: number, x = this.view.x, y = this.view.y): HitResult {
     assertDamage(damage);
     const view = this.view;
     if (view.state !== 'fighting') return 'blocked';
-    if (!view.vulnerable) return 'deflected';
+    if (!view.vulnerable || this.behaviour.hurtsAt?.(view, x, y) === false) return 'deflected';
     view.hp = Math.max(0, view.hp - damage);
     if (view.hp === 0) {
       this.enter('dying');
@@ -318,7 +230,7 @@ export class BossRunner {
     if (this.view.state !== 'fighting') return 'blocked';
     part.hp = Math.max(0, part.hp - damage);
     if (part.hp > 0) return 'hit';
-    this.refreshVulnerable();
+    this.refresh();
     return 'broken';
   }
 
@@ -363,19 +275,21 @@ export class BossRunner {
     this.announceVulnerability(arena);
   }
 
-  /** Asks the behaviour whether the core can be hurt now, and shows the answer on the view. */
-  private refreshVulnerable(): boolean {
-    const view = this.view;
-    view.vulnerable = this.behaviour.vulnerable?.(view) ?? true;
+  /** Asks the behaviour whether the core can be hurt now and where a shot does harm, shows both on the view, and returns the first. */
+  private refresh(): boolean {
+    const { view, behaviour } = this;
+    view.vulnerable = behaviour.vulnerable?.(view) ?? true;
+    view.target = behaviour.target === undefined ? coreOrPart(view) : behaviour.target(view);
     return view.vulnerable;
   }
 
-  /** Announces the core being exposed or shielded again since the last announcement, while it fights. */
+  /** Announces the core being exposed or shielded again since the last announcement, while it fights, as its behaviour names it. */
   private announceVulnerability(arena: Arena): void {
     const view = this.view;
-    if (this.refreshVulnerable() === this.shownVulnerable || view.state !== 'fighting') return;
+    if (this.refresh() === this.shownVulnerable || view.state !== 'fighting') return;
     this.shownVulnerable = view.vulnerable;
-    arena.events.push({ type: view.vulnerable ? 'bossExposed' : 'bossShielded', x: view.x, y: view.y });
+    const { opened, closed } = this.behaviour.exposure ?? CORE_EXPOSURE;
+    arena.events.push({ type: view.vulnerable ? opened : closed, x: view.x, y: view.y });
   }
 
   private spec(id: AttackId): AttackSpec {

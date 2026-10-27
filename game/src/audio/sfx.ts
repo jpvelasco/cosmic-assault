@@ -40,6 +40,8 @@ export const SFX_NAMES = [
   'partBreak',
   'coreExposed',
   'coreShielded',
+  'hangarOpen',
+  'hangarClose',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -100,6 +102,10 @@ function soundOf(event: SimEvent): SfxName | null {
       return 'coreExposed';
     case 'bossShielded':
       return 'coreShielded';
+    case 'hangarOpen':
+      return 'hangarOpen';
+    case 'hangarClose':
+      return 'hangarClose';
     // Only a foe with HP to spare survives a hit: the splitter, cracking.
     case 'foeHit':
       return 'foeCrack';

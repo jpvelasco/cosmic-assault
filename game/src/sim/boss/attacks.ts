@@ -1,7 +1,7 @@
 import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import { TAU } from '../math';
-import type { AttackContext } from './bossRunner';
+import type { AttackContext } from './behaviour';
 
 /**
  * Sends `count` pass-through rocks of `size` out from the core's rim, evenly spaced and turned by a random offset, at

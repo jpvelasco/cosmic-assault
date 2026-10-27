@@ -4,10 +4,11 @@ import { isFoeKind } from '../../content/foes';
 import { tierOf } from '../../content/galaxies';
 import type { BossId, GalaxyDef, PickupId, RockKind, WeaponTier } from '../../content/types';
 import { aimFromEdge, hasLeftField, launchFromEdge, type Asteroid, type AsteroidSize, type Edge, type EdgeAim } from '../asteroid';
-import { BossRunner, clearSpot, DYING_SECONDS, type BossFactory, type BossSetup, type BossView } from '../boss/bossRunner';
-import { ASTEROID, PLAYER } from '../config';
+import type { BossFactory, BossSetup, BossView } from '../boss/behaviour';
+import { BossRunner, clearSpot, DYING_SECONDS } from '../boss/bossRunner';
 import { createMonolith } from '../boss/monolith';
 import { SENTINEL } from '../boss/sentinel';
+import { ASTEROID, PLAYER } from '../config';
 import type { Field } from '../field';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
@@ -215,8 +216,8 @@ export class GalaxyRun implements Spawner {
   /**
    * A shot at (x, y) has reached the boss, if it overlaps a live part or the core; true means the shot is spent. A part
    * takes 1 damage, reporting `bossPartHit` or `bossPartBroken`. The core takes 1 damage and reports a `bossHit`, or a
-   * `bossDeflected` while shielded, and nothing while invulnerable; the blow that kills it scores `1000 x Dimension` as a
-   * combo kill.
+   * `bossDeflected` at (x, y) while shielded or off its weak point, and nothing while invulnerable; the blow that kills
+   * it scores `1000 x Dimension` as a combo kill.
    */
   hitBoss(x: number, y: number, radius: number): boolean {
     const boss = this.bossRunner;
@@ -227,7 +228,7 @@ export class GalaxyRun implements Spawner {
       return true;
     }
     if (!boss.overlaps(x, y, radius)) return false;
-    const result = boss.hit(1);
+    const result = boss.hit(1, x, y);
     if (result === 'blocked') return true;
     if (result === 'deflected') {
       this.arena.events.push({ type: 'bossDeflected', x, y });
@@ -305,7 +306,7 @@ export class GalaxyRun implements Spawner {
 
   private bringBoss(id: BossId, dimension: GalaxyDef['dimension']): BossRunner {
     const def = BOSSES[id];
-    const setup: BossSetup = { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field() };
+    const setup: BossSetup = { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field(), foes: this.foes };
     return new BossRunner(def, this.behaviours[id](setup), setup);
   }
 

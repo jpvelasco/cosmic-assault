@@ -131,6 +131,9 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
       return writeBurst(into, PICKUP_TAKE_BURST, palette.ring);
     case 'shieldBroken':
       return writeBurst(into, SHIELD_BREAK_BURST, palette.ring);
+    // The hangar's doors and the light inside are the drawer's to show.
+    case 'hangarOpen':
+    case 'hangarClose':
     case 'gameOver':
     case 'asteroidLeft':
     case 'galaxyStart':
@@ -282,6 +285,8 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
         return writeOrigin(origin, world.ship.x, world.ship.y, PICKUP.radius, PICKUP_COLORS[event.kind]);
       case 'shieldBroken':
         return writeOrigin(origin, world.ship.x, world.ship.y, SHIELD_RING_RADIUS, PICKUP_COLORS.shield);
+      case 'hangarOpen':
+      case 'hangarClose':
       case 'gameOver':
       case 'asteroidLeft':
       case 'galaxyStart':

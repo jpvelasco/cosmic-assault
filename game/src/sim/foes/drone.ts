@@ -2,7 +2,7 @@ import { DRONE_SEPARATION, DRONE_TURN_RATE, FOES } from '../../content/foes';
 import { edgeLength, edgePoint, oppositeEdge, EDGE_COUNT, type Edge } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU } from '../math';
+import { turnBetween } from '../math';
 import { wrapDelta, wrapPosition } from '../wrap';
 import type { Foe, FoeBehaviour } from './foe';
 import type { Ship } from '../ship';
@@ -11,13 +11,6 @@ import type { Rng } from '../rng';
 const { radius: RADIUS, speed: SPEED } = FOES.drone;
 /** Centre to centre along the edge: a clear gap of a radius between neighbours. */
 const SPACING = RADIUS * 3;
-
-/** The signed turn from heading `from` to `to`, in (-π, π]. */
-function turnBetween(from: number, to: number): number {
-  const turn = (to - from) % TAU;
-  if (turn > Math.PI) return turn - TAU;
-  return turn <= -Math.PI ? turn + TAU : turn;
-}
 
 /**
  * The push away from the drones crowding `foe`, in seek units: each neighbour within `DRONE_SEPARATION.radius` adds a

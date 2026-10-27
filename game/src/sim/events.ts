@@ -40,6 +40,10 @@ export type SimEvent =
   | { type: 'bossExposed'; x: number; y: number }
   /** A boss's core at (x, y) is shielded again: shots on it are deflected. */
   | { type: 'bossShielded'; x: number; y: number }
+  /** The Hive Carrier at (x, y) has opened its hangar: shots through it hurt the carrier. */
+  | { type: 'hangarOpen'; x: number; y: number }
+  /** The Hive Carrier at (x, y) has closed its hangar: its whole hull deflects shots again. */
+  | { type: 'hangarClose'; x: number; y: number }
   /** A boss fell to two thirds (2) or one third (3) of its HP. */
   | { type: 'bossPhase'; phase: 2 | 3 }
   /** A boss was beaten, its HP at 0: the galaxy warps out on the same step, and the boss dies over the warp. */
