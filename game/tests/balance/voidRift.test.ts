@@ -46,6 +46,15 @@ describe('Void Rift, played by the bots', { timeout: TIMEOUT_MS }, () => {
     expect(lost).toEqual([]);
   });
 
+  it('meets every rift and repulsion field its schedule shows on every cleared expert run, 4-2 to 4-5', () => {
+    for (const { id, seed, result, log } of expert) {
+      if (!result.cleared) continue;
+      // A rift shows a pair per intensity to two; a repulsion field one per event.
+      const expected = galaxyById(id).events.reduce((sum, e) => sum + (e.type === 'warpRift' ? Math.min(e.intensity, 2) : e.type === 'repulsionField' ? 1 : 0), 0);
+      expect(auditTelegraphs(log).length, `${id} seed ${String(seed)}`).toBe(expected);
+    }
+  });
+
   it('warns of every rift, repulsion field and phaser blink for its whole telegraph, as the expert and the casual play, and sees each new threat at work', () => {
     const telegraphs: TelegraphPair[] = [];
     const attacks: FoeAttackPair[] = [];

@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { runGalaxy } from '../../src/bot/run';
 import { kindProbability } from '../../src/content/curves';
 import { GALAXIES, galaxyById, tierOf } from '../../src/content/galaxies';
 import type { GalaxyEvent, GalaxyId } from '../../src/content/types';
 import { THREAT_COST } from '../../src/sim/galaxy/director';
-import { auditFoeAttacks, auditTelegraphs, type TimedEvent } from '../helpers/telegraphAudit';
 
 const VOID_RIFT: readonly GalaxyId[] = ['4-1', '4-2', '4-3', '4-4', '4-5'];
 const scheduled = (id: GalaxyId): GalaxyEvent[] => galaxyById(id).events.filter((e) => e.type !== 'meteorShower');
@@ -59,31 +57,4 @@ describe('Void Rift content', () => {
       ['repulsionField', 56, 2],
     ]);
   });
-
-  it('warns of every rift and repulsion field for its whole telegraph, and of every phaser blink, on 4-2 to 4-5 under expert, statue and casual', () => {
-    let blinks = 0;
-    for (const id of VOID_RIFT.slice(1)) {
-      for (const profile of ['expert', 'casual', 'statue'] as const) {
-        for (const seed of [1, 2, 3]) {
-          const log: TimedEvent[] = [];
-          const result = runGalaxy({
-            galaxy: galaxyById(id),
-            seed,
-            profile,
-            onStep: (world, _controls, events) => {
-              for (const event of events) log.push({ elapsed: world.elapsed, event: { ...event } });
-            },
-          });
-          const pairs = auditTelegraphs(log);
-          blinks += auditFoeAttacks(log).filter((p) => p.kind === 'phaser').length;
-          // A cleared run has met every hazard its schedule shows: a rift pair per intensity to two, a repulsion field per event.
-          if (result.cleared) {
-            const expected = scheduled(id).reduce((sum, e) => sum + (e.type === 'warpRift' ? Math.min(e.intensity, 2) : 1), 0);
-            expect(pairs.length, `${id} ${profile} seed ${String(seed)}`).toBe(expected);
-          }
-        }
-      }
-    }
-    expect(blinks).toBeGreaterThan(0);
-  }, 600_000);
 });

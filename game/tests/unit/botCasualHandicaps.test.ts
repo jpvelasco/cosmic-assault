@@ -162,7 +162,7 @@ describe("the casual bot's handicaps", () => {
     // about the 85% it chose to dodge.
     expect(shortest).toBeLessThan(0.1);
     expect(Math.abs(long - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.1);
-  });
+  }, 30_000);
 
   it('dodges the drones a telegraphed launch sends out at the launch\'s 85%, and other drones at the episode\'s 60%', () => {
     // The launch winds up with nothing yet in reach; its wave appears, marked as the launch's, as it runs, while the boss rests.

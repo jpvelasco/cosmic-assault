@@ -75,10 +75,10 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.duration).toBe(20);
   });
 
-  it('keeps every event inside the window from 15 s in (Void Rift\'s 4-5 opens its rift at 15 s) to 25 s before the end', () => {
+  it('keeps every event inside the window from the opening\'s end to 25 s before the end', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
-        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(15);
+        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
         expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);
       }
   });
