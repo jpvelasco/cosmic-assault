@@ -37,7 +37,7 @@ const destroyed = (size: AsteroidSize, points = 20): SimEvent => ({ type: 'aster
 const nameOf = (event: SimEvent): string | null => sfxFor(event)?.name ?? null;
 
 /** One event of every type the galaxies and bosses added that makes a sound; the Record makes a new event type fail to compile here. */
-const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | 'blast' | ContentEvent>, SimEvent>> = {
+const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | 'blast' | 'boltFired' | ContentEvent>, SimEvent>> = {
   galaxyStart: { type: 'galaxyStart', id: '1-1' },
   showerWarning: { type: 'showerWarning', angle: 0, at: 50 },
   showerStart: { type: 'showerStart' },
@@ -153,6 +153,10 @@ describe('sfxFor', () => {
 
   it('keeps a blast silent until it has a sound of its own: what it destroys still booms', () => {
     expect(nameOf({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBeNull();
+  });
+
+  it('keeps a bolt silent until the first foe or boss that fires one brings its sound', () => {
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'boss', x: 0, y: 0, angle: 0 })).toBeNull();
   });
 
   it('whooshes softly as a shower starts, and keeps its end and a meteor leaving silent', () => {

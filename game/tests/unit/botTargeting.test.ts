@@ -64,6 +64,13 @@ describe('bot targeting', () => {
     expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
   });
 
+  it('passes over an armoured part for the nearest one a shot can hurt', () => {
+    const view = sceneView();
+    const parts = [part(300, 100, 2), { ...part(700, 220, 2), armoured: true }];
+    view.boss = boss(null, 'fighting', parts);
+    expect(chosen(view)).toMatchObject({ x: 300, y: 100 });
+  });
+
   it("leads a boss's weak point by its core's motion", () => {
     const view = sceneView();
     view.boss = { ...boss({ x: 640, y: 185 }), px: 640 - 40 * STEP_SECONDS };

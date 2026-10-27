@@ -1,8 +1,7 @@
 import type { AsteroidSize } from '../asteroid';
-import { smoothstep, TAU } from '../math';
-import { pulse, rockRing } from './attacks';
-import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from './behaviour';
-import { bossHome } from './bossRunner';
+import { pulseAttack, rockRing } from './attacks';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup } from './behaviour';
+import { ShardOrbit, type ShardOrbitOptions } from './shardOrbit';
 
 /** How many shards it starts with, least and most. */
 export const SHARD_COUNTS = [8, 12] as const;
@@ -20,16 +19,17 @@ export const REGROW_SECONDS = 6;
 export const REGROW_CAP = 6;
 const DRIFT_SPEED = 12;
 
-/** Shards a volley throws, at most. */
-const VOLLEY_SHARDS = 3;
-/** Seconds a volley's shards take out to their turning point and back. */
-const VOLLEY_SECONDS = 1.8;
-/** How far apart the volley's lanes are, across its line of flight. */
-const VOLLEY_SPREAD = 46;
-/** How far past the aim the shards fly before they turn back. */
-const VOLLEY_OVERSHOOT = 70;
-/** How far either side of its line of flight a volley's shards reach. */
-const VOLLEY_REACH = VOLLEY_SPREAD + SHARD_RADIUS;
+/** The Monolith's shards, as a `ShardOrbit` sets them up. */
+export const MONOLITH_SHARDS: ShardOrbitOptions = {
+  counts: SHARD_COUNTS,
+  hp: SHARD_HP,
+  radius: SHARD_RADIUS,
+  orbit: ORBIT_RADIUS,
+  speed: ORBIT_SPEED,
+  exposedAt: EXPOSED_AT,
+  regrowSeconds: REGROW_SECONDS,
+  regrowCap: REGROW_CAP,
+};
 
 /** Rocks in a quake's ring, by phase (it quakes only from phase 2). */
 const QUAKE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 8, 2: 8, 3: 10 };
@@ -47,143 +47,43 @@ export type MonolithAttack = 'shardVolley' | 'quake' | 'pulse';
 /** The Monolith's windups, in seconds. */
 const WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, quake: 0.8, pulse: 0.5 };
 
-/** How far round from bearing `aim` a part sits about the core, in radians from -π to π. */
-function offsetFrom(aim: number, part: Readonly<BossPart>, boss: Readonly<BossView>): number {
-  const d = Math.atan2(part.y - boss.y, part.x - boss.x) - aim;
-  return d - Math.round(d / TAU) * TAU;
-}
-
 /**
- * The Monolith, Dimension 1's boss: a heavy core wrapped in `SHARD_COUNTS` orbiting shards of `SHARD_HP` each. While
- * more than `EXPOSED_AT` remain the core deflects every shot; at `EXPOSED_AT` or fewer it is bare, and grows one back
- * every `REGROW_SECONDS`. It throws its shards
- * at the ship and calls them back, quakes rings of small rocks out of itself, and pulses the ship away.
+ * The Monolith, Dimension 1's boss: a heavy core wrapped in `SHARD_COUNTS` orbiting shards of `SHARD_HP` each, a
+ * `ShardOrbit`. While more than `EXPOSED_AT` remain the core deflects every shot; at `EXPOSED_AT` or fewer it is bare,
+ * and grows one back every `REGROW_SECONDS`. It throws its shards at the ship and calls them back, quakes rings of small
+ * rocks out of itself, and pulses the ship away.
  */
 class Monolith implements BossBehaviour {
   readonly driftSpeed = DRIFT_SPEED;
-  readonly reach = ORBIT_RADIUS + SHARD_RADIUS;
+  readonly reach: number;
   readonly parts: readonly BossPart[];
-  readonly attacks: Readonly<Record<MonolithAttack, AttackSpec>> = {
-    shardVolley: { windup: WINDUPS.shardVolley, active: VOLLEY_SECONDS, run: (ctx) => { this.volley(ctx); }, threat: { kind: 'lane', reach: VOLLEY_REACH } },
-    quake: { windup: WINDUPS.quake, active: 0, run: (ctx) => { rockRing(ctx, QUAKE_ROCKS[ctx.boss.phase], QUAKE_SIZE, QUAKE_SPEED); } },
-    pulse: { windup: WINDUPS.pulse, active: PULSE_SECONDS, run: (ctx) => { pulse(ctx, PULSE_SPEED, PULSE_REACH); }, threat: { kind: 'shove', speed: PULSE_SPEED, reach: PULSE_REACH } },
-  };
-
-  /** The bearing of shard 0 from the core; shard i sits i shares of a turn on from it. */
-  private spin: number;
-  private regrowClock = 0;
-  /** How far through the volley under way, 0 to 1. */
-  private flight = 0;
-  /** Each shard's lane in the volley under way, -1 to 1 across the line of flight; NaN for a shard on its orbit. */
-  private readonly lanes: number[];
-  /** The shards the volley under way throws, left to right. */
-  private readonly thrown: number[] = [];
+  readonly attacks: Readonly<Record<MonolithAttack, AttackSpec>>;
+  private readonly shards: ShardOrbit;
 
   constructor(setup: BossSetup) {
-    const count = setup.rng.int(SHARD_COUNTS[0], SHARD_COUNTS[1] + 1);
-    this.spin = setup.rng.range(0, TAU);
-    this.parts = Array.from({ length: count }, () => ({ x: 0, y: 0, px: 0, py: 0, radius: SHARD_RADIUS, hp: SHARD_HP, maxHp: SHARD_HP }));
-    this.lanes = this.parts.map(() => Number.NaN);
-    const home = bossHome(setup.field);
-    this.placeAll(home.x, home.y);
-    for (const part of this.parts) {
-      part.px = part.x;
-      part.py = part.y;
-    }
+    const shards = new ShardOrbit(MONOLITH_SHARDS, setup);
+    this.shards = shards;
+    this.parts = shards.parts;
+    this.reach = shards.reach;
+    this.attacks = {
+      shardVolley: shards.volley(WINDUPS.shardVolley),
+      quake: { windup: WINDUPS.quake, active: 0, run: quake },
+      pulse: pulseAttack(WINDUPS.pulse, PULSE_SECONDS, PULSE_SPEED, PULSE_REACH),
+    };
   }
 
   vulnerable(): boolean {
-    return this.live() <= EXPOSED_AT;
+    return this.shards.exposed;
   }
 
-  /** Turns the orbit, grows a shard back on a bare core, and puts every shard where it is: on its orbit or in flight. */
   step(ctx: AttackContext): void {
-    const { boss, dt } = ctx;
-    this.spin = (this.spin + ORBIT_SPEED * dt) % TAU;
-    if (boss.active !== 'shardVolley') this.lanes.fill(Number.NaN);
-    this.regrow(boss, dt);
-    this.placeAll(boss.x, boss.y);
-    for (let i = 0; i < this.parts.length; i++) {
-      const lane = this.lanes[i] ?? Number.NaN;
-      if (!Number.isNaN(lane)) this.fly(ctx, lane, this.parts[i] as BossPart);
-    }
+    this.shards.step(ctx);
   }
+}
 
-  private live(): number {
-    let live = 0;
-    for (const part of this.parts) if (part.hp > 0) live++;
-    return live;
-  }
-
-  /** Puts every shard on its orbit around (x, y). */
-  private placeAll(x: number, y: number): void {
-    const { parts } = this;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i] as BossPart;
-      const bearing = this.spin + (i / parts.length) * TAU;
-      part.x = x + Math.cos(bearing) * ORBIT_RADIUS;
-      part.y = y + Math.sin(bearing) * ORBIT_RADIUS;
-    }
-  }
-
-  /** While the core is bare, a broken shard grows back on its orbit every 6 s; the wait starts afresh each time it is laid bare. */
-  private regrow(boss: Readonly<BossView>, dt: number): void {
-    if (boss.state !== 'fighting' || !boss.vulnerable) {
-      this.regrowClock = 0;
-      return;
-    }
-    this.regrowClock += dt;
-    if (this.regrowClock < REGROW_SECONDS || this.live() >= REGROW_CAP) return;
-    this.regrowClock = 0;
-    const i = this.parts.findIndex((part) => part.hp <= 0);
-    const part = this.parts[i];
-    if (part === undefined) return;
-    part.hp = part.maxHp;
-    // A shard broken in flight grows back on its orbit, out of the volley that threw it.
-    this.lanes[i] = Number.NaN;
-  }
-
-  /** Throws up to three shards out past where the ship was and back, each in its own lane. */
-  private volley(ctx: AttackContext): void {
-    if (ctx.age === 0) this.pickVolley(ctx);
-    this.flight = Math.min(1, (ctx.age + ctx.dt) / VOLLEY_SECONDS);
-  }
-
-  /** Lanes the live shards nearest the aim by bearing from the core, left to right across the line of flight. */
-  private pickVolley(ctx: AttackContext): void {
-    const { boss } = ctx;
-    const { parts, thrown } = this;
-    const aim = Math.atan2(ctx.aimY - boss.y, ctx.aimX - boss.x);
-    thrown.length = 0;
-    for (let n = 0; n < VOLLEY_SHARDS; n++) {
-      let best = -1;
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i] as BossPart;
-        if (part.hp <= 0 || thrown.includes(i)) continue;
-        if (best < 0 || Math.abs(offsetFrom(aim, part, boss)) < Math.abs(offsetFrom(aim, parts[best] as BossPart, boss))) best = i;
-      }
-      if (best < 0) break;
-      thrown.push(best);
-    }
-    thrown.sort((a, b) => offsetFrom(aim, parts[a] as BossPart, boss) - offsetFrom(aim, parts[b] as BossPart, boss));
-    for (let rank = 0; rank < thrown.length; rank++) this.lanes[thrown[rank] as number] = rank - (thrown.length - 1) / 2;
-  }
-
-  /** Moves a shard in flight from its orbit out to its lane's turning point and back, easing at both ends. */
-  private fly(ctx: AttackContext, lane: number, part: BossPart): void {
-    const dx = ctx.aimX - ctx.fromX;
-    const dy = ctx.aimY - ctx.fromY;
-    const length = Math.hypot(dx, dy);
-    const ux = length > 0 ? dx / length : 0;
-    const uy = length > 0 ? dy / length : 1;
-    const tx = ctx.aimX + ux * VOLLEY_OVERSHOOT - uy * lane * VOLLEY_SPREAD;
-    const ty = ctx.aimY + uy * VOLLEY_OVERSHOOT + ux * lane * VOLLEY_SPREAD;
-    // Out to the turning point over the first half, then back to its orbit, wherever that has turned to.
-    const out = this.flight < 0.5;
-    const s = out ? smoothstep(this.flight * 2) : 1 - smoothstep(this.flight * 2 - 1);
-    part.x += (tx - part.x) * s;
-    part.y += (ty - part.y) * s;
-  }
+/** Sends a ring of small pass-through rocks out of the core, more in phase 3. */
+function quake(ctx: AttackContext): void {
+  rockRing(ctx, QUAKE_ROCKS[ctx.boss.phase], QUAKE_SIZE, QUAKE_SPEED);
 }
 
 /** The Monolith's behaviour, with its attacks spelled out. */

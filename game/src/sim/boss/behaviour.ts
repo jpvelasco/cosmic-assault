@@ -1,6 +1,7 @@
 import type { AttackId, BossId, FoeKind } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
+import type { Bolts } from '../foes/bolts';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 
@@ -25,6 +26,8 @@ export interface BossPart {
   radius: number;
   hp: number;
   maxHp: number;
+  /** True while its behaviour armours it, so a blow on it is deflected; set by the runner with the view's target. */
+  armoured?: boolean;
 }
 
 /** What the renderer sees of a boss: one object, updated in place by `BossRunner.step`. */
@@ -61,6 +64,8 @@ export interface AttackContext {
   arena: Arena;
   readonly rng: Rng;
   readonly rockSpeed: number;
+  /** The galaxy's hostile bolts, for an attack that fires them; null where there are none to fire. */
+  readonly bolts: Bolts | null;
   /** The boss; an attack may move its core. */
   readonly boss: BossView;
   /** This step's length. */
@@ -138,11 +143,16 @@ export interface BossBehaviour {
   step?(ctx: AttackContext): void;
   /** Whether a blow on the core can hurt it now; always, if absent. Asked after every step and every part broken. */
   vulnerable?(boss: Readonly<BossView>): boolean;
+  /**
+   * Whether a blow on part `index` hurts it now; always, if absent. An armoured part deflects the blow, which spends a
+   * shot. Asked for every hit on a part, and after every step and every part broken.
+   */
+  partVulnerable?(index: number): boolean;
   /** Whether a blow landing at (x, y) hurts the core while it can be hurt; anywhere does, if absent. Elsewhere it deflects. */
   hurtsAt?(boss: Readonly<BossView>, x: number, y: number): boolean;
   /**
    * Where a shot does harm now, or null if nowhere does, asked right after `vulnerable`. If absent, the core while it
-   * can be hurt, else its first live part.
+   * can be hurt, else its first live part that is not armoured.
    */
   target?(boss: Readonly<BossView>): Readonly<Point> | null;
 }
@@ -164,6 +174,8 @@ export interface BossSetup {
   readonly field: Field;
   /** The galaxy's foes, for a boss that launches its own; absent where there are none to launch into. */
   readonly foes?: BossFoes;
+  /** The galaxy's hostile bolts, for a boss that fires them; absent where there are none to fire. */
+  readonly bolts?: Bolts;
 }
 
 /** Makes a fight's behaviour, which may keep state of its own, from the fight's setup. */

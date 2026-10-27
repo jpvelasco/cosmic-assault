@@ -58,13 +58,13 @@ const offerBossPoint = (view: Readonly<BotView>, out: Target, best: number, poin
 
 /**
  * Offers the boss where a shot hurts it now: the point its behaviour names while its core can be hurt, moving with the
- * core; else the nearest of its live parts, which a shot always strikes; nothing outside the fight.
+ * core; else the nearest of its live parts that are not armoured; nothing outside the fight.
  */
 function offerBoss(view: Readonly<BotView>, out: Target, best: number, boss: Readonly<BossView>): number {
   if (boss.state !== 'fighting') return best;
   const weakPoint = bossTarget(boss);
   if (boss.vulnerable && weakPoint !== null) return offerBossPoint(view, out, best, weakPoint, boss);
-  for (const part of boss.parts) if (part.hp > 0) best = offerBossPoint(view, out, best, part, part);
+  for (const part of boss.parts) if (part.hp > 0 && part.armoured !== true) best = offerBossPoint(view, out, best, part, part);
   return best;
 }
 

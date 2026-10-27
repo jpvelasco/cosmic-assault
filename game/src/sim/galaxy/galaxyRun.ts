@@ -10,6 +10,7 @@ import { BossArena } from '../boss/bossArena';
 import { BossRunner, DYING_SECONDS } from '../boss/bossRunner';
 import { BOSS_BEHAVIOURS } from '../boss/roster';
 import type { Field } from '../field';
+import { Bolts } from '../foes/bolts';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
 import type { HazardState } from '../hazards/hazard';
@@ -55,6 +56,8 @@ export class GalaxyRun implements Spawner {
   private readonly showers: Showers;
   private readonly hazards: HazardField;
   private readonly foes: FoeField;
+  /** The hostile bolts the boss and the foes fire. */
+  private readonly bolts: Bolts;
   private readonly combo = new Combo();
   private readonly rockSpeed: number;
   private shownMultiplier = 1;
@@ -90,9 +93,10 @@ export class GalaxyRun implements Spawner {
     this.showers = new Showers(galaxy.events, streams.director);
     this.hazards = new HazardField(galaxy.events, streams.hazards, () => arena.nextId());
     this.foes = new FoeField(arena, streams.foes, { score: (base) => this.scoreKill(base), killed: (x, y) => { this.dropFrom(x, y); } });
+    this.bolts = new Bolts(arena);
     this.rockSpeed = rockSpeedMultiplier(tierOf(galaxy));
     this.bosses = new BossArena(arena, BOSS_KILL_POINTS * galaxy.dimension, (base) => this.scoreKill(base), () => this.bringBoss());
-    this.blastScene = { arena, foes: this.foes, bosses: this.bosses };
+    this.blastScene = { arena, foes: this.foes, bolts: this.bolts, bosses: this.bosses };
   }
 
   get phase(): Phase {
@@ -140,6 +144,7 @@ export class GalaxyRun implements Spawner {
     this.director.fieldArea = areaOf(field);
     this.pickupField.resize(old, field);
     this.foes.resize(old, field);
+    this.bolts.resize(old, field);
     this.hazards.resize(old, field);
     this.bosses.resize(old, field);
   }
@@ -157,12 +162,14 @@ export class GalaxyRun implements Spawner {
   /**
    * The hazard path. Hazards pull by nudging the velocities of the ship (capped, summed), the rocks and the foes they
    * pull, and a boss's attack shoves the ship, here, after `stepShip` and before anything else moves; then the foes
-   * move, at the enemies' time scale.
+   * and the bolts move, at the enemies' time scale.
    */
   moveOwn(dt: number, ship: Ship): void {
     this.hazards.move(dt, ship, this.arena.asteroids, this.foes.list);
     this.bosses.shove(ship);
-    this.foes.step(dt * this.enemyTimeScale());
+    const enemyDt = dt * this.enemyTimeScale();
+    this.foes.step(enemyDt);
+    this.bolts.step(enemyDt);
   }
 
   shotRules(): ShotRules {
@@ -228,9 +235,9 @@ export class GalaxyRun implements Spawner {
     return this.foes.hit(x, y, radius, struck);
   }
 
-  /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, a boss that is fighting, or a lethal hazard. */
+  /** True when the ship at (x, y) has run into a foe, which is destroyed for 0 points, a boss that is fighting, a lethal hazard, or a bolt, which is spent. */
   shipStruck(x: number, y: number, radius: number): boolean {
-    return this.foes.ram(x, y, radius) || this.bosses.touches(x, y, radius) || this.hazards.strikes(x, y, radius);
+    return this.foes.ram(x, y, radius) || this.bosses.touches(x, y, radius) || this.hazards.strikes(x, y, radius) || this.bolts.strikes(x, y, radius);
   }
 
   /** While a boss is on the field, a respawning ship comes back clear of its reach, not at the centre, where the boss may be; else where a hazard sends it, if one does. */
@@ -256,7 +263,7 @@ export class GalaxyRun implements Spawner {
     const { boss: id, dimension } = this.galaxy;
     if (id === null) throw new RangeError(`${this.galaxy.id} has no boss to bring in: only a boss galaxy's run steps a boss`);
     const def = BOSSES[id];
-    const setup: BossSetup = { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field(), foes: this.foes };
+    const setup: BossSetup = { maxHp: bossHp(def, dimension), rng: this.streams.boss, rockSpeed: this.rockSpeed, field: this.arena.field(), foes: this.foes, bolts: this.bolts };
     return new BossRunner(def, this.behaviours[id](setup), setup);
   }
 
@@ -326,7 +333,7 @@ export class GalaxyRun implements Spawner {
   }
 
   /**
-   * Clears every rock and foe for 0 points, expires the pickups, and reports the clear: from here the ship cannot be hit and nothing scores, so
+   * Clears every rock and foe for 0 points and every bolt, expires the pickups, and reports the clear: from here the ship cannot be hit and nothing scores, so
    * the outcome is final, and an app that records it now keeps the win even if the page closes during the warp.
    */
   private warpOut(elapsed: number, seconds: number): void {
@@ -336,6 +343,7 @@ export class GalaxyRun implements Spawner {
     for (const a of asteroids) events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points: 0 });
     asteroids.length = 0;
     this.foes.clear();
+    this.bolts.clear();
     this.pickupField.expireAll(events);
     this.showers.stop();
     this.hazards.stop();

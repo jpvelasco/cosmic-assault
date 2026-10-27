@@ -1,6 +1,7 @@
 import type { BlastKind, TimedPickupId } from '../content/pickups';
 import type { AttackId, BossId, FoeKind, ForceKind, GalaxyId, PickupId } from '../content/types';
 import type { AsteroidSize } from './asteroid';
+import type { BoltSource } from './foes/bolts';
 import type { Stars } from './scoring';
 
 /** Plain facts from one `World.step`, for the renderer and audio to react to. */
@@ -60,6 +61,8 @@ export type SimEvent =
   | { type: 'shieldBroken' }
   /** A Field Bomb or a Nova went off at (x, y), reaching `radius`: its kills and boss hits follow as their own events. */
   | { type: 'blast'; kind: BlastKind; x: number; y: number; radius: number }
+  /** A hostile bolt `id` was fired from (x, y) along bearing `angle`, by a boss or a foe of that kind. */
+  | { type: 'boltFired'; id: number; source: BoltSource; x: number; y: number; angle: number }
   /** A foe has entered, at (x, y). */
   | { type: 'foeSpawned'; id: number; kind: FoeKind; x: number; y: number }
   /** A shot hurt a foe at (x, y) and left it alive with `hp`. The killing blow is `foeDestroyed` instead. */

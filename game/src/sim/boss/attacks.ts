@@ -1,8 +1,15 @@
 import { clamp } from '../../content/curves';
+import { BOLT, FOES } from '../../content/foes';
 import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
+import type { Field } from '../field';
 import { TAU } from '../math';
-import type { AttackContext, BossView, Point } from './behaviour';
+import type { AttackContext, AttackSpec, BossFoes, BossView, Point } from './behaviour';
+
+/**
+ * The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
+ * moves instead of copying them.
+ */
 
 /**
  * Sends a pass-through rock of `size` from (x, y) along `angle`, at `speed` times the galaxy's rock speed, marked as
@@ -57,4 +64,103 @@ export function pulse(ctx: AttackContext, speed: number, reach: number): void {
   radialShove(ctx.boss, speed, reach, ship.x, ship.y, shove);
   ctx.shoveX = shove.x;
   ctx.shoveY = shove.y;
+}
+
+/** A pulse telegraphed for `windup` s and on show for `active` s, declaring the shove it lands as its threat. */
+export const pulseAttack = (windup: number, active: number, speed: number, reach: number): AttackSpec => ({
+  windup,
+  active,
+  run: (ctx) => { pulse(ctx, speed, reach); },
+  threat: { kind: 'shove', speed, reach },
+});
+
+/**
+ * Dashes the core in a straight line, over `seconds`, to where the ship was as the windup began, stopping short of the
+ * field's edge.
+ */
+export function dash(ctx: AttackContext, seconds: number): void {
+  const { boss } = ctx;
+  const { width, height } = ctx.arena.field();
+  const progress = Math.min(1, (ctx.age + ctx.dt) / seconds);
+  const toX = clamp(ctx.aimX, boss.radius, width - boss.radius);
+  const toY = clamp(ctx.aimY, boss.radius, height - boss.radius);
+  boss.x = ctx.fromX + (toX - ctx.fromX) * progress;
+  boss.y = ctx.fromY + (toY - ctx.fromY) * progress;
+}
+
+/** A dash telegraphed for `windup` s and lasting `seconds`, declaring the core's lane to the aim as its threat. */
+export const dashAttack = (windup: number, seconds: number): AttackSpec => ({
+  windup,
+  active: seconds,
+  run: (ctx) => { dash(ctx, seconds); },
+  threat: { kind: 'lane', reach: 'core' },
+});
+
+/** Fires a bolt from (x, y) along `angle` at `speed`, marked as the boss's attack's; none with the galaxy's bolts all in flight. */
+export function fireBolt(ctx: AttackContext, x: number, y: number, angle: number, speed: number = BOLT.speed): void {
+  if (ctx.bolts === null) throw new RangeError("this boss fires bolts, so its setup needs the galaxy's bolts: pass them as setup.bolts (GalaxyRun passes its own)");
+  const bolt = ctx.bolts.fire(x, y, angle, speed, 'boss');
+  if (bolt !== null) bolt.fromAttack = true;
+}
+
+/** Drones leave the launch mouth this far past the core's rim, this far apart across it, fanning out by this much each. */
+const LAUNCH_GAP = 6;
+const LAUNCH_SPACING = 36;
+const LAUNCH_FAN = 0.3;
+/** Launch slots along each side of the core past its rim, at the least: room for a wave a ship tucked at a corner leaves short. */
+const END_SLOTS_A_SIDE = 5;
+
+/** Where along a line of `count` things, `spacing` apart and centred, the `i`th sits. */
+export const lane = (i: number, count: number, spacing: number): number => (i - (count - 1) / 2) * spacing;
+
+/** Writes into `out` the point `ahead` out from the boss's centre the way it faces and `across` to its side, and returns it. */
+export function hullPoint(boss: Readonly<BossView>, ahead: number, across: number, out: Point): Readonly<Point> {
+  const ux = Math.cos(boss.facing);
+  const uy = Math.sin(boss.facing);
+  out.x = boss.x + ux * ahead - uy * across;
+  out.y = boss.y + uy * ahead + ux * across;
+  return out;
+}
+
+/** Whether something may form at `at`: inside `field`, and at least `clearance` from `ship`. */
+export const clearSlot = ({ x, y }: Readonly<Point>, field: Field, ship: Readonly<Point>, clearance: number): boolean =>
+  x >= 0 && x <= field.width && y >= 0 && y <= field.height && Math.hypot(x - ship.x, y - ship.y) >= clearance;
+
+/**
+ * Writes into `out` where launch slot `slot` of a `count`-drone wave is, and returns the heading its drone leaves on.
+ * The first `count` slots fan out across the mouth the boss faces with; the rest line its cross axis out from its rim,
+ * alternating sides, and send their drones straight ahead. `launchDrones` gives each side `max(count, END_SLOTS_A_SIDE)`,
+ * so either side alone has room for a whole wave, and a ship tucked at a corner cannot leave a small wave short.
+ */
+export function launchSlot(boss: Readonly<BossView>, slot: number, count: number, out: Point): number {
+  const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;
+  if (slot < count) {
+    hullPoint(boss, mouth, lane(slot, count, LAUNCH_SPACING), out);
+    return boss.facing + lane(slot, count, LAUNCH_FAN);
+  }
+  const end = slot - count;
+  const side = end % 2 === 0 ? -1 : 1;
+  hullPoint(boss, 0, side * (mouth + Math.floor(end / 2) * LAUNCH_SPACING), out);
+  return boss.facing;
+}
+
+/** Where the next drone forms; one point, reused. */
+const slotSpot: Point = { x: 0, y: 0 };
+
+/**
+ * Sends out a wave of up to `wave` drones, as many as `cap` of the boss's own alive at once leaves room for. A slot
+ * outside the field or within the safe radius of the ship stays empty, and its drone leaves from the next clear slot
+ * instead: the wave's other mouth slots, then the sides, so a ship parked in front of the mouth still meets a full wave.
+ */
+export function launchDrones(ctx: AttackContext, foes: BossFoes, wave: number, cap: number): void {
+  const { boss, arena } = ctx;
+  const count = Math.min(wave, cap - foes.launched);
+  let launched = 0;
+  const slots = count + 2 * Math.max(count, END_SLOTS_A_SIDE);
+  for (let slot = 0; launched < count && slot < slots; slot++) {
+    const heading = launchSlot(boss, slot, count, slotSpot);
+    if (!clearSlot(slotSpot, arena.field(), arena.ship, ASTEROID.safeRadius)) continue;
+    if (!foes.launch('drone', slotSpot.x, slotSpot.y, heading)) return;
+    launched++;
+  }
 }

@@ -3,7 +3,7 @@ import type { Field } from '../field';
 import type { Moving } from '../math';
 import type { Arena } from '../rules';
 import type { BossView, Point } from './behaviour';
-import { BossRunner, clearSpot, type HitResult } from './bossRunner';
+import { BossRunner, clearSpot, type HitResult, type PartHitResult } from './bossRunner';
 
 /**
  * Where a galaxy's boss meets everything else, once it has arrived: the player's shots and blasts strike it here, which
@@ -55,20 +55,17 @@ export class BossArena {
 
   /**
    * A shot at (x, y) has reached the boss, if it overlaps a live part or the core; true means the shot is spent. A part
-   * takes 1 damage, reporting `bossPartHit` or `bossPartBroken`. The core takes 1 damage and reports a `bossHit`, or a
-   * `bossDeflected` at (x, y) while shielded or off its weak point, and nothing while invulnerable; the blow that kills
-   * it scores its kill points as a combo kill.
+   * takes 1 damage, reporting `bossPartHit` or `bossPartBroken`, or a `bossDeflected` at (x, y) while armoured. The core
+   * takes 1 damage and reports a `bossHit`, or a `bossDeflected` at (x, y) while shielded or off its weak point, and
+   * nothing while invulnerable; the blow that kills it scores its kill points as a combo kill.
    */
   hitBoss(x: number, y: number, radius: number): boolean {
     const boss = this.current;
     if (boss === null || boss.state === 'down') return false;
     const part = boss.partAt(x, y, radius);
-    if (part >= 0) {
-      this.hitPart(boss, part, 1);
-      return true;
-    }
-    if (!boss.overlaps(x, y, radius)) return false;
-    if (this.hitCore(boss, 1, x, y) === 'deflected') this.arena.events.push({ type: 'bossDeflected', x, y });
+    if (part < 0 && !boss.overlaps(x, y, radius)) return false;
+    const result = part >= 0 ? this.hitPart(boss, part, 1) : this.hitCore(boss, 1, x, y);
+    if (result === 'deflected') this.arena.events.push({ type: 'bossDeflected', x, y });
     return true;
   }
 
@@ -80,13 +77,15 @@ export class BossArena {
     return result;
   }
 
-  /** Takes `damage` off live part `index`, reporting `bossPartHit` or `bossPartBroken`. */
-  hitPart(boss: BossRunner, index: number, damage: number): void {
+  /** Takes `damage` off live part `index`: a hurt part reports `bossPartHit` or `bossPartBroken`. */
+  hitPart(boss: BossRunner, index: number, damage: number): PartHitResult {
     const result = boss.hitPart(index, damage);
     const part = boss.view.parts[index];
-    if (result === 'blocked' || part === undefined) return;
-    const { x, y } = part;
-    this.arena.events.push(result === 'broken' ? { type: 'bossPartBroken', part: index, x, y } : { type: 'bossPartHit', part: index, x, y, hp: part.hp });
+    if ((result === 'hit' || result === 'broken') && part !== undefined) {
+      const { x, y } = part;
+      this.arena.events.push(result === 'broken' ? { type: 'bossPartBroken', part: index, x, y } : { type: 'bossPartHit', part: index, x, y, hp: part.hp });
+    }
+    return result;
   }
 
   /** True when a circle at (x, y) touches a boss that is fighting, its core or a live part; the intro and dying are harmless. */

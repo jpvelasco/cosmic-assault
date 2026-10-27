@@ -11,6 +11,11 @@ export interface BossDef {
   readonly phases: readonly (readonly AttackId[])[];
   /** Seconds it rests between attacks in each phase, shrinking. */
   readonly rest: readonly [number, number, number];
+  /**
+   * HP the core loses each time one of its parts breaks, shielded or not (M6-R9): it can move the boss to its next phase,
+   * but never kills it, which takes a blow on the core. None if absent.
+   */
+  readonly partBreakDamage?: number;
 }
 
 const HP_PER_DIMENSION = 6;

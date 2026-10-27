@@ -18,8 +18,8 @@ export const MAX_SHOVE_SPEED = 300;
 
 /** What a blow on the core did: nothing outside the fight ('blocked') or while it is shielded ('deflected'). */
 export type HitResult = 'blocked' | 'deflected' | 'hit' | 'killed';
-/** What a blow on a part did: nothing outside the fight ('blocked'), or it took HP off the part, perhaps the last. */
-export type PartHitResult = 'blocked' | 'hit' | 'broken';
+/** What a blow on a part did: nothing outside the fight ('blocked') or on an armoured part ('deflected'), or it took HP off the part, perhaps the last. */
+export type PartHitResult = 'blocked' | 'deflected' | 'hit' | 'broken';
 
 /** How far inside the field's edges a ship respawns clear of a boss. */
 export const RESPAWN_INSET = 60;
@@ -57,10 +57,10 @@ export function bossTarget(view: Readonly<BossView>): Readonly<Point> | null {
   return view.state === 'fighting' ? view.target : null;
 }
 
-/** Where a shot harms a boss whose behaviour does not say: the core if it can be hurt, else its first live part. */
+/** Where a shot harms a boss whose behaviour does not say: the core if it can be hurt, else its first live part that is not armoured. */
 function coreOrPart(view: Readonly<BossView>): Readonly<Point> | null {
   if (view.vulnerable) return view;
-  for (const part of view.parts) if (part.hp > 0) return part;
+  for (const part of view.parts) if (part.hp > 0 && part.armoured !== true) return part;
   return null;
 }
 
@@ -214,32 +214,41 @@ export class BossRunner {
     const view = this.view;
     if (view.state !== 'fighting') return 'blocked';
     if (!view.vulnerable || this.behaviour.hurtsAt?.(view, x, y) === false) return 'deflected';
-    view.hp = Math.max(0, view.hp - damage);
-    if (view.hp === 0) {
-      this.enter('dying');
-      return 'killed';
-    }
-    const phase = phaseFor(view.hp, view.maxHp);
-    if (phase > view.phase) {
-      view.phase = phase;
-      this.cursor = 0;
-    }
-    return 'hit';
+    if (!this.lose(damage, 0)) return 'hit';
+    this.enter('dying');
+    return 'killed';
   }
 
   /**
    * Takes `damage` off part `index`, which must be live, and returns what came of it: 'blocked' outside the fight,
-   * 'broken' for the blow that empties it. A break that exposes the core takes effect at once; the next `step` announces it.
+   * 'deflected' while its behaviour armours it, 'broken' for the blow that empties it. A break takes the definition's
+   * `partBreakDamage` off the core, never its last HP, and one that exposes the core takes effect at once; the next
+   * `step` announces either.
    */
   hitPart(index: number, damage: number): PartHitResult {
     assertDamage(damage);
     const part = this.view.parts[index];
     if (part === undefined || part.hp <= 0) throw new RangeError(`no live part ${String(index)} to hit: pass an index from partAt`);
     if (this.view.state !== 'fighting') return 'blocked';
+    if (this.behaviour.partVulnerable?.(index) === false) return 'deflected';
     part.hp = Math.max(0, part.hp - damage);
     if (part.hp > 0) return 'hit';
+    if (this.def.partBreakDamage !== undefined) this.lose(this.def.partBreakDamage, 1);
     this.refresh();
     return 'broken';
+  }
+
+  /** Takes `damage` off the core's HP, leaving it at least `floor`, and moves it on to the phase that leaves it in; true if it is emptied. */
+  private lose(damage: number, floor: number): boolean {
+    const view = this.view;
+    view.hp = Math.max(floor, view.hp - damage);
+    if (view.hp === 0) return true;
+    const phase = phaseFor(view.hp, view.maxHp);
+    if (phase > view.phase) {
+      view.phase = phase;
+      this.cursor = 0;
+    }
+    return false;
   }
 
   /** Applies, on the hazard path, the shove the last attack asked for, then forgets it; a boss beaten meanwhile shoves nothing. */
@@ -283,10 +292,12 @@ export class BossRunner {
     this.announceVulnerability(arena);
   }
 
-  /** Asks the behaviour whether the core can be hurt now and where a shot does harm, shows both on the view, and returns the first. */
+  /** Asks the behaviour whether the core can be hurt now, which parts it armours and where a shot does harm, shows them on the view, and returns the first. */
   private refresh(): boolean {
     const { view, behaviour } = this;
     view.vulnerable = behaviour.vulnerable?.(view) ?? true;
+    const { parts } = view;
+    for (let i = 0; i < parts.length; i++) (parts[i] as BossPart).armoured = behaviour.partVulnerable?.(i) === false;
     view.target = behaviour.target === undefined ? coreOrPart(view) : behaviour.target(view);
     return view.vulnerable;
   }
@@ -390,7 +401,7 @@ export class BossRunner {
   }
 
   private contextFor(arena: Arena): AttackContext {
-    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, boss: this.view, dt: 0, age: 0, aimX: 0, aimY: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
+    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, bolts: this.setup.bolts ?? null, boss: this.view, dt: 0, age: 0, aimX: 0, aimY: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
     this.context.arena = arena;
     return this.context;
   }

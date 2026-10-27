@@ -104,7 +104,7 @@ export function stepAsteroid(a: Asteroid, dt: number, field: Field): void {
 }
 
 /** True once a rock lies wholly outside the field and is still heading away from it. */
-export function hasLeftField(a: Readonly<Asteroid>, field: Field): boolean {
+export function hasLeftField(a: Readonly<Pick<Asteroid, 'x' | 'y' | 'vx' | 'vy' | 'radius'>>, field: Field): boolean {
   const r = a.radius;
   return (a.x < -r && a.vx < 0) || (a.x > field.width + r && a.vx > 0) || (a.y < -r && a.vy < 0) || (a.y > field.height + r && a.vy > 0);
 }

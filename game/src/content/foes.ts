@@ -35,6 +35,12 @@ export const DRONE_SEPARATION = { radius: 28, weight: 2.5 } as const;
 export const SPLITTER_FRAGMENTS = 3;
 export const FRAGMENT_SPEED_MULTIPLIER = 1.6;
 
+/**
+ * Hostile bolts, shared by every foe and boss that fires them: their radius, their default speed in units per second, the
+ * seconds each lives, and how many can be on the field at once.
+ */
+export const BOLT = { radius: 5, speed: 230, life: 3.2, capacity: 96 } as const;
+
 export function isFoeKind(kind: ThreatKind): kind is FoeKind {
   return Object.hasOwn(FOES, kind);
 }
