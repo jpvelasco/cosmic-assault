@@ -97,25 +97,25 @@ describe('createStarLayers', () => {
     const layers = createStarLayers(3, 1);
     layers.resize(FIELD);
     const { ctx, calls, raw } = recordingContext();
-    layers.draw(ctx, 1.25);
+    layers.draw(ctx, 1.25, '#e8fdff');
     expect(calls.arcs).toBe(seedStars(3, 1, FIELD).length);
     for (const alpha of calls.alphas) {
       expect(alpha).toBeGreaterThan(0);
       expect(alpha).toBeLessThanOrEqual(1);
     }
     expect(raw.globalAlpha).toBe(1);
-    expect(raw.fillStyle).toBe('#fff4ff');
+    expect(raw.fillStyle).toBe('#e8fdff');
   });
 
   it('draws nothing before resize and moves stars on step', () => {
     const layers = createStarLayers(3, 1);
     const empty = recordingContext();
-    layers.draw(empty.ctx, 0);
+    layers.draw(empty.ctx, 0, '#fff4ff');
     expect(empty.calls.arcs).toBe(0);
     layers.resize(FIELD);
     layers.step(0.016, 0, 0);
     const moved = recordingContext();
-    layers.draw(moved.ctx, 0);
+    layers.draw(moved.ctx, 0, '#fff4ff');
     expect(moved.calls.arcs).toBeGreaterThan(0);
   });
 });
@@ -127,7 +127,7 @@ describe('createStarLayers.setCountScale', () => {
     const layers = createStarLayers(3, 1);
     layers.resize(FIELD);
     setup(layers);
-    layers.draw(ctx, 0);
+    layers.draw(ctx, 0, '#fff4ff');
     return arcs;
   };
 
@@ -145,7 +145,7 @@ describe('createStarLayers.setCountScale', () => {
     layers.setCountScale(0.5);
     let arcs = 0;
     layers.resize(FIELD);
-    layers.draw({ beginPath: () => undefined, arc: () => arcs++, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
+    layers.draw({ beginPath: () => undefined, arc: () => arcs++, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0, '#fff4ff');
     expect(arcs).toBe(seedStars(3, 0.5, FIELD).length);
   });
 
@@ -155,7 +155,7 @@ describe('createStarLayers.setCountScale', () => {
     const arc = (x: number, y: number, r: number): void => {
       byRadius.set(r, [...(byRadius.get(r) ?? []), [x, y]]);
     };
-    layers.draw({ beginPath: () => undefined, arc, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
+    layers.draw({ beginPath: () => undefined, arc, fill: () => undefined } as unknown as CanvasRenderingContext2D, 0, '#fff4ff');
     return byRadius;
   };
 
@@ -207,7 +207,7 @@ describe('createStarLayers.setCountScale', () => {
     layers.step(1, 100, 0);
     layers.setCountScale(1);
     const xs: number[] = [];
-    layers.draw({ beginPath: () => undefined, arc: (x: number) => xs.push(x), fill: () => undefined } as unknown as CanvasRenderingContext2D, 0);
+    layers.draw({ beginPath: () => undefined, arc: (x: number) => xs.push(x), fill: () => undefined } as unknown as CanvasRenderingContext2D, 0, '#fff4ff');
     expect(xs).not.toEqual(seedStars(3, 1, FIELD).map((s) => s.x));
   });
 });

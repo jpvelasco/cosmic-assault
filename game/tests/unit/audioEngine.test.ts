@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAudioEngine, needsSoundGesture, type AudioEngine } from '../../src/audio/engine';
 import { SFX_NAMES } from '../../src/audio/sfx';
 import { DEFAULT_SETTINGS, type Settings } from '../../src/app/settings';
+import type { GalaxyId } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 
 class FakeParam {
@@ -10,6 +11,7 @@ class FakeParam {
   readonly linearRampToValueAtTime = vi.fn();
   readonly exponentialRampToValueAtTime = vi.fn();
   readonly setTargetAtTime = vi.fn();
+  readonly cancelScheduledValues = vi.fn();
 }
 
 class FakeNode {
@@ -420,6 +422,21 @@ describe('sound effects', () => {
     expect(silenced()).toBe(true);
   });
 
+  it('plays one swarm buzz for a whole drone group arriving in a frame', () => {
+    const e = engine();
+    press();
+    const drone: SimEvent = { type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 };
+    const before = nodesOf('oscillator').length;
+    e.handle([drone]);
+    const one = nodesOf('oscillator').length - before;
+    expect(one).toBeGreaterThan(0);
+    e.handle([drone, drone, drone]);
+    expect(nodesOf('oscillator').length - before).toBe(one);
+    e.beginFrame();
+    e.handle([drone, drone]);
+    expect(nodesOf('oscillator').length - before).toBe(2 * one);
+  });
+
   it('does not cap other sounds', () => {
     const e = engine();
     press();
@@ -464,9 +481,127 @@ describe('sound effects', () => {
       expect(voice.stop).toHaveBeenCalledTimes(1);
       voice.onended?.();
     }
-    const fixed = new Set([...nodesOf('gain').slice(0, 3), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
+    // The master, sfx and music gains, and the music bus's lane for its theme.
+    const fixed = new Set([...nodesOf('gain').slice(0, 4), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
     const connected = c.nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0);
     expect(connected).toEqual([]);
+  });
+});
+
+describe('the gravity well hum', () => {
+  const START: SimEvent = { type: 'wellStart', id: 1 };
+  const END: SimEvent = { type: 'wellEnd', id: 1 };
+  /** The hum's oscillators: the only ones in these tests started with no stop scheduled. */
+  const looping = (): FakeNode[] => nodesOf('oscillator').filter((n) => n.stop.mock.calls.length === 0);
+  const playingEngine = (): AudioEngine => {
+    const e = engine();
+    press();
+    e.setScreen('playing');
+    return e;
+  };
+
+  it('loops a low voice from the moment a well pulls until it lets go, then stops and unhooks every node of it', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const hum = looping();
+    expect(hum.length).toBeGreaterThan(0);
+    expect(Math.min(...hum.map((n) => n.frequency.value))).toBeLessThan(80);
+    e.handle([{ type: 'shot', x: 0, y: 0 }]);
+    expect(looping()).toEqual(hum);
+    e.handle([END]);
+    expect(looping()).toEqual([]);
+    for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
+    for (const voice of [...nodesOf('oscillator'), ...nodesOf('bufferSource')]) voice.onended?.();
+    // The master, sfx and music gains, and the music bus's lane for its theme.
+    const fixed = new Set([...nodesOf('gain').slice(0, 4), nodesOf('biquad')[0], nodesOf('compressor')[0]]);
+    expect(ctx().nodes.filter((n) => !fixed.has(n) && n.outputs.size > 0)).toEqual([]);
+  });
+
+  it('fades it out on the audio clock, level and swell both ramped to silence, before its voices stop', () => {
+    const e = playingEngine();
+    const c = ctx();
+    c.currentTime = 3;
+    const before = nodesOf('gain').length;
+    e.handle([START]);
+    const hum = looping();
+    const made = nodesOf('gain').slice(before);
+    c.currentTime = 9;
+    e.handle([END]);
+    const ramps = made.filter((g) => g.gain.linearRampToValueAtTime.mock.calls.some(([value, at]) => value === 0 && (at as number) > 9));
+    // The hum's level and the depth of its swell: nothing is left modulating the gain once they reach 0.
+    expect(ramps).toHaveLength(2);
+    const silentAt = Math.max(...ramps.flatMap((g) => g.gain.linearRampToValueAtTime.mock.calls.filter(([value]) => value === 0).map(([, at]) => at as number)));
+    for (const g of ramps) expect(g.gain.setValueAtTime).toHaveBeenCalledWith(g.gain.value, 9);
+    for (const osc of hum) expect(osc.stop.mock.calls[0]?.[0] as number).toBeGreaterThan(silentAt);
+  });
+
+  it('starts it once, however many starts a frame brings', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const hum = looping();
+    e.handle([START]);
+    expect(looping()).toEqual(hum);
+  });
+
+  it('stops it on pause and brings it back on resume, while the well still pulls', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    e.setScreen('paused');
+    expect(looping()).toEqual([]);
+    e.setScreen('playing');
+    expect(looping().length).toBeGreaterThan(0);
+  });
+
+  it('stops it for good when the run is left for a menu or ends, so the next run starts quiet', () => {
+    for (const screen of ['title', 'gameOver', 'results'] as const) {
+      const e = playingEngine();
+      e.handle([START]);
+      e.setScreen('paused');
+      e.setScreen(screen);
+      e.setScreen('playing');
+      expect(looping(), screen).toEqual([]);
+      contexts = [];
+    }
+  });
+
+  it.each([
+    ['the warp', { type: 'warpOut' }],
+    ['game over', { type: 'gameOver', score: 0 }],
+  ] as const)('stops it when %s ends the galaxy with the well still pulling', (_name, event) => {
+    const e = playingEngine();
+    e.handle([START]);
+    e.handle([event]);
+    expect(looping()).toEqual([]);
+  });
+
+  it('stops it on mute, as after a crash, and brings it back on unmute', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    e.setMuted(true);
+    expect(looping()).toEqual([]);
+    e.setMuted(false);
+    expect(looping().length).toBeGreaterThan(0);
+  });
+
+  it('stops it on dispose', () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const hum = looping();
+    e.dispose();
+    for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('builds no hum before the context runs, and starts it once it does', () => {
+    FakeContext.startState = 'suspended';
+    FakeContext.resumeSucceeds = false;
+    const e = engine();
+    press();
+    e.setScreen('playing');
+    e.handle([START]);
+    expect(nodesOf('oscillator')).toEqual([]);
+    ctx().state = 'running';
+    ctx().onstatechange?.();
+    expect(looping().length).toBeGreaterThan(0);
   });
 });
 
@@ -760,5 +895,205 @@ describe('unavailable audio', () => {
       e.setMuted(true);
       e.setMuted(false);
     }).not.toThrow();
+  });
+});
+
+describe('music themes', () => {
+  const start = (id: GalaxyId): SimEvent => ({ type: 'galaxyStart', id });
+  const INTRO: SimEvent = { type: 'bossIntro', id: 'sentinel' };
+  /** A Drift bar at 96 bpm lasts 2.5 s, and the music starts 0.1 s after the first gesture. */
+  const BAR = 2.5;
+  const FIRST_BEAT = 0.1;
+
+  /** The buses of the themes now sounding: the gain nodes feeding the music bus. */
+  const lanes = (): FakeNode[] => {
+    const music = nodesOf('gain')[2] as FakeNode;
+    return nodesOf('gain').filter((n) => n.outputs.has(music));
+  };
+  const reaches = (from: FakeNode, to: FakeNode): boolean => from === to || [...from.outputs].some((n) => reaches(n, to));
+  /** Start times of the music voices that sound on `lane`. */
+  const startsOn = (lane: FakeNode): number[] => voiceNodes().filter((v) => reaches(v, lane)).map((v) => v.start.mock.calls[0]?.[0] as number);
+  /** The pitch classes (0-11) of the oscillators sounding on `lane`; noise has none. */
+  const pitchClassesOn = (lane: FakeNode): Set<number> =>
+    new Set(
+      nodesOf('oscillator')
+        .filter((v) => reaches(v, lane))
+        .map((v) => (((Math.round(69 + 12 * Math.log2((v.frequency.setValueAtTime.mock.calls[0]?.[0] as number) / 440)) % 12) + 12) % 12)),
+    );
+  const D_MAJOR = [2, 4, 6, 7, 9, 11, 1];
+  const A_MINOR = [9, 11, 0, 2, 4, 5, 7];
+  const setAt = (lane: FakeNode, value: number): number | undefined =>
+    (lane.gain.setValueAtTime.mock.calls as [number, number][]).find(([v]) => v === value)?.[1];
+
+  describe('which theme is chosen', () => {
+    it('starts on the Drift, before the audio context exists too', () => {
+      const e = engine();
+      expect(e.theme).toBe('drift');
+      e.handle([SHOT]);
+      expect(e.theme).toBe('drift');
+      expect(contexts).toHaveLength(0);
+    });
+
+    it.each([
+      ['1-1', 'drift'],
+      ['2-1', 'ionReach'],
+      ['2-5', 'ionReach'],
+      ['3-2', 'drift'],
+    ] as const)('takes galaxy %s\'s theme, %s, as it starts', (id, theme) => {
+      const e = engine();
+      e.handle([start(id)]);
+      expect(e.theme).toBe(theme);
+    });
+
+    it('turns to the Dimension\'s boss variant at the boss intro, and back to its theme at the next galaxy', () => {
+      const e = engine();
+      e.handle([start('2-6')]);
+      expect(e.theme).toBe('ionReach');
+      e.handle([INTRO]);
+      expect(e.theme).toBe('ionReachBoss');
+      e.handle([start('2-6')]);
+      expect(e.theme).toBe('ionReach');
+      e.handle([start('1-6'), INTRO]);
+      expect(e.theme).toBe('driftBoss');
+    });
+
+    it('keeps the boss variant through a pause, and plays the last-played Dimension\'s plain theme on every menu', () => {
+      const e = engine();
+      e.handle([start('2-6'), INTRO]);
+      e.setScreen('playing');
+      e.setScreen('paused');
+      expect(e.theme).toBe('ionReachBoss');
+      e.setScreen('playing');
+      expect(e.theme).toBe('ionReachBoss');
+      e.setScreen('results');
+      expect(e.theme).toBe('ionReach');
+      e.setScreen('title');
+      expect(e.theme).toBe('ionReach');
+    });
+  });
+
+  describe('changing theme while it plays', () => {
+    function playing(): AudioEngine {
+      const e = engine();
+      press();
+      runClock(1);
+      return e;
+    }
+
+    /** Runs the clock until the change happens, up to 10 s; returns the old bus and the new one while both are connected. */
+    function untilChange(): [FakeNode, FakeNode] {
+      for (let i = 0; i < 400 && lanes().length < 2; i++) runClock(0.025);
+      const both = lanes();
+      expect(both).toHaveLength(2);
+      return both as [FakeNode, FakeNode];
+    }
+
+    it('waits for the next bar line, then fades the old theme out and the new one in', () => {
+      const e = playing();
+      const [old] = lanes() as [FakeNode];
+      expect(lanes()).toHaveLength(1);
+      e.handle([start('2-1')]);
+      expect(lanes()).toHaveLength(1);
+      const [, fresh] = untilChange();
+      const at = setAt(fresh, 0) as number;
+      expect((at - FIRST_BEAT) / BAR).toBeCloseTo(Math.round((at - FIRST_BEAT) / BAR), 9);
+      expect(at).toBeGreaterThan(1);
+      expect(setAt(old, 1)).toBe(at);
+      expect(old.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, expect.any(Number));
+      expect(fresh.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, expect.any(Number));
+      expect(startsOn(old).every((t) => t < at)).toBe(true);
+      expect(startsOn(fresh).length).toBeGreaterThan(0);
+      expect(startsOn(fresh).every((t) => t >= at)).toBe(true);
+      // Nothing of the Drift (Am F C G) is on the new lane, even a note on the bar line itself, nor of Ion Reach on the old.
+      expect([...pitchClassesOn(fresh)].every((pc) => D_MAJOR.includes(pc))).toBe(true);
+      expect([...pitchClassesOn(old)].every((pc) => A_MINOR.includes(pc))).toBe(true);
+      expect(pitchClassesOn(fresh).size).toBeGreaterThanOrEqual(3);
+    });
+
+    it.each([
+      ['the Drift', '1-6', 0.625],
+      ['Ion Reach', '2-6', 60 / 110],
+    ] as const)('switches %s to its boss variant on the next beat, inside the 2 s boss intro', (_name, galaxy, beat) => {
+      const e = playing();
+      e.handle([start(galaxy)]);
+      for (let i = 0; i < 400 && lanes().length < 2; i++) runClock(0.025);
+      runClock(1);
+      expect(lanes()).toHaveLength(1);
+      const asked = ctx().currentTime;
+      e.handle([INTRO]);
+      const [, fresh] = untilChange();
+      const at = setAt(fresh, 0) as number;
+      expect(at).toBeGreaterThanOrEqual(asked);
+      expect(at - asked).toBeLessThanOrEqual(beat + 0.2);
+      expect(at - asked).toBeLessThan(2);
+      expect(e.theme).toBe(galaxy === '1-6' ? 'driftBoss' : 'ionReachBoss');
+    });
+
+    it('drops the faded-out bus once it is silent, and not before', () => {
+      const e = playing();
+      const [old] = lanes() as [FakeNode];
+      e.handle([start('2-1')]);
+      for (let i = 0; i < 400 && lanes().length < 2; i++) runClock(0.025);
+      expect(lanes()).toHaveLength(2);
+      expect(old.outputs.size).toBe(1);
+      runClock(0.3);
+      expect(old.outputs.size).toBe(1);
+      runClock(0.5);
+      expect(old.outputs.size).toBe(0);
+      expect(lanes()).toHaveLength(1);
+    });
+
+    it('makes one change for requests made before the bar line, to the last one asked', () => {
+      const e = playing();
+      e.handle([start('2-6')]);
+      e.handle([INTRO]);
+      untilChange();
+      expect(e.theme).toBe('ionReachBoss');
+      runClock(0.3);
+      expect(lanes()).toHaveLength(2);
+    });
+
+    it('makes none if the theme asked for is back to the one playing before the bar line', () => {
+      const e = playing();
+      e.handle([start('2-1')]);
+      e.handle([start('1-1')]);
+      let most = 0;
+      for (let i = 0; i < 240; i++) {
+        runClock(0.025);
+        most = Math.max(most, lanes().length);
+      }
+      expect(most).toBe(1);
+      expect(e.theme).toBe('drift');
+    });
+
+    it('waits through a mute and changes at the first bar line after the unmute, never replaying the muted stretch', () => {
+      const e = playing();
+      e.setMuted(true);
+      e.handle([start('2-1')]);
+      runClock(10);
+      expect(lanes()).toHaveLength(1);
+      const unmutedAt = ctx().currentTime;
+      e.setMuted(false);
+      const [, fresh] = untilChange();
+      expect(setAt(fresh, 0)).toBeGreaterThanOrEqual(unmutedAt);
+      for (const t of startsOn(fresh)) expect(t).toBeGreaterThanOrEqual(unmutedAt - 0.001);
+    });
+
+    it('starts on the theme chosen before the first gesture', () => {
+      const e = engine();
+      e.handle([start('2-1')]);
+      press();
+      runClock(1);
+      expect(lanes()).toHaveLength(1);
+      expect(e.theme).toBe('ionReach');
+    });
+
+    it('stops every bus with the player', () => {
+      const e = playing();
+      e.handle([start('2-1')]);
+      runClock(6);
+      e.dispose();
+      expect(lanes()).toEqual([]);
+    });
   });
 });

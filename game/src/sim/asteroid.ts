@@ -146,7 +146,7 @@ export type Edge = 0 | 1 | 2 | 3;
 
 export const EDGE_COUNT = 4;
 
-function oppositeEdge(edge: Edge): Edge {
+export function oppositeEdge(edge: Edge): Edge {
   return ((edge + 2) % EDGE_COUNT) as Edge;
 }
 
@@ -159,7 +159,7 @@ export interface EdgeAim {
 }
 
 /** An `EdgeAim` before its heading is drawn. */
-interface SpawnPoint {
+export interface SpawnPoint {
   readonly edge: Edge;
   readonly x: number;
   readonly y: number;
@@ -171,7 +171,7 @@ interface SpawnPoint {
  * The live game spawns 100 out, wraps there on the first frame and back on the next, entering
  * at the wrap line; spawning on it gives the same entry without the jump across the field.
  */
-function edgePoint(edge: Edge, along: number, field: Field): SpawnPoint {
+export function edgePoint(edge: Edge, along: number, field: Field): SpawnPoint {
   switch (edge) {
     case 0:
       return { edge, x: along, y: -WRAP_MARGIN, angle: 0 };
@@ -185,7 +185,7 @@ function edgePoint(edge: Edge, along: number, field: Field): SpawnPoint {
 }
 
 /** How far a point can lie along `edge`: the width on the top and bottom, the height on the sides. */
-function edgeLength(edge: Edge, field: Field): number {
+export function edgeLength(edge: Edge, field: Field): number {
   return edge % 2 === 0 ? field.width : field.height;
 }
 
@@ -205,7 +205,7 @@ function pickSpawnPoint(rng: Rng, field: Field, ship: Readonly<Ship> | null): Sp
  * On wide fields the aim jitter can point a top or bottom spawn slightly back out (about 0.2% of
  * spawns at 21:9), which would wrap it across the field on its first step; mirror it inward instead.
  */
-function headInward(a: Asteroid, edge: Edge): void {
+export function headInward(a: Pick<Asteroid, 'vx' | 'vy'>, edge: Edge): void {
   switch (edge) {
     case 0:
       a.vy = Math.abs(a.vy);

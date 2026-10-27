@@ -1,4 +1,6 @@
 import { galaxyById } from '../content/galaxies';
+import type { GalaxyDef } from '../content/types';
+import { recordPickupSeen } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
 import { createTabPresence, type TabPresence } from '../platform/tabPresence';
@@ -7,10 +9,12 @@ import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
 import { hasEnded, World } from '../sim/world';
+import { CALLOUT_MS } from '../ui/toast';
 import type { FlowCommand } from './commands';
 import { localDate } from './date';
 import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
 import { createFlowController } from './flowController';
+import { createPickupNotices } from './pickupNotices';
 import { createSaveStore, type StorageEvents } from './saveStore';
 import { clockSeed, isDebugRun, type RunOverrides } from './seed';
 
@@ -25,10 +29,10 @@ export interface RunControllerDeps {
   field(): Field | null;
   /** The flow is on a new screen; on a menu screen the run is already dropped. */
   showScreen(screen: Screen): void;
-  /** A new World is in place: reset the input latches, the loop and the renderer for it. */
-  onRunStarted(): void;
-  /** Tells the player something in a toast. */
-  notify(text: string): void;
+  /** A new World is in place, playing `galaxy`: reset the input latches, the loop and the renderer for it, in its palette. */
+  onRunStarted(galaxy: GalaxyDef): void;
+  /** Tells the player something in a toast, up for `ms` (the toast's default when omitted). */
+  notify(text: string, ms?: number): void;
   /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
   onEvents(events: readonly SimEvent[], world: World): void;
   /** Something the cards show changed outside a screen change: another tab's save, or the Rank lock. */
@@ -88,6 +92,15 @@ export function createRunController(deps: RunControllerDeps): RunController {
     ...(deps.events === undefined ? {} : { events: deps.events }),
   });
   store.importClassicOnce();
+  const notices = createPickupNotices({
+    seen: () => store.save.seenPickups,
+    markSeen: (kind) => {
+      store.update((save) => recordPickupSeen(save, kind));
+    },
+    notify: (text) => {
+      deps.notify(text, CALLOUT_MS);
+    },
+  });
   const presence = deps.presence ?? createTabPresence();
   let world: World | null = null;
   let rankLock: RankLock = 'free';
@@ -99,7 +112,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
   let recheckTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
-  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives. */
+  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives and weapon. */
   function startRun({ galaxy, mode, rankRun }: FlowState): void {
     const field = deps.field();
     if (field === null) {
@@ -108,14 +121,17 @@ export function createRunController(deps: RunControllerDeps): RunController {
     if (galaxy === null || mode === null) {
       throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow, from mode select or galaxy select');
     }
+    const def = galaxyById(galaxy);
     world = new World({
       seed: overrides.seed ?? clockSeed(),
       field,
-      rules: { kind: 'galaxy', galaxy: galaxyById(galaxy), mode },
-      // Free play always starts with the default lives; Rank carries its own.
+      rules: { kind: 'galaxy', galaxy: def, mode },
+      // Free play always starts with the default lives and weapon; Rank carries its own.
       startLives: rankRun?.lives ?? PLAYER.startLives,
+      startTier: rankRun?.weaponTier ?? 0,
     });
-    deps.onRunStarted();
+    notices.newRun();
+    deps.onRunStarted(def);
   }
 
   /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */
@@ -186,8 +202,15 @@ export function createRunController(deps: RunControllerDeps): RunController {
       setLock('elsewhere');
       return;
     }
-    // The forfeit re-checks inGalaxy inside its update, so a run another tab already forfeited loses no second life.
-    if (flow.forfeitLeftRun()) deps.notify(LEFT_RUN_NOTICE);
+    // The forfeit re-checks inGalaxy and rankSeq inside its update: a run another tab already forfeited loses no second
+    // life, and one it has written to since the probe is still live.
+    if (flow.forfeitLeftRun(rankSeq)) {
+      deps.notify(LEFT_RUN_NOTICE);
+    } else if (store.save.rankSeq !== rankSeq) {
+      // The forfeit found the run written to since the probe: another tab is playing it. Ask about it as it is now.
+      checkLeftRun();
+      return;
+    }
     setLock('free');
   }
   checkLeftRun();
@@ -232,6 +255,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       if (world === null) return;
       const events = world.step(dt, controls);
       deps.onEvents(events, world);
+      notices.handle(events);
       flow.handle(events, world);
     },
     pause() {
@@ -241,7 +265,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       flow.dispatch({ kind: 'resume' });
     },
     quit() {
-      if (world !== null) flow.dispatch({ kind: 'quit', livesLeft: world.lives });
+      if (world !== null) flow.dispatch({ kind: 'quit', livesLeft: world.lives, weaponTier: world.weaponTier });
     },
     dispose() {
       if (disposed) return;

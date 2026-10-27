@@ -1,4 +1,5 @@
-import type { GalaxyDef } from '../content/types';
+import type { TimedPickupId } from '../content/pickups';
+import type { GalaxyDef, WeaponTier } from '../content/types';
 import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
 import type { BossView } from './boss/bossRunner';
 import { circlesOverlap, SpatialHash } from './collision';
@@ -6,15 +7,19 @@ import { ASTEROID, PLAYER, PROJECTILE } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
 import type { Field } from './field';
-import { GalaxyRun } from './galaxy/galaxyRun';
+import { GalaxyRun, galaxyStreams } from './galaxy/galaxyRun';
 import type { Phase } from './galaxy/pacing';
 import type { ShowerState } from './galaxy/showers';
+import type { Foe } from './foes/foe';
+import type { WellState } from './hazards/gravityWell';
+import type { Pickup } from './pickups/pickups';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
 import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
-import { createShip, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { removeFlagged, resetFlags } from './flagged';
 import { rescale } from './wrap';
-import { assertAsteroidPlacement, assertField, assertFinite, resolveOptions, type ShipPlacement, type WorldOptions } from './worldOptions';
+import { assertAsteroidPlacement, assertField, placeShip, resolveOptions, type WorldOptions } from './worldOptions';
 
 export { isPracticeLevel, MAX_PRACTICE_LEVEL, MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
 export {
@@ -37,6 +42,9 @@ export function hasEnded(status: WorldStatus): boolean {
 }
 
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
+const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = Object.freeze({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
+const NO_PICKUPS: readonly Pickup[] = Object.freeze([]);
+const NO_FOES: readonly Foe[] = Object.freeze([]);
 
 function assertDt(dt: number): void {
   if (!(dt > 0 && Number.isFinite(dt))) {
@@ -44,22 +52,6 @@ function assertDt(dt: number): void {
       `World.step() needs a finite dt > 0 seconds (got ${String(dt)}); drive it from the fixed-step loop`,
     );
   }
-}
-
-/** Keeps the items whose index is not flagged, in order, without allocating. */
-function removeFlagged(items: unknown[], flagged: readonly boolean[]): void {
-  let kept = 0;
-  for (let i = 0; i < items.length; i++) {
-    if (flagged[i] !== true) {
-      items[kept++] = items[i];
-    }
-  }
-  items.length = kept;
-}
-
-function resetFlags(flags: boolean[], length: number): void {
-  flags.length = length;
-  flags.fill(false);
 }
 
 /**
@@ -70,8 +62,11 @@ function resetFlags(flags: boolean[], length: number): void {
  * - 'split': the angles and speeds of split children;
  * - 'shape': asteroid outlines (vertex count and radii) on every creation path, so
  *   outline changes never shift gameplay draws;
- * - 'director': a galaxy's spawns and showers, so galaxy rules never shift the practice streams;
- * - 'boss': a boss fight's drift and attacks.
+ * - 'director': a galaxy's spawns (what, when, and how many drones come as a group) and showers, so galaxy rules never shift the practice streams;
+ * - 'boss': a boss fight's drift and attacks;
+ * - 'pickups': whether a kill drops a pickup, and which;
+ * - 'foes': foe behaviour once spawned: where they enter, how they head and where their fragments fly;
+ * - 'hazards': where gravity wells sit.
  */
 export class World {
   private readonly level: number;
@@ -101,19 +96,19 @@ export class World {
   private deathsValue = 0;
 
   constructor(opts: WorldOptions) {
-    const { rules, lives } = resolveOptions(opts);
+    const { rules, lives, startTier } = resolveOptions(opts);
     this.level = rules.kind === 'practice' ? rules.level : MIN_PRACTICE_LEVEL;
     this.livesValue = lives;
     this.currentField = opts.field;
     this.spawnRng = createRng(deriveSeed(opts.seed, 'spawn'));
     this.splitRng = createRng(deriveSeed(opts.seed, 'split'));
     this.shapeRng = createRng(deriveSeed(opts.seed, 'shape'));
-    this.shipState = World.placeShip(opts.field, opts.initialShip);
+    this.shipState = placeShip(opts.field, opts.initialShip);
     const arena = this.createArena();
     if (rules.kind === 'practice') {
       this.rules = new PracticeSpawner(rules.level, this.spawnRng, arena);
     } else {
-      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, createRng(deriveSeed(opts.seed, 'director')), createRng(deriveSeed(opts.seed, 'boss')), arena);
+      this.rules = this.run = new GalaxyRun(rules.galaxy, rules.mode, galaxyStreams(opts.seed), arena, startTier);
     }
     if (opts.initialAsteroids === undefined) {
       this.rules.open?.();
@@ -210,6 +205,36 @@ export class World {
     return this.run?.multiplier ?? 1;
   }
 
+  /** The weapon tier, 0–3; always 0 in practice. */
+  get weaponTier(): WeaponTier {
+    return this.run?.loadout.tier ?? 0;
+  }
+
+  /** Seconds left on each timed effect, 0 for one that is off; a live view, and all 0 in practice. */
+  get effects(): Readonly<Record<TimedPickupId, number>> {
+    return this.run?.loadout.effects ?? NO_EFFECTS;
+  }
+
+  /** Whether the Shield is up. */
+  get shield(): boolean {
+    return this.run?.loadout.shielded === true;
+  }
+
+  /** The pickups on the field; a live view, and always empty in practice. */
+  get pickups(): readonly Readonly<Pickup>[] {
+    return this.run?.pickups ?? NO_PICKUPS;
+  }
+
+  /** The foes on the field; a live view, and always empty in practice. */
+  get foes(): readonly Readonly<Foe>[] {
+    return this.run?.foeList ?? NO_FOES;
+  }
+
+  /** The gravity well being telegraphed or pulling; null when there is none, and always in practice. */
+  get well(): Readonly<WellState> | null {
+    return this.run?.well ?? null;
+  }
+
   /** The meteor shower being telegraphed or falling, for the HUD warning; a live view. */
   get shower(): ShowerState | null {
     return this.run?.shower ?? null;
@@ -230,7 +255,8 @@ export class World {
     this.rememberPoses();
     this.elapsedValue += dt;
     this.rules.beginStep?.();
-    this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField));
+    this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField, this.run?.loadout.weapon));
+    this.rules.moveOwn?.(dt, this.shipState);
     this.moveEntities(dt);
     this.prepareCollisions();
     const stillPlaying = this.collideShip();
@@ -238,6 +264,7 @@ export class World {
       this.collideProjectiles();
     }
     this.breakAsteroids();
+    this.rules.afterCollisions?.();
     if (stillPlaying) {
       this.rules.step(dt);
     }
@@ -266,17 +293,6 @@ export class World {
     this.statusValue = 'gameOver';
   }
 
-  private static placeShip(field: Field, placement: ShipPlacement | undefined): Ship {
-    if (placement === undefined) {
-      return createShip(field.width / 2, field.height / 2);
-    }
-    assertFinite('WorldOptions.initialShip', { x: placement.x, y: placement.y, angle: placement.angle });
-    const ship = createShip(placement.x, placement.y);
-    ship.angle = placement.angle;
-    ship.pangle = placement.angle;
-    return ship;
-  }
-
   private nextId(): number {
     return ++this.lastId;
   }
@@ -292,6 +308,7 @@ export class World {
       elapsed: () => this.elapsedValue,
       score: () => this.scoreValue,
       deaths: () => this.deathsValue,
+      lives: () => this.livesValue,
       nextId: () => this.nextId(),
       award: (points) => {
         this.scoreValue += points;
@@ -369,7 +386,7 @@ export class World {
     return this.asteroidList[index] as Asteroid;
   }
 
-  /** Live rule: one hit per step, on the last-indexed overlapping asteroid, else a fighting boss' core. Returns false once the run ends. */
+  /** Live rule: one hit per step, on the last-indexed overlapping asteroid, else a foe, else a fighting boss' core. Returns false once the run ends. */
   private collideShip(): boolean {
     const ship = this.shipState;
     if (ship.invulnerable || this.statusValue === 'warping') {
@@ -378,7 +395,11 @@ export class World {
     const index = this.lastOverlap(ship.x, ship.y, PLAYER.radius);
     if (index >= 0) {
       this.markBroken(index);
-    } else if (this.run?.touchesBoss(ship.x, ship.y, PLAYER.radius) !== true) {
+    } else if (this.run?.shipStruck(ship.x, ship.y, PLAYER.radius) !== true) {
+      return true;
+    }
+    if (this.run?.absorbHit() === true) {
+      makeInvulnerable(ship);
       return true;
     }
     this.livesValue -= 1;
@@ -394,12 +415,12 @@ export class World {
     return true;
   }
 
-  /** Each projectile breaks at most one asteroid, or is spent on a boss' core, and is removed once (fixes CA-021). */
+  /** Each projectile breaks at most one asteroid, or is spent on a boss' core or a foe, and is removed once (fixes CA-021). */
   private collideProjectiles(): void {
     const projectiles = this.projectileList;
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i] as Projectile;
-      if (this.run?.hitBoss(p.x, p.y, PROJECTILE.radius) === true) {
+      if (this.run?.hitBoss(p.x, p.y, PROJECTILE.radius) === true || this.run?.hitFoe(p.x, p.y, PROJECTILE.radius) === true) {
         this.spentFlags[i] = true;
         continue;
       }
@@ -410,6 +431,7 @@ export class World {
         const points = this.rules.scoreKill(ASTEROID.scores[a.size]);
         this.scoreValue += points;
         this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
+        this.rules.rockKilled?.(a);
       }
     }
     removeFlagged(projectiles, this.spentFlags);

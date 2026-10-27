@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { expect, gameState, openGame, test } from './fixtures';
-import { PERF_GALAXY, PERF_SEED } from './seed';
+import { PERF_GALAXY, seedFor } from './seeds';
 
 const CPU_SLOWDOWN = 4;
+const PERF_SEED = seedFor('busy-field');
 /** A galaxy opens on an empty field, so the hold runs long enough for it to fill. */
 const HOLD_MS = 20000;
 /** The target for a throttled phone-class CPU; recorded in perf.json, not asserted in M2. */

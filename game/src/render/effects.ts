@@ -1,10 +1,13 @@
-import { ASTEROID } from '../sim/config';
+import { FOES } from '../content/foes';
+import type { FoeKind } from '../content/types';
+import { ASTEROID, PICKUP } from '../sim/config';
 import { isWarpClear, type SimEvent } from '../sim/events';
 import { TAU } from '../sim/math';
 import { createRng, type Rng } from '../sim/rng';
 import type { World } from '../sim/world';
 import { DRIFT, type Palette } from './palette';
 import { DEFAULT_PARTICLE_CAPACITY, type EmitOptions, type ParticlePool } from './particles';
+import { PICKUP_COLORS, SHIELD_RING_RADIUS } from './pickupArt';
 
 export interface BurstSpec {
   readonly shards: number;
@@ -28,6 +31,8 @@ export interface Effects {
   readonly shakeY: number;
   readonly flash: number;
   readonly flashColor: string;
+  /** Bursts from now on take their colours from `palette`; bursts already flying keep theirs. */
+  setPalette(palette: Palette): void;
   /** While true, flash stays 0; particles still emit. Turning it on clears the flash at once. Shake has its own gate. */
   reducedMotion: boolean;
   /** While false, shake stays 0; turning it off clears shake at once. The app sets it from `shakeEnabled(setting, reducedMotion)`. */
@@ -64,7 +69,15 @@ const ASTEROID_BURSTS: readonly [Counts, Counts, Counts, Counts] = [
 
 const SHIP_HIT_BURST: Counts = { shards: 16, sparks: 24, rings: 2, smoke: 8, shake: 7, flash: 0.45 };
 const SHOT_BURST: Counts = { shards: 0, sparks: 1, rings: 0, smoke: 0, shake: 0, flash: 0 };
-const BOSS_HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A shot hurting a boss or a foe without killing it. */
+const HIT_BURST: Counts = { shards: 0, sparks: 6, rings: 0, smoke: 0, shake: 0, flash: 0 };
+/** A destroyed foe bursts like a rock of its weight: the splitter a medium one, a drone a small one (the sounds in sfx.ts match). */
+const FOE_BURSTS: Readonly<Record<FoeKind, Counts>> = { splitter: ASTEROID_BURSTS[1], drone: ASTEROID_BURSTS[2] };
+/** A pickup dropping or being collected: a ring and a spray of sparks in its colour, no shake. */
+const PICKUP_DROP_BURST: Counts = { shards: 0, sparks: 8, rings: 1, smoke: 0, shake: 0, flash: 0 };
+const PICKUP_TAKE_BURST: Counts = { shards: 0, sparks: 12, rings: 1, smoke: 0, shake: 0, flash: 0 };
+/** The Shield taking a hit for the ship: it shatters, with a little shake but none of a lost life's weight. */
+const SHIELD_BREAK_BURST: Counts = { shards: 10, sparks: 14, rings: 1, smoke: 0, shake: 3, flash: 0 };
 /** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
 const WARP_CLEAR_BURST: Counts = { shards: 2, sparks: 4, rings: 0, smoke: 0, shake: 0, flash: 0 };
 
@@ -89,7 +102,16 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'shot':
       return writeBurst(into, SHOT_BURST, palette.shot);
     case 'bossHit':
-      return writeBurst(into, BOSS_HIT_BURST, palette.shot);
+    case 'foeHit':
+      return writeBurst(into, HIT_BURST, palette.shot);
+    case 'foeDestroyed':
+      return writeBurst(into, event.points === 0 ? WARP_CLEAR_BURST : FOE_BURSTS[event.kind], palette.ring);
+    case 'pickupDropped':
+      return writeBurst(into, PICKUP_DROP_BURST, palette.ring);
+    case 'pickupCollected':
+      return writeBurst(into, PICKUP_TAKE_BURST, palette.ring);
+    case 'shieldBroken':
+      return writeBurst(into, SHIELD_BREAK_BURST, palette.ring);
     case 'gameOver':
     case 'asteroidLeft':
     case 'galaxyStart':
@@ -103,6 +125,12 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
     case 'bossWindup':
     case 'bossPhase':
     case 'bossDown':
+    case 'pickupExpired':
+    case 'effectEnded':
+    case 'foeSpawned':
+    case 'wellWarning':
+    case 'wellStart':
+    case 'wellEnd':
       return null;
   }
 }
@@ -110,7 +138,7 @@ export function burstFor(event: SimEvent, palette: Palette, into = blankBurst())
 interface Emitter {
   readonly pool: ParticlePool;
   readonly rng: Rng;
-  readonly palette: Palette;
+  palette: Palette;
 }
 
 interface Origin {
@@ -195,7 +223,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   let time = 0;
   let shake = 0;
   let flash = 0;
-  let flashColor: string = palette.ring;
+  let flashColor: string = emitter.palette.ring;
   let reducedMotion = false;
   let shakeEnabled = true;
   let trailBudget = 0;
@@ -218,7 +246,16 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'shot':
         return writeOrigin(origin, event.x, event.y, 0, null, world.ship.vx * 0.5, world.ship.vy * 0.5);
       case 'bossHit':
+      case 'foeHit':
         return writeOrigin(origin, event.x, event.y, 0, null);
+      case 'foeDestroyed':
+        return writeOrigin(origin, event.x, event.y, FOES[event.kind].radius, null);
+      case 'pickupDropped':
+        return writeOrigin(origin, event.x, event.y, PICKUP.radius, PICKUP_COLORS[event.kind]);
+      case 'pickupCollected':
+        return writeOrigin(origin, world.ship.x, world.ship.y, PICKUP.radius, PICKUP_COLORS[event.kind]);
+      case 'shieldBroken':
+        return writeOrigin(origin, world.ship.x, world.ship.y, SHIELD_RING_RADIUS, PICKUP_COLORS.shield);
       case 'gameOver':
       case 'asteroidLeft':
       case 'galaxyStart':
@@ -232,6 +269,12 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'bossWindup':
       case 'bossPhase':
       case 'bossDown':
+      case 'pickupExpired':
+      case 'effectEnded':
+      case 'foeSpawned':
+      case 'wellWarning':
+      case 'wellStart':
+      case 'wellEnd':
         return null;
     }
   };
@@ -266,12 +309,16 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   return {
     handle(events, world) {
       for (const event of events) {
-        const burst = burstFor(event, palette, spec);
+        const burst = burstFor(event, emitter.palette, spec);
         const at = originFor(event, world);
         if (burst === null || at === null) continue;
         emitBurst(emitter, burst, at);
         kick(burst);
       }
+    },
+    setPalette(next) {
+      emitter.palette = next;
+      flashColor = next.ring;
     },
     step(dt, world, frozen = false) {
       time += dt;

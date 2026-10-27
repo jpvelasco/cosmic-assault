@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createHud, HUD_PILLS, hudScale, rightPillEdge, type HudBounds, type HudRect } from '../../src/render/hud';
 import { showerWarningAngle, timerFraction } from '../../src/render/hudGalaxy';
-import { DRIFT } from '../../src/render/palette';
+import { pillFraction } from '../../src/render/hudPickups';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { galaxyById } from '../../src/content/galaxies';
+import { EFFECT_SECONDS, type TimedPickupId } from '../../src/content/pickups';
 import type { GalaxyId } from '../../src/content/types';
 import type { BossView } from '../../src/sim/boss/bossRunner';
 import type { ShowerState } from '../../src/sim/galaxy/showers';
@@ -46,12 +48,16 @@ interface GalaxyWorld {
   readonly multiplier?: number;
   readonly boss?: Partial<BossView> | null;
   readonly shower?: ShowerState | null;
+  /** Seconds left per timed effect running; the rest are off. */
+  readonly effects?: Partial<Record<TimedPickupId, number>>;
 }
 
+const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 };
+
 /** The fields of a galaxy World the HUD reads, as a stand-in. */
-function galaxyWorld({ galaxy = '1-3', lives = 3, timeLeft = 45, multiplier = 1, boss = null, shower = null }: GalaxyWorld = {}): World {
+function galaxyWorld({ galaxy = '1-3', lives = 3, timeLeft = 45, multiplier = 1, boss = null, shower = null, effects = {} }: GalaxyWorld = {}): World {
   const fight = boss === null ? null : { x: 640, y: 200, px: 640, py: 200, radius: 70, hp: 20, maxHp: 20, phase: 1, state: 'fighting', windup: null, ...boss };
-  return { score: 0, lives, practiceLevel: 1, elapsed: 10, galaxy: galaxyById(galaxy), timeLeft, multiplier, boss: fight, shower } as unknown as World;
+  return { score: 0, lives, practiceLevel: 1, elapsed: 10, galaxy: galaxyById(galaxy), timeLeft, multiplier, boss: fight, shower, effects: { ...NO_EFFECTS, ...effects } } as unknown as World;
 }
 
 function apart(a: HudRect, b: HudRect): boolean {
@@ -100,7 +106,7 @@ describe('rightPillEdge', () => {
 
 /** A practice World stand-in with only what the HUD reads. */
 function practiceWorld(score: number, lives: number): World {
-  return { score, lives, practiceLevel: 4, elapsed: 0, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null } as unknown as World;
+  return { score, lives, practiceLevel: 4, elapsed: 0, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null, effects: NO_EFFECTS } as unknown as World;
 }
 
 describe('timerFraction', () => {
@@ -372,5 +378,140 @@ describe('createHud', () => {
       expect(hud.rects).toHaveLength(5);
       expectClearLayout(hud.rects, width, height, { x: width - 76, y: 0, width: 76, height: 76 });
     }
+  });
+
+  describe('pickup pills', () => {
+    const ALL: Partial<Record<TimedPickupId, number>> = { doubleShot: 9, rapidFire: 4, spreadLaser: 11, shield: 6 };
+
+    it('shows a pill for each timed effect running, in pickup order, on the lives row after the combo', () => {
+      const hud = createHud(DRIFT);
+      const { ctx } = fakeContext();
+      hud.resize(844, 390);
+      hud.draw(ctx, galaxyWorld({ multiplier: 3, effects: { spreadLaser: 5, doubleShot: 3 } }), 0);
+      const lives = hud.pill('lives');
+      const combo = hud.pill('combo');
+      const double = hud.pill('doubleShot');
+      const spread = hud.pill('spreadLaser');
+      if (lives === null || combo === null || double === null || spread === null) throw new Error('expected the lives, combo and two pickup pills');
+      expect(hud.pill('rapidFire')).toBeNull();
+      expect(hud.pill('shield')).toBeNull();
+      expect(double.x).toBeGreaterThanOrEqual(combo.x + combo.width + 6);
+      expect(spread.x).toBeGreaterThanOrEqual(double.x + double.width + 6);
+      for (const pill of [double, spread]) expect(pill.y + pill.height / 2).toBeCloseTo(lives.y + lives.height / 2, 9);
+      expect(hud.rects).toEqual(HUD_PILLS.map((id) => hud.pill(id)).filter((r) => r !== null));
+    });
+
+    it('starts the pills right after the lives with no combo going, and drops each one as its effect ends', () => {
+      const hud = createHud(DRIFT);
+      const { ctx } = fakeContext();
+      hud.resize(844, 390);
+      hud.draw(ctx, galaxyWorld({ effects: { shield: 15 } }), 0);
+      const lives = hud.pill('lives');
+      const shield = hud.pill('shield');
+      if (lives === null || shield === null) throw new Error('expected the lives and Shield pills');
+      expect(shield.x).toBe(lives.x + lives.width + 6);
+      hud.draw(ctx, galaxyWorld(), 0);
+      expect(hud.pill('shield')).toBeNull();
+      expect(hud.rects).toHaveLength(4);
+    });
+
+    it('lays out again only when the set of pills changes, not as their clocks run down', () => {
+      const hud = createHud(DRIFT);
+      const { ctx, measured } = fakeContext();
+      hud.resize(1280, 720);
+      hud.draw(ctx, galaxyWorld({ effects: { doubleShot: 12 } }), 0);
+      const rects = hud.rects;
+      const count = measured();
+      for (let left = 11.9; left > 0; left -= 0.5) hud.draw(ctx, galaxyWorld({ effects: { doubleShot: left } }), 0);
+      expect(hud.rects).toBe(rects);
+      expect(measured()).toBe(count);
+    });
+
+    it.each([
+      ['an 844×390 phone, under its pause button and notch', 844, 390, { insets: { top: 0, right: 44, left: 44 }, topRight: { width: 76, height: 76 } }],
+      ['a 1280×720 screen', 1280, 720, NONE],
+      ['a 568×320 phone, under its pause button', 568, 320, { ...NONE, topRight: { width: 76, height: 76 } }],
+    ] as const)('keeps three pickup pills, the Shield and the boss bar apart on %s', (_name, width, height, bounds) => {
+      const hud = createHud(DRIFT);
+      const { ctx } = fakeContext();
+      hud.resize(width, height);
+      hud.setBounds(bounds);
+      hud.draw(ctx, galaxyWorld({ galaxy: '3-6', lives: 5, multiplier: 5, timeLeft: 0, boss: { hp: 9 }, effects: ALL }), 1_234_567);
+      const corner = bounds.topRight === null ? null : { x: width - bounds.topRight.width, y: 0, width: bounds.topRight.width, height: bounds.topRight.height };
+      // Score, lives, galaxy, combo, four pickups and the boss.
+      expect(hud.rects).toHaveLength(9);
+      expectClearLayout(hud.rects, width, height, corner);
+    });
+
+    it('keeps three pickup pills and the Shield apart from the timer mid-galaxy, on a phone and a desktop', () => {
+      for (const [width, height] of [
+        [844, 390],
+        [1280, 720],
+      ] as const) {
+        const hud = createHud(DRIFT);
+        const { ctx } = fakeContext();
+        hud.resize(width, height);
+        hud.setBounds({ ...NONE, topRight: { width: 76, height: 76 } });
+        hud.draw(ctx, galaxyWorld({ lives: 4, multiplier: 4, effects: ALL }), 98_765);
+        expect(hud.rects).toHaveLength(9);
+        expectClearLayout(hud.rects, width, height, { x: width - 76, y: 0, width: 76, height: 76 });
+      }
+    });
+
+    it('sweeps the remaining-time arc from a full circle down with the effect', () => {
+      expect(pillFraction('doubleShot', EFFECT_SECONDS.doubleShot)).toBe(1);
+      expect(pillFraction('shield', EFFECT_SECONDS.shield / 2)).toBeCloseTo(0.5, 9);
+      expect(pillFraction('rapidFire', 0)).toBe(0);
+      expect(pillFraction('spreadLaser', 99)).toBe(1);
+    });
+  });
+});
+
+describe('setPalette', () => {
+  /** A context that keeps the colour stops of each gradient it makes, and the text colour of each label. */
+  function recordingContext(): { ctx: CanvasRenderingContext2D; stops: string[]; labels: string[] } {
+    const stops: string[] = [];
+    const labels: string[] = [];
+    let fill = '';
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_target, name) => {
+          switch (name) {
+            case 'measureText':
+              return (text: string) => ({ width: text.length * 10 });
+            case 'fillText':
+              return (text: string) => text === 'SCORE' && labels.push(fill);
+            case 'createLinearGradient':
+              return () => ({ addColorStop: (_at: number, color: string) => stops.push(color) });
+            default:
+              return () => undefined;
+          }
+        },
+        set: (_target, name, value) => {
+          if (name === 'fillStyle') fill = value as string;
+          return true;
+        },
+      },
+    ) as CanvasRenderingContext2D;
+    return { ctx, stops, labels };
+  }
+
+  it('recolours the bars, the combo and the labels on the next draw, and only then', () => {
+    const hud = createHud(DRIFT);
+    hud.resize(1280, 720);
+    const { ctx, stops, labels } = recordingContext();
+    const w = galaxyWorld({ multiplier: 3, boss: {} });
+    hud.draw(ctx, w, 0);
+    expect(stops).toEqual(expect.arrayContaining([DRIFT.accent[0], DRIFT.accent[1], DRIFT.ring, DRIFT.shot]));
+    expect(labels).toEqual([DRIFT.hud]);
+
+    stops.length = 0;
+    hud.setPalette(ION_REACH);
+    expect(stops).toEqual([]);
+    hud.draw(ctx, w, 0);
+    expect(stops).toEqual(expect.arrayContaining([ION_REACH.accent[0], ION_REACH.accent[1], ION_REACH.ring, ION_REACH.shot]));
+    expect(stops).not.toContain(DRIFT.accent[0]);
+    expect(labels).toEqual([DRIFT.hud, ION_REACH.hud]);
   });
 });

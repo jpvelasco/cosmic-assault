@@ -16,12 +16,12 @@ import type { Ship } from '../../src/sim/ship';
 import { rescale } from '../../src/sim/wrap';
 import { World, type WorldOptions } from '../../src/sim/world';
 import { BOSS_FIELD, ofType, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF = BOSSES.sentinel;
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS);
 const APPROACH = 20;
 const INTRO = 2;
-const MUTE = { from: 0, base: 0, step: 0, max: 0 };
 
 function runnerFor(): BossRunner {
   return new BossRunner(DEF, SENTINEL, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
@@ -180,7 +180,7 @@ type GalaxyWorld = { world: World; log: SimEvent[]; times: number[] };
 const HOME = bossHome(BOSS_FIELD);
 
 function calm(id: GalaxyId): GalaxyDef {
-  return { ...galaxyById(id), kinds: { large: MUTE, medium: MUTE, small: MUTE }, events: [] };
+  return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
 }
 
 function bossWorld(id: GalaxyId, opts: Partial<WorldOptions> = {}, mode: GalaxyMode = 'rank'): GalaxyWorld {
@@ -438,7 +438,7 @@ describe('GalaxyRun.hitBoss', () => {
   /** Runs a 1-6 galaxy on a stub arena for `to` seconds; the arena's events are left empty. */
   function approach(to: number) {
     const arena = stubArena();
-    const run = new GalaxyRun(calm('1-6'), 'free', createRng(1), createRng(2), arena);
+    const run = new GalaxyRun(calm('1-6'), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: createRng(5) }, arena);
     for (let i = 0; i < Math.round(to / STEP_SECONDS); i++) {
       arena.events.length = 0;
       arena.tick();

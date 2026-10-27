@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { guardScript } from '../helpers/guardScript';
+import { guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 
 const { run: runGuard, tempRoot } = guardScript('check-no-bridge.mjs', 'check-no-bridge-');
 
@@ -23,7 +23,7 @@ function writeDist(files: Record<string, string>): string {
   return root;
 }
 
-describe('check-no-bridge (release build)', () => {
+describe('check-no-bridge (release build)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('passes a build without the bridge or the e2e query parsing', () => {
     const result = runGuard(writeDist({ 'index.html': '<html></html>', 'assets/index.js': 'console.log(1)' }));
     expect(result).toEqual({ status: 0, output: 'e2e bridge, query parsing and the frame, fast-forward and boss-damage hooks absent\n' });
@@ -66,7 +66,7 @@ describe('check-no-bridge (release build)', () => {
   });
 });
 
-describe('check-no-bridge --e2e (e2e build)', () => {
+describe('check-no-bridge --e2e (e2e build)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('passes a build that carries every marker', () => {
     const result = runGuard('--e2e', writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${ALL_HOOKS}` }));
     expect(result).toEqual({ status: 0, output: 'e2e bridge, query parsing and the frame, fast-forward and boss-damage hooks present\n' });
@@ -104,7 +104,7 @@ describe('check-no-bridge --e2e (e2e build)', () => {
   });
 });
 
-describe('check-no-bridge (release build): the fast-forward hook', () => {
+describe('check-no-bridge (release build): the fast-forward hook', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('fails when a release file carries it', () => {
     const dist = writeDist({ 'assets/index.js': FAST_FORWARD });
     const result = runGuard(dist);
@@ -113,7 +113,7 @@ describe('check-no-bridge (release build): the fast-forward hook', () => {
   });
 });
 
-describe('check-no-bridge: the boss-damage hook', () => {
+describe('check-no-bridge: the boss-damage hook', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('fails a release build that carries it', () => {
     const dist = writeDist({ 'assets/index.js': DAMAGE_BOSS });
     const result = runGuard(dist);

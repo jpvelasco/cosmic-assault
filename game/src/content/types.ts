@@ -3,8 +3,26 @@ export type GalaxyIndex = 1 | 2 | 3 | 4 | 5 | 6;
 /** `'3-4'`: Dimension 3, galaxy 4. Galaxy 6 is the Dimension's boss. */
 export type GalaxyId = `${Dimension}-${GalaxyIndex}`;
 
-/** The rocks a galaxy spawns. M5 adds foe kinds. */
+/** The colour looks a galaxy can wear; M6 adds one per remaining Dimension. */
+export type PaletteId = 'drift' | 'ionReach';
+
+/** The music themes a galaxy can play, each with a heavier boss variant (see `audio/themes.ts`); M6 adds one per remaining Dimension. */
+export type MusicThemeId = 'drift' | 'ionReach';
+
+/** The pickups a kill can drop. M6 extends this. */
+export type PickupId = 'weaponCore' | 'doubleShot' | 'shield' | 'rapidFire' | 'spreadLaser';
+
+/** The ship's weapon tier: 0 fires one shot, 3 five. It indexes `WEAPON_SPREAD`. */
+export type WeaponTier = 0 | 1 | 2 | 3;
+
+/** The rocks a galaxy spawns. */
 export type RockKind = 'large' | 'medium' | 'small';
+
+/** The foes a galaxy spawns: a rock that breaks into fast fragments, and a seeking swarm. */
+export type FoeKind = 'splitter' | 'drone';
+
+/** Everything the director can spawn from its threat budget. */
+export type ThreatKind = RockKind | FoeKind;
 
 /** M5 widens this to one boss per Dimension. */
 export type BossId = 'sentinel';
@@ -26,7 +44,7 @@ export interface KindRamp {
 export interface GalaxyEvent {
   /** Seconds into the galaxy. */
   readonly at: number;
-  readonly type: 'meteorShower';
+  readonly type: 'meteorShower' | 'gravityWell';
   readonly intensity: 1 | 2 | 3;
 }
 
@@ -37,10 +55,12 @@ export interface GalaxyDef {
   readonly kind: 'survival' | 'boss';
   /** Seconds; for a boss galaxy, the length of the approach. */
   readonly duration: number;
-  readonly kinds: Readonly<Record<RockKind, KindRamp>>;
+  readonly kinds: Readonly<Record<ThreatKind, KindRamp>>;
   readonly events: readonly GalaxyEvent[];
-  /** Empty in M4. */
-  readonly pickups: readonly string[];
+  /** The pickups its kills can drop: every pickup from its Dimension or an earlier one. */
+  readonly pickups: readonly PickupId[];
   readonly boss: BossId | null;
-  readonly palette: 'drift';
+  /** The look it is drawn in, and the theme it plays: one per Dimension. */
+  readonly palette: PaletteId;
+  readonly theme: MusicThemeId;
 }

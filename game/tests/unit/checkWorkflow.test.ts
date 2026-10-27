@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { gameDir, guardScript } from '../helpers/guardScript';
+import { gameDir, guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 
 const { run: runGuard, tempRoot } = guardScript('check-workflow.mjs', 'check-workflow-');
 const realWorkflow = join(gameDir, '..', '.github', 'workflows', 'ci.yml');
@@ -87,7 +87,7 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ['website/assets/next directory', (t) => t, 'website/assets/next is named "next"', ['assets/next']],
 ];
 
-describe('check-workflow guard', () => {
+describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('accepts the real ci.yml', () => {
     const { status, output } = runGuard(realWorkflow);
     expect(output).toContain('workflow ok');

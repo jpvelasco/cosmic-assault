@@ -1,6 +1,6 @@
 import { freeNext, type FlowState } from '../app/flow';
 import { galaxyById, galaxyLabel } from '../content/galaxies';
-import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
+import { clearBonuses, dimensionMultiplier, galaxyBestScore, galaxyPoints } from '../sim/scoring';
 import { button, cardPanel, element, PRIMARY, starRow, withTestId, type Act } from './dom';
 
 export interface ResultsState {
@@ -34,6 +34,16 @@ function line(): { el: HTMLElement; set(label: string, amount: string): void } {
 }
 
 /**
+ * The "New best!" badge's text, or '' when the clear set none. In Rank it names the number that was recorded, the
+ * galaxy's best at Free play scale, which is not the multiplied score the card shows beside it.
+ */
+export function newBestLabel({ galaxy, mode, result }: Pick<FlowState, 'galaxy' | 'mode' | 'result'>): string {
+  if (result === null || !result.newBest) return '';
+  if (mode !== 'rank' || galaxy === null) return 'New best!';
+  return `New best! ${String(galaxyBestScore(result.report, galaxyById(galaxy).dimension, mode))}`;
+}
+
+/**
  * The end of a run: the galaxy, the heading, the stars won (lit one after another as the card pops in), the score, a
  * "New best!" badge, the bonus lines, the Rank run's total, and the buttons for what comes next. Enter and pad A take
  * the first button shown, so that one wears the primary style.
@@ -45,7 +55,7 @@ export function createResultsCard(act: Act): ResultsCard {
   const heading = element('h2', 'heading');
   const stars = starRow('stars--big');
   const score = element('p', 'score');
-  const newBest = element('p', 'badge new-best', 'New best!');
+  const newBest = element('p', 'badge new-best');
   const points = line();
   const clearBonus = line();
   const noDeathBonus = line();
@@ -100,7 +110,8 @@ export function createResultsCard(act: Act): ResultsCard {
       stars.el.hidden = !won;
       stars.set(won ? result.report.stars : 0);
       score.textContent = `Score ${String(value)}`;
-      newBest.hidden = !won || !result.newBest;
+      newBest.textContent = won ? newBestLabel(flow) : '';
+      newBest.hidden = newBest.textContent === '';
       setLines(flow, value);
       hint.textContent = screen === 'gameOver' ? restartHint : '';
       hint.hidden = hint.textContent === '';

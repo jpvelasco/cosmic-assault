@@ -18,6 +18,7 @@
     "check:base": "node scripts/check-base.mjs",
     "check:no-bridge": "node scripts/check-no-bridge.mjs",
     "check:workflow": "node scripts/check-workflow.mjs",
+    "find-seeds": "node scripts/find-seeds.mjs",
     "icons": "node scripts/render-icons.mjs",
     "record:parity": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/record-parity-traces.mjs"
   },

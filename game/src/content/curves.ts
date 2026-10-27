@@ -1,3 +1,4 @@
+import { WELL_SECONDS } from './hazards';
 import type { GalaxyDef, GalaxyEvent, KindRamp } from './types';
 
 function finite(value: number, name: string): number {
@@ -36,7 +37,22 @@ export function showerSeconds(intensity: GalaxyEvent['intensity']): number {
   return Math.min(12, 6 + 3 * intensity);
 }
 
+/** Seconds `event` lasts after its warning. */
+export function eventSeconds({ type, intensity }: Pick<GalaxyEvent, 'type' | 'intensity'>): number {
+  return type === 'gravityWell' ? WELL_SECONDS : showerSeconds(intensity);
+}
+
+/** The events of a schedule that are of `type`, in order: each hazard runs only its own. */
+export function eventsOfType(events: readonly GalaxyEvent[], type: GalaxyEvent['type']): GalaxyEvent[] {
+  return events.filter((event) => event.type === type);
+}
+
 /** Eases the first galaxy of each Dimension after the first, so a new Dimension starts gently. */
 export function sawtooth(g: Pick<GalaxyDef, 'dimension' | 'index'>): number {
   return g.index === 1 && g.dimension > 1 ? 0.85 : 1;
+}
+
+/** The chance a kill drops a pickup at tier `t`. */
+export function dropChance(t: number): number {
+  return clamp(0.06 + 0.01 * finite(t, 'tier'), 0.06, 0.12);
 }

@@ -39,6 +39,8 @@ export interface Arena {
   elapsed(): number;
   score(): number;
   deaths(): number;
+  /** Lives the ship has left, this one included. */
+  lives(): number;
   nextId(): number;
   award(points: number): void;
   setStatus(status: 'warping' | 'cleared'): void;
@@ -50,12 +52,21 @@ export interface Spawner {
   open?(): void;
   /** Runs at the start of every step, once the clock has advanced and before anything moves or collides. */
   beginStep?(): void;
+  /**
+   * Runs right after the ship has moved, before rocks and shots do: the hazard path. A ruleset's external forces (a
+   * gravity well's pull) nudge velocities here, and the entities it owns move, so `stepShip` is never altered.
+   */
+  moveOwn?(dt: number, ship: Ship): void;
+  /** Runs every step once collisions are done, even on the step the run ends: housekeeping for what the collisions spent. */
+  afterCollisions?(): void;
   /** Runs once a step, after collisions, while the ship still has lives. */
   step(dt: number): void;
   /** The points a kill worth `base` scores. */
   scoreKill(base: number): number;
   /** The ship has just lost a life. */
   shipLost?(): void;
+  /** A shot has just broken `rock`, after the kill is scored. */
+  rockKilled?(rock: Readonly<Asteroid>): void;
 }
 
 /** Today's practice: a timed spawn, a minimum on the field, rock sizes and speeds by level. */

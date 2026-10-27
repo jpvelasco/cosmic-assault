@@ -1,4 +1,4 @@
-import { PLAYER, STICK, WEAPON_SPREAD } from './config';
+import { PLAYER, STICK } from './config';
 import type { Controls, Stick } from './controls';
 import type { Field } from './field';
 import { wrapPosition } from './wrap';
@@ -20,7 +20,6 @@ export interface Ship {
   invulnerable: boolean;
   invulnerableFor: number;
   fireCooldown: number;
-  tier: 1 | 2 | 3 | 4;
 }
 
 export interface Shot {
@@ -28,6 +27,19 @@ export interface Shot {
   readonly y: number;
   readonly vx: number;
   readonly vy: number;
+}
+
+/** One gun of a volley: its aim relative to the nose, and how far to the right of the nose axis it sits. */
+export interface Barrel {
+  readonly angle: number;
+  readonly lateral: number;
+}
+
+/** What a ship fires with; without one, `stepShip` fires a single shot from the nose (weapon tier 0). */
+export interface Weapon {
+  readonly barrels: readonly Barrel[];
+  /** Multiplies the fire interval. */
+  readonly fireIntervalScale: number;
 }
 
 const NO_SHOTS: readonly Shot[] = Object.freeze([]);
@@ -48,8 +60,13 @@ export function createShip(x: number, y: number): Ship {
     invulnerable: true,
     invulnerableFor: PLAYER.invulnerableSeconds,
     fireCooldown: 0,
-    tier: 1,
   };
+}
+
+/** Starts the ship's post-hit invulnerability. */
+export function makeInvulnerable(ship: Ship): void {
+  ship.invulnerable = true;
+  ship.invulnerableFor = PLAYER.invulnerableSeconds;
 }
 
 export function respawnShip(ship: Ship, field: Field): void {
@@ -60,8 +77,7 @@ export function respawnShip(ship: Ship, field: Field): void {
   ship.pangle = ship.angle;
   ship.vx = 0;
   ship.vy = 0;
-  ship.invulnerable = true;
-  ship.invulnerableFor = PLAYER.invulnerableSeconds;
+  makeInvulnerable(ship);
 }
 
 /**
@@ -102,17 +118,19 @@ function steerWithKeyboard(ship: Ship, controls: Controls, compensation: number,
   }
 }
 
-function fireShots(ship: Ship): readonly Shot[] {
-  ship.fireCooldown = PLAYER.fireInterval;
-  const x = ship.x + Math.cos(ship.angle) * PLAYER.noseOffset;
-  const y = ship.y + Math.sin(ship.angle) * PLAYER.noseOffset;
+const SINGLE_SHOT: readonly Barrel[] = [{ angle: 0, lateral: 0 }];
+
+function fireShots(ship: Ship, weapon: Weapon | undefined): readonly Shot[] {
+  ship.fireCooldown = PLAYER.fireInterval * (weapon?.fireIntervalScale ?? 1);
+  const nx = ship.x + Math.cos(ship.angle) * PLAYER.noseOffset;
+  const ny = ship.y + Math.sin(ship.angle) * PLAYER.noseOffset;
   const baseVx = ship.vx * PLAYER.inheritVelocity;
   const baseVy = ship.vy * PLAYER.inheritVelocity;
-  return (WEAPON_SPREAD[ship.tier - 1] ?? []).map((offset) => ({
-    x,
-    y,
-    vx: baseVx + Math.cos(ship.angle + offset) * PLAYER.projectileSpeed,
-    vy: baseVy + Math.sin(ship.angle + offset) * PLAYER.projectileSpeed,
+  return (weapon?.barrels ?? SINGLE_SHOT).map(({ angle, lateral }) => ({
+    x: nx - Math.sin(ship.angle) * lateral,
+    y: ny + Math.cos(ship.angle) * lateral,
+    vx: baseVx + Math.cos(ship.angle + angle) * PLAYER.projectileSpeed,
+    vy: baseVy + Math.sin(ship.angle + angle) * PLAYER.projectileSpeed,
   }));
 }
 
@@ -141,7 +159,8 @@ function applyPhysics(ship: Ship, stepDrag: number, dt: number): void {
   ship.y += ship.vy * dt;
 }
 
-export function stepShip(ship: Ship, controls: Controls, dt: number, field: Field): readonly Shot[] {
+/** Steps the ship; `weapon` replaces the default single forward shot and its fire interval (practice and the parity traces never pass one; a galaxy run's `Loadout` owns the weapon tier). */
+export function stepShip(ship: Ship, controls: Controls, dt: number, field: Field, weapon?: Weapon): readonly Shot[] {
   if (ship.invulnerable) {
     ship.invulnerableFor -= dt;
     if (ship.invulnerableFor <= 0) {
@@ -162,7 +181,7 @@ export function stepShip(ship: Ship, controls: Controls, dt: number, field: Fiel
     steerWithStick(ship, controls.stick, compensation, dt);
   }
 
-  const shots = controls.fire && ship.fireCooldown <= COOLDOWN_EPSILON ? fireShots(ship) : NO_SHOTS;
+  const shots = controls.fire && ship.fireCooldown <= COOLDOWN_EPSILON ? fireShots(ship, weapon) : NO_SHOTS;
 
   applyPhysics(ship, stepDrag, dt);
   wrapPosition(ship, field);

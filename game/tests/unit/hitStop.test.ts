@@ -20,6 +20,11 @@ describe('hitStopFor', () => {
     expect(hitStopFor(SHOT)).toBe(0);
     expect(hitStopFor({ type: 'gameOver', score: 5 })).toBe(0);
     expect(hitStopFor({ type: 'bossHit', x: 0, y: 0, hp: 5 })).toBe(0);
+    // Foes are medium-sized or smaller, and swarms die in bursts: a freeze on each would stutter the game.
+    expect(hitStopFor({ type: 'foeHit', id: 1, x: 0, y: 0, hp: 1 })).toBe(0);
+    expect(hitStopFor({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 100 })).toBe(0);
+    expect(hitStopFor({ type: 'foeDestroyed', id: 2, kind: 'drone', x: 0, y: 0, points: 100 })).toBe(0);
+    expect(hitStopFor({ type: 'wellStart', id: 1 })).toBe(0);
   });
 
   it('never freezes for a large rock the warp clears for 0 points', () => {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Screen } from '../../src/app/flow';
+import { galaxyById } from '../../src/content/galaxies';
 import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
@@ -11,6 +12,8 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { RingLog } from '../../src/platform/log';
 import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
 import { memoryStorage } from '../helpers/memoryStorage';
+import { seedFor } from '../../e2e/seeds';
+import { CALLOUT_MS, TOAST_MS } from '../../src/ui/toast';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
@@ -26,7 +29,7 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
   const refresh = vi.fn();
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
-  const notify = vi.fn<(text: string) => void>();
+  const notify = vi.fn<(text: string, ms?: number) => void>();
   const run = createRunController({
     storage,
     overrides: { ...NONE, ...overrides },
@@ -60,6 +63,7 @@ describe('createRunController', () => {
     expect(run.world?.galaxy?.id).toBe('2-3');
     expect(run.world?.lives).toBe(3);
     expect(onRunStarted).toHaveBeenCalledTimes(1);
+    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'));
   });
 
   it('gives a Rank run its lives', () => {
@@ -81,12 +85,12 @@ describe('createRunController', () => {
 
   it('stands the run total on the Rank score carried in plus the galaxy score, and on the clear total after it', () => {
     const saved = { ...startRank('2026-10-26'), score: 4000 };
-    const { run } = setup({ seed: 2 }, () => FIELD, setRankRun(defaultSave(), saved));
+    const { run } = setup({ seed: seedFor('clears-1-1') }, () => FIELD, setRankRun(defaultSave(), saved));
     run.command({ kind: 'resumeRank' });
     const world = run.world;
     if (world === null) throw new Error('Resume must start a run');
     expect(run.runTotal).toBe(4000);
-    // Seed 2 keeps the idle ship alive to the warp, so the clear bonus is the galaxy's only score.
+    // The 'clears-1-1' seed keeps the idle ship alive to the warp, so the clear bonus is the galaxy's only score.
     while (run.flow.screen === 'playing') run.step(STEP_SECONDS, NO_CONTROLS);
     expect(run.flow.screen).toBe('results');
     expect(run.runTotal).toBe(run.flow.result?.total);
@@ -94,9 +98,72 @@ describe('createRunController', () => {
   });
 
   it('is the galaxy score in Free play', () => {
-    const { run } = setup({ galaxy: '1-1', seed: 2 });
+    const { run } = setup({ galaxy: '1-1', seed: seedFor('clears-1-1') });
     run.command({ kind: 'start' });
     expect(run.runTotal).toBe(run.world?.score);
+  });
+
+  describe('weapon tiers and pickups', () => {
+    const armed = (weaponTier: 0 | 1 | 2 | 3) => setRankRun(defaultSave(), { ...startRank('2026-10-26'), weaponTier });
+    const SPIN_AND_FIRE = { ...NO_CONTROLS, turn: 1, fire: true } as const;
+
+    it('starts a Rank galaxy on the tier the run carries, and a Free play galaxy on tier 0', () => {
+      const rank = setup({}, () => FIELD, armed(2));
+      rank.run.command({ kind: 'resumeRank' });
+      expect(rank.run.world?.weaponTier).toBe(2);
+      const free = setup({ galaxy: '1-1' });
+      free.run.command({ kind: 'start' });
+      expect(free.run.world?.weaponTier).toBe(0);
+    });
+
+    it('forfeits a Rank galaxy on Quit with a tier lost, from the tier the ship has', () => {
+      const { run } = setup({}, () => FIELD, armed(2));
+      run.command({ kind: 'resumeRank' });
+      run.pause();
+      run.quit();
+      expect(run.save.rankRun).toMatchObject({ lives: 2, weaponTier: 1, inGalaxy: false });
+    });
+
+    it('announces a kind on its first drop, with the line for it', () => {
+      // Seed 5 drops a Shield about 7 s into a spinning, firing 1-1 run.
+      const { run, notify } = setup({ galaxy: '1-1', seed: 5, startLives: 5 });
+      run.command({ kind: 'start' });
+      for (let i = 0; i < 20 * 120 && !notify.mock.calls.some(([text]) => text.startsWith('New:')); i++) run.step(STEP_SECONDS, SPIN_AND_FIRE);
+      // A callout stays up longer than a status toast, so there is time to read what the pickup does.
+      expect(notify).toHaveBeenCalledWith('New: Shield — absorbs one hit', CALLOUT_MS);
+      expect(CALLOUT_MS).toBeGreaterThan(TOAST_MS);
+      expect(run.save.seenPickups).toEqual([]);
+    });
+
+    it('counts a kind as seen once collected, and keeps its callout quiet after that', () => {
+      const { run, notify } = setup({ galaxy: '1-1', seed: 5, startLives: 5 });
+      run.command({ kind: 'start' });
+      const world = run.world;
+      if (world === null) throw new Error('the run must have started');
+      // Lay a Shield on the ship, as a drop would have.
+      const { x, y } = world.ship;
+      world['run']?.['pickupField'].list.push({ id: 90, kind: 'shield', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
+      run.step(STEP_SECONDS, NO_CONTROLS);
+      expect(run.save.seenPickups).toEqual(['shield']);
+      run.step(STEP_SECONDS, NO_CONTROLS);
+      expect(notify).not.toHaveBeenCalledWith(expect.stringContaining('Shield'));
+      run.pause();
+      run.quit();
+      run.command({ kind: 'start' });
+      for (let i = 0; i < 20 * 120; i++) run.step(STEP_SECONDS, SPIN_AND_FIRE);
+      expect(notify).not.toHaveBeenCalledWith('New: Shield — absorbs one hit', CALLOUT_MS);
+    });
+
+    it('writes the kind to the saved game outside debug runs', () => {
+      const { run, storage } = setup({}, () => FIELD, armed(0));
+      run.command({ kind: 'resumeRank' });
+      const world = run.world;
+      if (world === null) throw new Error('the run must have started');
+      const { x, y } = world.ship;
+      world['run']?.['pickupField'].list.push({ id: 90, kind: 'doubleShot', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
+      run.step(STEP_SECONDS, NO_CONTROLS);
+      expect(JSON.parse(storage.items.get(SAVE_KEY) ?? '{}')).toMatchObject({ seenPickups: ['doubleShot'] });
+    });
   });
 
   describe('a run saved mid-galaxy at boot', () => {
@@ -220,6 +287,17 @@ describe('createRunController', () => {
       await held.answer(false);
       expect(run.save.rankRun).toMatchObject({ next: '1-1', lives: 3, inGalaxy: true });
       expect(run.rankLock).toBe('free');
+    });
+
+    it('asks again, rather than offering Resume, when its forfeit finds the run moved on since the probe', async () => {
+      const held = heldPresence();
+      const { run, storage } = setup({}, () => FIELD, leftMidGalaxy, held.presence);
+      // Another tab's hit: stored, but its storage event has not reached this tab.
+      storage.items.set(SAVE_KEY, JSON.stringify({ ...leftMidGalaxy, rankSeq: leftMidGalaxy.rankSeq + 1 }));
+      await held.answer(false);
+      expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+      expect(run.rankLock).toBe('checking');
+      expect(held.waiting()).toBe(1);
     });
 
     it('nothing is forfeited after dispose, even when the pending probe then goes unanswered', async () => {

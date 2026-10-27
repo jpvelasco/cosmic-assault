@@ -1,4 +1,5 @@
 import type { Screen } from '../app/flow';
+import type { FoeKind } from '../content/types';
 import { isWarpClear, type SimEvent } from '../sim/events';
 
 /** Every sound effect, in the order voices.ts defines them. */
@@ -22,6 +23,18 @@ export const SFX_NAMES = [
   'bossWindup',
   'bossPhase',
   'bossDown',
+  'pickupDrop',
+  'pickupCollect',
+  'pickupExpire',
+  'effectEnd',
+  'shieldBreak',
+  'droneSwarm',
+  'foeCrack',
+  'splitterBreak',
+  'droneDown',
+  'wellWarn',
+  'wellOpen',
+  'wellClose',
 ] as const;
 
 export type SfxName = (typeof SFX_NAMES)[number];
@@ -45,6 +58,17 @@ const FANFARE: SfxCue = { name: 'cleared', delay: FANFARE_DELAY_SECONDS };
 /** Asteroid sizes 0 (large) to 3 (tiny) in order. */
 const BOOM_BY_SIZE = ['boomLarge', 'boomMedium', 'boomSmall', 'boomTiny'] as const satisfies readonly SfxName[];
 
+/** A killed foe's death: the splitter breaks like a rock that cracks apart, a drone goes down with a zap. */
+const DEATH_BY_FOE = { splitter: 'splitterBreak', drone: 'droneDown' } as const satisfies Readonly<Record<FoeKind, SfxName>>;
+/** A drone group arrives with a buzz; a splitter arrives like any rock, unheard. */
+const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm' } as const satisfies Readonly<Record<FoeKind, SfxName | null>>;
+
+/**
+ * The most times a sound starts in one frame; the rest are dropped. Held fire plus a hit-stop catch-up would stack shot
+ * blips, and a drone group arrives in one step, three to five at once, which is heard as one swarm.
+ */
+export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1 };
+
 /** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
 export function isBossKill(events: readonly SimEvent[]): boolean {
   return events.some((event) => event.type === 'bossDown');
@@ -60,6 +84,14 @@ function soundOf(event: SimEvent): SfxName | null {
       return isWarpClear(event) ? null : BOOM_BY_SIZE[event.size];
     case 'bossHit':
       return 'boomTiny';
+    // Only a foe with HP to spare survives a hit: the splitter, cracking.
+    case 'foeHit':
+      return 'foeCrack';
+    // Like the rocks a warp clears, a foe cleared or rammed (0 points) is heard as the warp or the hit on the ship.
+    case 'foeDestroyed':
+      return event.points === 0 ? null : DEATH_BY_FOE[event.kind];
+    case 'foeSpawned':
+      return ARRIVAL_BY_FOE[event.kind];
     case 'shipHit':
       return 'shipHit';
     case 'gameOver':
@@ -70,6 +102,23 @@ function soundOf(event: SimEvent): SfxName | null {
       return 'showerSting';
     case 'showerStart':
       return 'showerWhoosh';
+    // A well also hums while it pulls: see `humFor`.
+    case 'wellWarning':
+      return 'wellWarn';
+    case 'wellStart':
+      return 'wellOpen';
+    case 'wellEnd':
+      return 'wellClose';
+    case 'pickupDropped':
+      return 'pickupDrop';
+    case 'pickupCollected':
+      return 'pickupCollect';
+    case 'pickupExpired':
+      return 'pickupExpire';
+    case 'effectEnded':
+      return 'effectEnd';
+    case 'shieldBroken':
+      return 'shieldBreak';
     case 'warpOut':
       return 'warp';
     // The multiplier only climbs within a chain, so above 1 it has just risen; back to 1 the chain broke, silently.
@@ -88,6 +137,25 @@ function soundOf(event: SimEvent): SfxName | null {
     case 'asteroidLeft':
     case 'showerEnd':
     case 'galaxyCleared':
+      return null;
+  }
+}
+
+/**
+ * Whether `event` starts (true) or stops (false) the gravity well's looped hum, or leaves it be (null). It runs from
+ * `wellStart` to `wellEnd`; a galaxy that ends mid-well (warp or game over) ends it with no `wellEnd`, so those stop it
+ * too, as does a new galaxy starting.
+ */
+export function humFor(event: SimEvent): boolean | null {
+  switch (event.type) {
+    case 'wellStart':
+      return true;
+    case 'wellEnd':
+    case 'warpOut':
+    case 'gameOver':
+    case 'galaxyStart':
+      return false;
+    default:
       return null;
   }
 }

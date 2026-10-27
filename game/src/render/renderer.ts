@@ -1,3 +1,4 @@
+import type { PaletteId } from '../content/types';
 import type { Asteroid } from '../sim/asteroid';
 import type { SimEvent } from '../sim/events';
 import { isPositiveFiniteSize, type Field } from '../sim/field';
@@ -6,12 +7,17 @@ import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
+import { createFoePass } from './foePass';
+import { createHazardPass } from './hazardPass';
+import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
 import { createBossPass } from './bossPass';
 import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layout';
-import { DRIFT } from './palette';
+import { DRIFT, paletteFor, type Palette } from './palette';
 import { createParticlePass } from './particlePass';
+import { createPickupPass } from './pickupPass';
+import type { SceneLook } from './scene';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
 import { createSpriteBaker, type Sprite, type SpriteBaker } from './sprites';
@@ -44,6 +50,14 @@ export interface Renderer {
   draw(world: World, alpha: number, score: number): void;
   /** Frees the previous run's sprites and particles; call when a new run starts. */
   reset(): void;
+  /**
+   * Redraws everything in palette `id`: the sky and vignette re-bake at once, the sprites bake under the new palette's
+   * keys (the old ones are never looked up again), and bursts, the HUD, the stars and the foe, hazard, pickup and boss
+   * art take its colours. Nothing happens for the palette already in force. Call it when a run starts.
+   */
+  setPalette(id: PaletteId): void;
+  /** The palette in force. */
+  readonly palette: PaletteId;
   readonly effects: Effects;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
@@ -91,9 +105,10 @@ export function blinkHidden(elapsed: number): boolean {
 
 export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts = {}): Renderer {
   const ctx = get2dContext(canvas);
-  const palette = DRIFT;
+  let palette: Palette = DRIFT;
   const baker = parts.baker ?? createSpriteBaker();
   const particles = parts.particles ?? new ParticlePool(DEFAULT_PARTICLE_CAPACITY);
+  const hitFlash = createHitFlash(baker);
   const effects = createEffects(particles, deriveSeed(RENDER_SEED, 'effects'), palette);
   const stars = createStarLayers(deriveSeed(RENDER_SEED, 'stars'), HIGH_QUALITY.starScale);
   const flicker = createRng(deriveSeed(RENDER_SEED, 'flame'));
@@ -101,8 +116,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const pen = createFieldPen(ctx);
   const particlePass = createParticlePass(ctx, pen, baker, particles);
   const hud = createHud(palette);
-  const bossPass = createBossPass(ctx, pen, baker, palette);
   const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0 };
+  const scene: { -readonly [K in keyof SceneLook]: SceneLook[K] } = { glow: 1, still: false, time: 0, visual: UNIT_VISUAL };
   const copies = new Float64Array(6);
   const pose = { x: 0, y: 0, angle: 0 };
   let layout: Layout | null = null;
@@ -161,6 +176,24 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
+  /** The passes whose sprite keys and painters are made once per palette. */
+  const passesFor = (p: Palette) => ({
+    boss: createBossPass(ctx, pen, baker, p),
+    foe: createFoePass(ctx, stamp, baker, p),
+    hazard: createHazardPass(ctx, stamp, baker, p),
+    pickup: createPickupPass(ctx, stamp, baker, p),
+  });
+  let passes = passesFor(palette);
+
+  function setPalette(id: PaletteId): void {
+    if (id === palette.id) return;
+    palette = paletteFor(id);
+    effects.setPalette(palette);
+    hud.setPalette(palette);
+    backdrop.setPalette(palette);
+    passes = passesFor(palette);
+  }
+
   /** Writes the asteroid's interpolated pose into `pose` and returns its drawn glow's reach, which covers its body too. */
   function rockPose(a: Readonly<Asteroid>, alpha: number, field: Field, visual: VisualScale): number {
     interpolatePose(a.px, a.py, a.protation, a.x, a.y, a.rotation, alpha, field, pose);
@@ -183,6 +216,18 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
+  /** The silhouettes of rocks that just broke, fading over their flash; unturned, since the event holds no rotation. */
+  function drawRockFlashes(field: Field): void {
+    for (const { key, x, y, left } of hitFlash.rocks) {
+      // A rebake or an eviction may have freed the silhouette since the break: skip it, never draw an empty canvas.
+      const sprite = baker.cached(key);
+      if (sprite === undefined || sprite.canvas.width === 0) continue;
+      ctx.globalAlpha = left / HIT_FLASH_SECONDS;
+      stamp(sprite, x, y, 1, 0, sprite.halfW, field);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   function drawShots(world: World, alpha: number, field: Field): void {
     const sprite = baker.shot(palette);
     for (const p of world.projectiles) {
@@ -197,11 +242,15 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const { ship } = world;
     // A lost last life leaves only its burst.
     if (world.status === 'gameOver') return;
-    if (ship.invulnerable && blinkHidden(world.elapsed)) return;
     interpolatePose(ship.px, ship.py, ship.pangle, ship.x, ship.y, ship.angle, alpha, field, pose);
     const { x, y } = pose;
-    const cos = Math.cos(pose.angle);
-    const sin = Math.sin(pose.angle);
+    // The Shield's ring (and its crack, as the hit that broke it starts the blink) shows through the blink.
+    passes.pickup.drawShield(world.effects.shield, x, y, field, scene);
+    if (ship.invulnerable && blinkHidden(world.elapsed)) return;
+    // The squash scales the hull and its flame, not the glow: the pen's turn (cos, sin) carries a scale too.
+    const squash = effects.reducedMotion ? 1 : hitFlash.shipScale;
+    const cos = Math.cos(pose.angle) * squash;
+    const sin = Math.sin(pose.angle) * squash;
     const glowDiameter = SHIP_GLOW_DIAMETER * visual.ship;
     const radius = glowDiameter / 2;
     ctx.globalCompositeOperation = 'lighter';
@@ -222,7 +271,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     bossLook.still = effects.reducedMotion;
     bossLook.aimX = world.ship.x;
     bossLook.aimY = world.ship.y;
-    bossPass.draw(world.boss, alpha, bossLook);
+    passes.boss.draw(world.boss, alpha, bossLook);
   }
 
   /** Steps 1–2: sky and stars, unshaken, clipped to the field. */
@@ -232,18 +281,27 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.rect(0, 0, field.width, field.height);
     ctx.clip();
     ctx.drawImage(sky, 0, 0, field.width, field.height);
-    stars.draw(ctx, world.elapsed);
+    stars.draw(ctx, world.elapsed, palette.star);
   }
 
   /** Steps 3–8: the shaken scene. */
   function drawScene(world: World, alpha: number, { field, k, fieldX, fieldY, visual }: Layout): void {
     pen.aim(k, fieldX + k * effects.shakeX, fieldY + k * effects.shakeY);
+    scene.glow = quality.glow;
+    scene.still = effects.reducedMotion;
+    scene.time = world.elapsed;
+    scene.visual = visual;
     ctx.globalCompositeOperation = 'lighter';
     drawRockGlows(world, alpha, field, visual);
     particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
+    passes.hazard.drawWell(world.well, field, scene);
     drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
+    passes.foe.drawFoes(world.foes, alpha, field, scene);
+    drawRockFlashes(field);
+    passes.foe.drawFlashes(hitFlash.foes, field);
+    passes.pickup.drawPickups(world.pickups, alpha, field, scene);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
@@ -292,14 +350,18 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
 
   function stepBursts(dt: number, world: World, frozen: boolean): void {
     effects.step(dt, world, frozen);
+    hitFlash.step(dt);
+    passes.pickup.advance(dt);
     particles.step(dt);
-    bossPass.advance(dt, world.boss);
+    passes.boss.advance(dt, world.boss);
   }
 
   function freeRun(): void {
     baker.clear();
     particles.clear();
-    bossPass.reset();
+    passes.boss.reset();
+    hitFlash.reset();
+    passes.pickup.reset();
   }
 
   return {
@@ -309,7 +371,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     handle(events, world) {
       effects.handle(events, world);
-      bossPass.handle(events);
+      passes.boss.handle(events);
+      passes.pickup.handle(events);
+      // Before the forget below: a flash needs the rock's sprite, which `forget` frees.
+      hitFlash.handle(events);
       for (const event of events) if (event.type === 'asteroidDestroyed' || event.type === 'asteroidLeft') baker.forget(event.id);
     },
     advance(dt, world, frozen) {
@@ -328,6 +393,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     setQuality,
     draw,
     reset: freeRun,
+    setPalette,
+    get palette() {
+      return palette.id;
+    },
     effects,
     get hudRects() {
       return hud.rects;

@@ -1,11 +1,13 @@
 import { BOSSES } from '../content/bosses';
 import { clamp } from '../content/curves';
 import { galaxyLabel } from '../content/galaxies';
+import { TIMED_PICKUPS, type TimedPickupId } from '../content/pickups';
 import type { BossId, GalaxyDef } from '../content/types';
 import type { World } from '../sim/world';
 import { rgba } from './color';
 import { BOSS_MIN_W, bossBarWidth, bossNameX, drawBossHp, placeHpTrack } from './hudBoss';
 import { drawShowerWarning, drawTimer, showerWarningAngle, timerFraction, type ChevronView } from './hudGalaxy';
+import { drawPickupPill, placePickupPill } from './hudPickups';
 import { across, bottom, box, BRIGHT_STROKE, PILL_PAD, tracePill, WHITE, type HudRect } from './hudShapes';
 import type { Palette } from './palette';
 import { SHIP_HULL } from './sprites';
@@ -33,19 +35,22 @@ export interface HudBounds {
 
 /**
  * The HUD's pills, in draw order: the score, the lives, the galaxy (the practice level outside a galaxy), the timer bar
- * under it, the combo multiplier and the boss's HP bar.
+ * under it, the combo multiplier, a badge per timed pickup running (the Shield too), and the boss's HP bar.
  */
-export type HudPill = 'score' | 'lives' | 'galaxy' | 'timer' | 'combo' | 'boss';
-export const HUD_PILLS: readonly HudPill[] = ['score', 'lives', 'galaxy', 'timer', 'combo', 'boss'];
+export type HudPill = 'score' | 'lives' | 'galaxy' | 'timer' | 'combo' | TimedPickupId | 'boss';
+export const HUD_PILLS: readonly HudPill[] = ['score', 'lives', 'galaxy', 'timer', 'combo', ...TIMED_PICKUPS, 'boss'];
 /** The pills drawn as plain glass; the combo wears the accent and the timer is a bar. */
 const GLASS_PILLS: readonly HudPill[] = ['score', 'lives', 'galaxy', 'boss'];
 
 export interface Hud {
   resize(cssWidth: number, cssHeight: number): void;
   setBounds(bounds: HudBounds): void;
+  /** Recolours the bars, labels and arrows from the next draw. */
+  setPalette(palette: Palette): void;
   /**
    * Draws the pills, showing `score` (in Rank, the run's total) and, while a shower is telegraphed, arrows at its edge.
-   * `still` holds the arrows steady for reduced motion. The caller sets a CSS-px transform (identity × dpr).
+   * `still` holds the arrows steady and the expiring pickup badges dim rather than blinking, for reduced motion. The
+   * caller sets a CSS-px transform (identity × dpr).
    */
   draw(ctx: CanvasRenderingContext2D, world: World, score: number, still?: boolean): void;
   /** The pills drawn last, in CSS px, in draw order. */
@@ -108,10 +113,33 @@ interface Measured {
 
 const measured = (): Measured => ({ text: '', width: 0 });
 
-export function createHud(palette: Palette): Hud {
-  const boxes: Readonly<Record<HudPill, HudRect>> = { score: box(), lives: box(), galaxy: box(), timer: box(), combo: box(), boss: box() };
+export function createHud(initial: Palette): Hud {
+  let palette = initial;
+  const boxes: Readonly<Record<HudPill, HudRect>> = {
+    score: box(),
+    lives: box(),
+    galaxy: box(),
+    timer: box(),
+    combo: box(),
+    doubleShot: box(),
+    rapidFire: box(),
+    spreadLaser: box(),
+    shield: box(),
+    boss: box(),
+  };
   const { score, lives, galaxy, timer, combo, boss } = boxes;
-  const shown: Record<HudPill, boolean> = { score: true, lives: false, galaxy: true, timer: false, combo: false, boss: false };
+  const shown: Record<HudPill, boolean> = {
+    score: true,
+    lives: false,
+    galaxy: true,
+    timer: false,
+    combo: false,
+    doubleShot: false,
+    rapidFire: false,
+    spreadLaser: false,
+    shield: false,
+    boss: false,
+  };
   /** The HP track inside the boss bar. */
   const hpTrack = box();
   let rects: readonly HudRect[] = [];
@@ -175,6 +203,7 @@ export function createHud(palette: Palette): Hud {
     show('lives', shownLives > 0);
     show('timer', def !== null && fight === null);
     show('combo', multiplier > 1);
+    for (const kind of TIMED_PICKUPS) show(kind, world.effects[kind] > 0);
     if (multiplier > 1 && multiplier !== shownMultiplier) {
       shownMultiplier = multiplier;
       remeasure(ctx, comboText, `×${String(multiplier)}`, comboFont);
@@ -196,6 +225,17 @@ export function createHud(palette: Palette): Hud {
     const fits = x + width <= right;
     Object.assign(galaxy, { x: fits ? x : left, y: fits ? top : bottom(lives) + LIVES_GAP * s, width, height: PILL_H * s });
     Object.assign(timer, { x: galaxy.x + galaxy.height / 2, y: bottom(galaxy) + TIMER_GAP * s, width: galaxy.width - galaxy.height, height: TIMER_H * s });
+  }
+
+  /** The pickup badges run along the lives row, after whichever of the lives and combo pills come last. */
+  function layoutPickups(left: number): void {
+    const gap = LIVES_GAP * scale;
+    let x = shown.combo ? combo.x + combo.width + gap : shown.lives ? lives.x + lives.width + gap : left;
+    for (const kind of TIMED_PICKUPS) {
+      if (!shown[kind]) continue;
+      placePickupPill(boxes[kind], x, lives, scale);
+      x += boxes[kind].width + gap;
+    }
   }
 
   /** Top centre, between the score and galaxy pills; below every other pill where that row is too narrow. */
@@ -224,6 +264,7 @@ export function createHud(palette: Palette): Hud {
     Object.assign(lives, { x: left, y: bottom(score) + LIVES_GAP * s, width: (2 * LIFE_FIRST_X + LIFE_SPACING * (shownLives - 1)) * s, height: LIVES_H * s });
     layoutLevel(left, top);
     Object.assign(combo, { x: shown.lives ? lives.x + lives.width + LIVES_GAP * s : left, y: lives.y, width: comboText.width + 2 * COMBO_PAD * s, height: LIVES_H * s });
+    layoutPickups(left);
     if (shown.boss) layoutBoss(left, top);
     rects = HUD_PILLS.filter((id) => shown[id]).map((id) => boxes[id]);
     timerFill = across(ctx, timer, palette.accent[0], palette.accent[2]);
@@ -260,6 +301,10 @@ export function createHud(palette: Palette): Hud {
       ctx.strokeStyle = BRIGHT_STROKE;
       tracePill(ctx, combo);
     }
+  }
+
+  function drawPickups(ctx: CanvasRenderingContext2D, world: World, still: boolean): void {
+    for (const kind of TIMED_PICKUPS) if (shown[kind]) drawPickupPill(ctx, boxes[kind], kind, world.effects[kind], still, scale);
   }
 
   function drawBars(ctx: CanvasRenderingContext2D, world: World): void {
@@ -306,6 +351,11 @@ export function createHud(palette: Palette): Hud {
       for (const text of [scoreText, caption, level, comboText, bossName]) text.text = '\u0000';
       dirty = true;
     },
+    setPalette(next) {
+      palette = next;
+      // The bar gradients are made on layout.
+      dirty = true;
+    },
     setBounds(next) {
       bounds = next;
       chevronView.insets = next.insets;
@@ -316,6 +366,7 @@ export function createHud(palette: Palette): Hud {
       if (dirty) layout(ctx);
       drawPills(ctx);
       drawBars(ctx, world);
+      drawPickups(ctx, world, still);
       if (shown.lives) drawLifeIcons(ctx);
       drawText(ctx);
       const warning = showerWarningAngle(world.shower);

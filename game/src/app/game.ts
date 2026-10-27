@@ -1,5 +1,7 @@
 import { createAudioEngine, needsSoundGesture, type AudioState } from '../audio/engine';
+import type { ThemeId } from '../audio/themes';
 import { currentBuildLabel } from '../buildLabel';
+import type { GalaxyDef, PaletteId } from '../content/types';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
@@ -12,11 +14,13 @@ import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
 import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
+import { paletteFor } from '../render/palette';
 import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
 import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
 import { createFixedStepLoop } from '../sim/loop';
+import { applyAccents } from '../ui/accents';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
@@ -54,6 +58,10 @@ export interface App {
   readonly frameStats: FrameSummary;
   /** Whether sound is muted (saved across visits). */
   readonly muted: boolean;
+  /** The colour look in force: the last run's galaxy's palette, the Drift's before any run. */
+  readonly palette: PaletteId;
+  /** The music theme chosen: a galaxy's, its boss variant once the boss appears, and the last Dimension's on a menu. */
+  readonly musicTheme: ThemeId;
   /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
   readonly settings: Settings;
   /** The motion rules in force once reduced motion and the shake setting are combined. */
@@ -268,12 +276,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     redrawPending = true;
   }
 
-  /** A new World is in place: fresh input latches, loop, renderer and frame stats for it. */
-  function onRunStarted(): void {
+  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette) and frame stats for it. */
+  function onRunStarted(galaxy: GalaxyDef): void {
     startKeys.latch(keyboard.held);
     padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
+    renderer.setPalette(galaxy.palette);
+    applyAccents(document.documentElement.style, paletteFor(galaxy.palette));
     renderer.reset();
     monitor.reset();
     scaler.startRun();
@@ -459,6 +469,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     },
     get muted() {
       return audio.muted;
+    },
+    get palette() {
+      return renderer.palette;
+    },
+    get musicTheme() {
+      return audio.theme;
     },
     get settings() {
       return prefs.settings;

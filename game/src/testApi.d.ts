@@ -33,6 +33,18 @@ interface CosmicAssaultTestState {
   readonly ship: CosmicAssaultTestShip | null;
   readonly asteroidCount: number;
   readonly projectileCount: number;
+  /** The pickups on the field, with the seconds each has before it expires (it blinks under 2); empty outside a run. */
+  readonly pickups: readonly { readonly id: number; readonly kind: import('./content/types').PickupId; readonly x: number; readonly y: number; readonly expiresIn: number }[];
+  /** The foes on the field; empty outside a galaxy run. */
+  readonly foes: readonly { readonly id: number; readonly kind: import('./content/types').FoeKind; readonly x: number; readonly y: number }[];
+  /** The gravity well being telegraphed or pulling (at most one), with the seconds until it starts or ends; empty when there is none. */
+  readonly wells: readonly { readonly id: number; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number }[];
+  /** The timed effects running (doubleShot, rapidFire, spreadLaser, shield), each with its seconds left; one that is off is absent. */
+  readonly effects: Readonly<Partial<Record<import('./content/pickups').TimedPickupId, number>>>;
+  /** The weapon tier, 0–3; 0 outside a run. */
+  readonly weaponTier: import('./content/types').WeaponTier;
+  /** Whether the Shield is up. */
+  readonly shield: boolean;
   /** The HUD pills drawn on the last frame; empty before the first run is drawn. */
   readonly hudRects: readonly CosmicAssaultTestRect[];
   /** Frames the renderer has drawn; a still screen (paused, game over) draws only when something changes. */
@@ -45,6 +57,10 @@ interface CosmicAssaultTestState {
   readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
+  /** The colour look in force: the last run's galaxy's palette ('drift' before any run). */
+  readonly palette: import('./content/types').PaletteId;
+  /** The music theme chosen (it changes at the next bar line): a galaxy's, its boss variant from the boss intro, the last Dimension's on a menu. */
+  readonly musicTheme: import('./audio/themes').ThemeId;
   /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
   readonly settings: import('./app/settings').Settings;
   /** The motion rules in force: reduced motion (the browser's setting) and whether shake is on once the shake setting is applied. */

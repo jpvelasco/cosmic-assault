@@ -44,6 +44,22 @@ export interface SpriteBaker {
   setScale(pixelsPerUnit: number, dpr: number, visual?: VisualScale): void;
   /** Drops every sprite baked for this asteroid id. */
   forget(asteroidId: number): void;
+  /**
+   * The solid white silhouette of the sprite cached under `key` (see `custom`), for a hit flash, baked once; undefined
+   * if that sprite is not cached. Dropped with the rest by `setScale` and `clear`.
+   */
+  white(key: string): Sprite | undefined;
+  /**
+   * Bakes the white silhouette of a rock `asteroidId` has drawn and returns the key to find it by (see `cached`), or
+   * undefined if the rock has not been drawn. Unlike the rock's own sprites it survives `forget`, so a flash can finish
+   * after the renderer lets the rock go; the cache's size bound frees it in the end.
+   */
+  whiteRock(asteroidId: number): string | undefined;
+  /**
+   * The sprite under `key` if it is still cached. A rebake (`setScale`, `clear`) or an eviction frees a sprite's canvas, so
+   * anything that outlives a frame holds a key and looks it up each time it draws.
+   */
+  cached(key: string): Sprite | undefined;
   /** Frees every baked sprite, for example when a new run starts. */
   clear(): void;
 }
@@ -59,7 +75,7 @@ export interface Crater {
   readonly r: number;
 }
 
-interface Point {
+export interface Point {
   readonly x: number;
   readonly y: number;
 }
@@ -168,20 +184,30 @@ export function shapeFingerprint(a: Readonly<Asteroid>): string {
   return (hash >>> 0).toString(16);
 }
 
-function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
+/** Begins a closed path through `points`. */
+export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[]): void {
   ctx.beginPath();
   for (const p of points) ctx.lineTo(p.x, p.y);
   ctx.closePath();
 }
 
-function paintGlow(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, radius: number, alpha = 1): void {
+/** Strokes the current path in `color` at `width`. */
+export function strokePath(ctx: CanvasRenderingContext2D, color: string, width: number): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
+/** A soft radial glow of `color` around (x, y), for bakes; `alpha` scales every stop. */
+export function paintGlow(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, radius: number, alpha = 1): void {
   const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
   for (const [offset, stopAlpha] of GLOW_STOPS) gradient.addColorStop(offset, rgba(color, stopAlpha * alpha));
   ctx.fillStyle = gradient;
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
 
-function addStops(gradient: CanvasGradient, colors: readonly string[], offsets: readonly number[]): CanvasGradient {
+/** Adds `colors` to `gradient` at `offsets` (1 for any missing). */
+export function addStops(gradient: CanvasGradient, colors: readonly string[], offsets: readonly number[]): CanvasGradient {
   colors.forEach((color, i) => {
     gradient.addColorStop(offsets[i] ?? 1, color);
   });
@@ -404,6 +430,34 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     });
   }
 
+  /** `source` drawn solid white: its own pixels, with every colour replaced and the edge antialiasing kept. */
+  function bakeWhite(source: Sprite): Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = source.canvas.width;
+    canvas.height = source.canvas.height;
+    const ctx = get2dContext(canvas);
+    ctx.drawImage(source.canvas, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = WHITE;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return { canvas, halfW: source.halfW, halfH: source.halfH };
+  }
+
+  /**
+   * Bakes the white variant of the sprite under `key` (if it is cached) as an ordinary entry under `whiteKey`, not an
+   * asteroid's, so `forget` leaves it. Returns `whiteKey`, or undefined without a source.
+   */
+  function bakeWhiteUnder(key: string, whiteKey: string): string | undefined {
+    const source = cache.get(key)?.sprite;
+    if (source === undefined) return undefined;
+    if (cache.get(whiteKey) === undefined) store(whiteKey, bakeWhite(source));
+    return whiteKey;
+  }
+
+  function cachedSprite(key: string): Sprite | undefined {
+    return cache.get(key)?.sprite;
+  }
+
   // Each method looks the key up first and only builds the bake closure on a miss.
   return {
     glow(color, diameter) {
@@ -487,6 +541,17 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
     forget(asteroidId) {
       for (const key of [...(asteroidKeys.get(asteroidId) ?? [])]) cache.delete(key);
     },
+    white(key) {
+      // `keyOf` builds each name's string once, so a boss hit's frames build none. It is for the few custom keys only: a
+      // rock's key is new every time and would never be forgotten there.
+      const whiteKey = bakeWhiteUnder(key, keyOf('white', key, 0));
+      return whiteKey === undefined ? undefined : cachedSprite(whiteKey);
+    },
+    whiteRock(asteroidId) {
+      const [key] = asteroidKeys.get(asteroidId) ?? [];
+      return key === undefined ? undefined : bakeWhiteUnder(key, `white|${key}`);
+    },
+    cached: cachedSprite,
     clear() {
       cache.clear();
     },

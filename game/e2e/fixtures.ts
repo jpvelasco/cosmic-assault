@@ -2,7 +2,7 @@ import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
 import type { GalaxyId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
-import { E2E_GALAXY, E2E_SEED, GAME_OVER_GALAXY, GAME_OVER_SEED } from './seed';
+import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /**
  * Fails every test that logs a console error or throws an uncaught page error.
@@ -49,10 +49,10 @@ export interface GameQuery {
 }
 
 /**
- * Opens the e2e build (seed E2E_SEED and galaxy E2E_GALAXY unless overridden) and waits for the test bridge, which
+ * Opens the e2e build (the 'lanes-clear' seed and galaxy E2E_GALAXY unless overridden) and waits for the test bridge, which
  * loads after an `import()`. Any of these switches makes it a debug run, which never writes the save.
  */
-export async function openGame(page: Page, { seed = E2E_SEED, lives, quality, galaxy = E2E_GALAXY }: GameQuery = {}): Promise<void> {
+export async function openGame(page: Page, { seed = seedFor('lanes-clear'), lives, quality, galaxy = E2E_GALAXY }: GameQuery = {}): Promise<void> {
   const query = new URLSearchParams({ seed: String(seed) });
   if (galaxy !== null) query.set('galaxy', galaxy);
   if (lives !== undefined) query.set('lives', String(lives));
@@ -165,17 +165,23 @@ export async function shipState(page: Page): Promise<CosmicAssaultTestShip> {
   return ship;
 }
 
-export async function expectMode(page: Page, mode: CosmicAssaultTestState['mode']): Promise<void> {
-  await expect.poll(async () => (await gameState(page)).mode).toBe(mode);
+/** Waits for the game's `mode`; pass a longer `timeout` where a rendered frame has to apply the change first. */
+export async function expectMode(page: Page, mode: CosmicAssaultTestState['mode'], { timeout }: { timeout?: number } = {}): Promise<void> {
+  await expect.poll(async () => (await gameState(page)).mode, timeout === undefined ? {} : { timeout }).toBe(mode);
 }
 
 export function speed({ vx, vy }: CosmicAssaultTestShip): number {
   return Math.hypot(vx, vy);
 }
 
-/** Opens a one-life Rank run of GAME_OVER_GALAXY and GAME_OVER_SEED; start it, then call `waitForGameOver`. */
+/** Opens a one-life Rank run of GAME_OVER_GALAXY and the 'one-life-death' seed; start it, then call `waitForGameOver`. */
 export function openGameOverRun(page: Page): Promise<void> {
-  return openGame(page, { seed: GAME_OVER_SEED, lives: 1, galaxy: GAME_OVER_GALAXY });
+  return openGame(page, { seed: seedFor('one-life-death'), lives: 1, galaxy: GAME_OVER_GALAXY });
+}
+
+/** Opens BOSS_GALAXY in Free play with the 'boss-fight' seed, whose idle ship lives to the boss fight. */
+export function openBossGame(page: Page): Promise<void> {
+  return openGame(page, { seed: seedFor('boss-fight'), galaxy: BOSS_GALAXY });
 }
 
 /** Waits for the idle ship's only life to go (about 7 s of sim time; a starved renderer runs slower). */

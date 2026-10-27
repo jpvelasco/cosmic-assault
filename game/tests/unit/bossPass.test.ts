@@ -110,6 +110,24 @@ describe('createBossPass', () => {
     expect(pass.flash).toBe(0);
   });
 
+  it('draws the core as its white silhouette for the first 60 ms after a hit, then in colour again', () => {
+    pass.draw(boss(), 1, LOOK);
+    const core = baker.custom('boss|core|70', 0, () => undefined).canvas;
+    const white = baker.white('boss|core|70')?.canvas;
+    expect(white).toBeDefined();
+    draws.length = 0;
+    pass.handle([{ type: 'bossHit', x: 640, y: 200, hp: 19 }]);
+    pass.advance(0.05, boss());
+    pass.draw(boss(), 1, LOOK);
+    expect(draws.some(({ image }) => image === white)).toBe(true);
+    expect(draws.some(({ image }) => image === core)).toBe(false);
+    draws.length = 0;
+    pass.advance(0.02, boss());
+    pass.draw(boss(), 1, LOOK);
+    expect(draws.some(({ image }) => image === white)).toBe(false);
+    expect(draws.some(({ image }) => image === core)).toBe(true);
+  });
+
   it('fades the core in through its intro', () => {
     pass.advance(0.01, boss({ state: 'intro' }));
     pass.draw(boss({ state: 'intro' }), 1, LOOK);

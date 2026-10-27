@@ -26,6 +26,7 @@ export function stubArena(ship: Ship = createShip(BOSS_FIELD.width / 2, 600), fi
     elapsed: () => elapsed,
     score: () => 0,
     deaths: () => 0,
+    lives: () => 3,
     nextId: () => ++lastId,
     award: () => undefined,
     setStatus: () => undefined,

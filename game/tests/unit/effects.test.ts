@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { burstFor, createEffects } from '../../src/render/effects';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool, type Particle } from '../../src/render/particles';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
+import { PICKUP_COLORS } from '../../src/render/pickupArt';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -48,6 +49,35 @@ function positions(seed: number, withThrust: boolean): number[][] {
   });
   return out;
 }
+
+describe('burstFor: foes', () => {
+  const hurt: SimEvent = { type: 'foeHit', id: 1, x: 10, y: 20, hp: 1 };
+  const slain = (kind: 'splitter' | 'drone', points = 100): SimEvent => ({ type: 'foeDestroyed', id: 1, kind, x: 10, y: 20, points });
+
+  it('gives a foe hit the sparks of a boss hit, and a destroyed foe the burst of a rock of its weight', () => {
+    expect(burstFor(hurt, DRIFT)).toEqual(burstFor({ type: 'bossHit', x: 0, y: 0, hp: 3 }, DRIFT));
+    expect(burstFor(slain('splitter'), DRIFT)).toEqual(burstFor(DESTROYED(1), DRIFT));
+    expect(burstFor(slain('drone'), DRIFT)).toEqual(burstFor(DESTROYED(2), DRIFT));
+  });
+
+  it('gives a foe the warp cleared or the ship rammed the light puff of a cleared rock', () => {
+    expect(burstFor(slain('splitter', 0), DRIFT)).toEqual(burstFor(DESTROYED(0, 0), DRIFT));
+  });
+
+  it('keeps arriving foes and the well events silent', () => {
+    for (const event of [{ type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 }, { type: 'wellWarning', x: 0, y: 0, at: 30 }, { type: 'wellStart', id: 1 }, { type: 'wellEnd', id: 1 }] as const) {
+      expect(burstFor(event, DRIFT)).toBeNull();
+    }
+  });
+
+  it('emits particles where a foe was destroyed, from the effects\' own stream', () => {
+    const pool = new ParticlePool(400);
+    createEffects(pool, 3).handle([slain('splitter')], makeWorld());
+    const emitted = allParticles(pool);
+    expect(emitted.length).toBeGreaterThan(0);
+    expect(emitted.some((p) => Math.abs(p.x - 10) < 40 && Math.abs(p.y - 20) < 40)).toBe(true);
+  });
+});
 
 describe('burstFor', () => {
   it('matches the burst table for asteroid sizes', () => {
@@ -106,6 +136,39 @@ describe('burstFor', () => {
     expect(burstFor({ type: 'gameOver', score: 10 }, DRIFT)).toBeNull();
   });
 
+  it('pops a ring and sparks where a pickup drops, and as one is collected; a lapsed pickup or effect is quiet', () => {
+    const drop = burstFor({ type: 'pickupDropped', id: 1, kind: 'shield', x: 0, y: 0 }, DRIFT);
+    const take = burstFor({ type: 'pickupCollected', id: 1, kind: 'shield' }, DRIFT);
+    for (const burst of [drop, take]) {
+      expect(burst?.rings).toBeGreaterThan(0);
+      expect(burst?.sparks).toBeGreaterThan(0);
+      expect(burst?.shake).toBe(0);
+    }
+    expect(burstFor({ type: 'pickupExpired', id: 1 }, DRIFT)).toBeNull();
+    expect(burstFor({ type: 'effectEnded', kind: 'shield' }, DRIFT)).toBeNull();
+  });
+
+  it('shatters the Shield into shards with a little shake when it breaks', () => {
+    const burst = burstFor({ type: 'shieldBroken' }, DRIFT);
+    expect(burst?.shards).toBeGreaterThan(0);
+    expect(burst?.shake).toBeGreaterThan(0);
+  });
+
+  it('tints a pickup burst in its kind\'s colour, at the drop and at the ship that collects it', () => {
+    const pool = new ParticlePool(200);
+    const fx = createEffects(pool, 2);
+    const w = makeWorld();
+    fx.handle([{ type: 'pickupDropped', id: 1, kind: 'rapidFire', x: 100, y: 120 }], w);
+    const dropped = allParticles(pool);
+    expect(new Set(dropped.map((p) => p.color))).toEqual(new Set([PICKUP_COLORS.rapidFire]));
+    expect(dropped.find((p) => p.kind === 'ring')).toMatchObject({ x: 100, y: 120 });
+    pool.clear();
+    fx.handle([{ type: 'pickupCollected', id: 1, kind: 'doubleShot' }, { type: 'shieldBroken' }], w);
+    const at = allParticles(pool).filter((p) => p.kind === 'ring');
+    expect(at.map((p) => p.color).sort()).toEqual([PICKUP_COLORS.doubleShot, PICKUP_COLORS.shield].sort());
+    for (const ring of at) expect(ring).toMatchObject({ x: w.ship.x, y: w.ship.y });
+  });
+
   it('writes into a spec it is given, so one spec serves every event', () => {
     const into = { shards: -1, sparks: -1, rings: -1, smoke: -1, shake: -1, flash: -1, flashColor: '' };
     expect(burstFor(SHIP_HIT, DRIFT, into)).toBe(into);
@@ -115,6 +178,19 @@ describe('burstFor', () => {
 });
 
 describe('createEffects', () => {
+  it('bursts in the new palette once setPalette changes it, keeping its settings', () => {
+    const pool = new ParticlePool(200);
+    const fx = createEffects(pool, 1);
+    fx.reducedMotion = true;
+    fx.setPalette(ION_REACH);
+    expect(fx.reducedMotion).toBe(true);
+    expect(fx.flashColor).toBe(ION_REACH.ring);
+    fx.handle([DESTROYED(0)], makeWorld());
+    const all = allParticles(pool);
+    expect(new Set(all.filter((p) => p.kind === 'spark').map((p) => p.color))).toEqual(new Set([ION_REACH.spark]));
+    expect(all.filter((p) => p.kind === 'ring').every((p) => p.color === ION_REACH.ring)).toBe(true);
+  });
+
   it('emits the table counts for an asteroid kill, with palette colours', () => {
     const pool = new ParticlePool(200);
     const fx = createEffects(pool, 1);

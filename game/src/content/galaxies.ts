@@ -1,6 +1,7 @@
 import { showerSeconds } from './curves';
 import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
-import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, RockKind } from './types';
+import { poolFor } from './pickups';
+import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, MusicThemeId, PaletteId, ThreatKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   1: 'The Drift',
@@ -10,12 +11,38 @@ export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   5: 'Singularity',
 };
 
-/** Initial values; M5 balance tunes them. Every galaxy shares this one table. */
-const KIND_RAMPS: Readonly<Record<RockKind, KindRamp>> = {
+/** How each Dimension looks and sounds. The Dimensions after Ion Reach keep the Drift's until M6 gives them their own. */
+const LOOKS: Readonly<Record<Dimension, { readonly palette: PaletteId; readonly theme: MusicThemeId }>> = {
+  1: { palette: 'drift', theme: 'drift' },
+  2: { palette: 'ionReach', theme: 'ionReach' },
+  3: { palette: 'drift', theme: 'drift' },
+  4: { palette: 'drift', theme: 'drift' },
+  5: { palette: 'drift', theme: 'drift' },
+};
+
+type Ramps = Readonly<Record<ThreatKind, KindRamp>>;
+
+const ABSENT: KindRamp = { from: 0, base: 0, step: 0, max: 0 };
+
+/** Initial values; M5 balance tunes them. Every galaxy shares one of the three tables below. */
+const ROCKS: Ramps = {
   large: { from: 0, base: 0.6, step: 0, max: 0.6 },
   medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
   small: { from: 0.5, base: 0.1, step: 0.05, max: 0.4 },
+  splitter: ABSENT,
+  drone: ABSENT,
 };
+const SPLITTERS: Ramps = { ...ROCKS, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.35 } };
+const SWARMS: Ramps = { ...SPLITTERS, drone: { from: 1, base: 0.2, step: 0.08, max: 0.45 } };
+
+/**
+ * Splitters join from 1-3 and drones from Ion Reach, which keeps the splitters. The Dimensions after it keep their
+ * rocks until their own foes are made (M6).
+ */
+function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
+  if (dimension === 1) return index >= 3 ? SPLITTERS : ROCKS;
+  return dimension === 2 ? SWARMS : ROCKS;
+}
 
 /** M5 replaces this per Dimension. */
 const PLACEHOLDER_BOSS: BossId = 'sentinel';
@@ -34,6 +61,19 @@ function showers(dimension: Dimension, index: GalaxyIndex, duration: number): Ga
   return SHOWER_SHARES[index <= 3 ? 1 : 2].map((share) => ({ at: Math.min(latest, Math.round(duration * share)), type: 'meteorShower', intensity }));
 }
 
+/** Ion Reach's gravity wells by galaxy index: when one starts, and how hard it pulls. Each ends before the lull. */
+const WELLS: Readonly<Partial<Record<GalaxyIndex, readonly [at: number, intensity: GalaxyEvent['intensity']]>>> = {
+  2: [25, 1],
+  3: [28, 1],
+  4: [46, 2],
+  5: [46, 2],
+};
+
+function wells(dimension: Dimension, index: GalaxyIndex): GalaxyEvent[] {
+  const well = dimension === 2 ? WELLS[index] : undefined;
+  return well === undefined ? [] : [{ at: well[0], type: 'gravityWell', intensity: well[1] }];
+}
+
 /** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
 export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
   return `${String(dimension)}-${String(index)}` as GalaxyId;
@@ -48,11 +88,11 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     index,
     kind: boss ? 'boss' : 'survival',
     duration,
-    kinds: KIND_RAMPS,
-    events: boss ? [] : showers(dimension, index, duration),
-    pickups: [],
+    kinds: rampsFor(dimension, index),
+    events: boss ? [] : [...showers(dimension, index, duration), ...wells(dimension, index)].sort((a, b) => a.at - b.at),
+    pickups: poolFor(dimension),
     boss: boss ? PLACEHOLDER_BOSS : null,
-    palette: 'drift',
+    ...LOOKS[dimension],
   };
 }
 

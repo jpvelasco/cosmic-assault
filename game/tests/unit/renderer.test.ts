@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REBAKE_DELAY_MS } from '../../src/render/layout';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import { ParticlePool } from '../../src/render/particles';
 import { QUALITY_LEVELS } from '../../src/render/quality';
 import { blinkHidden, createRenderer, type Renderer } from '../../src/render/renderer';
@@ -9,12 +9,21 @@ import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
+import type { TimedPickupId } from '../../src/content/pickups';
+import { galaxyById } from '../../src/content/galaxies';
+import { foeKeys } from '../../src/render/foePass';
+import { CRACK_SECONDS } from '../../src/render/pickupPass';
+import type { Foe } from '../../src/sim/foes/foe';
+import type { WellState } from '../../src/sim/hazards/gravityWell';
+import type { Pickup } from '../../src/sim/pickups/pickups';
 import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
 
 interface DrawCall {
   readonly image: unknown;
+  /** The transform's x scale when the image was drawn: the field scale, times the sprite's own turn and scale. */
+  readonly a: number;
   /** The transform's x and y offset when the image was drawn. */
   readonly e: number;
   readonly f: number;
@@ -28,6 +37,8 @@ interface FakeCanvas {
   height: number;
   readonly style: Record<string, string>;
   readonly draws: DrawCall[];
+  /** The colour of every gradient stop added so far. */
+  readonly stops: string[];
   /** Arcs begun so far; the stars are the only thing drawn as arcs in the stub scene. */
   arcs: number;
   getContext(kind: string): unknown;
@@ -36,24 +47,26 @@ interface FakeCanvas {
 /** A canvas whose 2D context accepts every call and logs each drawImage with the transform offset in force. */
 function fakeCanvas(): FakeCanvas {
   const draws: DrawCall[] = [];
+  let a = 1;
   let e = 0;
   let f = 0;
   let alpha = 1;
   let smoothing = true;
-  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, arcs: 0, getContext: () => ctx };
-  const gradient = { addColorStop: () => undefined };
+  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, getContext: () => ctx };
+  const gradient = { addColorStop: (_at: number, color: string) => fake.stops.push(color) };
   const ctx = new Proxy(
     {},
     {
       get: (_target, name) => {
         switch (name) {
           case 'setTransform':
-            return (_a: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+            return (nextA: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+              a = nextA;
               e = nextE;
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, e, f, alpha, smoothing });
+            return (image: unknown) => draws.push({ image, a, e, f, alpha, smoothing });
           case 'arc':
             return () => fake.arcs++;
           case 'createLinearGradient':
@@ -80,6 +93,10 @@ interface Stub {
   elapsed: number;
   ship: { x: number; y: number; px: number; py: number; angle: number; pangle: number; vx: number; vy: number; thrusting: boolean; invulnerable: boolean };
   asteroids: Asteroid[];
+  foes: Foe[];
+  well: WellState | null;
+  pickups: Pickup[];
+  effects: Record<TimedPickupId, number>;
 }
 
 /** A world-shaped stub holding exactly what the renderer reads. */
@@ -93,6 +110,10 @@ function stubWorld(): { stub: Stub; world: World } {
     elapsed: 0,
     ship: { x: 640, y: 360, px: 640, py: 360, angle: 0, pangle: 0, vx: 0, vy: 0, thrusting: false, invulnerable: false },
     asteroids: [rock],
+    foes: [],
+    well: null,
+    pickups: [],
+    effects: { doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 },
   };
   const world = Object.assign(stub, { projectiles: [], score: 0, lives: 3, practiceLevel: 1, galaxy: null, timeLeft: null, multiplier: 1, boss: null, shower: null }) as unknown as World;
   return { stub, world };
@@ -219,6 +240,468 @@ describe('createRenderer', () => {
     expect(shipDrawn()).toBe(true);
     stub.status = 'gameOver';
     expect(shipDrawn()).toBe(false);
+  });
+
+  describe('setPalette', () => {
+    const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };
+
+    it('starts in the Drift and reports the palette in force', () => {
+      expect(renderer.palette).toBe('drift');
+      renderer.setPalette('ionReach');
+      expect(renderer.palette).toBe('ionReach');
+    });
+
+    it('re-bakes the sky once, at once, and draws every sprite kind from the new palette', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { stub, world } = stubWorld();
+      stub.foes.push({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      stub.pickups.push({ id: 3, kind: 'rapidFire', x: 700, y: 300, px: 700, py: 300, vx: 0, vy: 0, expiresIn: 9 });
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.setPalette('ionReach');
+      expect(setScale).toHaveBeenCalledTimes(1);
+      expect(renderer.consumeRedrawRequest()).toBe(true);
+      drawFrame(world, 1);
+      const drawn = (sprite: { readonly canvas: HTMLCanvasElement } | undefined): number => drawsOf(sprite?.canvas).length;
+      expect(drawsOf(baker.ship(ION_REACH).canvas)).toHaveLength(1);
+      expect(drawsOf(baker.ship(DRIFT).canvas)).toHaveLength(0);
+      expect(drawsOf(baker.asteroid(stub.asteroids[0] as Asteroid, ION_REACH).canvas)).toHaveLength(1);
+      expect(drawsOf(baker.asteroid(stub.asteroids[0] as Asteroid, DRIFT).canvas)).toHaveLength(0);
+      expect(drawn(baker.cached(foeKeys(ION_REACH).drone))).toBe(1);
+      expect(drawn(baker.cached(foeKeys(DRIFT).drone))).toBe(0);
+      expect(drawn(baker.cached('pickup|ionReach|rapidFire'))).toBe(1);
+      expect(baker.cached('pickup|drift|rapidFire')).toBeUndefined();
+    });
+
+    it('draws the HUD bars in the new palette', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      Object.assign(world, { galaxy: galaxyById('2-4'), timeLeft: 40 });
+      renderer.setPalette('ionReach');
+      canvas.stops.length = 0;
+      drawFrame(world, 1);
+      expect(canvas.stops).toContain(ION_REACH.accent[2]);
+      expect(canvas.stops).not.toContain(DRIFT.accent[2]);
+    });
+
+    it('re-bakes nothing for the palette already in force', () => {
+      renderer.resize(1280, 720, FIELD);
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.setPalette('drift');
+      expect(setScale).not.toHaveBeenCalled();
+      expect(renderer.consumeRedrawRequest()).toBe(false);
+    });
+
+    it('colours bursts and the HUD in the new palette, and keeps the effects object the settings hold', () => {
+      const { effects } = renderer;
+      effects.reducedMotion = true;
+      renderer.setPalette('ionReach');
+      expect(renderer.effects).toBe(effects);
+      expect(effects.reducedMotion).toBe(true);
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      renderer.handle([slain], world);
+      expect(particles.count).toBeGreaterThan(0);
+      let ringColors = 0;
+      particles.forEach((p) => {
+        if (p.kind === 'ring') {
+          expect(p.color).toBe(ION_REACH.ring);
+          ringColors++;
+        }
+      });
+      expect(ringColors).toBeGreaterThan(0);
+    });
+
+    it('waits for the first resize when it comes before one, and then bakes in the new palette', () => {
+      renderer.setPalette('ionReach');
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.resize(1280, 720, FIELD);
+      expect(setScale).toHaveBeenCalledTimes(1);
+      drawFrame(stubWorld().world, 1);
+      expect(canvas.draws.some((call) => call.image === baker.ship(ION_REACH).canvas)).toBe(true);
+    });
+  });
+
+  describe('hit-object juice', () => {
+    const FRAME = 1 / 60;
+    const shipHit: SimEvent = { type: 'shipHit', x: 640, y: 360, livesLeft: 2 };
+
+    /** Draws the rock once so it has a sprite, then breaks it; returns the white silhouette the flash should show. */
+    function breakRock(world: World): HTMLCanvasElement {
+      renderer.resize(1280, 720, FIELD);
+      drawFrame(world, 1);
+      const key = baker.whiteRock(5);
+      const white = key === undefined ? undefined : baker.cached(key);
+      if (white === undefined) throw new Error('the drawn rock must have a white silhouette');
+      renderer.handle([destroyed(5)], world);
+      return white.canvas;
+    }
+
+    function advanceFrames(world: World, frames: number): void {
+      for (let i = 0; i < frames; i++) renderer.advance(FRAME, world, false);
+    }
+
+    it('flashes a destroyed rock white where it broke, for 60 ms', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      drawFrame(world, 1);
+      // The break's shake moves the scene down, not sideways, in its first instant.
+      expect(drawsOf(white).map((call) => call.e)).toEqual([300]);
+      advanceFrames(world, 3);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(1);
+      advanceFrames(world, 2);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(0);
+    });
+
+    it('fades the flash out as it goes', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      drawFrame(world, 1);
+      const first = drawsOf(white)[0]?.alpha ?? 0;
+      advanceFrames(world, 2);
+      drawFrame(world, 1);
+      const later = drawsOf(white)[0]?.alpha ?? 0;
+      expect(first).toBe(1);
+      expect(later).toBeGreaterThan(0);
+      expect(later).toBeLessThan(first);
+    });
+
+    it('keeps the flash under reduced motion, a lighter touch than the full-screen flash it drops', () => {
+      const { world } = stubWorld();
+      renderer.effects.reducedMotion = true;
+      const white = breakRock(world);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(1);
+    });
+
+    it('draws no flash, and nothing empty, when a rebake drops the silhouette mid-flash', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      baker.setScale(2, 1);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(0);
+      expect(canvas.draws.every((call) => (call.image as HTMLCanvasElement).width > 0)).toBe(true);
+    });
+
+    it('shows no flash for a rock that was never drawn, or that the warp cleared', () => {
+      const { world } = stubWorld();
+      renderer.resize(1280, 720, FIELD);
+      renderer.handle([destroyed(5), { type: 'asteroidDestroyed', id: 5, x: 300, y: 300, size: 0, points: 0 }], world);
+      drawFrame(world, 1);
+      // The frame bakes the rock; its silhouette (made now, after the fact) was never drawn.
+      const key = baker.whiteRock(5);
+      expect(drawsOf(key === undefined ? null : baker.cached(key)?.canvas)).toHaveLength(0);
+    });
+
+    describe('foes', () => {
+      const KEYS = foeKeys(DRIFT);
+      const drone = (): Foe => ({ id: 9, kind: 'drone', x: 400, y: 300, vx: 0, vy: 0, px: 400, py: 300, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 });
+      const spawned: SimEvent = { type: 'foeSpawned', id: 9, kind: 'drone', x: 400, y: 300 };
+      const hurt: SimEvent = { type: 'foeHit', id: 9, x: 400, y: 300, hp: 1 };
+      const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };
+
+      /** Draws the drone once so it has a sprite; returns the sprite its flash should show. */
+      function drawnDrone(): { world: World; stub: Stub; white: HTMLCanvasElement } {
+        const { stub, world } = stubWorld();
+        stub.foes.push(drone());
+        renderer.resize(1280, 720, FIELD);
+        renderer.handle([spawned], world);
+        drawFrame(world, 1);
+        const white = baker.white(KEYS.drone);
+        if (white === undefined) throw new Error('the drawn drone must have a white silhouette');
+        return { world, stub, white: white.canvas };
+      }
+
+      it('draws a foe where it is, from a baked sprite', () => {
+        const { world } = drawnDrone();
+        const sprite = baker.cached(KEYS.drone);
+        expect(drawsOf(sprite?.canvas)).toHaveLength(1);
+        expect(drawsOf(sprite?.canvas)[0]?.e).toBe(400);
+        drawFrame(world, 1);
+        expect(drawsOf(sprite?.canvas)).toHaveLength(1);
+      });
+
+      it('turns a drone to its heading, with its engine glow behind it', () => {
+        const { world, stub } = drawnDrone();
+        stub.foes[0] = { ...drone(), rotation: Math.PI / 2, protation: Math.PI / 2 };
+        drawFrame(world, 1);
+        const body = drawsOf(baker.cached(KEYS.drone)?.canvas)[0];
+        // Turned a quarter: the transform's x scale is cos(π/2) = 0.
+        expect(body?.a).toBeCloseTo(0, 9);
+        const engine = canvas.draws.find((call) => call.f !== 300 && Math.abs(call.e - 400) < 1e-9);
+        expect(engine?.f).toBeLessThan(300);
+      });
+
+      it('shows a splitter one hit from breaking with its seams cracked open', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        const splitter: Foe = { ...drone(), kind: 'splitter', radius: 30, hp: 2 };
+        stub.foes.push(splitter);
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached(KEYS.splitter)?.canvas)).toHaveLength(1);
+        expect(baker.cached(KEYS.crackedSplitter)).toBeUndefined();
+        splitter.hp = 1;
+        drawFrame(world, 1);
+        expect(drawsOf(baker.cached(KEYS.crackedSplitter)?.canvas)).toHaveLength(1);
+        expect(drawsOf(baker.cached(KEYS.splitter)?.canvas)).toHaveLength(0);
+      });
+
+      it('skips a foe that is spent (HP 0) but not yet swept', () => {
+        const { world, stub } = drawnDrone();
+        const sprite = baker.cached(KEYS.drone);
+        stub.foes[0] = { ...drone(), hp: 0 };
+        drawFrame(world, 1);
+        expect(drawsOf(sprite?.canvas)).toHaveLength(0);
+      });
+
+      it.each([
+        ['hit', hurt],
+        ['destroyed', slain],
+      ])('flashes a foe white where it was %s, for 60 ms, fading', (_name, event) => {
+        const { world, stub, white } = drawnDrone();
+        renderer.handle([event], world);
+        stub.foes.length = 0;
+        drawFrame(world, 1);
+        expect(drawsOf(white).map((call) => call.e)).toEqual([400]);
+        const first = drawsOf(white)[0]?.alpha ?? 0;
+        advanceFrames(world, 2);
+        drawFrame(world, 1);
+        const later = drawsOf(white)[0]?.alpha ?? 0;
+        expect(later).toBeGreaterThan(0);
+        expect(later).toBeLessThan(first);
+        advanceFrames(world, 3);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+      });
+
+      it('shows no flash for a foe the warp cleared or the ship rammed (0 points)', () => {
+        const { world, white } = drawnDrone();
+        renderer.handle([{ ...slain, points: 0 }], world);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+      });
+
+      it('draws no flash, and nothing empty, when a rebake drops the silhouette mid-flash', () => {
+        const { world, white } = drawnDrone();
+        renderer.handle([hurt], world);
+        baker.setScale(2, 1);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+        expect(canvas.draws.every((call) => (call.image as HTMLCanvasElement).width > 0)).toBe(true);
+      });
+
+      it('drops a foe flash when a new run starts', () => {
+        const { world, white } = drawnDrone();
+        renderer.handle([hurt], world);
+        renderer.reset();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(drawsOf(white)).toHaveLength(0);
+      });
+    });
+
+    describe('a gravity well', () => {
+      const well = (stage: 'warning' | 'active', remaining = 5): WellState => ({ id: 2, stage, x: 600, y: 300, intensity: 2, remaining });
+      const sprite = (name: string): HTMLCanvasElement | undefined => baker.cached(`well|drift|${name}`)?.canvas;
+      const ARCS = ['arc0', 'arc1', 'arc2'] as const;
+
+      it('is a faint outline alone while it is a warning, pulsing and closing in as it comes due', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.well = well('warning', 2);
+        drawFrame(world, 1);
+        const early = drawsOf(sprite('outline'));
+        expect(early.map((call) => call.e)).toEqual([600]);
+        expect(early[0]?.alpha).toBeLessThan(0.7);
+        for (const name of [...ARCS, 'horizon']) expect(sprite(name)).toBeUndefined();
+        stub.well = well('warning', 0.2);
+        stub.elapsed = 0.3;
+        drawFrame(world, 1);
+        const late = drawsOf(sprite('outline'))[0];
+        expect(late?.a).toBeLessThan(early[0]?.a ?? 0);
+        expect(late?.alpha).not.toBe(early[0]?.alpha);
+      });
+
+      it('swirls once it pulls: a glow, three arcs that turn with time, and the dark lens over them', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.well = well('active');
+        drawFrame(world, 1);
+        expect(sprite('outline')).toBeUndefined();
+        const order = canvas.draws.filter((call) => call.e !== 0 && call.e !== 640).map((call) => call.image);
+        const arcs = ARCS.map(sprite);
+        for (const arc of arcs) expect(drawsOf(arc)).toHaveLength(1);
+        expect(order.indexOf(sprite('horizon'))).toBeGreaterThan(Math.max(...arcs.map((arc) => order.indexOf(arc))));
+        const before = drawsOf(arcs[0])[0]?.a;
+        stub.elapsed = 0.5;
+        drawFrame(world, 1);
+        expect(drawsOf(arcs[0])[0]?.a).not.toBeCloseTo(before ?? 0, 3);
+      });
+
+      it('holds its arcs still under reduced motion, breathing only in opacity, gently', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        renderer.effects.reducedMotion = true;
+        stub.well = well('active');
+        const frames = [0, 0.35, 0.7, 1.05, 1.4].map((elapsed) => {
+          stub.elapsed = elapsed;
+          drawFrame(world, 1);
+          return ARCS.map((name) => drawsOf(sprite(name))[0]);
+        });
+        for (const [i] of ARCS.entries()) {
+          const angles = new Set(frames.map((arcs) => arcs[i]?.a));
+          expect(angles.size, ARCS[i]).toBe(1);
+          const alphas = frames.map((arcs) => arcs[i]?.alpha ?? Number.NaN);
+          expect(new Set(alphas).size).toBeGreaterThan(1);
+          expect(Math.min(...alphas)).toBeGreaterThanOrEqual(0.6 - 1e-9);
+          expect(Math.max(...alphas)).toBeLessThanOrEqual(1);
+        }
+      });
+
+      it('swirls up as it starts and fades out as it ends', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        const arcAlpha = (remaining: number): number => {
+          stub.well = well('active', remaining);
+          drawFrame(world, 1);
+          return drawsOf(sprite('arc1'))[0]?.alpha ?? Number.NaN;
+        };
+        expect(arcAlpha(14)).toBe(0);
+        expect(arcAlpha(13.8)).toBeGreaterThan(0);
+        expect(arcAlpha(13.8)).toBeLessThan(1);
+        expect(arcAlpha(7)).toBe(1);
+        expect(arcAlpha(0.4)).toBeCloseTo(0.5, 9);
+      });
+
+      it('is not drawn when there is none', () => {
+        const { world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        for (const name of [...ARCS, 'horizon', 'outline']) expect(sprite(name)).toBeUndefined();
+      });
+    });
+
+    describe('pickups and the Shield', () => {
+      const capsule = (kind: string): HTMLCanvasElement | undefined => baker.cached(`pickup|drift|${kind}`)?.canvas;
+      const ring = (): HTMLCanvasElement | undefined => baker.cached('shield|drift|ring')?.canvas;
+      const crack = (): HTMLCanvasElement | undefined => baker.cached('shield|drift|crack')?.canvas;
+      const pickup = (id: number, kind: Pickup['kind'], expiresIn: number): Pickup => ({ id, kind, x: 200 + id * 100, y: 400, px: 200 + id * 100, py: 400, vx: 0, vy: 0, expiresIn });
+
+      it('draws each pickup as the capsule of its kind where it is, whole until its last 2 s, then blinking', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.pickups.push(pickup(1, 'shield', 6), pickup(2, 'rapidFire', 1.9));
+        drawFrame(world, 1);
+        expect(drawsOf(capsule('shield')).map((call) => [call.e, call.alpha])).toEqual([[300, 1]]);
+        const blinking = drawsOf(capsule('rapidFire'))[0];
+        expect(blinking?.e).toBe(400);
+        expect(blinking?.alpha).toBeLessThan(1);
+        (stub.pickups[1] as Pickup).expiresIn = 1.8;
+        drawFrame(world, 1);
+        expect(drawsOf(capsule('rapidFire'))[0]?.alpha).toBe(1);
+      });
+
+      it('rings the ship while the Shield is up, blinking through its last 2 s, and not otherwise', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(ring()).toBeUndefined();
+        stub.effects.shield = 10;
+        drawFrame(world, 1);
+        expect(drawsOf(ring()).map((call) => call.e)).toEqual([640]);
+        const steady = drawsOf(ring())[0]?.alpha ?? 0;
+        stub.effects.shield = 1.9;
+        drawFrame(world, 1);
+        expect(drawsOf(ring())[0]?.alpha).toBeLessThan(steady);
+        // Even while an invulnerable ship blinks out.
+        stub.ship.invulnerable = true;
+        stub.elapsed = 0.06;
+        drawFrame(world, 1);
+        expect(drawsOf(baker.ship(DRIFT).canvas)).toHaveLength(0);
+        expect(drawsOf(ring())).toHaveLength(1);
+      });
+
+      it('cracks the ring apart when the Shield breaks, growing and fading, gone after the crack', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        renderer.handle([{ type: 'shieldBroken' }], world);
+        drawFrame(world, 1);
+        const first = drawsOf(crack())[0];
+        expect(first?.e).toBe(640);
+        expect(first?.alpha).toBe(1);
+        renderer.advance(CRACK_SECONDS / 2, world, false);
+        drawFrame(world, 1);
+        const later = drawsOf(crack())[0];
+        expect(later?.alpha).toBeCloseTo(0.5, 9);
+        expect(later?.a).toBeGreaterThan(first?.a ?? 0);
+        renderer.advance(CRACK_SECONDS / 2, world, false);
+        drawFrame(world, 1);
+        expect(drawsOf(crack())).toHaveLength(0);
+        expect(stub.effects.shield).toBe(0);
+        expect(drawsOf(ring())).toHaveLength(0);
+      });
+
+      it('drops a crack in progress when a new run starts', () => {
+        const { world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        renderer.handle([{ type: 'shieldBroken' }], world);
+        renderer.reset();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(crack()).toBeUndefined();
+      });
+    });
+
+    /** The x scale the ship hull is drawn with now. */
+    function shipScale(world: World): number {
+      drawFrame(world, 1);
+      return drawsOf(baker.ship(DRIFT).canvas)[0]?.a ?? 0;
+    }
+
+    it('squashes the ship to 0.9 for a hit, easing back in 80 ms', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const rest = shipScale(world);
+      expect(rest).toBeGreaterThan(0);
+      renderer.handle([shipHit], world);
+      expect(shipScale(world) / rest).toBeCloseTo(0.9);
+      advanceFrames(world, 2);
+      const middle = shipScale(world) / rest;
+      expect(middle).toBeGreaterThan(0.9);
+      expect(middle).toBeLessThan(1);
+      advanceFrames(world, 3);
+      expect(shipScale(world)).toBe(rest);
+    });
+
+    it('squashes the ship through hit-stop, which only freezes the sim', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const rest = shipScale(world);
+      renderer.handle([shipHit], world);
+      expect(shipScale(world) / rest).toBeCloseTo(0.9);
+      for (let i = 0; i < 6; i++) renderer.advance(FRAME, world, true);
+      expect(shipScale(world)).toBe(rest);
+    });
+
+    it('does not squash the ship under reduced motion', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      const rest = shipScale(world);
+      renderer.effects.reducedMotion = true;
+      renderer.handle([shipHit], world);
+      expect(shipScale(world)).toBe(rest);
+    });
+
+    it('drops every flash and the squash when a new run starts', () => {
+      const { world } = stubWorld();
+      const white = breakRock(world);
+      renderer.handle([shipHit], world);
+      renderer.reset();
+      renderer.resize(1280, 720, FIELD);
+      drawFrame(world, 1);
+      expect(drawsOf(white)).toHaveLength(0);
+    });
   });
 
   it('reset() frees the sprites and particles of the previous run', () => {

@@ -12,6 +12,7 @@ import {
   waitForGameOver,
   waitOutGameOverGuard,
 } from './fixtures';
+import { FREE_GAME_OVER_SECONDS, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /** Starts the one-life Rank run of the game-over galaxy; its game over card offers Continue and Title. */
 async function startOneLifeRun(page: Page): Promise<void> {
@@ -120,11 +121,11 @@ test('a fire key held through the restart does not fire until pressed again', as
 });
 
 test('a Free play game over offers Retry, which plays the galaxy again at once, and Map', async ({ page }) => {
-  // Three lives in 5-5: seed 30's idle ship loses its last about 17 s in, so the test fast-forwards there.
-  await openGame(page, { galaxy: '5-5', seed: 30 });
+  // Three lives in 5-5: the 'free-game-over' seed's idle ship loses its last about 17 s in, so the test fast-forwards there.
+  await openGame(page, { galaxy: GAME_OVER_GALAXY, seed: seedFor('free-game-over') });
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
-  await fastForward(page, 40);
+  await fastForward(page, FREE_GAME_OVER_SECONDS);
   await expectMode(page, 'gameOver');
   await expect(page.getByTestId('rank-continue')).toBeHidden();
   await waitOutGameOverGuard(page);
@@ -133,7 +134,7 @@ test('a Free play game over offers Retry, which plays the galaxy again at once, 
   await expectMode(page, 'playing');
   expect(await gameState(page)).toMatchObject({ galaxy: '5-5', lives: 3, rankRun: null });
 
-  await fastForward(page, 40);
+  await fastForward(page, FREE_GAME_OVER_SECONDS);
   await expectMode(page, 'gameOver');
   await waitOutGameOverGuard(page);
   await page.getByTestId('results-map').click();

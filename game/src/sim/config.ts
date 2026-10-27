@@ -51,3 +51,27 @@ export const WEAPON_SPREAD: readonly (readonly number[])[] = [
   [0, -0.18, 0.18],
   [0, -0.18, 0.18, -0.3, 0.3],
 ];
+
+export const MAX_WEAPON_TIER = 3;
+
+/** How shots combine. A volley never exceeds `maxShots`: the widest tier fires 5, Double Shot adds 1 and Spread Laser 2. */
+export const VOLLEY = {
+  maxShots: 8,
+  /** Double Shot turns the centre shot into a pair, this far to either side of the nose axis. */
+  parallelOffset: 6,
+  /** Spread Laser adds a shot at each of `+angle` and `-angle`. */
+  spreadLaserAngle: 0.22,
+  /** Rapid Fire multiplies the fire interval by this. */
+  rapidFireScale: 0.6,
+} as const;
+
+export const PICKUP = {
+  radius: 14,
+  /** Units per second. */
+  drift: 20,
+  /** Seconds a pickup waits before it expires. */
+  lifespan: 8,
+  /** It blinks for this long before it expires. */
+  blinkSeconds: 2,
+  maxOnField: 2,
+} as const;

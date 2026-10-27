@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DRIFT } from '../../src/render/palette';
+import { foeKeys } from '../../src/render/foePass';
+import { DRIFT, ION_REACH } from '../../src/render/palette';
 import {
   craterLayout,
   createSpriteBaker,
@@ -222,6 +223,20 @@ describe('createSpriteBaker', () => {
     expect(baker.asteroid(rock(4), DRIFT)).not.toBe(baker.asteroid(a, DRIFT));
   });
 
+  it('keys every sprite by palette, so a new palette bakes its own and the old ones are never looked up again', () => {
+    const baker = createSpriteBaker();
+    baker.setScale(1, 1);
+    expect(baker.ship(ION_REACH)).not.toBe(baker.ship(DRIFT));
+    expect(baker.shot(ION_REACH)).not.toBe(baker.shot(DRIFT));
+    expect(baker.flame(ION_REACH, 16)).not.toBe(baker.flame(DRIFT, 16));
+    expect(baker.ship(ION_REACH)).toBe(baker.ship(ION_REACH));
+  });
+
+  it('keys the foe sprites by palette too', () => {
+    const keys = [...Object.values(foeKeys(DRIFT)), ...Object.values(foeKeys(ION_REACH))];
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it('frees and rebakes everything when the scale or dpr changes, and keeps the cache otherwise', () => {
     const baker = createSpriteBaker();
     baker.setScale(1, 2);
@@ -283,7 +298,7 @@ describe('createSpriteBaker', () => {
     const baker = createSpriteBaker();
     const a = rock(7);
     const drift = baker.asteroid(a, DRIFT);
-    const other = baker.asteroid(a, { ...DRIFT, id: 'other' });
+    const other = baker.asteroid(a, ION_REACH);
     expect(other).not.toBe(drift);
     expect(baker.asteroid(a, DRIFT)).toBe(drift);
   });
@@ -309,6 +324,114 @@ describe('createSpriteBaker', () => {
     baker.asteroid(rock(3), DRIFT);
     expect(first.canvas.width).toBe(0);
     expect(created).toHaveLength(3);
+  });
+
+  describe('white silhouettes', () => {
+    /** Canvases whose context logs the calls that decide the look of a white bake. */
+    function recordingCanvases(): { calls: string[][]; canvases: unknown[] } {
+      const calls: string[][] = [];
+      const canvases: unknown[] = [];
+      vi.stubGlobal('document', {
+        createElement: () => {
+          const log: string[] = [];
+          calls.push(log);
+          const gradient = { addColorStop: () => undefined };
+          const ctx = new Proxy(
+            {},
+            {
+              get: (_target, name) => {
+                if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => gradient;
+                return (...args: unknown[]) => log.push(`${String(name)}(${args.map((arg) => (typeof arg === 'number' ? String(arg) : 'canvas')).join(',')})`);
+              },
+              set: (_target, name, value) => {
+                log.push(`${String(name)}=${String(value)}`);
+                return true;
+              },
+            },
+          );
+          const canvas = { width: 0, height: 0, getContext: () => ctx };
+          canvases.push(canvas);
+          return canvas;
+        },
+      });
+      return { calls, canvases };
+    }
+
+    it('bakes a rock, then stamps it solid white: draw it, then fill white only where it has pixels', () => {
+      const { calls } = recordingCanvases();
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      const body = baker.asteroid(a, DRIFT);
+      const key = baker.whiteRock(a.id);
+      const white = key === undefined ? undefined : baker.cached(key);
+      expect(white).toBeDefined();
+      expect(white?.canvas).not.toBe(body.canvas);
+      expect(white?.halfW).toBe(body.halfW);
+      expect(white?.halfH).toBe(body.halfH);
+      expect(white?.canvas.width).toBe(body.canvas.width);
+      const log = calls.at(-1) ?? [];
+      expect(log).toEqual(['drawImage(canvas,0,0)', 'globalCompositeOperation=source-in', 'fillStyle=#ffffff', expect.stringMatching(/^fillRect\(0,0,/)]);
+      expect(log.some((entry) => entry.startsWith('shadowBlur') || entry.startsWith('filter'))).toBe(false);
+    });
+
+    it('is baked once per rock, and not for a rock never drawn', () => {
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      expect(baker.whiteRock(a.id)).toBeUndefined();
+      baker.asteroid(a, DRIFT);
+      const key = baker.whiteRock(a.id);
+      expect(key).toBeDefined();
+      expect(baker.whiteRock(a.id)).toBe(key);
+      const key2 = key ?? '';
+      expect(baker.cached(key2)).toBe(baker.cached(key2));
+    });
+
+    it('outlives the rock\'s own sprite, so a flash can finish after the rock is forgotten', () => {
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      baker.asteroid(a, DRIFT);
+      const key = baker.whiteRock(a.id) ?? '';
+      baker.forget(a.id);
+      expect(baker.cached(key)?.canvas.width).toBeGreaterThan(0);
+      expect(baker.whiteRock(a.id)).toBeUndefined();
+    });
+
+    it('whitens a custom sprite by key, and only one that is cached', () => {
+      const baker = createSpriteBaker();
+      expect(baker.white('boss|core|70')).toBeUndefined();
+      const core = baker.custom('boss|core|70', 72, () => undefined);
+      const white = baker.white('boss|core|70');
+      expect(white?.canvas).not.toBe(core.canvas);
+      expect(white?.halfW).toBe(core.halfW);
+      expect(baker.white('boss|core|70')).toBe(white);
+    });
+
+    it('is gone from the cache, not a zero-size canvas, once the scale changes', () => {
+      const baker = createSpriteBaker();
+      const a = rock(3);
+      baker.asteroid(a, DRIFT);
+      const key = baker.whiteRock(a.id) ?? '';
+      const white = baker.cached(key);
+      baker.setScale(2, 1);
+      expect(white?.canvas.width).toBe(0);
+      expect(baker.cached(key)).toBeUndefined();
+    });
+
+    it('asks for no new key string each time a custom sprite is whitened', () => {
+      const baker = createSpriteBaker();
+      baker.custom('boss|core|70', 72, () => undefined);
+      const first = baker.white('boss|core|70');
+      expect(baker.white('boss|core|70')).toBe(first);
+    });
+
+    it('is rebaked with the rest when the scale changes', () => {
+      const baker = createSpriteBaker();
+      baker.custom('k', 10, () => undefined);
+      const white = baker.white('k');
+      baker.setScale(2, 1);
+      expect(white?.canvas.width).toBe(0);
+      expect(baker.white('k')).toBeUndefined();
+    });
   });
 
   it('rejects a scale that is not positive and finite', () => {

@@ -6,9 +6,9 @@ import {
   expectMode,
   fastForward,
   gameState,
+  openBossGame,
   openFreshGame,
   openGalaxySelect,
-  openGame,
   pinClockSeed,
   playFreeGalaxy,
   seedSave,
@@ -18,13 +18,13 @@ import {
   waitForBridge,
 } from './fixtures';
 import { STEP_SECONDS } from '../src/sim/config';
-import { BOSS_GALAXY, CLEAR_1_1_SECONDS, E2E_SEED, SURVIVES_1_1, TO_BOSS_FIGHT_SECONDS } from './seed';
+import { BOSS_GALAXY, CLEAR_1_1_SECONDS, seedFor, TO_BOSS_FIGHT_SECONDS } from './seeds';
 
 /** More than any boss' hit points. */
 const KILL_DAMAGE = 100;
 
 test('Free play: 1-1 clears to a results card with its stars, saved as the warp starts, opens 1-2 on the map, and a reload keeps it', async ({ page }) => {
-  await pinClockSeed(page, SURVIVES_1_1);
+  await pinClockSeed(page, seedFor('clears-1-1'));
   await openFreshGame(page);
   await openGalaxySelect(page, 1);
   await expect(page.getByTestId('galaxy-1-1')).toBeEnabled();
@@ -58,7 +58,7 @@ test('Free play: 1-1 clears to a results card with its stars, saved as the warp 
 
 test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
   test('a debug run beats the Sentinel and shows the results card, and leaves the save alone', async ({ page }) => {
-    await openGame(page, { galaxy: BOSS_GALAXY });
+    await openBossGame(page);
     await page.keyboard.press('Space');
     await expectMode(page, 'playing');
     expect((await gameState(page)).save.frontier).toBe('1-1');
@@ -78,7 +78,7 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
   });
 
   test('damaging a boss that is not fighting is refused, with what to do', async ({ page }) => {
-    await openGame(page, { galaxy: BOSS_GALAXY });
+    await openBossGame(page);
     await page.keyboard.press('Space');
     await expectMode(page, 'playing');
 
@@ -96,7 +96,7 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
   test('the normal flow records the boss clear and opens Dimension 2', async ({ page }) => {
     const save: SaveData = { ...defaultSave(), frontier: BOSS_GALAXY };
     await seedSave(page, save);
-    await pinClockSeed(page, E2E_SEED);
+    await pinClockSeed(page, seedFor('boss-fight'));
     await openFreshGame(page);
     await page.getByTestId('play').click();
     await page.getByTestId('mode-free').click();
@@ -122,7 +122,7 @@ test.describe(`boss galaxy ${BOSS_GALAXY}`, () => {
 });
 
 test('a clear in one tab opens the next galaxy in another without a reload, and the other tab keeps it when it writes', async ({ page, context }) => {
-  await pinClockSeed(page, SURVIVES_1_1);
+  await pinClockSeed(page, seedFor('clears-1-1'));
   await openFreshGame(page);
   const other = await context.newPage();
   await openFreshGame(other);
@@ -175,7 +175,7 @@ test.describe('a save that cannot be read', () => {
   }
 
   test('after one, the game still plays, and its next write replaces the unreadable text with a valid save', async ({ page }) => {
-    await pinClockSeed(page, SURVIVES_1_1);
+    await pinClockSeed(page, seedFor('clears-1-1'));
     await openWithStoredText(page, 'not json {{{');
     await playFreeGalaxy(page, '1-1');
 

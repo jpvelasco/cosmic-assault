@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES, galaxyOrdinal } from '../../src/content/galaxies';
+import { PICKUP_IDS } from '../../src/content/pickups';
 import { createRng, type Rng } from '../../src/sim/rng';
 import { defaultSave, MAX_RANK_SEQ, mergeSaves, parseSave, SAVE_KEY, sanitizeSave, type SaveData } from '../../src/meta/save';
 import type { RankEntry } from '../../src/meta/rankBoard';
@@ -16,17 +17,19 @@ const GOOD: SaveData = {
   rankBoard: [ENTRY],
   classicBest: 4400,
   classicImported: true,
+  seenPickups: ['doubleShot', 'shield'],
 };
 
 describe('defaults', () => {
   it('start at 1-1 with nothing cleared', () => {
     expect(SAVE_KEY).toBe('cosmic-assault.v2');
-    expect(defaultSave()).toEqual({ version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false });
+    expect(defaultSave()).toEqual({ version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false, seenPickups: [] });
   });
 
   it('are a fresh copy each time', () => {
     expect(defaultSave()).not.toBe(defaultSave());
     expect(defaultSave().galaxies).not.toBe(defaultSave().galaxies);
+    expect(defaultSave().seenPickups).not.toBe(defaultSave().seenPickups);
   });
 });
 
@@ -132,6 +135,38 @@ describe('sanitizeSave', () => {
       const older: Record<string, unknown> = { ...RUN };
       delete older['inGalaxy'];
       expect(sanitizeSave({ rankRun: older }).rankRun).toEqual({ ...RUN, inGalaxy: false });
+    });
+  });
+
+  describe('seenPickups', () => {
+    it('keeps the known kinds', () => {
+      expect(sanitizeSave({ seenPickups: ['doubleShot', 'shield'] }).seenPickups).toEqual(['doubleShot', 'shield']);
+    });
+
+    it('drops unknown ids and things that are not ids', () => {
+      expect(sanitizeSave({ seenPickups: ['doubleShot', 'laserBeam', 7, null, {}, [], 'DoubleShot', ' shield'] }).seenPickups).toEqual(['doubleShot']);
+    });
+
+    it('drops duplicates', () => {
+      expect(sanitizeSave({ seenPickups: ['shield', 'shield', 'shield'] }).seenPickups).toEqual(['shield']);
+    });
+
+    it('lists kinds in the table\'s order, whatever order they were saved in', () => {
+      expect(sanitizeSave({ seenPickups: ['spreadLaser', 'weaponCore', 'shield'] }).seenPickups).toEqual(['weaponCore', 'shield', 'spreadLaser']);
+    });
+
+    it.each([undefined, null, 'doubleShot', 5, {}, { doubleShot: true }])('reads %j as none seen', (seenPickups) => {
+      expect(sanitizeSave({ ...GOOD, seenPickups }).seenPickups).toEqual([]);
+    });
+
+    it('reads a save made before pickups as none seen, costing nothing else', () => {
+      const older: Record<string, unknown> = { ...GOOD };
+      delete older['seenPickups'];
+      expect(sanitizeSave(older)).toEqual({ ...GOOD, seenPickups: [] });
+    });
+
+    it('does not cost the other fields', () => {
+      expect(sanitizeSave({ ...GOOD, seenPickups: 'bad' })).toEqual({ ...GOOD, seenPickups: [] });
     });
   });
 
@@ -256,6 +291,13 @@ describe('mergeSaves', () => {
     expect(mergeSaves(mergeSaves(a, b), b)).toEqual(mergeSaves(a, b));
   });
 
+  it('unions the pickups seen on either side, in the table\'s order', () => {
+    const x = { ...a, seenPickups: ['shield', 'spreadLaser'] as const };
+    const y = { ...b, seenPickups: ['weaponCore', 'shield'] as const };
+    for (const merged of [mergeSaves(x, y), mergeSaves(y, x)]) expect(merged.seenPickups).toEqual(['weaponCore', 'shield', 'spreadLaser']);
+    expect(mergeSaves(a, b).seenPickups).toEqual([]);
+  });
+
   it('keeps the larger classic best and any import mark', () => {
     expect(mergeSaves(a, b)).toMatchObject({ classicBest: 80, classicImported: true });
     expect(mergeSaves(a, defaultSave()).classicBest).toBe(50);
@@ -368,6 +410,7 @@ describe('mergeSaves over seeded random pairs', () => {
       rankBoard: board,
       classicBest: rng.chance(0.5) ? rng.int(0, 5) * 1000 : null,
       classicImported: rng.chance(0.5),
+      seenPickups: PICKUP_IDS.filter(() => rng.chance(0.4)),
     });
   }
 
@@ -396,6 +439,7 @@ describe('mergeSaves over seeded random pairs', () => {
       const m = mergeSaves(a, b);
       expect(galaxyOrdinal(m.frontier)).toBe(Math.max(galaxyOrdinal(a.frontier), galaxyOrdinal(b.frontier)));
       expect(m.rankSeq).toBe(Math.max(a.rankSeq, b.rankSeq));
+      expect(m.seenPickups).toEqual(PICKUP_IDS.filter((id) => a.seenPickups.includes(id) || b.seenPickups.includes(id)));
       for (const id of GALAXY_IDS) {
         expect(m.galaxies[id]?.bestScore ?? 0).toBe(Math.max(a.galaxies[id]?.bestScore ?? 0, b.galaxies[id]?.bestScore ?? 0));
         expect(m.galaxies[id]?.stars ?? 0).toBe(Math.max(a.galaxies[id]?.stars ?? 0, b.galaxies[id]?.stars ?? 0));
