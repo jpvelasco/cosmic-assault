@@ -3,8 +3,9 @@ import { bossHp, BOSSES } from '../../src/content/bosses';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId } from '../../src/content/types';
+import { launchSlot, launchSlotsFor } from '../../src/sim/boss/attacks';
 import { createEclipse, DIVE_SECONDS, ECLIPSE_CAP, ECLIPSE_CORONA, ECLIPSE_REACH, ECLIPSE_VOLLEY, ECLIPSE_WAVES, QUAKE_ROCKS } from '../../src/sim/boss/eclipse';
-import type { BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossBehaviour, BossPart, BossPhase, BossSetup, BossView, Point } from '../../src/sim/boss/behaviour';
 import { bossClearance, clearSpot } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -15,6 +16,7 @@ import { createShip } from '../../src/sim/ship';
 import { BOSS_FIELD, runFor, stubArena, type StubArena } from '../helpers/bossArena';
 
 const DEF = BOSSES.eclipse;
+const spot: Point = { x: 0, y: 0 };
 const MAX_HP = 134;
 const INTRO = 2;
 const FOES_SEED = 99;
@@ -332,6 +334,28 @@ describe('the Eclipse moves', () => {
     for (let step = 0; step < 60 / STEP_SECONDS; step++) {
       stepper(rig)(STEP_SECONDS, rig.arena);
       expect(rig.foes.launched).toBeLessThanOrEqual(ECLIPSE_CAP);
+    }
+  });
+
+  it('forms every drone its launch sends out on a mouth slot the drawer marks, skipping the slot the ship is on', () => {
+    const rig = fighting(7);
+    toPhase(rig, 3);
+    rig.foes.clear();
+    const wave = ECLIPSE_WAVES[3];
+    stepUntil(rig, (view) => view.windup === 'launch', 60);
+    // The ship lies on the mouth's first slot, so that slot must stay empty.
+    launchSlot(rig.r.view, 0, wave, spot);
+    Object.assign(rig.arena.ship, { x: spot.x, y: spot.y });
+    stepUntil(rig, (view) => view.active === 'launch', 5);
+    stepper(rig)(STEP_SECONDS, rig.arena);
+    const marks = launchSlotsFor(rig.r.view, BOSS_FIELD, rig.arena.ship, wave, wave, []).map((slot) => {
+      launchSlot(rig.r.view, slot, wave, spot);
+      return { x: spot.x, y: spot.y };
+    });
+    expect(rig.foes.list.length, 'drones launched').toBeGreaterThan(0);
+    for (const drone of rig.foes.list) {
+      const near = marks.some((mark) => Math.hypot(drone.x - mark.x, drone.y - mark.y) < 5);
+      expect(near, `drone at ${String(drone.x)},${String(drone.y)} forms on no marked slot`).toBe(true);
     }
   });
 

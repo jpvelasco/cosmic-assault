@@ -92,7 +92,14 @@ class Eclipse implements BossBehaviour {
       shardVolley: corona.volley(WINDUPS.shardVolley),
       quake: rockRingAttack(WINDUPS.quake, QUAKE_ROCKS, QUAKE_SIZE, QUAKE_SPEED),
       pulse: pulseAttack(WINDUPS.pulse, PULSE_SECONDS, PULSE_SPEED, PULSE_REACH),
-      launch: { windup: WINDUPS.launch, active: 0, run: (ctx) => { launchDrones(ctx, foes, ECLIPSE_WAVES[ctx.boss.phase], ECLIPSE_CAP); } },
+      launch: {
+        windup: WINDUPS.launch,
+        active: 0,
+        run: (ctx) => {
+          const wave = ECLIPSE_WAVES[ctx.boss.phase];
+          launchDrones(ctx, foes, wave, ECLIPSE_CAP, wave);
+        },
+      },
       turretVolley: { ...turretVolleyAttack(WINDUPS.turretVolley, TURRET_SECONDS, corona.parts), threat: { kind: 'ring', radius: CORONA_ORBIT, reach: CORONA_RADIUS, around: 'core' } },
       dive: { ...dashAttack(WINDUPS.dive, DIVE_SECONDS, ECLIPSE_REACH), threat: { kind: 'lane', reach: ECLIPSE_REACH } },
     };

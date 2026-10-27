@@ -733,7 +733,7 @@ describe('createBossPass', () => {
     it('rings each drone\'s mouth in gold as a launch winds up, one for each drone of its wave by phase', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(eclipse({ phase: 3, windup: 'launch', threat: { attack: 'launch', windup: 0.7, kind: 'none', reach: 0, speed: 0 } }), 1, LOOK);
-      expect(keysOf(custom).filter((key) => key === `${KEY}|warnMouth|${String(SHARD_RADIUS)}`)).toHaveLength(3);
+      expect(keysOf(custom).filter((key) => key === `${KEY}|warnMouth|18`)).toHaveLength(3);
     });
 
     it('rings each of its windups in a colour of its own', () => {

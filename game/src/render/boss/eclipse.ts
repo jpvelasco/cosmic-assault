@@ -1,5 +1,5 @@
 import type { PaletteId } from '../../content/types';
-import { launchSlot } from '../../sim/boss/attacks';
+import { launchSlot, launchSlotsFor } from '../../sim/boss/attacks';
 import type { BossPart, BossView, Point } from '../../sim/boss/behaviour';
 import { ECLIPSE_REACH, ECLIPSE_WAVES } from '../../sim/boss/eclipse';
 import { TAU } from '../../sim/math';
@@ -23,7 +23,7 @@ const SHARD_TUMBLE = 0.9;
 const RING_REACH = 1.6;
 const RING_HALF = 2;
 const SPOKE_HALF = 3;
-const MOUTH_RADIUS = 14;
+const MOUTH_RADIUS = 18;
 
 /** The cache keys of the Eclipse's sprites, made once per size so drawing builds no strings. */
 const coreKeys = (radius: number, palette: PaletteId): { readonly core: string } => ({ core: `boss|${palette}|eclipse|core|${String(radius)}` });
@@ -63,8 +63,11 @@ export const eclipseDrawer: DrawerFactory = (kit) => {
   const paintWholeShard = shardPainter(false);
   const paintCrackedShard = shardPainter(true);
   const paintMouth = (c: CanvasRenderingContext2D): void => {
-    paintWarnRing(c, MOUTH_RADIUS, palette.ring);
+    paintWarnRing(c, MOUTH_RADIUS, hostile);
   };
+  /** The mouth slots a launch shows, and where the live ship is for them; reused. */
+  const marks: number[] = [];
+  const ship: Point = { x: 0, y: 0 };
   // Warning painters, one per size, made on first use so a frame of drawing allocates nothing.
   const ringPainters = new Map<number, (c: CanvasRenderingContext2D) => void>();
   const spokePainters = new Map<number, (c: CanvasRenderingContext2D) => void>();
@@ -121,9 +124,11 @@ export const eclipseDrawer: DrawerFactory = (kit) => {
         else warn(shards.spoke, spokePainter(part.radius), part.radius * SPOKE_HALF, x, y, size, Math.atan2(at.y, at.x), strength);
       }
     } else if (boss.windup === 'launch') {
-      const count = ECLIPSE_WAVES[boss.phase];
-      for (let i = 0; i < count; i++) {
-        launchSlot(boss, i, count, slot);
+      // The slots the launch will form its drones in, against the ship as the frame shows it.
+      const wave = ECLIPSE_WAVES[boss.phase];
+      Object.assign(ship, { x: frame.look.aimX, y: frame.look.aimY });
+      for (const mark of launchSlotsFor(boss, frame.look.field, ship, wave, wave, marks)) {
+        launchSlot(boss, mark, wave, slot);
         warn(mouthKey, paintMouth, MOUTH_RADIUS * 2, slot.x, slot.y, size, 0, strength);
       }
     }

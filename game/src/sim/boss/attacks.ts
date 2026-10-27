@@ -155,22 +155,39 @@ export function launchSlot(boss: Readonly<BossView>, slot: number, count: number
 
 /** Where the next drone forms; one point, reused. */
 const slotSpot: Point = { x: 0, y: 0 };
+/** The mouth slots the drones of a launch form in; reused. */
+const formed: number[] = [];
 
 /**
- * Sends out a wave of up to `wave` drones, as many as `cap` of the boss's own alive at once leaves room for. A slot
- * outside the field or within the safe radius of the ship stays empty, and its drone leaves from the next clear slot
- * instead: the wave's other mouth slots, then the sides, so a ship parked in front of the mouth still meets a full wave.
+ * Writes into `out`, and returns, the slots `count` drones of a launch form in: the first `count` slots, laid out for
+ * `layout` drones (`launchSlot`), that lie clear of the ship. A slot outside the field or within the safe radius of the
+ * ship stays empty, and its drone forms in the next clear slot instead: the wave's other mouth slots, then the sides, so a
+ * ship parked in front of the mouth still meets a full wave. The drawer marks this same list, so a drone never forms on
+ * a slot it does not show.
  */
-export function launchDrones(ctx: AttackContext, foes: BossFoes, wave: number, cap: number): void {
+export function launchSlotsFor(boss: Readonly<BossView>, field: Field, ship: Readonly<Point>, count: number, layout: number, out: number[]): number[] {
+  out.length = 0;
+  const slots = layout + 2 * Math.max(layout, END_SLOTS_A_SIDE);
+  for (let slot = 0; out.length < count && slot < slots; slot++) {
+    launchSlot(boss, slot, layout, slotSpot);
+    if (clearSlot(slotSpot, field, ship, ASTEROID.safeRadius)) out.push(slot);
+  }
+  return out;
+}
+
+/**
+ * Sends out a wave of up to `wave` drones, as many as `cap` of the boss's own alive at once leaves room for, from the
+ * slots `launchSlotsFor` gives. The mouth is laid out for the drones sent, unless `layout` says a wave's mouth, so that a
+ * launch cut short by the cap still leaves from the slots the wave's mouth shows.
+ */
+export function launchDrones(ctx: AttackContext, foes: BossFoes, wave: number, cap: number, layout?: number): void {
   const { boss, arena } = ctx;
   const count = Math.min(wave, cap - foes.launched);
-  let launched = 0;
-  const slots = count + 2 * Math.max(count, END_SLOTS_A_SIDE);
-  for (let slot = 0; launched < count && slot < slots; slot++) {
-    const heading = launchSlot(boss, slot, count, slotSpot);
-    if (!clearSlot(slotSpot, arena.field(), arena.ship, ASTEROID.safeRadius)) continue;
+  if (count <= 0) return;
+  const laid = layout ?? count;
+  for (const slot of launchSlotsFor(boss, arena.field(), arena.ship, count, laid, formed)) {
+    const heading = launchSlot(boss, slot, laid, slotSpot);
     if (!foes.launch('drone', slotSpot.x, slotSpot.y, heading)) return;
-    launched++;
   }
 }
 
