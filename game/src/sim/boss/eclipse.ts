@@ -12,7 +12,7 @@ const CORONA_ORBIT = 112;
 const EXPOSED_AT = 4;
 const REGROW_SECONDS = 7;
 /** It never grows back past this many shards: one more than `EXPOSED_AT`, so a bare core shields itself again. */
-const REGROW_CAP = 6;
+const REGROW_CAP = 5;
 /** How far the corona reaches from the core's centre: the orbit and a shard's radius. */
 export const ECLIPSE_REACH = CORONA_ORBIT + CORONA_RADIUS;
 
@@ -100,7 +100,7 @@ class Eclipse implements BossBehaviour {
           launchDrones(ctx, foes, wave, ECLIPSE_CAP, wave);
         },
       },
-      turretVolley: { ...turretVolleyAttack(WINDUPS.turretVolley, TURRET_SECONDS, corona.parts), threat: { kind: 'ring', radius: CORONA_ORBIT, reach: CORONA_RADIUS, around: 'core' } },
+      turretVolley: turretVolleyAttack(WINDUPS.turretVolley, TURRET_SECONDS, corona.parts),
       dive: { ...dashAttack(WINDUPS.dive, DIVE_SECONDS, ECLIPSE_REACH), threat: { kind: 'lane', reach: ECLIPSE_REACH } },
     };
   }
