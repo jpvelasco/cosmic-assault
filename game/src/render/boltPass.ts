@@ -25,7 +25,7 @@ const SPRITE_PAD = 4;
 /** The bolt's sprite cache key in `palette`, made once so drawing builds no strings. */
 export const boltKey = (palette: Palette): string => `bolt|${palette.id}`;
 
-/** The bolt: a glossy capsule along +x in the palette's hostile hue, a white-hot core down its middle. */
+/** The bolt: a glossy capsule along +x in the palette's hostile hue, rimmed dark, a white-hot core down its middle. */
 function paintBolt(ctx: CanvasRenderingContext2D, p: Palette): void {
   const hue = p.hostile;
   const r = BOLT.radius;
@@ -37,6 +37,10 @@ function paintBolt(ctx: CanvasRenderingContext2D, p: Palette): void {
   ctx.roundRect(-half, -width, half * 2, width * 2, width);
   ctx.fillStyle = addStops(ctx.createLinearGradient(0, width, 0, -width), [mix(hue, '#000000', 0.35), hue, mix(hue, WHITE, 0.5)], [0, 0.5, 1]);
   ctx.fill();
+  // A dark rim, then a light one inside it: the capsule reads against anything of its own hue, a lethal zone included.
+  ctx.strokeStyle = rgba(mix(hue, '#000000', 0.8), 0.9);
+  ctx.lineWidth = 2.4;
+  ctx.stroke();
   ctx.strokeStyle = rgba(WHITE, 0.55);
   ctx.lineWidth = 0.8;
   ctx.stroke();

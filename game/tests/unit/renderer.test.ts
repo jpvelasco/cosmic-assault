@@ -603,7 +603,20 @@ describe('createRenderer', () => {
         expect(drawsOf(warning?.canvas)).toEqual([]);
       });
 
-      it('restyles the bolts in the palette\'s hostile hue, and looks their glow up once a frame however many fly (Task 3 N-4)', () => {
+      it('draws a zone\'s warning over the rocks, so a rock never hides one, and a lethal zone under them', () => {
+        const { stub, world } = crimsonWorld();
+        const zone = (stage: 'warning' | 'active'): HazardState => ({ id: 8, type: 'dangerZone', stage, x: 300, y: 300, w: 160, h: 140, intensity: 1, remaining: 1.5 });
+        const order = (key: string): number => canvas.draws.findIndex((call) => call.image === baker.cached(key)?.canvas);
+        const rock = (): number => canvas.draws.findIndex((call) => call.image === baker.asteroid(stub.asteroids[0] as Asteroid, CRIMSON).canvas);
+        stub.hazards = [zone('warning')];
+        drawFrame(world, 1);
+        expect(order('zone|crimsonNebula|warning|160.0x140.0')).toBeGreaterThan(rock());
+        stub.hazards = [zone('active')];
+        drawFrame(world, 1);
+        expect(order('zone|crimsonNebula|active|160.0x140.0')).toBeLessThan(rock());
+      });
+
+      it('restyles the bolts in the palette\'s hostile hue, and looks their glow up once a frame however many fly', () => {
         const { stub, world } = crimsonWorld();
         for (let i = 0; i < 5; i++) stub.bolts.push({ id: 20 + i, x: 300 + i * 40, y: 300, px: 300 + i * 40, py: 300, vx: 230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 5, fromAttack: false });
         const glow = vi.spyOn(baker, 'glow');

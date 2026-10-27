@@ -114,7 +114,8 @@ describe('gunship', () => {
       // The ship drifts, so every windup aims somewhere new.
       r.arena.ship.x = 640 + 200 * Math.sin(t / 3);
     });
-    const windups = log.filter((l) => l.event.type === 'foeWindup');
+    // A windup begun in the run's last half second has not fired yet.
+    const windups = log.filter((l) => l.event.type === 'foeWindup' && l.t <= 40 - GUNSHIP.windup);
     const shots = log.filter((l) => l.event.type === 'boltFired');
     expect(windups.length).toBeGreaterThanOrEqual(12);
     expect(shots).toHaveLength(windups.length);
@@ -137,7 +138,7 @@ describe('gunship', () => {
     r.foes.spawn('gunship', 1, 1);
     const foe = only(r);
     const aims: { x: number; y: number }[] = [];
-    const log = run(r, 4, () => {
+    const log = run(r, 6, () => {
       if (aims.length === 0 && foe.charging) aims.push({ x: r.arena.ship.x, y: r.arena.ship.y });
       // The ship moves away the moment the gunship starts aiming.
       if (foe.charging) r.arena.ship.y = 100;
@@ -185,6 +186,24 @@ describe('gunship', () => {
     });
     expect(log.filter((l) => l.event.type === 'foeWindup')).toHaveLength(1);
     expect(log.filter((l) => l.event.type === 'boltFired')).toEqual([]);
+  });
+
+  it('waits a short random while for a ship it may not fire at, so gunships kept waiting do not all wind up together as it can be hurt again', () => {
+    const r = rig();
+    for (let i = 0; i < 4; i++) r.foes.spawn('gunship', 1, 1);
+    makeInvulnerable(r.arena.ship);
+    r.arena.ship.invulnerableFor = 1e9;
+    const lapse = 8;
+    const log = run(r, lapse + 2, (t) => {
+      if (t >= lapse) r.arena.ship.invulnerable = false;
+    });
+    const windups = log.filter((l) => l.event.type === 'foeWindup').map((l) => l.t);
+    expect(windups.every((t) => t > lapse)).toBe(true);
+    const first = windups.slice(0, 4);
+    expect(first).toHaveLength(4);
+    // Each waits at most a second past the lapse, and they come at different times.
+    for (const t of first) expect(t).toBeLessThanOrEqual(lapse + 1 + DT);
+    expect(new Set(first).size).toBeGreaterThan(1);
   });
 
   it('fires only from inside the field, never from the wrap margin', () => {

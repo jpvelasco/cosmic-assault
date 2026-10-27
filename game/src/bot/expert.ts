@@ -134,6 +134,8 @@ export class Pilot {
   private readonly reach: number[] = [];
   /** A boss's bodies and its strike lane: worth keeping out of even while the ship cannot be hurt. */
   private readonly solid: boolean[] = [];
+  /** Whether a threat is measured across the wrap; a bolt, which never wraps, is measured straight across the field. */
+  private readonly wraps: boolean[] = [];
   /** For a threat a telegraphed attack made, whether that attack was to be dodged; null for any other threat. */
   private readonly rolled: (boolean | null)[] = [];
   private count = 0;
@@ -448,6 +450,7 @@ export class Pilot {
     this.tvy[i] = vy;
     this.reach[i] = touching + PLAYER.radius;
     this.solid[i] = solid;
+    this.wraps[i] = wraps;
     this.rolled[i] = rolled;
   }
 
@@ -459,7 +462,7 @@ export class Pilot {
   private predict(view: Readonly<BotView>, heading: number | null): void {
     this.predictShip(view, heading);
     const { width, height } = view.field;
-    const { tx, ty, tvx, tvy, reach, solid, sx, sy } = this;
+    const { tx, ty, tvx, tvy, reach, solid, wraps, sx, sy } = this;
     let least = Infinity;
     let total = 0;
     let nearest = -1;
@@ -470,9 +473,9 @@ export class Pilot {
       let who = -1;
       for (let i = 0; i < this.count; i++) {
         if (harmless && solid[i] !== true) continue;
-        const dx = wrapDelta((tx[i] ?? 0) + (tvx[i] ?? 0) * t - (sx[k] ?? 0), width);
-        const dy = wrapDelta((ty[i] ?? 0) + (tvy[i] ?? 0) * t - (sy[k] ?? 0), height);
-        const clearance = Math.hypot(dx, dy) - (reach[i] ?? 0);
+        const dx = (tx[i] ?? 0) + (tvx[i] ?? 0) * t - (sx[k] ?? 0);
+        const dy = (ty[i] ?? 0) + (tvy[i] ?? 0) * t - (sy[k] ?? 0);
+        const clearance = (wraps[i] === false ? Math.hypot(dx, dy) : Math.hypot(wrapDelta(dx, width), wrapDelta(dy, height))) - (reach[i] ?? 0);
         if (clearance < sample) {
           sample = clearance;
           who = i;

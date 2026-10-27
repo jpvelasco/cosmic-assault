@@ -36,7 +36,9 @@ export const DRONE_SEPARATION = { radius: 28, weight: 2.5 } as const;
 /**
  * How a gunship fights: it circles the ship between `orbit` units out, turning at up to `turnRate` rad/s, and keeps
  * `separation` from the gunships beside it as drones do. Every `cadence` ± `cadenceJitter` seconds it winds up for
- * `windup` seconds, aiming where the ship is then, and fires one bolt there. No more than `maxLive` fly at once.
+ * `windup` seconds, aiming where the ship is then, and fires one bolt there. One that may not fire (the ship cannot be
+ * hurt, or it is outside the field) tries again after a random `retry` seconds, so gunships kept waiting never wind up
+ * together. No more than `maxLive` fly at once.
  */
 export const GUNSHIP = {
   orbit: [240, 300],
@@ -45,6 +47,7 @@ export const GUNSHIP = {
   cadence: 2.6,
   cadenceJitter: 0.4,
   windup: 0.5,
+  retry: [0.3, 1],
   maxLive: 4,
 } as const;
 /**

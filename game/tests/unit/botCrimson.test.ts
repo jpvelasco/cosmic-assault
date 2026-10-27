@@ -66,7 +66,15 @@ describe('the expert in Crimson Nebula', () => {
     expect(Math.cos(intent.heading ?? 0)).toBeLessThan(0);
   });
 
-  it('ignores a bolt flying out past the far edge: bolts never wrap, so it is no threat from across the seam (Task 3 N-3)', () => {
+  it('never wraps a bolt it is predicting: one flying out of the top edge is no threat to a ship racing for the bottom', () => {
+    const view = sceneView();
+    // 420 above it and fast, so across the wrap it would seem to come from 400 below, on a collision course.
+    view.ship = { ...view.ship, y: 600, vy: 350 };
+    view.bolts = [{ ...flyingBolt(82, SCENE_SHIP.x, 180, -Math.PI / 2), vy: -400 }];
+    expect(decide(view).thrust).toBe(false);
+  });
+
+  it('ignores a bolt flying out past the far edge: bolts never wrap, so it is no threat from across the seam', () => {
     const view = sceneView();
     view.ship = { ...view.ship, x: 20 };
     view.bolts = [flyingBolt(80, SCENE_FIELD.width - 20, SCENE_SHIP.y, 0)];
@@ -77,7 +85,7 @@ describe('the expert in Crimson Nebula', () => {
   });
 });
 
-describe("the expert's prediction of a hazard's pull (Task 1 N-1)", () => {
+describe("the expert's prediction of a hazard's pull", () => {
   const well = (at: number, type: GalaxyEvent['type'] = 'gravityWell'): GalaxyEvent => ({ at, type, intensity: 3 });
 
   /** The ship's velocity change over one step of `world`'s hazards, as the sim applies it, per second: the acceleration. */

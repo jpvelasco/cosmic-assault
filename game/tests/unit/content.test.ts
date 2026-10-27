@@ -327,7 +327,7 @@ describe('the galaxy table', () => {
   it('makes gunships and mines Crimson Nebula\'s: a 3 HP gunship alone, unpulled, and mines of 1 HP in ones and twos, pulled', () => {
     expect(FOES.gunship).toEqual({ from: 3, radius: 18, hp: 3, cost: 4, points: 250, speed: 80, group: [1, 1], pulled: false });
     expect(FOES.mine).toEqual({ from: 3, radius: 12, hp: 1, cost: 2, points: 150, speed: 25, group: [1, 2], pulled: true });
-    expect(GUNSHIP).toMatchObject({ orbit: [240, 300], cadence: 2.6, cadenceJitter: 0.4, windup: 0.5, maxLive: 4 });
+    expect(GUNSHIP).toMatchObject({ orbit: [240, 300], cadence: 2.6, cadenceJitter: 0.4, windup: 0.5, retry: [0.3, 1], maxLive: 4 });
     expect(MINE).toMatchObject({ armRadius: 110, fuse: 0.6, blastRadius: 80 });
   });
 

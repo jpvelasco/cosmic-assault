@@ -303,6 +303,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     passes.foe.drawFoes(world.foes, alpha, field, scene);
     drawRockFlashes(field);
     passes.foe.drawFlashes(hitFlash.foes, field);
+    passes.hazard.drawWarnings(world.hazards, field, scene);
     passes.pickup.drawPickups(world.pickups, alpha, field, scene);
     passes.bolt.drawBolts(world.bolts, alpha, field, scene);
     ctx.globalCompositeOperation = 'lighter';

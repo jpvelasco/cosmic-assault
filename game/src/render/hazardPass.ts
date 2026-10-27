@@ -12,11 +12,13 @@ export interface HazardPass {
   /**
    * The hazards in play. A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls,
    * a glow, three arcs swirling round it (held still and breathing under reduced motion) and a dark lens at its heart.
-   * A danger zone: a dashed, faintly hatched rectangle pulsing while it warns; once it is lethal, filled, hatched and
-   * outlined solid in the hostile hue. The other hazards are drawn once they are made. Expects `source-over`, which it
+   * A lethal danger zone: filled, hatched and outlined solid in the hostile hue (its warning is `drawWarnings`'). The
+   * other hazards are drawn once they are made. Expects `source-over`, which it
    * leaves as it found it, with alpha 1.
    */
   drawHazards(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
+  /** The danger zones' warnings, drawn over the rocks and foes so nothing hides one. */
+  drawWarnings(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
 }
 
 const WHITE = '#ffffff';
@@ -97,9 +99,9 @@ function paintZoneWarning(ctx: CanvasRenderingContext2D, w: number, h: number, c
 
 /** A lethal zone: filled and hatched in the hostile hue, outlined solid and bright. */
 function paintZoneActive(ctx: CanvasRenderingContext2D, w: number, h: number, color: string): void {
-  ctx.fillStyle = rgba(color, 0.2);
+  ctx.fillStyle = rgba(color, 0.14);
   ctx.fillRect(-w / 2, -h / 2, w, h);
-  hatch(ctx, w, h, rgba(color, 0.55), 3);
+  hatch(ctx, w, h, rgba(color, 0.45), 3);
   ctx.strokeStyle = rgba(color, 0.35);
   ctx.lineWidth = 8;
   ctx.strokeRect(-w / 2, -h / 2, w, h);
@@ -249,10 +251,15 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, stamp: Stamp, ba
   return {
     drawHazards(hazards, field, look) {
       for (const hazard of hazards) {
-        if (hazard.type === 'dangerZone') drawZone(hazard, field, look);
-        else if (hazard.type === 'gravityWell') (hazard.stage === 'warning' ? drawWarning : drawActive)(hazard, field, look);
+        if (hazard.type === 'dangerZone') {
+          if (hazard.stage === 'active') drawZone(hazard, field, look);
+        } else if (hazard.type === 'gravityWell') (hazard.stage === 'warning' ? drawWarning : drawActive)(hazard, field, look);
         ctx.globalAlpha = 1;
       }
+    },
+    drawWarnings(hazards, field, look) {
+      for (const hazard of hazards) if (hazard.type === 'dangerZone' && hazard.stage === 'warning') drawZone(hazard, field, look);
+      ctx.globalAlpha = 1;
     },
   };
 }

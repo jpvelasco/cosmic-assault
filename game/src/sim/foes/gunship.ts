@@ -40,11 +40,13 @@ function circle(foe: Foe, dt: number, field: Field, { arena, list }: FoeWorld): 
   steer(foe, toX - foe.x, toY - foe.y, dt, FLIGHT, field, list);
 }
 
-/** Starts a windup, aiming where the ship is now, if it may: inside the field, at a ship that can be hurt. */
-function windUp(foe: Foe, field: Field, { arena }: FoeWorld): void {
+/** Starts a windup, aiming where the ship is now, if it may: inside the field, at a ship that can be hurt; else tries again shortly. */
+function windUp(foe: Foe, field: Field, { arena, rng }: FoeWorld): void {
   const { ship } = arena;
-  // It waits, ready, for a ship it may fire at.
-  if (ship.invulnerable || !inField(foe, field)) return;
+  if (ship.invulnerable || !inField(foe, field)) {
+    foe.timer = rng.range(GUNSHIP.retry[0], GUNSHIP.retry[1]);
+    return;
+  }
   foe.charging = true;
   foe.timer = GUNSHIP.windup;
   foe.aimX = ship.x;
