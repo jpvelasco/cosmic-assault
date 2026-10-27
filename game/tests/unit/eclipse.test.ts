@@ -166,6 +166,28 @@ describe('the Eclipse corona', () => {
     expect(rig.r.view.vulnerable).toBe(false);
   });
 
+  it('regrows a shard only where the ship is clear of it, on every regrowth of a fight with the ship roaming', () => {
+    const clearance = ECLIPSE_CORONA.growClearance;
+    expect(clearance, 'the corona declares its grow clearance').toBeDefined();
+    const rng = createRng(21);
+    let regrown = 0;
+    const rig = fighting(3);
+    breakUntil(rig.r, 4);
+    for (let step = 0; step < 90 / STEP_SECONDS; step++) {
+      if (step % 240 === 0) Object.assign(rig.arena.ship, { x: rng.range(0, BOSS_FIELD.width), y: rng.range(0, BOSS_FIELD.height) });
+      const before = rig.r.view.parts.map((p) => p.hp);
+      stepper(rig)(STEP_SECONDS, rig.arena);
+      rig.r.view.parts.forEach((part, i) => {
+        if ((before[i] ?? 0) > 0 || part.hp <= 0) return;
+        regrown++;
+        const { ship } = rig.arena;
+        expect(Math.hypot(part.x - ship.x, part.y - ship.y), `regrowth at step ${String(step)}`).toBeGreaterThanOrEqual(clearance ?? Infinity);
+      });
+      if (!rig.r.view.vulnerable) breakUntil(rig.r, 4);
+    }
+    expect(regrown, 'the fight regrew shards to check').toBeGreaterThanOrEqual(3);
+  });
+
   it('carries no armour on any shard, so every blow on one breaks it', () => {
     const rig = fighting(11);
     for (const part of rig.r.view.parts) expect(part.armoured).toBe(false);

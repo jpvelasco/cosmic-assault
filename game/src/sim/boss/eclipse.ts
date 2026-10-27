@@ -19,6 +19,12 @@ export const ECLIPSE_REACH = CORONA_ORBIT + CORONA_RADIUS;
 /** Its shard volley: four shards out past the aim and back in 1.6 s, in lanes 40 apart, turning 90 past it. */
 export const ECLIPSE_VOLLEY: VolleyShape = { shards: 4, seconds: 1.6, spread: 40, overshoot: 90 };
 
+/**
+ * How far from the ship a regrowing shard's slot must lie: the shard's own radius and the ship's, plus what the orbit
+ * sweeps past in the 0.4 s a shard takes to grow in, so a shard never forms on a ship that holds still.
+ */
+const GROW_CLEARANCE = 46;
+
 /** The corona, as a `ShardOrbit` sets it up. Its shards hold inside the field when a volley throws them. */
 export const ECLIPSE_CORONA: ShardOrbitOptions = {
   counts: [CORONA_SHARDS, CORONA_SHARDS],
@@ -31,6 +37,7 @@ export const ECLIPSE_CORONA: ShardOrbitOptions = {
   regrowCap: REGROW_CAP,
   volley: ECLIPSE_VOLLEY,
   keepInField: true,
+  growClearance: GROW_CLEARANCE,
 };
 
 /** Rocks in a quake's ring, by phase. */

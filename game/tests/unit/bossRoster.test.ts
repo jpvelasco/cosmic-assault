@@ -165,7 +165,8 @@ describe('a ShardOrbit', () => {
   it('takes a volley of its own and a home of its own, for a boss that is not the Monolith', () => {
     const setup = setupFor(BOSS_FIELD);
     const orbit = new ShardOrbit({ ...OPTIONS, volley: { shards: 2, seconds: 1.2, spread: 30, overshoot: 40 } }, setup, { x: 300, y: 300 });
-    expect(orbit.volley(0.6)).toMatchObject({ active: 1.2, threat: { kind: 'lane', reach: 30 + 10 } });
+    // Two shards sit half a lane either side of the aim: the outer one is half the spread out, and a shard's radius beyond.
+    expect(orbit.volley(0.6)).toMatchObject({ active: 1.2, threat: { kind: 'lane', reach: 0.5 * 30 + 10 } });
     for (const part of orbit.parts) expect(Math.hypot(part.x - 300, part.y - 300)).toBeCloseTo(80, 6);
   });
 });

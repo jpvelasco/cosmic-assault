@@ -1,6 +1,7 @@
 import { clamp } from '../../content/curves';
 import { outAndBack, TAU } from '../math';
 import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView, Point } from './behaviour';
+import { clearSlot } from './attacks';
 import { bossHome } from './bossRules';
 
 /** A ring of shards orbiting a boss's core, as a boss's definition of it sets it up. */
@@ -23,6 +24,8 @@ export interface ShardOrbitOptions {
   readonly volley?: VolleyShape;
   /** Whether a shard's turning point is held inside the field, so a shard thrown past a wall stays where the ship can strike it. */
   readonly keepInField?: boolean;
+  /** How far from the ship a regrowing shard's slot must lie, so a shard never grows in on it; any slot if absent. */
+  readonly growClearance?: number;
 }
 
 /** How a shard volley flies. */
@@ -64,6 +67,8 @@ export class ShardOrbit {
   private readonly lanes: number[];
   /** The shards the volley under way throws, left to right. */
   private readonly thrown: number[] = [];
+  /** Where a regrowing shard's slot is; one point, reused. */
+  private readonly slot: Point = { x: 0, y: 0 };
 
   /** How its volley flies. */
   private readonly shape: VolleyShape;
@@ -104,7 +109,7 @@ export class ShardOrbit {
     const { boss, dt } = ctx;
     this.spin = (this.spin + this.options.speed * dt) % TAU;
     if (boss.active !== 'shardVolley') this.lanes.fill(Number.NaN);
-    this.regrow(boss, dt);
+    this.regrow(ctx);
     this.placeAll(boss.x, boss.y);
     for (let i = 0; i < this.parts.length; i++) {
       const lane = this.lanes[i] ?? Number.NaN;
@@ -129,21 +134,48 @@ export class ShardOrbit {
     }
   }
 
-  /** While the core is bare, a broken shard grows back on its orbit every `regrowSeconds`; the wait starts afresh each time it is laid bare. */
-  private regrow(boss: Readonly<BossView>, dt: number): void {
+  /**
+   * While the core is bare, a broken shard grows back on its orbit every `regrowSeconds`; the wait starts afresh each time
+   * it is laid bare. The shard grows in on the first broken slot clear of the ship (`growClearance`), and while every
+   * broken slot lies too near it, the regrowth waits.
+   */
+  private regrow(ctx: AttackContext): void {
+    const { boss, dt } = ctx;
     if (boss.state !== 'fighting' || !boss.vulnerable) {
       this.regrowClock = 0;
       return;
     }
     this.regrowClock += dt;
     if (this.regrowClock < this.options.regrowSeconds || this.live() >= this.options.regrowCap) return;
+    const i = this.growable(ctx);
+    if (i < 0) return;
     this.regrowClock = 0;
-    const i = this.parts.findIndex((part) => part.hp <= 0);
-    const part = this.parts[i];
-    if (part === undefined) return;
+    const part = this.parts[i] as BossPart;
     part.hp = part.maxHp;
     // A shard broken in flight grows back on its orbit, out of the volley that threw it.
     this.lanes[i] = Number.NaN;
+  }
+
+  /** The first broken shard whose slot on the orbit is clear of the ship, or -1 with none. */
+  private growable(ctx: AttackContext): number {
+    const { boss, arena } = ctx;
+    const clearance = this.options.growClearance;
+    const field = arena.field();
+    for (let i = 0; i < this.parts.length; i++) {
+      if ((this.parts[i] as BossPart).hp > 0) continue;
+      if (clearance === undefined) return i;
+      this.slotOf(i, boss.x, boss.y, this.slot);
+      if (clearSlot(this.slot, field, arena.ship, clearance)) return i;
+    }
+    return -1;
+  }
+
+  /** Writes into `out` where shard `i`'s slot on the orbit about (x, y) is, as `placeAll` puts it, and returns it. */
+  private slotOf(i: number, x: number, y: number, out: Point): Point {
+    const bearing = this.spin + (i / this.parts.length) * TAU;
+    out.x = x + Math.cos(bearing) * this.options.orbit;
+    out.y = y + Math.sin(bearing) * this.options.orbit;
+    return out;
   }
 
   /** Throws up to its volley's count of shards out past where the ship was and back, each in its own lane. */
