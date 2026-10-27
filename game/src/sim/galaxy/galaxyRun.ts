@@ -10,7 +10,7 @@ import { BossArena } from '../boss/bossArena';
 import { BossRunner, DYING_SECONDS } from '../boss/bossRunner';
 import { BOSS_BEHAVIOURS } from '../boss/roster';
 import type { Field } from '../field';
-import { Bolts } from '../foes/bolts';
+import { Bolts, type Bolt } from '../foes/bolts';
 import { FoeField } from '../foes/foeField';
 import type { Foe } from '../foes/foe';
 import type { HazardState } from '../hazards/hazard';
@@ -133,6 +133,11 @@ export class GalaxyRun implements Spawner {
   /** The foes on the field; a live view. */
   get foeList(): readonly Foe[] {
     return this.foes.list;
+  }
+
+  /** The hostile bolts on the field; a live view. */
+  get boltList(): readonly Bolt[] {
+    return this.bolts.list;
   }
 
   /** The hazards being telegraphed or active, for the HUD, the renderer and the bots; a live view. */

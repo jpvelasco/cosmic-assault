@@ -2,21 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { BossId } from '../../src/content/types';
-import { dash, dashAttack, fireBolt, launchDrones, pulse, pulseAttack, rockRing } from '../../src/sim/boss/attacks';
-import type { AttackSpec, BossBehaviour, BossSetup } from '../../src/sim/boss/behaviour';
+import { aimedBoltsAttack, dash, dashAttack, fireBolt, pulseAttack, radialBoltsAttack } from '../../src/sim/boss/attacks';
+import type { AttackSpec, BossBehaviour, BossPart, BossSetup } from '../../src/sim/boss/behaviour';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { createMonolith, MONOLITH_SHARDS } from '../../src/sim/boss/monolith';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { ShardOrbit } from '../../src/sim/boss/shardOrbit';
-import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
 import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { ATTACK_TELEGRAPHS, auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
-const fieldAt = (aspect: number): Field => ({ width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT });
 const BOSS_IDS = Object.keys(BOSS_BEHAVIOURS) as BossId[];
 
 function setupFor(field: Field, arena: StubArena = stubArena(undefined, field)): BossSetup {
@@ -25,19 +24,6 @@ function setupFor(field: Field, arena: StubArena = stubArena(undefined, field)):
 }
 
 describe('the boss roster', () => {
-  it.each([
-    { label: '4:3', aspect: MIN_ASPECT },
-    { label: '21:9', aspect: MAX_ASPECT },
-  ])('keeps every boss, as it arrives, out of reach of a ship parked at the field\'s centre at $label', ({ aspect }) => {
-    const field = fieldAt(aspect);
-    for (const id of BOSS_IDS) {
-      const setup = setupFor(field);
-      const runner = new BossRunner(BOSSES[id], BOSS_BEHAVIOURS[id](setup), setup);
-      const home = runner.view;
-      expect(runner.reach + PLAYER.radius, id).toBeLessThan(Math.hypot(home.x - field.width / 2, home.y - field.height / 2));
-    }
-  });
-
   it('gives every attack of every boss a telegraph of at least the minimum windup', () => {
     for (const id of BOSS_IDS) {
       for (const [attack, spec] of Object.entries(BOSS_BEHAVIOURS[id](setupFor(BOSS_FIELD)).attacks)) expect(spec.windup, `${id} ${attack}`).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
@@ -46,16 +32,12 @@ describe('the boss roster', () => {
 });
 
 describe('the shared attack library', () => {
-  it('holds the moves the bosses share: rock rings, pulses, dashes, drone launches and bolts', () => {
-    for (const move of [rockRing, pulse, dash, launchDrones, fireBolt]) expect(typeof move).toBe('function');
-  });
-
   it('builds a pulse or a dash as a whole attack, its declared threat matching what it does', () => {
     expect(pulseAttack(0.5, 0.3, 260, 320)).toMatchObject({ windup: 0.5, active: 0.3, threat: { kind: 'shove', speed: 260, reach: 320 } });
     expect(dashAttack(0.7, 1)).toMatchObject({ windup: 0.7, active: 1, threat: { kind: 'lane', reach: 'core' } });
   });
 
-  it("runs the Sentinel's lunge as the shared dash, and the Monolith's shards as a ShardOrbit", () => {
+  it("runs the Sentinel's lunge as the shared dash over its 0.8 s, and makes the Monolith's shards a ShardOrbit of its options", () => {
     const arena = stubArena();
     const sentinel = new BossRunner(BOSSES.sentinel, SENTINEL, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
     const dashed = new BossRunner(BOSSES.sentinel, { ...SENTINEL, attacks: { ...SENTINEL.attacks, lunge: { ...SENTINEL.attacks.lunge, run: (ctx) => { dash(ctx, 0.8); } } } }, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
@@ -75,22 +57,57 @@ describe('the shared attack library', () => {
     expect(createMonolith(setupFor(BOSS_FIELD)).parts).toEqual(shards);
   });
 
-  it('fires attack bolts from the boss, marked as its attack\'s as they are made', () => {
+  /** The fixture fights stand their bolt attacks in for the Sentinel's two. */
+  const BOLT_HARMS = { ...ATTACK_TELEGRAPHS, shardRing: 'bolts', lunge: 'bolts' } as const;
+
+  /** A fight whose every attack is `spec`, on a stub arena with bolts, its fight steps recorded for the audit. */
+  function boltFight(spec: AttackSpec, parts: readonly BossPart[] = []) {
     const arena = stubArena();
     const setup = setupFor(BOSS_FIELD, arena);
     const bolts = setup.bolts as Bolts;
-    const volley: AttackSpec = { windup: 0.5, active: 0, run: (ctx) => { fireBolt(ctx, ctx.boss.x, ctx.boss.y, Math.PI / 2, 230); } };
-    const behaviour: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: volley, lunge: volley } };
-    const runner = new BossRunner(BOSSES.sentinel, behaviour, setup);
-    const firstBolt: number[] = [];
-    const log = runFor((dt, a) => { runner.step(dt, a); }, arena, 6, () => {
-      if (bolts.list.length > 0 && firstBolt.length === 0) firstBolt.push(arena.elapsed());
-    });
-    const [windup] = timedOfType(log, 'bossWindup');
-    expect(windup).toBeDefined();
-    expect((firstBolt[0] ?? 0) - (windup?.at ?? 0)).toBeGreaterThanOrEqual(0.5 - 1e-9);
+    const runner = new BossRunner(BOSSES.sentinel, { driftSpeed: 0, parts, attacks: { shardRing: spec, lunge: spec } }, setup);
+    const recorder = fightRecorder();
+    const source = { get elapsed() { return arena.elapsed(); }, boss: runner.view, asteroids: arena.asteroids, foes: [], bolts: bolts.list };
+    const log = runFor((dt, a) => { runner.step(dt, a); }, arena, 6, () => { recorder.record(source, arena.events); });
+    return { runner, bolts, log, pairs: auditAttacks(recorder.steps, BOLT_HARMS) };
+  }
+
+  it("fires attack bolts only once the attack's own windup has run, each marked as its attack's", () => {
+    const { bolts, log, pairs } = boltFight(aimedBoltsAttack(0.7, 3, 0.4, 200));
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const pair of pairs) expect(pair.harm).toEqual(new Set(['bolts']));
     expect(timedOfType(log, 'boltFired')[0]?.event.source).toBe('boss');
     for (const bolt of bolts.list) expect(bolt.fromAttack).toBe(true);
+  });
+
+  it('fans aimed bolts across their spread about the bearing to where the ship was as the windup began', () => {
+    const { runner, log } = boltFight(aimedBoltsAttack(0.5, 3, 0.4, 200));
+    const [first] = timedOfType(log, 'bossWindup');
+    const volley = timedOfType(log, 'boltFired').filter((l) => l.at === timedOfType(log, 'boltFired')[0]?.at);
+    expect(first).toBeDefined();
+    expect(volley).toHaveLength(3);
+    const aim = Math.atan2(600 - runner.view.y, BOSS_FIELD.width / 2 - runner.view.x);
+    expect(volley.map((l) => l.event.angle)).toEqual([aim - 0.2, aim, aim + 0.2].map((a) => expect.closeTo(a, 9) as number));
+  });
+
+  it('fires radial bolts outward from the core through each live part, from the part, and none from a broken one', () => {
+    const parts: BossPart[] = [0, 1, 2, 3].map((i) => ({ x: 640 + Math.cos(i * Math.PI / 2) * 100, y: 201.6 + Math.sin(i * Math.PI / 2) * 100, px: 0, py: 0, radius: 12, hp: i === 2 ? 0 : 1, maxHp: 1 }));
+    const { log } = boltFight(radialBoltsAttack(0.6, parts, 230), parts);
+    const volley = timedOfType(log, 'boltFired').filter((l) => l.at === timedOfType(log, 'boltFired')[0]?.at);
+    expect(volley.map((l) => [Math.round(l.event.x), Math.round(l.event.y)])).toEqual([[740, 202], [640, 302], [640, 102]]);
+    expect(volley.map((l) => l.event.angle)).toEqual([0, Math.PI / 2, -Math.PI / 2].map((a) => expect.closeTo(a, 9) as number));
+  });
+
+  it('refuses attack output from a behaviour\'s step, which no windup telegraphs, saying where it belongs', () => {
+    const arena = stubArena();
+    const setup = setupFor(BOSS_FIELD, arena);
+    const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
+    const sly: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: spec, lunge: spec }, step: (ctx) => { if (ctx.boss.windup !== null) fireBolt(ctx, ctx.boss.x, ctx.boss.y, 0); } };
+    const runner = new BossRunner(BOSSES.sentinel, sly, setup);
+    expect(() => runFor((dt, a) => { runner.step(dt, a); }, arena, 6)).toThrow(/step .*attack's run/);
+    const shover: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: spec, lunge: spec }, step: (ctx) => { ctx.shoveX = 50; } };
+    const pushy = new BossRunner(BOSSES.sentinel, shover, setupFor(BOSS_FIELD, arena));
+    expect(() => runFor((dt, a) => { pushy.step(dt, a); }, arena, 1)).toThrow(/step .*attack's run/);
   });
 
   it('refuses a bolt from a fight with no bolts to fire, saying how to give it some', () => {
@@ -145,5 +162,12 @@ describe('a ShardOrbit', () => {
     const { orbit } = orbiting();
     const volley = orbit.volley(0.9);
     expect(volley).toMatchObject({ windup: 0.9, active: 1.8, threat: { kind: 'lane', reach: 46 + 10 } });
+  });
+
+  it('takes a volley of its own and a home of its own, for a boss that is not the Monolith', () => {
+    const setup = setupFor(BOSS_FIELD);
+    const orbit = new ShardOrbit({ ...OPTIONS, volley: { shards: 2, seconds: 1.2, spread: 30, overshoot: 40 } }, setup, { x: 300, y: 300 });
+    expect(orbit.volley(0.6)).toMatchObject({ active: 1.2, threat: { kind: 'lane', reach: 30 + 10 } });
+    for (const part of orbit.parts) expect(Math.hypot(part.x - 300, part.y - 300)).toBeCloseTo(80, 6);
   });
 });

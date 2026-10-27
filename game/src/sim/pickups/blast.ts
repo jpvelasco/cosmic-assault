@@ -21,7 +21,9 @@ export interface BlastScene {
  * measures it, for score through the combo, but nothing it kills drops a pickup and no rock splits (M6-R5); it clears
  * the bolts it reaches. A fighting boss takes the blast's part damage on each live
  * part it reaches, then its core damage if the core is in reach: the blow lands on the core's rim toward the blast, so
- * a shielded core, or one hurt only from another side, takes none, silently.
+ * a shielded core, or one hurt only from another side, takes none, silently. Parts are struck in index order, each
+ * judged as it stands then: an armoured part passes silently, and a break that opens a later part lets the same blast
+ * hurt that one too.
  */
 export function blast(kind: BlastKind, x: number, y: number, scene: BlastScene): void {
   const { radius, coreDamage, partDamage } = BLAST[kind];
@@ -36,11 +38,11 @@ export function blast(kind: BlastKind, x: number, y: number, scene: BlastScene):
   const field = scene.arena.field();
   for (let i = 0; i < view.parts.length; i++) {
     const part = view.parts[i];
-    if (part !== undefined && part.hp > 0 && overlapsAcrossWrap(field, x, y, radius, part.x, part.y, part.radius)) bosses.hitPart(boss, i, partDamage);
+    if (part !== undefined && part.hp > 0 && overlapsAcrossWrap(field, x, y, radius, part.x, part.y, part.radius)) bosses.hitPart(i, partDamage);
   }
   if (!overlapsAcrossWrap(field, x, y, radius, view.x, view.y, view.radius)) return;
   const away = Math.atan2(wrapDelta(y - view.y, field.height), wrapDelta(x - view.x, field.width));
-  bosses.hitCore(boss, coreDamage, view.x + Math.cos(away) * view.radius, view.y + Math.sin(away) * view.radius);
+  bosses.hitCore(coreDamage, view.x + Math.cos(away) * view.radius, view.y + Math.sin(away) * view.radius);
 }
 
 /** Destroys every rock the blast reaches, whole, for its points through the combo. */

@@ -143,6 +143,12 @@ describe('auditAttacks', () => {
     expect(() => auditAttacks([step(1, { events: [windup('quake')] }), step(1.1, { made: { rocks: 1, foes: 0, bolts: 0 } })])).toThrow(/^quake .*made rocks/);
   });
 
+  it('holds an attack to its own declared windup, not only the minimum', () => {
+    const log = [step(1, { events: [windup('quake')], windup: 1.2 }), step(1.5, { windup: 1.2, made: { rocks: 4, foes: 0, bolts: 0 } })];
+    expect(() => auditAttacks(log)).toThrow(/^quake .*made rocks.*1\.2 s windup/);
+    expect(auditAttacks([log[0] as FightStep, step(2.2, { windup: 1.2, made: { rocks: 4, foes: 0, bolts: 0 } })])[0]?.minimum).toBe(1.2);
+  });
+
   it('fails attack-made bodies with no attack warned, and harm an attack is not listed for', () => {
     expect(() => auditAttacks([step(1, { made: { rocks: 0, foes: 0, bolts: 2 } })])).toThrow(/no attack warned/);
     expect(() => auditAttacks([step(1, { events: [windup('quake')] }), step(2, { made: { rocks: 0, foes: 0, bolts: 2 } })])).toThrow(/quake made bolts/);

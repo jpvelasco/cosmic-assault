@@ -53,6 +53,8 @@ const THINK_STEPS = 2;
 const COAST_DRAG = PLAYER.dragPerFrame60;
 const THRUST_DRAG = Math.min(COAST_DRAG + STICK.maxDragReliefFactor * (1 - COAST_DRAG), STICK.maxDrag);
 const IDLE: Readonly<Intent> = Object.freeze(idleIntent());
+/** The fewest circles a ring threat is laid out as, however wide each is. */
+const RING_MIN_CIRCLES = 8;
 /** Out of this range of a boss's core, across the field, the pilot closes in, to this far out from it the way it faces. */
 const ENGAGE_RANGE = 420;
 const STANDOFF = 300;
@@ -316,7 +318,7 @@ export class Pilot {
     let kept = 0;
     for (let i = 0; i < spawnIds.length; i++) {
       const id = spawnIds[i] ?? 0;
-      if (!onField(view.foes, id) && !onField(view.asteroids, id)) continue;
+      if (!onField(view.foes, id) && !onField(view.asteroids, id) && !onField(view.bolts, id)) continue;
       spawnIds[kept] = id;
       spawnDodging[kept++] = spawnDodging[i] ?? true;
     }
@@ -331,6 +333,11 @@ export class Pilot {
       if (rock.id <= this.idMark) continue;
       mark = Math.max(mark, rock.id);
       if (rock.fromAttack === true) this.noteSpawn(rock.id);
+    }
+    for (const bolt of view.bolts) {
+      if (bolt.id <= this.idMark) continue;
+      mark = Math.max(mark, bolt.id);
+      if (bolt.fromAttack) this.noteSpawn(bolt.id);
     }
     this.idMark = mark;
   }
@@ -358,10 +365,27 @@ export class Pilot {
     for (const foe of view.foes) {
       if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.attackRoll(foe.id));
     }
+    for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id));
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
     for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
-    if (this.strikeThreat?.kind === 'lane') this.addLane(view, boss, this.strikeThreat.reach);
+    const threat = this.strikeThreat;
+    if (threat?.kind === 'lane') this.addLane(view, boss, threat.reach);
+    else if (threat?.ring !== undefined) this.addRing(view, boss, threat.ring, threat.reach);
+  }
+
+  /**
+   * A ring of `ring.radius` about the core, or about where the ship was as the windup began, as circles `reach` across
+   * no more than a reach apart: a telegraphed attack may sweep the boss's parts, or its body, round it.
+   */
+  private addRing(view: Readonly<BotView>, boss: Readonly<BossView>, ring: NonNullable<BossThreat['ring']>, reach: number): void {
+    const cx = ring.around === 'core' ? boss.x : this.strikeX;
+    const cy = ring.around === 'core' ? boss.y : this.strikeY;
+    const circles = Math.max(RING_MIN_CIRCLES, Math.ceil((TAU * ring.radius) / reach));
+    for (let i = 0; i < circles; i++) {
+      const angle = (i * TAU) / circles;
+      this.addThreat(view, cx + Math.cos(angle) * ring.radius, cy + Math.sin(angle) * ring.radius, 0, 0, reach, true, this.dodgingStrike);
+    }
   }
 
   /**

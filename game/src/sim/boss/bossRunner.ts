@@ -17,6 +17,12 @@ export type HitResult = 'blocked' | 'deflected' | 'hit' | 'killed';
 /** What a blow on a part did: nothing outside the fight ('blocked') or on an armoured part ('deflected'), or it took HP off the part, perhaps the last. */
 export type PartHitResult = 'blocked' | 'deflected' | 'hit' | 'broken';
 
+/** A part's extent within this of the reach is the reach: an orbit's float residue, not a part trailing beyond it. */
+const REACH_SLACK = 1e-6;
+
+/** `extent`, if it lies beyond `reach` by more than float residue, else `reach`. */
+const beyond = (reach: number, extent: number): number => (extent > reach + REACH_SLACK ? extent : reach);
+
 /** How a boss announces its core opening and closing, unless its behaviour says otherwise. */
 const CORE_EXPOSURE: Exposure = { opened: 'bossExposed', closed: 'bossShielded' };
 /** Where a boss faces until its behaviour turns it: down the field, toward the ship's side. */
@@ -93,7 +99,7 @@ export class BossRunner {
     return this.view.state;
   }
 
-  /** How far from the core's centre the boss reaches, its parts included. */
+  /** How far the core keeps from the walls, and from a respawning ship: its behaviour's reach, else its radius. Live parts beyond it count too. */
   get reach(): number {
     return this.behaviour.reach ?? this.view.radius;
   }
@@ -214,8 +220,28 @@ export class BossRunner {
       case 'down':
     }
     if (view.state === 'down') return;
-    this.behaviour.step?.(ctx);
+    this.stepBehaviour(ctx, arena);
     this.announceVulnerability(arena);
+  }
+
+  /**
+   * Runs the behaviour's own step, which may move the boss and its parts but make no attack output: no rocks, bolts,
+   * drones or shove, which only an attack's run makes, once its windup is over. Throws if it does.
+   */
+  private stepBehaviour(ctx: AttackContext, arena: Arena): void {
+    const { behaviour } = this;
+    if (behaviour.step === undefined) return;
+    const made = this.output(arena);
+    const { shoveX, shoveY } = ctx;
+    behaviour.step(ctx);
+    if (this.output(arena) > made || ctx.shoveX !== shoveX || ctx.shoveY !== shoveY) {
+      throw new RangeError(`${this.def.id}'s behaviour step made attack output (rocks, bolts, drones or a shove), which no windup telegraphs: make it in an attack's run instead`);
+    }
+  }
+
+  /** How much attack output is on the field: rocks, bolts and the boss's own drones. */
+  private output(arena: Arena): number {
+    return arena.asteroids.length + (this.setup.bolts?.list.length ?? 0) + (this.setup.foes?.launched ?? 0);
   }
 
   /** Asks the behaviour whether the core can be hurt now, which parts it armours and where a shot does harm, shows them on the view, and returns the first. */
@@ -334,14 +360,22 @@ export class BossRunner {
 
   /** Moves the core along its heading, bouncing it off the walls so the whole boss, parts and all, stays inside the field. */
   private drift(dt: number, field: Field): void {
-    const { view } = this;
-    const { reach } = this;
-    const [maxX, maxY] = [field.width - reach, field.height - reach];
-    view.x = clamp(view.x + this.dx * dt, reach, maxX);
-    view.y = clamp(view.y + this.dy * dt, reach, maxY);
-    if (view.x === reach) this.dx = Math.abs(this.dx);
+    const { view, reach } = this;
+    // How far the boss extends each way from its core: its reach, or further where a live part trails beyond it.
+    let [left, right, up, down] = [reach, reach, reach, reach];
+    for (const part of view.parts) {
+      if (part.hp <= 0) continue;
+      left = beyond(left, view.x - part.x + part.radius);
+      right = beyond(right, part.x - view.x + part.radius);
+      up = beyond(up, view.y - part.y + part.radius);
+      down = beyond(down, part.y - view.y + part.radius);
+    }
+    const [maxX, maxY] = [field.width - right, field.height - down];
+    view.x = clamp(view.x + this.dx * dt, left, maxX);
+    view.y = clamp(view.y + this.dy * dt, up, maxY);
+    if (view.x === left) this.dx = Math.abs(this.dx);
     else if (view.x === maxX) this.dx = -Math.abs(this.dx);
-    if (view.y === reach) this.dy = Math.abs(this.dy);
+    if (view.y === up) this.dy = Math.abs(this.dy);
     else if (view.y === maxY) this.dy = -Math.abs(this.dy);
   }
 }

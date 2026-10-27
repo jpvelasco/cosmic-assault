@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { Pilot } from '../../src/bot/expert';
 import { idleIntent, type Intent } from '../../src/bot/hands';
 import type { BotView } from '../../src/bot/view';
-import type { BossView } from '../../src/sim/boss/behaviour';
+import type { BossThreat, BossView } from '../../src/sim/boss/behaviour';
 import { createRng } from '../../src/sim/rng';
 import { wrapDelta } from '../../src/sim/wrap';
-import { SCENE_SHIP, sceneView, stage, stillRock, threatOf, type Staged } from '../helpers/botScene';
+import { flyingBolt, SCENE_SHIP, sceneView, stage, stillRock, threatOf, type Staged } from '../helpers/botScene';
 
 /** The pilot's intent on the step `seconds` after its first look at `view`, which it watches throughout. */
 function after(view: BotView, seconds: number): Intent {
@@ -83,5 +83,23 @@ describe('the expert pilot against a boss', () => {
     expect(intent.thrust).toBe(true);
     const station = { x: 1100, y: 108 + 300 };
     expect(intent.heading).toBeCloseTo(Math.atan2(wrapDelta(station.y - 650, 720), wrapDelta(station.x - 100, 1280)), 6);
+  });
+
+  it('keeps off the ring an attack sweeps, about the core or about where it was, and stays put well clear of it', () => {
+    const ring = (around: 'core' | 'aim', radius: number): BossThreat => ({ attack: 'shardRing', windup: 0.7, kind: 'ring', reach: 25, speed: 0, ring: { radius, around } });
+    const core = { x: SCENE_SHIP.x, y: SCENE_SHIP.y - 230 };
+    expect(after(stage(sceneView(), { at: core, radius: 48, windup: 'shardRing', threat: ring('core', 230) }), 0).thrust).toBe(true);
+    expect(after(stage(sceneView(), { at: core, radius: 48, windup: 'shardRing', threat: ring('core', 100) }), 0).thrust).toBe(false);
+    // Coiled round where the ship was as the windup began, 220 out: the ship sits at its centre, safe.
+    expect(after(stage(sceneView(), { at: { x: 340, y: 210 }, radius: 34, windup: 'shardRing', threat: ring('aim', 220) }), 0).thrust).toBe(false);
+  });
+
+  it('dodges a hostile bolt flying at it, and lets one flying away pass', () => {
+    const at = stage(sceneView(), { at: { x: 640, y: 60 } });
+    at.bolts = [flyingBolt(900, SCENE_SHIP.x + 90, SCENE_SHIP.y, Math.PI)];
+    expect(after(at, 0).thrust).toBe(true);
+    const away = stage(sceneView(), { at: { x: 640, y: 60 } });
+    away.bolts = [flyingBolt(901, SCENE_SHIP.x + 90, SCENE_SHIP.y, 0)];
+    expect(after(away, 0).thrust).toBe(false);
   });
 });

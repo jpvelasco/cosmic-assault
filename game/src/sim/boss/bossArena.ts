@@ -65,21 +65,25 @@ export class BossArena {
     if (boss === null || boss.state === 'down') return false;
     const part = boss.partAt(x, y, radius);
     if (part < 0 && !boss.overlaps(x, y, radius)) return false;
-    const result = part >= 0 ? this.hitPart(boss, part, 1) : this.hitCore(boss, 1, x, y);
+    const result = part >= 0 ? this.hitPart(part, 1) : this.hitCore(1, x, y);
     if (result === 'deflected') this.arena.events.push({ type: 'bossDeflected', x, y });
     return true;
   }
 
-  /** Takes `damage` off the core for a blow at (x, y): a hurt core reports a `bossHit`, and the blow that kills it scores. */
-  hitCore(boss: BossRunner, damage: number, x: number, y: number): HitResult {
+  /** Takes `damage` off the core for a blow at (x, y): a hurt core reports a `bossHit`, and the blow that kills it scores; 'blocked' before the boss arrives. */
+  hitCore(damage: number, x: number, y: number): HitResult {
+    const boss = this.current;
+    if (boss === null) return 'blocked';
     const result = boss.hit(damage, x, y);
     if (result === 'hit' || result === 'killed') this.arena.events.push({ type: 'bossHit', x, y, hp: boss.hp });
     if (result === 'killed') this.arena.award(this.scoreKill(this.killPoints));
     return result;
   }
 
-  /** Takes `damage` off live part `index`: a hurt part reports `bossPartHit` or `bossPartBroken`. */
-  hitPart(boss: BossRunner, index: number, damage: number): PartHitResult {
+  /** Takes `damage` off live part `index`: a hurt part reports `bossPartHit` or `bossPartBroken`; 'blocked' before the boss arrives. */
+  hitPart(index: number, damage: number): PartHitResult {
+    const boss = this.current;
+    if (boss === null) return 'blocked';
     const result = boss.hitPart(index, damage);
     const part = boss.view.parts[index];
     if ((result === 'hit' || result === 'broken') && part !== undefined) {
@@ -94,10 +98,10 @@ export class BossArena {
     return this.current?.state === 'fighting' && this.current.touches(x, y, radius);
   }
 
-  /** While the boss is on the field, where a respawning ship comes back clear of its reach; null once it is down, or before it arrives. */
+  /** While the boss is on the field, where a respawning ship comes back clear of its reach and of every live part; null once it is down, or before it arrives. */
   respawnPoint(): Readonly<Point> | null {
     const boss = this.current;
     if (boss === null || boss.state === 'down') return null;
-    return clearSpot(boss.view, boss.reach + PLAYER.radius + ASTEROID.safeRadius, this.arena.field());
+    return clearSpot(boss.view, boss.reach, this.arena.field(), PLAYER.radius + ASTEROID.safeRadius);
   }
 }

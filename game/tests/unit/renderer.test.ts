@@ -11,8 +11,10 @@ import { createRng } from '../../src/sim/rng';
 import { visualScaleFor } from '../../src/render/visualScale';
 import { noEffects, type TimedPickupId } from '../../src/content/pickups';
 import { galaxyById } from '../../src/content/galaxies';
+import { boltKey } from '../../src/render/boltPass';
 import { foeKeys } from '../../src/render/foePass';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
+import type { Bolt } from '../../src/sim/foes/bolts';
 import type { Foe } from '../../src/sim/foes/foe';
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import type { Pickup } from '../../src/sim/pickups/pickups';
@@ -94,6 +96,7 @@ interface Stub {
   ship: { x: number; y: number; px: number; py: number; angle: number; pangle: number; vx: number; vy: number; thrusting: boolean; invulnerable: boolean };
   asteroids: Asteroid[];
   foes: Foe[];
+  bolts: Bolt[];
   hazards: HazardState[];
   pickups: Pickup[];
   effects: Record<TimedPickupId, number>;
@@ -111,6 +114,7 @@ function stubWorld(): { stub: Stub; world: World } {
     ship: { x: 640, y: 360, px: 640, py: 360, angle: 0, pangle: 0, vx: 0, vy: 0, thrusting: false, invulnerable: false },
     asteroids: [rock],
     foes: [],
+    bolts: [],
     hazards: [],
     pickups: [],
     effects: noEffects(),
@@ -270,6 +274,17 @@ describe('createRenderer', () => {
       expect(drawn(baker.cached(foeKeys(DRIFT).drone))).toBe(0);
       expect(drawn(baker.cached('pickup|ionReach|rapidFire'))).toBe(1);
       expect(baker.cached('pickup|drift|rapidFire')).toBeUndefined();
+    });
+
+    it('draws a hostile bolt from its own baked capsule, keyed by the palette, and rebuilds it with the palette', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { stub, world } = stubWorld();
+      stub.bolts.push({ id: 11, x: 500, y: 300, px: 498, py: 300, vx: 230, vy: 0, radius: 5, age: 0, source: 'boss', fromAttack: true });
+      drawFrame(world, 1);
+      expect(drawsOf(baker.cached(boltKey(DRIFT))?.canvas)).toHaveLength(1);
+      renderer.setPalette('crimsonNebula');
+      drawFrame(world, 1);
+      expect(drawsOf(baker.cached(boltKey(paletteFor('crimsonNebula')))?.canvas)).toHaveLength(1);
     });
 
     it('rebuilds the palette-derived sprites on each step of a D3 to D4 to D5 switch', () => {

@@ -4,12 +4,10 @@ import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import { TAU } from '../math';
-import type { AttackContext, AttackSpec, BossFoes, BossView, Point } from './behaviour';
+import type { AttackContext, AttackSpec, BossFoes, BossPart, BossView, Point } from './behaviour';
 
-/**
- * The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
- * moves instead of copying them.
- */
+// The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
+// moves instead of copying them.
 
 /**
  * Sends a pass-through rock of `size` from (x, y) along `angle`, at `speed` times the galaxy's rock speed, marked as
@@ -164,3 +162,32 @@ export function launchDrones(ctx: AttackContext, foes: BossFoes, wave: number, c
     launched++;
   }
 }
+
+/** Fires one bolt from each live part in `parts`, outward along the bearing from the core through it, at `speed`. */
+export function radialBolts(ctx: AttackContext, parts: readonly Readonly<BossPart>[], speed: number = BOLT.speed): void {
+  const { boss } = ctx;
+  for (const part of parts) if (part.hp > 0) fireBolt(ctx, part.x, part.y, Math.atan2(part.y - boss.y, part.x - boss.x), speed);
+}
+
+/**
+ * Fires `count` bolts from `from` at `speed`, fanned evenly across `spread` radians about the bearing to where the ship
+ * was as the windup began; one bolt flies straight at it.
+ */
+export function aimedBolts(ctx: AttackContext, from: Readonly<Point>, count: number, spread: number, speed: number = BOLT.speed): void {
+  const aim = Math.atan2(ctx.aimY - from.y, ctx.aimX - from.x);
+  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, aim + (count > 1 ? lane(i, count, spread / (count - 1)) : 0), speed);
+}
+
+/** An attack telegraphed for `windup` s that fires `radialBolts` from `parts` (the behaviour's own, the same objects all fight) as it ends. */
+export const radialBoltsAttack = (windup: number, parts: readonly Readonly<BossPart>[], speed: number = BOLT.speed): AttackSpec => ({
+  windup,
+  active: 0,
+  run: (ctx) => { radialBolts(ctx, parts, speed); },
+});
+
+/** An attack telegraphed for `windup` s that fires `aimedBolts` from the core as it ends. */
+export const aimedBoltsAttack = (windup: number, count: number, spread: number, speed: number = BOLT.speed): AttackSpec => ({
+  windup,
+  active: 0,
+  run: (ctx) => { aimedBolts(ctx, ctx.boss, count, spread, speed); },
+});

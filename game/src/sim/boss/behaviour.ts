@@ -94,7 +94,15 @@ export type AttackThreat =
   /** It sends the core, or its parts, down the lane from the core to where the ship was as its windup began, reaching `reach` either side of that line; 'core' reaches the core's radius. */
   | { readonly kind: 'lane'; readonly reach: number | 'core' }
   /** As it goes active it shoves the ship straight away from the core, `speed` at the core's rim and fading to none `reach` beyond it: `radialShove`. */
-  | { readonly kind: 'shove'; readonly speed: number; readonly reach: number };
+  | { readonly kind: 'shove'; readonly speed: number; readonly reach: number }
+  /**
+   * It sweeps a ring of `radius` about the core, or about where the ship was as its windup began ('aim'), reaching
+   * `reach` either side of the ring: a ring of parts easing out, a body coiling round the ship.
+   */
+  | { readonly kind: 'ring'; readonly radius: number; readonly reach: number; readonly around: RingCentre };
+
+/** What a ring threat is centred on: the core, or where the ship was as the windup began. */
+export type RingCentre = 'core' | 'aim';
 
 /** An attack as the bots read it: its windup, in the boss's time, and its threat resolved for the boss that makes it. */
 export interface BossThreat {
@@ -102,10 +110,12 @@ export interface BossThreat {
   readonly windup: number;
   /** 'none' for an attack whose only harm is what it sends out. */
   readonly kind: AttackThreat['kind'] | 'none';
-  /** How far either side of its lane, or past the core's rim, it reaches; 0 for none. */
+  /** How far either side of its lane or ring, or past the core's rim, it reaches; 0 for none. */
   readonly reach: number;
   /** A shove's speed at the core's rim; 0 for any other. */
   readonly speed: number;
+  /** A ring's radius and centre; absent for any other. */
+  readonly ring?: Readonly<{ radius: number; around: RingCentre }>;
 }
 
 export interface AttackSpec {
@@ -133,7 +143,10 @@ export interface BossBehaviour {
   readonly driftSpeed: number;
   /** Its parts, which the runner shows on the view, steps the previous poses of, rescales and strikes. None if absent. */
   readonly parts?: readonly BossPart[];
-  /** How far from the core's centre the boss reaches, parts included; its drift keeps that much inside the field. The core radius if absent. */
+  /**
+   * How far the core keeps from the walls as it drifts, and from a respawning ship; the core radius if absent. A live
+   * part that trails beyond it, a serpent's tail say, is kept inside the field and clear of the ship by its own radius.
+   */
   readonly reach?: number;
   /** Where in `field` it arrives; `bossHome` if absent. */
   home?(field: Field): Readonly<Point>;

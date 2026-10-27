@@ -10,6 +10,7 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
 import { BOSS_FIELD, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { ATTACK_TELEGRAPHS } from '../helpers/telegraphAudit';
 
 const BOT_DIR = new URL('../../src/bot/', import.meta.url);
 /** The boss modules a bot may read: the seam's types, the rules every fight keeps and the shared attack library. */
@@ -51,11 +52,11 @@ function windUpTo(runner: BossRunner, arena: StubArena, attack: AttackId, phase:
 }
 
 describe('the generic boss threat view (M5-R30)', () => {
-  it('lets the bots read a boss through its seam alone: nothing in src/bot imports a particular boss', () => {
+  it('lets the bots read a boss through its seam alone: nothing in src/bot imports a particular boss or names a boss or attack', () => {
     for (const file of readdirSync(BOT_DIR)) {
       const source = readFileSync(new URL(file, BOT_DIR), 'utf8');
       for (const [, module] of source.matchAll(/from '\.\.\/sim\/boss\/(\w+)'/g)) expect(GENERIC_BOSS_MODULES, `${file} imports sim/boss/${String(module)}`).toContain(module);
-      expect(source, file).not.toMatch(/'(shardRing|lunge|shardVolley|quake|pulse|launch|broadside|retreat)'/);
+      for (const id of [...Object.keys(ATTACK_TELEGRAPHS), ...Object.keys(BOSSES)]) expect(source, `${file} names ${id}`).not.toContain(`'${id}'`);
     }
   });
 

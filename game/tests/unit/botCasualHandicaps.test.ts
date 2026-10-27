@@ -17,7 +17,7 @@ import type { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import type { Ship } from '../../src/sim/ship';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import { SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock, threatOf } from '../helpers/botScene';
+import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock, threatOf } from '../helpers/botScene';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const WOBBLE_LIMIT = 0.25;
@@ -180,6 +180,15 @@ describe("the casual bot's handicaps", () => {
       view.asteroids = [flyingRock(id, SMALL_BOSS.at.x, SMALL_BOSS.at.y + SMALL_BOSS.radius + 15, Math.PI / 2, true)];
     });
     expect(Math.abs(rate - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+  });
+
+  it("judges the bolts a telegraphed attack fires on the attack's 85% roll, and other bolts on the episode's 60%", () => {
+    const volley = (fromAttack: boolean) => (view: BotView, id: number): void => {
+      windUp(view, null);
+      view.bolts = [flyingBolt(id, SCENE_SHIP.x + 110, SCENE_SHIP.y, Math.PI, fromAttack)];
+    };
+    expect(Math.abs(dodgeRate(19, 'quake', volley(true)) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+    expect(Math.abs(dodgeRate(19, null, volley(false)) - DODGE_CHANCE)).toBeLessThan(0.05);
   });
 
   it('judges a rock that comes unannounced on the episode\'s 60% roll, even while an attack winds up', () => {

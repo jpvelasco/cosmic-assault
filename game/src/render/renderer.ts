@@ -7,6 +7,7 @@ import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
+import { createBoltPass } from './boltPass';
 import { createFoePass } from './foePass';
 import { createHazardPass } from './hazardPass';
 import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
@@ -179,6 +180,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   /** The passes whose sprite keys and painters are made once per palette. */
   const passesFor = (p: Palette) => ({
     boss: createBossPass(ctx, pen, baker, p),
+    bolt: createBoltPass(ctx, stamp, baker, p),
     foe: createFoePass(ctx, stamp, baker, p),
     hazard: createHazardPass(ctx, stamp, baker, p),
     pickup: createPickupPass(ctx, stamp, baker, p),
@@ -302,6 +304,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawRockFlashes(field);
     passes.foe.drawFlashes(hitFlash.foes, field);
     passes.pickup.drawPickups(world.pickups, alpha, field, scene);
+    passes.bolt.drawBolts(world.bolts, alpha, field, scene);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);

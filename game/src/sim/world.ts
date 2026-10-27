@@ -12,6 +12,7 @@ import { GalaxyRun } from './galaxy/galaxyRun';
 import { galaxyStreams } from './galaxy/streams';
 import type { Phase } from './galaxy/pacing';
 import type { ShowerState } from './galaxy/showers';
+import type { Bolt } from './foes/bolts';
 import type { Foe } from './foes/foe';
 import type { HazardState } from './hazards/hazard';
 import type { Pickup } from './pickups/pickups';
@@ -242,6 +243,11 @@ export class World {
   /** The foes on the field; a live view, and always empty in practice. */
   get foes(): readonly Readonly<Foe>[] {
     return this.run?.foeList ?? NONE;
+  }
+
+  /** The hostile bolts on the field; a live view, and always empty in practice. */
+  get bolts(): readonly Readonly<Bolt>[] {
+    return this.run?.boltList ?? NONE;
   }
 
   /** The hazards being telegraphed or active; a live view, and always empty in practice. */

@@ -128,6 +128,27 @@ describe('bolts in a galaxy run', () => {
     expect(run['bolts'].list).toEqual([]);
   });
 
+  it('break the Shield instead of costing a life, spent on it, and pass an invulnerable ship by unspent', () => {
+    const { world, run } = withBolt(0, 0);
+    const { ship } = world;
+    const bolt = run['bolts'].list[0];
+    if (bolt === undefined) throw new Error('no bolt');
+    Object.assign(world['shipState'], { invulnerable: false, invulnerableFor: 0 });
+    run.loadout.collect('shield');
+    Object.assign(bolt, { x: ship.x - 8, y: ship.y, vx: 0, vy: 0 });
+    const shielded = world.step(DT, NO_CONTROLS);
+    expect(ofType(shielded, 'shieldBroken')).toHaveLength(1);
+    expect(ofType(shielded, 'shipHit')).toEqual([]);
+    expect(world.lives).toBe(3);
+    expect(run['bolts'].list).toEqual([]);
+    // Invulnerable from the Shield's break, the ship lets the next bolt through it.
+    const next = run['bolts'].fire(ship.x - 8, ship.y, 0, 0, 'boss');
+    const passed = world.step(DT, NO_CONTROLS);
+    expect(world['shipState'].invulnerable).toBe(true);
+    expect(ofType(passed, 'shipHit')).toEqual([]);
+    expect(run['bolts'].list).toEqual([next]);
+  });
+
   it('are swept by a blast and by the warp out', () => {
     const { world, run } = withBolt(640, 300);
     run['bolts'].fire(40, 40, 0, 0, 'boss');

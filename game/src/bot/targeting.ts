@@ -1,6 +1,6 @@
-import type { BossView } from '../sim/boss/behaviour';
+import type { BossPart, BossView, Point } from '../sim/boss/behaviour';
 import { bossTarget } from '../sim/boss/bossRules';
-import { PLAYER, STEP_SECONDS } from '../sim/config';
+import { PLAYER, PROJECTILE, STEP_SECONDS } from '../sim/config';
 import type { Field } from '../sim/field';
 import { wrapDelta } from '../sim/wrap';
 import type { BotView } from './view';
@@ -56,14 +56,45 @@ function offer(view: Readonly<BotView>, out: Target, best: number, body: Body, v
 const offerBossPoint = (view: Readonly<BotView>, out: Target, best: number, point: Body, body: Posed): number =>
   offer(view, out, best, point, (body.x - body.px) / STEP_SECONDS, (body.y - body.py) / STEP_SECONDS, PRIORITY.boss, false);
 
+/** The live part `point` is, or null for a point that is no part (the core, or a spot on its hull). */
+function partAt(boss: Readonly<BossView>, point: Readonly<Point>): Readonly<BossPart> | null {
+  for (const part of boss.parts) if (part === point) return part;
+  return null;
+}
+
 /**
- * Offers the boss where a shot hurts it now: the point its behaviour names while its core can be hurt, moving with the
- * core; else the nearest of its live parts that are not armoured; nothing outside the fight.
+ * Whether a part in the line of fire blocks it: one a shot is spent on without clearing it, armoured or with HP to
+ * spare. A part one shot breaks does not, since the shot that breaks it clears the way for the next.
+ */
+const blocks = (part: Readonly<BossPart>): boolean => part.armoured === true || part.hp > 1;
+
+/**
+ * Whether a straight shot from the ship reaches `to` without striking a blocking part other than `to` on the way: a
+ * shot strikes the first part it touches, so one in the way spends it.
+ */
+function clearLine(ship: Readonly<Point>, to: Readonly<Point>, parts: readonly Readonly<BossPart>[]): boolean {
+  const dx = to.x - ship.x;
+  const dy = to.y - ship.y;
+  const length2 = dx * dx + dy * dy;
+  for (const part of parts) {
+    if (part.hp <= 0 || part === to || !blocks(part)) continue;
+    const along = length2 > 0 ? ((part.x - ship.x) * dx + (part.y - ship.y) * dy) / length2 : 0;
+    if (along <= 0 || along >= 1) continue;
+    const reach = part.radius + PROJECTILE.radius;
+    if (Math.hypot(ship.x + dx * along - part.x, ship.y + dy * along - part.y) < reach) return false;
+  }
+  return true;
+}
+
+/**
+ * Offers the boss where a shot hurts it now: the point its behaviour names while its core can be hurt, led by its own
+ * motion if it is a part and by the core's otherwise, as long as no blocking part stands in the line of fire; else the
+ * nearest of its live parts that are not armoured; nothing outside the fight.
  */
 function offerBoss(view: Readonly<BotView>, out: Target, best: number, boss: Readonly<BossView>): number {
   if (boss.state !== 'fighting') return best;
   const weakPoint = bossTarget(boss);
-  if (boss.vulnerable && weakPoint !== null) return offerBossPoint(view, out, best, weakPoint, boss);
+  if (boss.vulnerable && weakPoint !== null && clearLine(view.ship, weakPoint, boss.parts)) return offerBossPoint(view, out, best, weakPoint, partAt(boss, weakPoint) ?? boss);
   for (const part of boss.parts) if (part.hp > 0 && part.armoured !== true) best = offerBossPoint(view, out, best, part, part);
   return best;
 }

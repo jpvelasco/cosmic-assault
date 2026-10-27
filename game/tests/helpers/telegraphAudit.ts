@@ -2,7 +2,7 @@ import { HAZARD_RULES } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
-import type { World } from '../../src/sim/world';
+import type { BossView } from '../../src/sim/boss/behaviour';
 
 /** An event, with the galaxy seconds of the step that made it. */
 export interface TimedEvent {
@@ -99,24 +99,39 @@ export const ATTACK_TELEGRAPHS: Readonly<Record<AttackId, AttackHarm>> = {
   retreat: 'active',
 };
 
-/** What one step of a boss fight showed: its events, the attack running after it, and the attack-made bodies new in it. */
+/**
+ * What one step of a boss fight showed: its events, the attack running after it, the declared windup of the attack
+ * winding up or running (null between attacks), and the attack-made bodies new in it.
+ */
 export interface FightStep {
   readonly elapsed: number;
   readonly events: readonly SimEvent[];
   readonly active: AttackId | null;
+  readonly windup?: number | null;
   readonly made: Readonly<Record<Exclude<AttackHarm, 'active'>, number>>;
 }
 
-/** One attack, from its warning: when it went active, and what harm it was seen to do. */
+/** What the recorder reads of a fight after each step: a World, or a runner on a stub arena. */
+export interface FightSource {
+  readonly elapsed: number;
+  readonly boss: Readonly<BossView> | null;
+  readonly asteroids: readonly Readonly<{ id: number; fromAttack?: boolean }>[];
+  readonly foes: readonly Readonly<{ id: number; fromAttack?: boolean }>[];
+  readonly bolts: readonly Readonly<{ id: number; fromAttack?: boolean }>[];
+}
+
+/** One attack, from its warning: the windup it must run, when it went active, and what harm it was seen to do. */
 export interface AttackPair {
   readonly attack: AttackId;
   readonly warned: number;
+  /** Its declared windup, or `MIN_WINDUP_SECONDS` if the step showed none; never less than the minimum. */
+  readonly minimum: number;
   active: number | null;
   readonly harm: Set<AttackHarm>;
 }
 
-/** Records each step of a World's boss fight for `auditAttacks`: call it after every step. */
-export function fightRecorder(): { readonly steps: FightStep[]; record(world: World, events: readonly SimEvent[]): void } {
+/** Records each step of a boss fight for `auditAttacks`: call it after every step. */
+export function fightRecorder(): { readonly steps: FightStep[]; record(fight: FightSource, events: readonly SimEvent[]): void } {
   const seen = new Set<number>();
   const steps: FightStep[] = [];
   const fresh = (bodies: readonly Readonly<{ id: number; fromAttack?: boolean }>[]): number => {
@@ -130,39 +145,46 @@ export function fightRecorder(): { readonly steps: FightStep[]; record(world: Wo
   };
   return {
     steps,
-    record(world, events) {
-      const bolts = world['run']?.['bolts'].list ?? [];
-      steps.push({ elapsed: world.elapsed, events: events.map((e) => ({ ...e })), active: world.boss?.active ?? null, made: { rocks: fresh(world.asteroids), foes: fresh(world.foes), bolts: fresh(bolts) } });
+    record(fight, events) {
+      const { boss } = fight;
+      steps.push({
+        elapsed: fight.elapsed,
+        events: events.map((e) => ({ ...e })),
+        active: boss?.active ?? null,
+        windup: boss?.threat?.windup ?? null,
+        made: { rocks: fresh(fight.asteroids), foes: fresh(fight.foes), bolts: fresh(fight.bolts) },
+      });
     },
   };
 }
 
 /**
  * Pairs each boss attack with its `bossWindup`, and checks it went active, and that every rock, foe and bolt it made
- * appeared, no sooner than `MIN_WINDUP_SECONDS` after the warning, and that it made only the harm its entry names.
- * Returns the attacks in the order they were warned; throws, naming the attack, at the first that breaks the rule.
+ * appeared, no sooner than its own declared windup after the warning (and never under `MIN_WINDUP_SECONDS`), and that
+ * it made only the harm `harms` names for it. Returns the attacks in the order they were warned; throws, naming the
+ * attack, at the first that breaks the rule.
  */
-export function auditAttacks(steps: readonly FightStep[]): AttackPair[] {
+export function auditAttacks(steps: readonly FightStep[], harms: Readonly<Record<AttackId, AttackHarm>> = ATTACK_TELEGRAPHS): AttackPair[] {
   const pairs: AttackPair[] = [];
   let current: AttackPair | null = null;
   const early = (pair: AttackPair, elapsed: number, what: string): Error =>
-    new Error(`${pair.attack} warned at ${seconds(pair.warned)} ${what} at ${seconds(elapsed)}, under the ${seconds(MIN_WINDUP_SECONDS)} minimum windup: lengthen its windup`);
-  for (const { elapsed, events, active, made } of steps) {
+    new Error(`${pair.attack} warned at ${seconds(pair.warned)} ${what} at ${seconds(elapsed)}, under its ${seconds(pair.minimum)} windup: lengthen its windup, or make nothing before it ends`);
+  for (const { elapsed, events, active, windup, made } of steps) {
     for (const event of events) {
       if (event.type !== 'bossWindup') continue;
-      current = { attack: event.attack, warned: elapsed, active: null, harm: new Set() };
+      current = { attack: event.attack, warned: elapsed, minimum: Math.max(MIN_WINDUP_SECONDS, windup ?? 0), active: null, harm: new Set() };
       pairs.push(current);
     }
     if (current !== null && active === current.attack && current.active === null) {
-      if (elapsed - current.warned + SLACK < MIN_WINDUP_SECONDS) throw early(current, elapsed, 'went active');
+      if (elapsed - current.warned + SLACK < current.minimum) throw early(current, elapsed, 'went active');
       current.active = elapsed;
-      if (ATTACK_TELEGRAPHS[current.attack] === 'active') current.harm.add('active');
+      if (harms[current.attack] === 'active') current.harm.add('active');
     }
     for (const kind of ['rocks', 'foes', 'bolts'] as const) {
       if (made[kind] === 0) continue;
       if (current === null) throw new Error(`${String(made[kind])} attack ${kind} appeared at ${seconds(elapsed)} with no attack warned: tag only what an attack makes`);
-      if (elapsed - current.warned + SLACK < MIN_WINDUP_SECONDS) throw early(current, elapsed, `made ${kind}`);
-      if (ATTACK_TELEGRAPHS[current.attack] !== kind) throw new Error(`${current.attack} made ${kind}, which its telegraph entry does not name: fix ATTACK_TELEGRAPHS`);
+      if (elapsed - current.warned + SLACK < current.minimum) throw early(current, elapsed, `made ${kind}`);
+      if (harms[current.attack] !== kind) throw new Error(`${current.attack} made ${kind}, which its telegraph entry does not name: fix ATTACK_TELEGRAPHS`);
       current.harm.add(kind);
     }
   }
