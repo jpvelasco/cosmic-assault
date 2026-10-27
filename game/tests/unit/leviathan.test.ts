@@ -522,6 +522,19 @@ describe('a Leviathan coil near the field\'s edge', () => {
     expect(turns).toEqual(new Set([1, -1]));
   });
 
+  it('holds a head that starts inside the ring, on the centre side of the ship, round at its own distance before it swims out', () => {
+    // The head 45 from the ship and 37 from the ring's centre, nearly on the ship's bearing: swimming out at once would
+    // run it over the ship, so it waits for the ship to fall a quarter turn behind it.
+    const [ship, head, aim, at] = [{ x: 171.9, y: 348.6 }, { x: 216.9, y: 343.4 }, { x: 254.0, y: 348.6 }, { x: 0, y: 0 }];
+    const plan: CoilPlan = { opening: 0, from: 0, turn: 1, turnsAt: 0, movesAt: 0 };
+    for (const swimTurn of [1, -1]) {
+      planCoil(head, aim, ship, swimTurn, plan);
+      expect(plan.from).toBeLessThan(COIL_RADIUS);
+      expect(plan.movesAt).toBeGreaterThan(0);
+      for (let t = 0; t <= COIL_SECONDS + SLACK; t += STEP_SECONDS) expect(distance(coilPoint(plan, aim, t, at), ship), `${t.toFixed(3)} s`).toBeGreaterThanOrEqual(DEF.radius + PLAYER.radius);
+    }
+  });
+
   it('never touches a ship that holds still where it was as a coil wound up, wherever the ship is and whichever way the head turns', () => {
     // Ships at seeded spots over the field, each met by every coil of a fight's second phase, from wherever the swim
     // and the attacks before it left the head; a ship already within reach of the body as a coil winds up is skipped.
