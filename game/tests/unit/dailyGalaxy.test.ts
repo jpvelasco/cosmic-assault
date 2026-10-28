@@ -11,14 +11,8 @@ import { galaxyProblems } from '../../src/content/validity';
 import { compareDates, dayNumber, nextDate } from '../../src/meta/calendar';
 import { dailyGalaxy, rolledTwist, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { hashString } from '../../src/sim/rng';
+import { datesFrom } from '../helpers/dailyRuns';
 import { importClosure } from '../helpers/sourceImports';
-
-/** `count` consecutive dates from `from`. */
-function datesFrom(from: string, count: number): string[] {
-  const dates = [from];
-  while (dates.length < count) dates.push(nextDate(dates[dates.length - 1] ?? from));
-  return dates;
-}
 
 const DATES = datesFrom('2026-01-01', 1000);
 const DAILIES: readonly DailyGalaxy[] = DATES.map(dailyGalaxy);

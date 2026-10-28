@@ -7,8 +7,8 @@ const { run: runGuard, tempRoot } = guardScript('check-workflow.mjs', 'check-wor
 const realWorkflow = join(gameDir, '..', '.github', 'workflows', 'ci.yml');
 const realText = readFileSync(realWorkflow, 'utf8');
 
-/** Every Dimension's balance targets file, as the balance shards expect them. */
-const TARGET_FILES = [1, 2, 3, 4, 5].map((d) => `d${String(d)}-targets.test.ts`);
+/** Every Dimension's balance targets file and the Daily's suite, as the balance shards expect them. */
+const TARGET_FILES = [...[1, 2, 3, 4, 5].map((d) => `d${String(d)}-targets.test.ts`), 'daily.test.ts'];
 
 /**
  * Lays out <tmp>/.github/workflows/ci.yml, <tmp>/website/ and <tmp>/game/tests/balance/ with `balanceFiles` in it,
@@ -50,7 +50,7 @@ const buildStep = '        run: npm run build\n';
 const noBridgeStep = '        run: npm run check:no-bridge\n';
 const buildE2eStep = '        run: npm run build:e2e\n';
 const legacyRun = '        run: npx playwright test --project=chromium-desktop --reporter=html,list\n';
-const balanceStep = '        run: npm run test:balance -- d${{ matrix.dimension }}-\n';
+const balanceStep = '        run: npm run test:balance -- ${{ matrix.shard }}\n';
 const perfStep = '        run: npm run test:perf\n';
 /** The perf job's own steps, from its header to the balance shards' header. */
 const perfJob = (t: string) => t.slice(t.indexOf('  perf:\n'), t.indexOf('  balance-dimension:\n'));
@@ -59,7 +59,7 @@ const inPerf = (t: string, from: string, to: string) => {
   const job = perfJob(t);
   return t.replace(job, () => replaceOnce(job, from, to));
 };
-const matrixLine = '        dimension: [1, 2, 3, 4, 5]\n';
+const matrixLine = '        shard: [d1-, d2-, d3-, d4-, d5-, daily]\n';
 const rollUpNeeds = '    needs: [balance-dimension]\n';
 const rollUpAlways = '    if: always()\n';
 const rollUpCheck = '        run: test "$SHARDS" = success\n';
@@ -128,14 +128,15 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
     (t) => t.slice(0, t.indexOf('  balance:\n')) + t.slice(t.indexOf('  legacy:\n')),
     'missing job balance:',
   ],
-  ['deleted balance run', (t) => replaceOnce(t, balanceStep, ''), 'the balance-dimension job must run "npm run test:balance -- d${{ matrix.dimension }}-"'],
+  ['deleted balance run', (t) => replaceOnce(t, balanceStep, ''), 'the balance-dimension job must run "npm run test:balance -- ${{ matrix.shard }}"'],
   ['balance shards running the whole suite', (t) => replaceOnce(t, balanceStep, '        run: npm run test:balance\n'), 'the balance-dimension job must run'],
   [
     'balance without node-version-file',
     (t) => t.slice(0, balanceNode(t)) + t.slice(balanceNode(t) + nodeVersionLine.length),
     'balance-dimension must set up Node with node-version-file: .nvmrc',
   ],
-  ['a Dimension dropped from the matrix', (t) => replaceOnce(t, matrixLine, '        dimension: [1, 2, 3, 4]\n'), 'must run a matrix of dimension: [1, 2, 3, 4, 5]'],
+  ['a Dimension dropped from the matrix', (t) => replaceOnce(t, matrixLine, '        shard: [d1-, d2-, d3-, d4-, daily]\n'), 'must run a matrix of shard: [d1-, d2-, d3-, d4-, d5-, daily]'],
+  ['the Daily dropped from the matrix', (t) => replaceOnce(t, matrixLine, '        shard: [d1-, d2-, d3-, d4-, d5-]\n'), 'must run a matrix of shard: [d1-, d2-, d3-, d4-, d5-, daily]'],
   [
     'removed balance shards',
     (t) => t.slice(0, t.indexOf('  balance-dimension:\n')) + t.slice(t.indexOf('  balance:\n')),
@@ -145,7 +146,9 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ['roll-up skipped when a shard fails', (t) => replaceOnce(t, `${rollUpNeeds}${rollUpAlways}`, rollUpNeeds), 'balance must declare if: always()'],
   ['roll-up passing whatever the shards did', (t) => replaceOnce(t, rollUpCheck, '        run: true\n'), 'balance must pass only when every shard did'],
   ['a Dimension without its targets file', (t) => t, 'd3-targets.test.ts is missing', [], TARGET_FILES.filter((f) => !f.startsWith('d3-'))],
+  ['no Daily suite in the balance tests', (t) => t, 'holds no daily*.test.ts file', [], TARGET_FILES.filter((f) => !f.startsWith('daily')).concat('dailyRuns.ts', 'd2-daily.test.ts')],
   ['a balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'pace.test.ts', 'targets.ts']],
+  ['a balance test that plays the Daily under another name', (t) => t, 'game/tests/balance/theDaily.test.ts runs in no balance shard', [], [...TARGET_FILES, 'theDaily.test.ts']],
   ['a nested balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/bosses/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'bosses/pace.test.ts', 'bosses/d3-pace.test.ts']],
   ['a balance test named for a Dimension past the fifth', (t) => t, 'game/tests/balance/d6-pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'd6-pace.test.ts']],
   ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, perf, balance]\n'), 'never waits for the report-only balance jobs'],
@@ -191,6 +194,12 @@ describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(realText).toMatch(/^ {2}perf:$/m);
     expect(realText).toContain(needsLine);
     const { status, output } = runGuard(realWorkflow);
+    expect(output).toContain('workflow ok');
+    expect(status).toBe(0);
+  });
+
+  it('accepts the Daily\'s suites beside the Dimensions\' files', () => {
+    const { status, output } = runGuard(writeFixture(realText, [], [...TARGET_FILES, 'daily-edges.test.ts', 'dailyRuns.ts']));
     expect(output).toContain('workflow ok');
     expect(status).toBe(0);
   });

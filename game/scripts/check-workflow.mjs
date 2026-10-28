@@ -33,9 +33,11 @@ const inOrder = (id, first, second) => {
   return a === -1 || b === -1 || a < b;
 };
 
-/** The balance suite's shards: one per Dimension, each running its d<N>-*.test.ts files. */
+/** The balance suite's shards: one per Dimension, each running its d<N>-*.test.ts files, and the Daily's daily*.test.ts. */
 const DIMENSIONS = [1, 2, 3, 4, 5];
-const BALANCE_SHARD = 'd${{ matrix.dimension }}-';
+const DAILY_SHARD = 'daily';
+const SHARDS = [...DIMENSIONS.map((d) => `d${String(d)}-`), DAILY_SHARD];
+const BALANCE_SHARD = '${{ matrix.shard }}';
 
 const problems = Object.entries(jobs)
   .filter(([, block]) => block === undefined)
@@ -87,9 +89,9 @@ const checks = [
   [anyLine('legacy', (line) => line.startsWith('run: npx playwright test')),
     'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
   [hasLine('balance-dimension', `run: npm run test:balance -- ${BALANCE_SHARD}`),
-    `ci.yml: the balance-dimension job must run "npm run test:balance -- ${BALANCE_SHARD}"; restore the step so each Dimension's bot kill and clear rates are reported`],
-  [hasLine('balance-dimension', `dimension: [${DIMENSIONS.join(', ')}]`),
-    `ci.yml: the balance-dimension job must run a matrix of dimension: [${DIMENSIONS.join(', ')}], one shard per Dimension; restore every Dimension`],
+    `ci.yml: the balance-dimension job must run "npm run test:balance -- ${BALANCE_SHARD}"; restore the step so each shard's bot kill and clear rates are reported`],
+  [hasLine('balance-dimension', `shard: [${SHARDS.join(', ')}]`),
+    `ci.yml: the balance-dimension job must run a matrix of shard: [${SHARDS.join(', ')}], one per Dimension and one for the Daily; restore every shard`],
   [hasJobKey('balance', 'needs: [balance-dimension]'),
     'ci.yml: balance must declare needs: [balance-dimension] (job level), so the one check the ruleset sees waits for every shard'],
   [hasJobKey('balance', 'if: always()'),
@@ -104,9 +106,13 @@ const balanceDir = resolve(repoRoot, 'game', 'tests', 'balance');
 const balanceFiles = existsSync(balanceDir) ? readdirSync(balanceDir, { recursive: true }).map((path) => path.split(sep).join('/')) : [];
 problems.push(...DIMENSIONS.filter((d) => !balanceFiles.includes(`d${String(d)}-targets.test.ts`)).map((d) =>
   `game/tests/balance/d${String(d)}-targets.test.ts is missing, so the Dimension ${String(d)} balance shard pins no targets; restore it`));
-const shardPrefix = new RegExp(`^d[${DIMENSIONS.join('')}]-`);
-problems.push(...balanceFiles.filter((file) => file.endsWith('.test.ts') && !shardPrefix.test(basename(file))).map((file) =>
-  `game/tests/balance/${file} runs in no balance shard, since each shard runs only its d<N>- files; give it the d<N>- prefix of the Dimension it plays, N from ${String(DIMENSIONS[0])} to ${String(DIMENSIONS.at(-1))}`));
+const inShard = (file) => SHARDS.some((shard) => basename(file).startsWith(shard));
+const testFiles = balanceFiles.filter((file) => file.endsWith('.test.ts'));
+if (!testFiles.some((file) => basename(file).startsWith(DAILY_SHARD))) {
+  problems.push(`game/tests/balance/ holds no ${DAILY_SHARD}*.test.ts file, so the ${DAILY_SHARD} balance shard plays no Daily; restore daily.test.ts`);
+}
+problems.push(...testFiles.filter((file) => !inShard(file)).map((file) =>
+  `game/tests/balance/${file} runs in no balance shard, since each shard runs only its own files; give it the d<N>- prefix of the Dimension it plays, N from ${String(DIMENSIONS[0])} to ${String(DIMENSIONS.at(-1))}, or the ${DAILY_SHARD} prefix if it plays the Daily`));
 
 const nextPaths = readdirSync(resolve(repoRoot, 'website'), { recursive: true })
   .filter((path) => basename(path) === 'next');
