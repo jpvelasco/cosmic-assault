@@ -1,5 +1,8 @@
 import { FOES } from '../../content/foes';
 import { BLACK_HOLE, HAZARD_RULES } from '../../content/hazards';
+import { clearSpot } from '../boss/bossRules';
+import { ASTEROID, PLAYER } from '../config';
+import type { Foe } from '../foes/foe';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { nudge } from '../math';
@@ -105,10 +108,15 @@ export class BlackHole implements Hazard {
     return this.strikes(x, y, r);
   }
 
-  /** While the hole is warning or active a respawning ship comes back at its respawn point, a share of the field; else null. */
-  respawnPoint(): Readonly<{ x: number; y: number }> | null {
-    if (this.field === null || this.schedule.live.length === 0) return null;
-    return { x: this.field.width * BLACK_HOLE.respawn.x, y: this.field.height * BLACK_HOLE.respawn.y };
+  /**
+   * While the hole is warning or active, where a respawning ship comes back: the first of the usual respawn spots
+   * (`clearSpot`) a ship's safe radius outside the hole's `exitReach` and every live foe, so it neither falls in during its
+   * invulnerability nor wakes among a swarm that gathered where it died; else null.
+   */
+  respawnPoint(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null {
+    const hole = this.schedule.live[0];
+    if (this.field === null || hole === undefined) return null;
+    return clearSpot({ x: hole.x, y: hole.y, parts: foes }, BLACK_HOLE.exitReach, this.field, PLAYER.radius + ASTEROID.safeRadius);
   }
 
   resize(old: Field, field: Field): void {

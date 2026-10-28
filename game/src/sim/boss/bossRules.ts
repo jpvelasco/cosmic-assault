@@ -20,8 +20,11 @@ export const RESPAWN_INSET = 60;
  */
 export const RESPAWN_LOWEST_SHARE = 0.8;
 
-/** A boss as its reach is measured: its core, and the parts it may have, of which only the live ones count. */
-export type BossBodies = Readonly<Point> & { readonly parts?: readonly Readonly<BossPart>[] };
+/**
+ * A body a respawn keeps clear of, as its reach is measured: a boss's core and the parts it may have, or a black hole and
+ * the foes round it. Only the live parts count.
+ */
+export type BossBodies = Readonly<Point> & { readonly parts?: readonly Readonly<Pick<BossPart, 'x' | 'y' | 'radius' | 'hp'>>[] };
 
 /**
  * How far (x, y) lies outside the boss: outside the circle of `reach` about its core, and outside every live part by

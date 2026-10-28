@@ -116,10 +116,11 @@ export class HazardField {
     return false;
   }
 
-  /** Where a respawning ship must come back, if an active hazard says so; else null. */
+  /** Where a respawning ship must come back, if an active hazard says so, clear of the foes as of the last move; else null. */
   respawnPoint(): Readonly<{ x: number; y: number }> | null {
+    const foes = this.bodies?.foes ?? [];
     for (const hazard of this.hazards) {
-      const spot = hazard.respawnPoint?.() ?? null;
+      const spot = hazard.respawnPoint?.(foes) ?? null;
       if (spot !== null) return spot;
     }
     return null;

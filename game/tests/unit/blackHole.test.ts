@@ -221,11 +221,46 @@ describe('the hole\'s life', () => {
     expect(rock.vx).toBe(0);
   });
 
-  it('returns the respawn point (w/2, 0.8·h) from its warning until it ends, and nothing before or after', () => {
-    expect(holeField(START_AT - 1).respawnPoint()).toEqual({ x: FIELD.width / 2, y: 0.8 * FIELD.height });
-    expect(holeField(START_AT + 1).respawnPoint()).toEqual({ x: FIELD.width / 2, y: 0.8 * FIELD.height });
+  it('returns a respawn point from its warning until it ends, and nothing before or after', () => {
+    expect(holeField(START_AT - 1).respawnPoint()).not.toBeNull();
+    expect(holeField(START_AT + 1).respawnPoint()).not.toBeNull();
     expect(holeField(START_AT - 4).respawnPoint()).toBeNull();
     expect(holeField(START_AT + LENGTH + 1).respawnPoint()).toBeNull();
+  });
+
+  /** How far a respawn point must lie from the hole: a ship's safe radius outside the reach it survives a reaction from. */
+  const SAFE_FROM_HOLE = BLACK_HOLE.exitReach + PLAYER.radius + ASTEROID.safeRadius;
+
+  it.each([MIN_ASPECT, 16 / 9, MAX_ASPECT])('puts the respawn point a safe radius outside its exit reach, inside the field, at aspect %d', (aspect) => {
+    const field: Field = { width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT };
+    let last = 0;
+    const hazards = new HazardField([hole(START_AT, 3)], () => createRng(1), () => ++last);
+    hazards.step(START_AT + 1, field, []);
+    const spot = hazards.respawnPoint();
+    if (spot === null) throw new Error('the hole is active, so it has a respawn point');
+    expect(Math.hypot(spot.x - field.width / 2, spot.y - field.height / 2)).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
+    expect(spot.x).toBeGreaterThan(0);
+    expect(spot.x).toBeLessThan(field.width);
+    expect(spot.y).toBeGreaterThan(0);
+    expect(spot.y).toBeLessThan(field.height);
+  });
+
+  it('moves the respawn point off a swarm gathered on it, to a spot clear of every live foe and of the hole, the same for the same foes', () => {
+    const hazards = holeField(START_AT + 1);
+    const ship = shipAt(60, 60);
+    hazards.move(DT, ship, [], [], []);
+    const first = hazards.respawnPoint();
+    if (first === null) throw new Error('the hole is active, so it has a respawn point');
+    const swarm = [foeAt(1, first.x, first.y), foeAt(2, first.x + 30, first.y), foeAt(3, first.x, first.y - 30)];
+    hazards.move(DT, ship, [], swarm, []);
+    const moved = hazards.respawnPoint();
+    if (moved === null) throw new Error('the hole is active, so it has a respawn point');
+    for (const foe of swarm) expect(Math.hypot(moved.x - foe.x, moved.y - foe.y) - foe.radius).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
+    expect(Math.hypot(moved.x - CENTRE.x, moved.y - CENTRE.y)).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
+    expect(hazards.respawnPoint()).toEqual(moved);
+    // A spent foe is no swarm: the first choice comes back.
+    for (const foe of swarm) foe.hp = 0;
+    expect(hazards.respawnPoint()).toEqual(first);
   });
 
   it('is one hazard of its own stream, \'hazards:blackHole\', so the other hazards\' draws do not move', () => {

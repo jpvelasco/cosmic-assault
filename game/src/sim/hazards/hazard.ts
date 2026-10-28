@@ -90,8 +90,8 @@ export interface Hazard {
   swallows?(x: number, y: number, r: number): boolean;
   /** Moves or removes bodies once the pulls are applied, pushing what it did into `out`. */
   carry?(bodies: Bodies, out: SimEvent[]): void;
-  /** Where a respawning ship must come back while it is active, or null for the default. */
-  respawnPoint?(): Readonly<{ x: number; y: number }> | null;
+  /** Where a respawning ship must come back while it is active, clear of it and of `foes`, or null for the default. */
+  respawnPoint?(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null;
   /** Stretches its places to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void;
   /** Ends every warning and hazard at once, without an event: the galaxy is over. */
