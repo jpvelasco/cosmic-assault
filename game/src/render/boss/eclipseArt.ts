@@ -1,10 +1,8 @@
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { BLACK, mix, rgba, WHITE } from '../color';
 import type { Palette } from '../palette';
 import { addStops, strokePath } from '../sprites';
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** The disc is near black, lit only at its rim, so it reads as a body against the bright corona round it. */
 const DISC_DEEP = '#07050d';
 /** How far the core's sprite reaches past its radius: its limb's rim. */

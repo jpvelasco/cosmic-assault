@@ -1,7 +1,7 @@
 import type { Asteroid } from '../sim/asteroid';
 import { TAU } from '../sim/math';
 import { FNV_OFFSET_BASIS, fnv1aStep, mulberry32 } from '../sim/rng';
-import { mix, rgba } from './color';
+import { mix, rgba, WHITE } from './color';
 import { get2dContext } from './context';
 import type { Palette } from './palette';
 import { SpriteCache } from './spriteCache';
@@ -83,7 +83,6 @@ export interface Point {
   readonly y: number;
 }
 
-const WHITE = '#ffffff';
 /**
  * The sprites the cache holds by default: max(256, 1.5 × the most the e2e sprite-cache spec has seen in use at once in
  * the scenes it plays), so steady play evicts nothing it will draw again soon.
@@ -201,6 +200,20 @@ export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[
   ctx.beginPath();
   for (const p of points) ctx.lineTo(p.x, p.y);
   ctx.closePath();
+}
+
+const SOLID: readonly number[] = [];
+
+/** Dashes the lines `ctx` strokes with `dash`, marching along them at `speed` units a second `time` seconds in; still under reduced motion. */
+export function marchDash(ctx: CanvasRenderingContext2D, dash: readonly number[], time: number, speed: number, still: boolean): void {
+  ctx.setLineDash(dash);
+  ctx.lineDashOffset = still ? 0 : -time * speed;
+}
+
+/** Strokes solid lines again after `marchDash`. */
+export function solidLines(ctx: CanvasRenderingContext2D): void {
+  ctx.setLineDash(SOLID);
+  ctx.lineDashOffset = 0;
 }
 
 /** Strokes the current path in `color` at `width`. */
@@ -345,7 +358,8 @@ function flameGlowRadius(length: number): number {
   return Math.max(FLAME_HALF_WIDTH * 1.6, length * 0.55);
 }
 
-function maxDistance(points: readonly Point[]): number {
+/** How far the farthest of `points` lies from the origin. */
+export function maxDistance(points: readonly Point[]): number {
   return Math.max(...points.map((p) => Math.hypot(p.x, p.y)));
 }
 

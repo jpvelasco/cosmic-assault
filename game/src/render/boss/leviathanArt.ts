@@ -1,10 +1,8 @@
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { BLACK, mix, rgba, WHITE } from '../color';
 import type { Palette } from '../palette';
 import { addStops, paintGlow, scaled, strokePath, tracePath, type Point } from '../sprites';
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** Its hide: deep indigo scales, lit to shadowed. */
 const HIDE_LIT = '#6f86d8';
 const HIDE = '#2a2f7a';

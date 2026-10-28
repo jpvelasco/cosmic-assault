@@ -1,6 +1,7 @@
 import type { BossView } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { mix, rgba, WHITE } from '../color';
+import { marchDash, solidLines } from '../sprites';
 import type { BossFrame, DrawerKit } from './drawer';
 
 /** A dive's aim line, as the boss pass draws it. */
@@ -9,10 +10,8 @@ export interface AimLine {
   draw(boss: Readonly<BossView>, frame: Readonly<BossFrame>, clock: number): void;
 }
 
-const WHITE = '#ffffff';
 /** The dashes of the line, in field units, and how fast they march toward the aim unless held still. */
 const DASH = [14, 10];
-const NO_DASH: number[] = [];
 const DASH_SPEED = 120;
 const LINE_WIDTH = 3;
 /** The reticle at the aim: its radius, and how it closes in as the windup runs. */
@@ -64,13 +63,12 @@ export function createAimLine({ ctx, pen, baker, palette }: DrawerKit): AimLine 
       ctx.globalAlpha = frame.shown;
       ctx.strokeStyle = stroke;
       ctx.lineWidth = LINE_WIDTH;
-      ctx.setLineDash(DASH);
-      ctx.lineDashOffset = still ? 0 : -clock * DASH_SPEED;
+      marchDash(ctx, DASH, clock, DASH_SPEED, still);
       ctx.beginPath();
       ctx.moveTo(frame.x, frame.y);
       ctx.lineTo(aimX, aimY);
       ctx.stroke();
-      ctx.setLineDash(NO_DASH);
+      solidLines(ctx);
       const close = still ? 1 : 1 + RETICLE_CLOSE * Math.max(0, 1 - clock / RETICLE_CLOSE_SECONDS);
       pen.place(aimX, aimY, close, 0);
       pen.blit(baker.custom(key, RETICLE_RADIUS + 2, paint));

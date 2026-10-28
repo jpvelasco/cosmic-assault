@@ -2,12 +2,11 @@ import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { COIL_OPENING } from '../../sim/boss/leviathan';
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { mix, rgba, WHITE } from '../color';
 import { blitTinted, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { HEAD_ART_REACH, paintHead, paintSegment, SEGMENT_ART_REACH } from './leviathanArt';
 import { clockHooks, PartClocks } from './partClocks';
 
-const WHITE = '#ffffff';
 /** The open tail's glow, in segment radii across, pulsing at this rate unless held still. */
 const TAIL_GLOW_SCALE = 3.4;
 const TAIL_GLOW_ALPHA = 0.85;

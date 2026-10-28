@@ -3,11 +3,11 @@ import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../content/hazards';
 import type { Field } from '../sim/field';
 import type { HazardState, PointHazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
 import { TAU } from '../sim/math';
-import { mix, rgba } from './color';
+import { BLACK, mix, rgba, WHITE } from './color';
 import type { FieldPen } from './fieldPen';
 import type { Palette } from './palette';
 import type { SceneLook, Stamp } from './scene';
-import { strokePath, type Sprite, type SpriteBaker } from './sprites';
+import { marchDash, solidLines, strokePath, type Sprite, type SpriteBaker } from './sprites';
 
 export interface HazardPass {
   /**
@@ -45,12 +45,10 @@ const RIPPLE_SECONDS = 1.6;
 const { telegraph: RIFT_TELEGRAPH_SECONDS, seconds: RIFT_SECONDS } = HAZARD_RULES.warpRift;
 const RIFT_RADIUS = WARP_RIFT.radius;
 const RIFT_LINK_DASH: number[] = [8, 6];
-const NO_DASH: number[] = [];
 const RIFT_LINK_MARCH = 40;
 const RIFT_LINK_WIDTH = 2;
 const RIFT_LINK_BOW = 0.18;
 
-const WHITE = '#ffffff';
 const { telegraph: WELL_TELEGRAPH_SECONDS, seconds: WELL_SECONDS } = HAZARD_RULES.gravityWell;
 /** The drawn radius of an intensity-1 well; its pull reaches the whole field and has no edge. Each intensity adds a share. */
 const WELL_RADIUS = 90;
@@ -179,9 +177,9 @@ function paintRipple(ctx: CanvasRenderingContext2D, r: number, color: string): v
 function paintHorizon(ctx: CanvasRenderingContext2D, r: number, rim: string): void {
   const inner = HORIZON * r;
   const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, inner * 1.9);
-  gradient.addColorStop(0, rgba('#000000', 0.95));
-  gradient.addColorStop(0.5, rgba('#000000', 0.85));
-  gradient.addColorStop(1, rgba('#000000', 0));
+  gradient.addColorStop(0, rgba(BLACK, 0.95));
+  gradient.addColorStop(0.5, rgba(BLACK, 0.85));
+  gradient.addColorStop(1, rgba(BLACK, 0));
   ctx.fillStyle = gradient;
   ctx.fillRect(-inner * 2, -inner * 2, inner * 4, inner * 4);
   ctx.beginPath();
@@ -197,9 +195,9 @@ function paintLens(ctx: CanvasRenderingContext2D, rim: string): void {
   ctx.fillStyle = halo;
   ctx.fillRect(-HOLE_RING_RADIUS, -HOLE_RING_RADIUS, HOLE_RING_RADIUS * 2, HOLE_RING_RADIUS * 2);
   const dark = ctx.createRadialGradient(0, 0, 0, 0, 0, HOLE_HORIZON * 1.1);
-  dark.addColorStop(0, rgba('#000000', 1));
-  dark.addColorStop(0.85, rgba('#000000', 0.97));
-  dark.addColorStop(1, rgba('#000000', 0));
+  dark.addColorStop(0, rgba(BLACK, 1));
+  dark.addColorStop(0.85, rgba(BLACK, 0.97));
+  dark.addColorStop(1, rgba(BLACK, 0));
   ctx.fillStyle = dark;
   ctx.fillRect(-HOLE_HORIZON * 1.1, -HOLE_HORIZON * 1.1, HOLE_HORIZON * 2.2, HOLE_HORIZON * 2.2);
   ctx.beginPath();
@@ -452,14 +450,12 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     ctx.beginPath();
     ctx.moveTo(rift.x, rift.y);
     ctx.quadraticCurveTo(mx + (nx / length) * bow * 2, my + (ny / length) * bow * 2, rift.toX, rift.toY);
-    ctx.setLineDash(RIFT_LINK_DASH);
-    ctx.lineDashOffset = still ? 0 : -time * RIFT_LINK_MARCH;
+    marchDash(ctx, RIFT_LINK_DASH, time, RIFT_LINK_MARCH, still);
     ctx.lineWidth = RIFT_LINK_WIDTH;
     ctx.strokeStyle = violet;
     ctx.globalAlpha = alpha;
     ctx.stroke();
-    ctx.setLineDash(NO_DASH);
-    ctx.lineDashOffset = 0;
+    solidLines(ctx);
     ctx.globalAlpha = 1;
   }
 

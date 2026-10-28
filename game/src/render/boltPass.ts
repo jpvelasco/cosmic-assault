@@ -1,7 +1,7 @@
 import { BOLT } from '../content/foes';
 import type { Field } from '../sim/field';
 import type { Bolt } from '../sim/foes/bolts';
-import { mix, rgba } from './color';
+import { BLACK, mix, rgba, WHITE } from './color';
 import { interpolatePose } from './interp';
 import type { Palette } from './palette';
 import { createZoom, type SceneLook, type Stamp } from './scene';
@@ -12,7 +12,6 @@ export interface BoltPass {
   drawBolts(bolts: readonly Readonly<Bolt>[], alpha: number, field: Field, look: SceneLook): void;
 }
 
-const WHITE = '#ffffff';
 /** The capsule's half-length along its flight and its half-width across it, as shares of the bolt's radius. */
 const HALF_LENGTH = 2;
 const HALF_WIDTH = 0.95;
@@ -35,10 +34,10 @@ function paintBolt(ctx: CanvasRenderingContext2D, p: Palette): void {
   ctx.globalCompositeOperation = 'source-over';
   ctx.beginPath();
   ctx.roundRect(-half, -width, half * 2, width * 2, width);
-  ctx.fillStyle = addStops(ctx.createLinearGradient(0, width, 0, -width), [mix(hue, '#000000', 0.35), hue, mix(hue, WHITE, 0.5)], [0, 0.5, 1]);
+  ctx.fillStyle = addStops(ctx.createLinearGradient(0, width, 0, -width), [mix(hue, BLACK, 0.35), hue, mix(hue, WHITE, 0.5)], [0, 0.5, 1]);
   ctx.fill();
   // A dark rim, then a light one inside it: the capsule reads against anything of its own hue, a lethal zone included.
-  ctx.strokeStyle = rgba(mix(hue, '#000000', 0.8), 0.9);
+  ctx.strokeStyle = rgba(mix(hue, BLACK, 0.8), 0.9);
   ctx.lineWidth = 2.4;
   ctx.stroke();
   ctx.strokeStyle = rgba(WHITE, 0.55);

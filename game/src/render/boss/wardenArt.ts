@@ -1,10 +1,8 @@
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { BLACK, mix, rgba, WHITE } from '../color';
 import type { Palette } from '../palette';
 import { addStops, paintGlow, strokePath } from '../sprites';
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** Burnished steel, lit to shadowed. */
 const STEEL_LIT = '#d8dcea';
 const STEEL = '#4a5070';

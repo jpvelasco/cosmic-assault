@@ -4,13 +4,13 @@ import type { FoeKind } from '../content/types';
 import type { Field } from '../sim/field';
 import type { Foe } from '../sim/foes/foe';
 import { TAU } from '../sim/math';
-import { mix, rgba } from './color';
+import { BLACK, mix, rgba, WHITE } from './color';
 import { HIT_FLASH_SECONDS, type FoeFlash } from './hitFlash';
 import { interpolatePose } from './interp';
 import type { FieldPen } from './fieldPen';
 import type { Palette } from './palette';
 import { createZoom, type SceneLook, type Stamp } from './scene';
-import { addStops, paintGlow, strokePath, tracePath, type Point, type SpriteBaker } from './sprites';
+import { addStops, marchDash, paintGlow, solidLines, strokePath, tracePath, type Point, type SpriteBaker } from './sprites';
 
 export interface FoePass {
   /**
@@ -23,8 +23,6 @@ export interface FoePass {
   drawFlashes(flashes: readonly Readonly<FoeFlash>[], field: Field): void;
 }
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** Room around the art for its rim stroke and baked engine glow, in field units. */
 const SPRITE_PAD = 3;
 /** The glow under a foe: its diameter as a multiple of the radius, and its alpha at full quality. */
@@ -92,7 +90,6 @@ const RING_SPIN = 0.35;
 const ARMED_HZ = 6;
 /** The aim line's dash and gap, in field units, how fast it marches toward the aim, and its width. */
 const AIM_DASH: readonly number[] = [10, 7];
-const NO_DASH: readonly number[] = [];
 const AIM_MARCH = 60;
 const AIM_WIDTH = 2;
 
@@ -409,8 +406,7 @@ export function createFoePass(ctx: CanvasRenderingContext2D, pen: FieldPen, stam
     pen.field();
     ctx.strokeStyle = aimColor;
     ctx.lineWidth = AIM_WIDTH;
-    ctx.setLineDash(AIM_DASH);
-    ctx.lineDashOffset = still ? 0 : -time * AIM_MARCH;
+    marchDash(ctx, AIM_DASH, time, AIM_MARCH, still);
     for (const foe of foes) {
       if (foe.hp <= 0 || foe.kind !== 'gunship' || !foe.charging) continue;
       interpolatePose(foe.px, foe.py, foe.protation, foe.x, foe.y, foe.rotation, alpha, field, pose);
@@ -420,8 +416,7 @@ export function createFoePass(ctx: CanvasRenderingContext2D, pen: FieldPen, stam
       ctx.lineTo(foe.aimX, foe.aimY);
       ctx.stroke();
     }
-    ctx.setLineDash(NO_DASH);
-    ctx.lineDashOffset = 0;
+    solidLines(ctx);
     ctx.globalAlpha = 1;
   }
 

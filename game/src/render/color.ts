@@ -1,3 +1,7 @@
+/** Pure white and black, to mix palette colours toward. */
+export const WHITE = '#ffffff';
+export const BLACK = '#000000';
+
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export function hexToRgb(hex: string): readonly [number, number, number] {

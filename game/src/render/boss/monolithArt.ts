@@ -1,10 +1,8 @@
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { BLACK, mix, rgba, WHITE } from '../color';
 import type { Palette } from '../palette';
 import { addStops, craterLayout, paintCraters, paintGlow, scaled, strokePath, tracePath, type Point } from '../sprites';
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 const SLATE_LIT = '#7a6a9e';
 const SLATE = '#2b2140';
 /** The Monolith's crater layout, fixed, as if it were one rock. */

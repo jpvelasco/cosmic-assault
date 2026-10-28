@@ -1,11 +1,9 @@
 import { HANGAR_HALF_ARC } from '../../sim/boss/hiveCarrier';
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { BLACK, mix, rgba, WHITE } from '../color';
 import type { Palette } from '../palette';
 import { addStops, paintGlow, scaled, strokePath, tracePath, type Point } from '../sprites';
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** Gunmetal plating, lit to shadowed. */
 const PLATE_LIT = '#a9bbd6';
 const PLATE = '#3b4a68';

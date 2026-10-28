@@ -1,20 +1,18 @@
 import type { Field } from '../sim/field';
 import { wingmanPoint } from '../sim/pickups/wingman';
 import type { World } from '../sim/world';
-import { mix, rgba } from './color';
+import { BLACK, mix, rgba, WHITE } from './color';
 import { expiryAlpha } from './pickupArt';
 import { interpolatePose } from './interp';
 import type { Palette } from './palette';
 import type { SceneLook, Stamp } from './scene';
-import { addStops, paintGlow, strokePath, tracePath, type Point, type SpriteBaker } from './sprites';
+import { addStops, maxDistance, paintGlow, strokePath, tracePath, type Point, type SpriteBaker } from './sprites';
 
 export interface WingmanPass {
   /** The Wingman drone, beside the ship's left wing where its shots start, while the effect runs (blinking as it ends). */
   draw(world: World, alpha: number, field: Field, look: SceneLook): void;
 }
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** Room around the drone's art for its rim, in field units. */
 const SPRITE_PAD = 3;
 /** The drone's hull, nose along +x: a short wedge with swept wings, smaller than the ship. */
@@ -50,7 +48,7 @@ export function createWingmanPass(ctx: CanvasRenderingContext2D, stamp: Stamp, b
   const paint = (c: CanvasRenderingContext2D): void => {
     paintWingman(c, palette);
   };
-  const halfSize = Math.max(...HULL.map((p) => Math.hypot(p.x, p.y))) + SPRITE_PAD;
+  const halfSize = maxDistance(HULL) + SPRITE_PAD;
 
   return {
     draw(world, alpha, field, { glow, still }) {

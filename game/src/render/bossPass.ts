@@ -10,7 +10,7 @@ import { hiveCarrierDrawer } from './boss/hiveCarrier';
 import { leviathanDrawer } from './boss/leviathan';
 import { monolithDrawer } from './boss/monolith';
 import { wardenDrawer } from './boss/warden';
-import { mix, rgba } from './color';
+import { mix, rgba, WHITE } from './color';
 import type { FieldPen } from './fieldPen';
 import { HIT_FLASH_SECONDS } from './hitFlash';
 import type { Palette } from './palette';
@@ -44,7 +44,6 @@ export interface BossPass {
 /** Each boss's look. */
 const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer, warden: wardenDrawer, leviathan: leviathanDrawer, eclipse: eclipseDrawer };
 
-const WHITE = '#ffffff';
 /** The core shows white while the flash is above this, the share of BOSS_FLASH_SECONDS left after HIT_FLASH_SECONDS. */
 const TINT_ABOVE = 1 - HIT_FLASH_SECONDS / BOSS_FLASH_SECONDS;
 const INTRO_FADE_SECONDS = 0.8;

@@ -4,11 +4,11 @@ import { galaxyLabel } from '../content/galaxies';
 import { TIMED_PICKUPS, type TimedPickupId } from '../content/pickups';
 import type { BossId, GalaxyDef } from '../content/types';
 import type { World } from '../sim/world';
-import { rgba } from './color';
+import { rgba, WHITE } from './color';
 import { BOSS_MIN_W, bossBarWidth, bossNameX, drawBossHp, placeHpTrack } from './hudBoss';
 import { drawShowerWarning, drawTimer, showerWarningAngle, timerFraction, type ChevronView } from './hudGalaxy';
 import { drawPickupPill, placePickupPill } from './hudPickups';
-import { across, bottom, box, BRIGHT_STROKE, PILL_PAD, tracePill, WHITE, type HudRect } from './hudShapes';
+import { across, bottom, box, BRIGHT_STROKE, PILL_PAD, tracePill, type HudRect } from './hudShapes';
 import type { Palette } from './palette';
 import { SHIP_HULL } from './sprites';
 
