@@ -95,7 +95,7 @@ describe('the generic boss threat view', () => {
     { id: 'monolith', attack: 'quake', phase: 2, threat: { windup: 0.8, kind: 'none', reach: 0, speed: 0 } },
     { id: 'hiveCarrier', attack: 'launch', phase: 1, threat: { windup: 0.7, kind: 'none', reach: 0, speed: 0 } },
     { id: 'hiveCarrier', attack: 'retreat', phase: 2, threat: { windup: 1, kind: 'none', reach: 0, speed: 0 } },
-    { id: 'leviathan', attack: 'dive', phase: 1, threat: { windup: 0.7, kind: 'lane', reach: BOSSES.leviathan.radius, speed: 0 } },
+    { id: 'leviathan', attack: 'dive', phase: 1, threat: { windup: 1, kind: 'lane', reach: BOSSES.leviathan.radius, speed: 0 } },
     { id: 'leviathan', attack: 'spit', phase: 1, threat: { windup: 0.5, kind: 'none', reach: 0, speed: 0 } },
     { id: 'leviathan', attack: 'coil', phase: 2, threat: { windup: 0.9, kind: 'ring', reach: BOSSES.leviathan.radius, speed: 0, ring: { radius: 220, around: 'aim' } } },
   ])("resolves $id's $attack as the data its behaviour declares", ({ id, attack, phase, threat }) => {

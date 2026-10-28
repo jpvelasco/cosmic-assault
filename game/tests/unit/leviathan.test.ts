@@ -112,9 +112,11 @@ describe('the Leviathan definition', () => {
     expect(galaxyById('4-6').boss).toBe('leviathan');
   });
 
-  it('telegraphs its dive for 0.7 s, its spit for 0.5 s and its coil for 0.9 s, every one at least the minimum', () => {
+  it('telegraphs its dive for 1 s, its spit for 0.5 s and its coil for 0.9 s, every one at least the minimum', () => {
     const { attacks } = createLeviathan({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()) });
-    expect({ dive: attacks.dive.windup, spit: attacks.spit.windup, coil: attacks.coil.windup }).toEqual({ dive: 0.7, spit: 0.5, coil: 0.9 });
+    expect({ dive: attacks.dive.windup, spit: attacks.spit.windup, coil: attacks.coil.windup }).toEqual({ dive: 1, spit: 0.5, coil: 0.9 });
+    // Long enough for a ship at rest to thrust out of the head's lane, with a 5% margin.
+    expect(attacks.dive.windup).toBeGreaterThanOrEqual(1.05 * Math.sqrt((2 * (DEF.radius + PLAYER.radius)) / PLAYER.thrust));
     for (const spec of Object.values(attacks)) expect(spec.windup).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
     expect(attacks.dive).toMatchObject({ active: DIVE_SECONDS, threat: { kind: 'lane', reach: 'core' } });
     expect(attacks.coil).toMatchObject({ active: COIL_SECONDS, threat: { kind: 'ring', radius: COIL_RADIUS, reach: DEF.radius, around: 'aim' } });

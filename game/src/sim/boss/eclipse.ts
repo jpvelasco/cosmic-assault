@@ -66,8 +66,8 @@ const PULSE_REACH = 340;
 /** How fast the core turns to face the ship, radians per second. */
 const TURN_RATE = 0.6;
 
-/** The Eclipse's windups, in seconds. */
-const WINDUPS = { shardVolley: 1.2, quake: 0.8, pulse: 0.6, launch: 0.7, turretVolley: 0.6, dive: 0.8 } as const;
+/** The Eclipse's windups, in seconds. A dive's is long enough for a ship at rest to thrust out of the core's lane. */
+const WINDUPS = { shardVolley: 1.2, quake: 0.8, pulse: 0.6, launch: 0.7, turretVolley: 0.6, dive: 1 } as const;
 
 export type EclipseAttack = keyof typeof WINDUPS;
 

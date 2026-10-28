@@ -276,9 +276,14 @@ describe('the Eclipse moves', () => {
     expect(ATTACKS.pulse).toMatchObject({ windup: 0.6, active: 0.3 });
     expect(ATTACKS.launch).toMatchObject({ windup: 0.7, active: 0 });
     expect(ATTACKS.turretVolley).toMatchObject({ windup: 0.6, active: 0.4 });
-    expect(ATTACKS.dive).toMatchObject({ windup: 0.8, active: DIVE_SECONDS });
+    expect(ATTACKS.dive).toMatchObject({ windup: 1, active: DIVE_SECONDS });
     expect(ECLIPSE_CAP).toBe(8);
     expect(ECLIPSE_WAVES).toEqual({ 1: 2, 2: 2, 3: 3 });
+  });
+
+  it('telegraphs its dive long enough for a ship at rest to thrust out of the core\'s lane, with a 5% margin', () => {
+    const leave = Math.sqrt((2 * (DEF.radius + PLAYER.radius)) / PLAYER.thrust);
+    expect(ATTACKS.dive.windup).toBeGreaterThanOrEqual(1.05 * leave);
   });
 
   it('declares its honest threat for each move: lanes to the aim for the shard volley and dive, a shove for the pulse, a ring for the turret volley', () => {

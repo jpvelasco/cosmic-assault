@@ -49,8 +49,8 @@ const COIL_EXIT = 80;
 /** How fast the head turns toward a dive's aim through its windup, radians per second. */
 const AIM_TURN_RATE = 8;
 
-/** The Leviathan's windups, in seconds. */
-const WINDUPS = { dive: 0.7, spit: 0.5, coil: 0.9 } as const;
+/** The Leviathan's windups, in seconds. A dive's is long enough for a ship at rest to thrust out of the head's lane. */
+const WINDUPS = { dive: 1, spit: 0.5, coil: 0.9 } as const;
 export type LeviathanAttack = keyof typeof WINDUPS;
 /** Its attacks that move its head, which then follows what their run makes of it. */
 const MOVES: ReadonlySet<AttackId> = new Set<AttackId>(['dive', 'coil']);
