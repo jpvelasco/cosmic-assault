@@ -1,7 +1,12 @@
 import type { BossPart } from '../../sim/boss/behaviour';
 import type { SimEvent } from '../../sim/events';
+import { TAU } from '../../sim/math';
 import { HIT_FLASH_SECONDS } from '../hitFlash';
 import { easeOut } from '../scene';
+import type { BossDrawer } from './drawer';
+
+/** Warnings flicker at this rate unless held still. */
+const WARN_FLICKER_HZ = 5;
 
 /** Grows `list` to `length` with `fill`, or cuts it down, so it has one slot per part. */
 function fit(list: number[], length: number, fill: number): void {
@@ -10,11 +15,13 @@ function fit(list: number[], length: number, fill: number): void {
 }
 
 /**
- * Each boss part's clocks, for a drawer: its hit flash, white for `HIT_FLASH_SECONDS` after a `bossPartHit`, and its
- * growth, from nothing to full size over `growSeconds` each time it grows back. Parts live at the start of a fight show
- * at full size.
+ * A boss drawer's clocks: the real seconds since the boss arrived, for its pulses and tumbles, and each part's: its hit
+ * flash, white for `HIT_FLASH_SECONDS` after a `bossPartHit`, and its growth, from nothing to full size over
+ * `growSeconds` each time it grows back. Parts live at the start of a fight show at full size.
  */
 export class PartClocks {
+  /** Real seconds since the boss arrived. */
+  time = 0;
   private readonly flash: number[] = [];
   private readonly growth: number[] = [];
   /** Whether each part was live last frame, 1 or 0. */
@@ -24,6 +31,7 @@ export class PartClocks {
 
   /** Counts each part's flash down and its growth up, starting the growth afresh for a part that has just grown back. */
   advance(dt: number, parts: readonly Readonly<BossPart>[]): void {
+    this.time += dt;
     const { flash, growth, live } = this;
     const fresh = live.length !== parts.length;
     fit(flash, parts.length, 0);
@@ -52,14 +60,33 @@ export class PartClocks {
     return (this.flash[i] ?? 0) > 0;
   }
 
+  /** A warning's flicker, 0.5 to 1, steady at 1 under reduced motion. */
+  flicker(still: boolean): number {
+    return still ? 1 : 0.75 + 0.25 * Math.sin(this.time * TAU * WARN_FLICKER_HZ);
+  }
+
   /** How grown part `i` is, eased, 0 to 1. */
   grown(i: number): number {
     return easeOut(Math.min(1, (this.growth[i] ?? this.growSeconds) / this.growSeconds));
   }
 
   reset(): void {
+    this.time = 0;
     this.flash.length = 0;
     this.growth.length = 0;
     this.live.length = 0;
   }
 }
+
+/** The drawer methods that only run `clocks`: advancing them, starting flashes and forgetting the last fight. */
+export const clockHooks = (clocks: PartClocks): Required<Pick<BossDrawer, 'advance' | 'handle' | 'reset'>> => ({
+  advance: (dt, boss) => {
+    clocks.advance(dt, boss.parts);
+  },
+  handle: (event) => {
+    clocks.handle(event);
+  },
+  reset: () => {
+    clocks.reset();
+  },
+});

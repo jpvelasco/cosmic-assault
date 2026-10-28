@@ -3,7 +3,7 @@ import { HANGAR_HALF_ARC } from '../../sim/boss/hiveCarrier';
 import { TAU } from '../../sim/math';
 import type { Palette } from '../palette';
 import { createTurnedSprite } from '../turnedSprite';
-import { coreSprite, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
+import { RIM_PAD, tintedSprite, type BossFrame, type DrawerFactory } from './drawer';
 import { ENGINES, HIVE_ART_REACH, hiveArtBoxes, paintHiveBay, paintHiveDoor, paintHiveHull } from './hiveCarrierArt';
 
 /** Seconds the doors take to slide fully open or shut. */
@@ -123,7 +123,7 @@ export const hiveCarrierDrawer: DrawerFactory = (kit) => {
       }
       const half = r * HIVE_ART_REACH + RIM_PAD;
       const shut = doors === 0;
-      const hull = coreSprite(kit, shut ? keys.hullShut : keys.hull, half, shut ? paintShut : paintHull, frame.tinted);
+      const hull = tintedSprite(kit, shut ? keys.hullShut : keys.hull, half, shut ? paintShut : paintHull, frame.tinted);
       placeTurned(frame, 0);
       pen.blit(hullTurn.turn(hull, boss.facing));
       const facing = hullTurn.angle;

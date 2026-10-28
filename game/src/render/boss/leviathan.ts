@@ -3,9 +3,9 @@ import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { COIL_OPENING } from '../../sim/boss/leviathan';
 import { TAU } from '../../sim/math';
 import { mix, rgba } from '../color';
-import { coreSprite, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
+import { blitTinted, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { HEAD_ART_REACH, paintHead, paintSegment, SEGMENT_ART_REACH } from './leviathanArt';
-import { PartClocks } from './partClocks';
+import { clockHooks, PartClocks } from './partClocks';
 
 const WHITE = '#ffffff';
 /** The open tail's glow, in segment radii across, pulsing at this rate unless held still. */
@@ -18,8 +18,7 @@ const TAIL_HEAT_ALPHA = 0.7;
 /** The bare head's maw glow, in head radii across. */
 const MAW_GLOW_SCALE = 2.6;
 const MAW_GLOW_ALPHA = 0.6;
-/** The coil's ring through its windup, pulsing, and fainter while it runs; its opening's edges marked this long. */
-const RING_PULSE_HZ = 5;
+/** The coil's ring through its windup, flickering, and fainter while it runs; its opening's edges marked this long. */
 const RING_RUNNING_ALPHA = 0.3;
 const OPENING_TICK = 34;
 
@@ -69,9 +68,7 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   const segmentPainters = Object.fromEntries(
     SEGMENT_LOOKS.map((look) => [look, (c: CanvasRenderingContext2D): void => { paintSegment(c, segmentRadius, palette, heat, look); }]),
   ) as Record<SegmentLook, (c: CanvasRenderingContext2D) => void>;
-  /** Real seconds of the fight so far, for the tail's pulse and the ring's. */
-  let time = 0;
-  /** Each segment's hit flash; segments never grow back, so their growth is never seen. */
+  /** The fight's time, for the tail's pulse and the ring's, and each segment's hit flash; segments never grow back, so their growth is never seen. */
   const clocks = new PartClocks(1);
   /** Where each part is drawn this frame, and the bearing it is turned to: refilled by `layout`, resized only with the body. */
   let placeX = new Float64Array(0);
@@ -81,12 +78,6 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   /** The coil's ring: whether one is shown, and the bearing of its opening from its centre. */
   let coiling = false;
   let opening = 0;
-
-  function reset(): void {
-    time = 0;
-    clocks.reset();
-    coiling = false;
-  }
 
   /**
    * Notes the coil's opening on its windup's first frame: the bearing from its aim to the head, which holds still
@@ -111,9 +102,8 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
     const { x, y } = boss.aim;
     const radius = boss.threat?.ring?.radius ?? 0;
     const half = COIL_OPENING / 2;
-    const pulse = look.still ? 1 : 0.75 + 0.25 * Math.sin(time * TAU * RING_PULSE_HZ);
     pen.field();
-    ctx.globalAlpha = shown * (boss.windup === 'coil' ? pulse : RING_RUNNING_ALPHA);
+    ctx.globalAlpha = shown * (boss.windup === 'coil' ? clocks.flicker(look.still) : RING_RUNNING_ALPHA);
     for (const pass of ringPasses) {
       ctx.strokeStyle = pass[0];
       ctx.lineWidth = pass[1];
@@ -140,12 +130,10 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   function layout(boss: Readonly<BossView>, frame: Readonly<BossFrame>): void {
     const { parts } = boss;
     if (turns.length !== parts.length) [placeX, placeY, turns] = [new Float64Array(parts.length), new Float64Array(parts.length), new Float64Array(parts.length)];
-    const cx = boss.px + (boss.x - boss.px) * frame.alpha;
-    const cy = boss.py + (boss.y - boss.py) * frame.alpha;
     let aheadX = frame.x;
     let aheadY = frame.y;
     for (let i = parts.length - 1; i >= 0; i--) {
-      const at = partOffset(parts[i] as BossPart, frame, cx, cy, offset);
+      const at = partOffset(parts[i] as BossPart, frame, offset);
       const x = (placeX[i] = frame.x + at.x * frame.size);
       const y = (placeY[i] = frame.y + at.y * frame.size);
       turns[i] = Math.atan2(aheadY - y, aheadX - x);
@@ -155,7 +143,7 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   }
 
   /** How bright the open tail's glow is now, from 0.6 to 1; held at 1 for reduced motion. */
-  const tailPulse = (frame: Readonly<BossFrame>): number => (frame.look.still ? 1 : 0.8 + 0.2 * Math.sin(time * TAU * TAIL_PULSE_HZ));
+  const tailPulse = (frame: Readonly<BossFrame>): number => (frame.look.still ? 1 : 0.8 + 0.2 * Math.sin(clocks.time * TAU * TAIL_PULSE_HZ));
 
   /** The open tail's heat, drawn additively over it so it reads through its own sprite, pulsing unless held still. */
   function drawTailHeat(tail: Readonly<BossPart>, i: number, frame: Readonly<BossFrame>): void {
@@ -175,7 +163,7 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
       const tail = boss.parts[openPart(boss.parts)];
       if (tail === undefined || boss.state !== 'fighting') return;
       // Just the tail's place: the whole body is laid out once a frame, for its body.
-      const at = partOffset(tail, frame, boss.px + (boss.x - boss.px) * frame.alpha, boss.py + (boss.y - boss.py) * frame.alpha, offset);
+      const at = partOffset(tail, frame, offset);
       ctx.globalAlpha = TAIL_GLOW_ALPHA * frame.look.glow * frame.shown * tailPulse(frame);
       pen.place(frame.x + at.x * frame.size, frame.y + at.y * frame.size, frame.size, 0);
       pen.blit(baker.glow(heat, tail.radius * TAIL_GLOW_SCALE));
@@ -200,13 +188,12 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
         const look: SegmentLook = i !== tail ? 'armoured' : part.hp < part.maxHp ? 'cracked' : 'open';
         const turn = turns[i] ?? 0;
         pen.place(placeX[i] ?? 0, placeY[i] ?? 0, Math.cos(turn) * size, Math.sin(turn) * size);
-        const sprite = baker.custom(segments[look], segmentRadius * SEGMENT_ART_REACH + RIM_PAD, segmentPainters[look]);
-        pen.blit(clocks.flashing(i) ? (baker.white(segments[look]) ?? sprite) : sprite);
+        blitTinted(kit, segments[look], segmentRadius * SEGMENT_ART_REACH + RIM_PAD, segmentPainters[look], clocks.flashing(i));
       }
       if (tail >= 0 && boss.state === 'fighting') drawTailHeat(parts[tail] as BossPart, tail, frame);
       const bare = boss.vulnerable && boss.state === 'fighting';
       pen.place(frame.x, frame.y, Math.cos(boss.facing) * size, Math.sin(boss.facing) * size);
-      pen.blit(coreSprite(kit, bare ? heads.bare : heads.shut, r * HEAD_ART_REACH + RIM_PAD, bare ? paintBare : paintShut, tinted));
+      blitTinted(kit, bare ? heads.bare : heads.shut, r * HEAD_ART_REACH + RIM_PAD, bare ? paintBare : paintShut, tinted);
       if (!bare) return;
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = frame.shown * MAW_GLOW_ALPHA * frame.look.glow;
@@ -216,14 +203,10 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = frame.shown;
     },
-    advance(dt, boss) {
-      time += dt;
-      clocks.advance(dt, boss.parts);
+    ...clockHooks(clocks),
+    reset() {
+      clocks.reset();
+      coiling = false;
     },
-    handle(event) {
-      if (event.type === 'bossIntro') time = 0;
-      clocks.handle(event);
-    },
-    reset,
   };
 };

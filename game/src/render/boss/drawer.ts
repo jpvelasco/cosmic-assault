@@ -70,23 +70,29 @@ export function radial(ctx: CanvasRenderingContext2D, x: number, y: number, r0: 
   return gradient;
 }
 
-/** A core's sprite baked under `key`, or its white silhouette while `tinted`. */
-export function coreSprite({ baker }: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): Sprite {
+/** A core's or a part's sprite baked under `key`, or its white silhouette while `tinted` by a hit. */
+export function tintedSprite({ baker }: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): Sprite {
   const core = baker.custom(key, half, paint);
   return tinted ? (baker.white(key) ?? core) : core;
 }
 
-/** Blits `coreSprite` at the pen's place. */
-export function blitCore(kit: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): void {
-  kit.pen.blit(coreSprite(kit, key, half, paint, tinted));
+/** Blits `tintedSprite` at the pen's place. */
+export function blitTinted(kit: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): void {
+  kit.pen.blit(tintedSprite(kit, key, half, paint, tinted));
 }
 
-/** Writes into `out`, and returns, where `part` sits from the core's interpolated centre (cx, cy), `frame.alpha` of the way from its previous pose. */
-export function partOffset(part: Readonly<BossPart>, frame: Readonly<BossFrame>, cx: number, cy: number, out: Point): Readonly<Point> {
-  out.x = part.px + (part.x - part.px) * frame.alpha - cx;
-  out.y = part.py + (part.y - part.py) * frame.alpha - cy;
+/**
+ * Writes into `out`, and returns, where `part` sits from the core's interpolated centre (`frame.x`, `frame.y`),
+ * `frame.alpha` of the way from its previous pose: parts are placed about it, so they keep their places as it scales.
+ */
+export function partOffset(part: Readonly<BossPart>, frame: Readonly<BossFrame>, out: Point): Readonly<Point> {
+  out.x = part.px + (part.x - part.px) * frame.alpha - frame.x;
+  out.y = part.py + (part.y - part.py) * frame.alpha - frame.y;
   return out;
 }
+
+/** How far the windup under way has come, 0 to 1, over its declared length. */
+export const windupCharge = (boss: Readonly<BossView>, frame: Readonly<BossFrame>): number => Math.min(1, frame.windupAge / (boss.threat?.windup ?? 1));
 
 /** Room around a core's rim for its stroke. */
 export const RIM_PAD = 2;
