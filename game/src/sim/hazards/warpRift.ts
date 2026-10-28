@@ -41,11 +41,12 @@ interface Pair extends RiftState {
 }
 
 /**
- * The keep-out rings a mouth tries while a black hole is in play, most preferred first: a body's exit from a mouth lands
- * `WARP_RIFT.radius + body + EXIT_GAP` out of it, so a mouth whose centre lies `exitReach + PLAYER.radius + EXIT_GAP` from the
- * hole lets a ship heading straight in leave outside the reach it survives from. The fallback is for a crowded field.
+ * The keep-out rings a mouth's rim keeps out of while a black hole is in play, most preferred first: a body's exit from a
+ * mouth lands `WARP_RIFT.radius + body + EXIT_GAP` out of its centre, so a mouth whose rim lies `exit + PLAYER.radius +
+ * EXIT_GAP` from the hole lets a ship heading straight in leave `exit` from it. The first rung's exit is the reach it survives
+ * from; the fallback's is for a crowded field.
  */
-const HOLE_RUNGS: readonly number[] = [BLACK_HOLE.exitReach + PLAYER.radius + EXIT_GAP, BLACK_HOLE.exitFallback];
+const HOLE_RUNGS: readonly number[] = [BLACK_HOLE.exitReach, BLACK_HOLE.exitFallback].map((exit) => exit + PLAYER.radius + EXIT_GAP);
 
 /** The id the ship rests under: rocks and foes take ids from the arena, which start at 1. */
 const SHIP_KEY = 0;
@@ -105,7 +106,8 @@ function touchesWithin(field: Field, ship: Readonly<Ship>, body: Mover, radius: 
  * A body leaves at most once a step. A jump that leaves the ship touching a body, or about to within a windup, grants the
  * ship its invulnerability for that long. It never strikes. Mouths keep clear of the field's centre, the ship and the HUD
  * and thumb corners, and of each other across pairs (`MOUTH_SPACING`), and sit at least `apart` of the field's width
- * from their pair: placed from their own stream.
+ * from their pair: placed from their own stream. While a black hole is in play they also keep out of its reach, on the
+ * first of `HOLE_RUNGS` that leaves room, and a pair with room on neither is not placed.
  */
 export class WarpRifts implements Hazard {
   private readonly rng: Rng;

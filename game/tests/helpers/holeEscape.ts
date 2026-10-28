@@ -40,8 +40,10 @@ export function shipAt(x: number, y: number, vx = 0, vy = 0, angle = 0): Ship {
 }
 
 /**
- * Flies a ship out of a hole of `intensity` at the centre of `field`, from (x, y) with velocity (vx, vy). It coasts for
- * `reaction` seconds, then turns away at the keyboard's rate with full thrust held, the way out. `pulls` adds more
+ * Flies a ship out of a hole of `intensity` at the centre of `field`, from (x, y) with velocity (vx, vy). It turns away
+ * at the keyboard's rate from the first step, and holds full thrust once `reaction` seconds have passed, the way out. The
+ * reaction is a thrustless turn, not a coast: a ship that neither turns nor thrusts through it needs to start about 8 units
+ * further out (292 against 284 at top speed, heading straight in). `pulls` adds more
  * hazard states to the hole's pull, each stepped with the ship (the strongest other pull that can coexist).
  */
 export function flyOut(
@@ -78,7 +80,7 @@ export function flyOut(
 
 /**
  * Whether a ship can get out from (x, y) with velocity (vx, vy) and heading `angle`, by the better of the two plans the
- * keyboard allows: thrust held through the turn, or the turn first. Both coast through the reaction.
+ * keyboard allows: thrust held through the turn, or the turn first. Both turn without thrust through the reaction.
  */
 export function canEscape(start: { x: number; y: number; vx?: number; vy?: number; angle?: number }, intensity: GalaxyEvent['intensity'], field: Field, reaction: number, adversary = false): boolean {
   return [false, true].some((turnFirst) => !flyOut(start, intensity, field, { reaction, adversary, turnFirst }).contact);

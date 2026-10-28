@@ -14,7 +14,11 @@ const SHIP_EXIT_GAP = WARP_RIFT.radius + PLAYER.radius + 2;
 const FIELDS: readonly Field[] = [MIN_ASPECT, 16 / 9, MAX_ASPECT].map((aspect) => ({ width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT }));
 const CENTRE = (field: Field) => ({ x: field.width / 2, y: field.height / 2 });
 
-/** The least distance from the hole a ship heading straight in at `speed` can escape from, after the reaction (by bisection). */
+/**
+ * The least distance from the hole a ship heading straight in at `speed` can escape from, turning through the reaction
+ * and thrusting after it (by bisection): about 256 at top speed. A ship that does not turn until the reaction is over
+ * needs about 292; `exitReach` sits between the two.
+ */
 function leastSurvivable(speed: number, field: Field): number {
   const c = CENTRE(field);
   let lo: number = BLACK_HOLE.horizon;
@@ -77,8 +81,9 @@ describe('rift mouths and a black hole', () => {
   }
 
   it('keeps every mouth at the exit reach, or else at the fallback on a crowded 4:3 field, and places both pairs on the wider fields', () => {
-    const reach = BLACK_HOLE.exitReach + PLAYER.radius + 2 + WARP_RIFT.radius;
-    const fallback = BLACK_HOLE.exitFallback + WARP_RIFT.radius;
+    const mouthFor = (exit: number): number => exit + PLAYER.radius + 2 + WARP_RIFT.radius;
+    const reach = mouthFor(BLACK_HOLE.exitReach);
+    const fallback = mouthFor(BLACK_HOLE.exitFallback);
     for (const field of FIELDS) {
       const c = CENTRE(field);
       const wide = field.width > 960;

@@ -78,7 +78,7 @@ describe('the galaxy table', () => {
   it('keeps every event inside the window from the opening\'s end to 25 s before the end, a black hole excepted', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
-        // A black hole starts 12 s in, inside the opening, from a 3 s warning that ends as the opening does.
+        // A black hole may start up to its warning's length before the opening ends (Singularity's starts at 12 s, warned from 9 s).
         if (e.type === 'blackHole') expect(e.at + warning(e), `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
         else expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
         expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);

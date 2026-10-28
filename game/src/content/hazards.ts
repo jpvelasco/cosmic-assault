@@ -66,7 +66,8 @@ export const WARP_RIFT = { maxPairs: 2, radius: 30, drawn: 48, apart: 0.4, inset
  * `warnRadius` is the ring its warning is drawn at, and the distance a ship must be from it to escape the pull, from rest, at
  * the start: the test holds the hole to both. `exitReach` is the least distance from the hole a ship heading straight in at
  * the top speed survives a reaction from, so a rift mouth whose exit lands inside it can doom the ship, and `exitFallback`
- * is the lesser keep-out for a field too crowded for it (the test measures both).
+ * is the lesser exit distance a field too crowded for it settles for (the test measures both). Both are distances of the
+ * ship's exit from the hole, not of a mouth: a mouth keeps the ship's radius and its exit gap further out.
  */
 const HOLE_HORIZON = 32;
 export const BLACK_HOLE = {
@@ -77,7 +78,7 @@ export const BLACK_HOLE = {
   rockSpeedCap: 120,
   warnRadius: HOLE_HORIZON * 2.4,
   exitReach: 284,
-  exitFallback: 260,
+  exitFallback: 248,
 } as const;
 
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */

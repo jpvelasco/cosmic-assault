@@ -201,8 +201,9 @@ describe('foes in other rules', () => {
       const w = new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode: 'rank' }, startLives: 5 });
       for (let i = 0; i < 40 * 120 && w.status === 'playing'; i++) expect(ofType(step(w), 'foeSpawned'), id).toEqual([]);
     }
-    // An idle ship would be lost to the black hole's horizon, so it is held unhurt while the foes come in.
-    const w = new World({ seed: 2, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById('5-1'), mode: 'rank' }, startLives: 5 });
+    // An idle ship would be lost to the black hole's horizon, so it is held unhurt while the foes come in: the outcome then
+    // rests on no seed's luck, and the seed is the one the D1 galaxies play.
+    const w = new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById('5-1'), mode: 'rank' }, startLives: 5 });
     let spawned = 0;
     for (let i = 0; i < 40 * 120 && w.status === 'playing'; i++) {
       Object.assign(w['shipState'], { invulnerable: true, invulnerableFor: 1 });
