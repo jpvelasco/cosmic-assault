@@ -82,6 +82,9 @@ const balanceDir = resolve(repoRoot, 'game', 'tests', 'balance');
 const balanceFiles = existsSync(balanceDir) ? readdirSync(balanceDir) : [];
 problems.push(...DIMENSIONS.filter((d) => !balanceFiles.includes(`d${String(d)}-targets.test.ts`)).map((d) =>
   `game/tests/balance/d${String(d)}-targets.test.ts is missing, so the Dimension ${String(d)} balance shard pins no targets; restore it`));
+const shardPrefix = new RegExp(`^d[${DIMENSIONS.join('')}]-`);
+problems.push(...balanceFiles.filter((file) => file.endsWith('.test.ts') && !shardPrefix.test(file)).map((file) =>
+  `game/tests/balance/${file} runs in no balance shard, since each shard runs only its d<N>- files; give it the d<N>- prefix of the Dimension it plays, N from ${String(DIMENSIONS[0])} to ${String(DIMENSIONS.at(-1))}`));
 
 const nextPaths = readdirSync(resolve(repoRoot, 'website'), { recursive: true })
   .filter((path) => basename(path) === 'next');
