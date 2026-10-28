@@ -61,8 +61,8 @@ class HiveCarrier implements BossBehaviour {
     retreat: { windup: WINDUPS.retreat, active: RETREAT_SECONDS, run: retreat },
   };
 
-  /** The sim time the hangar closes at. */
-  private closesAt = Number.NEGATIVE_INFINITY;
+  /** Seconds of the fight's own clock until the hangar closes, as of the last step; 0 or less while it is shut. */
+  private openFor = 0;
   private open = false;
   /** Which way it cruises: 1 to the right, -1 to the left. */
   private direction: 1 | -1;
@@ -96,7 +96,8 @@ class HiveCarrier implements BossBehaviour {
   /** While it fights: turns toward the ship, cruises unless retreating, and opens or shuts the hangar on time. */
   step(ctx: AttackContext): void {
     const { boss, arena, dt } = ctx;
-    this.open = boss.state === 'fighting' && arena.elapsed() + TIME_EPSILON < this.closesAt;
+    this.open = boss.state === 'fighting' && this.openFor > TIME_EPSILON;
+    this.openFor -= dt;
     if (boss.state !== 'fighting') return;
     turnToward(boss, arena.ship, TURN_RATE, dt);
     if (boss.active !== 'retreat') this.cruise(boss, dt, arena.field());
@@ -113,7 +114,7 @@ class HiveCarrier implements BossBehaviour {
 
   /** Opens the hangar, and sends out the phase's wave of drones through it, as many as the cap leaves room for (`launchDrones`). */
   private launch(ctx: AttackContext): void {
-    this.closesAt = ctx.arena.elapsed() + HANGAR_OPEN_SECONDS;
+    this.openFor = HANGAR_OPEN_SECONDS;
     launchDrones(ctx, this.foes, LAUNCH_WAVES[ctx.boss.phase], DRONE_CAP);
   }
 }

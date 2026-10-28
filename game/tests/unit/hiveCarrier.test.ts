@@ -18,7 +18,7 @@ import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed } from '../helpers/bossArena';
+import { BOSS_FIELD, runFor, stubArena, timedOfType, type Stepper, type StubArena, type Timed } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = BOSSES.hiveCarrier;
@@ -165,6 +165,21 @@ describe('the Hive Carrier\'s hangar', () => {
     runFor(stepper(rig.r), rig.arena, HANGAR_OPEN_SECONDS);
     expect(rig.r.view.vulnerable).toBe(false);
     expect(hitAt(rig, rim(rig, 0))).toBe('deflected');
+  });
+
+  it('keeps its hangar open HANGAR_OPEN_SECONDS of its own clock: a fight stepped at half time, as Time Warp does, holds it open twice the real time', () => {
+    const rig = fighting();
+    const halfTime: Stepper = (dt, arena) => {
+      rig.r.step(dt / 2, arena);
+    };
+    let opened = 0;
+    let shutAfter = 0;
+    runFor(halfTime, rig.arena, 40, () => {
+      if (rig.r.view.vulnerable && opened === 0) opened = rig.arena.elapsed();
+      else if (!rig.r.view.vulnerable && opened > 0 && shutAfter === 0) shutAfter = rig.arena.elapsed() - opened;
+    });
+    expect(opened).toBeGreaterThan(0);
+    expect(shutAfter).toBeCloseTo(2 * HANGAR_OPEN_SECONDS, 6);
   });
 
   it('always opens again after a launch, even one the drone cap leaves empty, and stays open HANGAR_OPEN_SECONDS, so the fight never stalls shut', () => {
