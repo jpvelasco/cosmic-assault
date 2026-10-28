@@ -259,6 +259,12 @@ export function wellPresence(remaining: number): number {
   return presenceOf(remaining, WELL_SECONDS);
 }
 
+/** A wave from 0 to 1 and back, `hz` times a second, `time` seconds in. */
+const wave = (time: number, hz: number): number => 0.5 + 0.5 * Math.sin(time * TAU * hz);
+
+/** An open swirl's opacity: 1 while it turns; under reduced motion, which freezes it, a slow breath shows it still acts. */
+const breathOf = (time: number, still: boolean): number => (still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * wave(time, STILL_PULSE_HZ) : 1);
+
 /** The drawn size of a well of `intensity`, as a share of the baked sprites. */
 const sizeOf = (intensity: number): number => (1 + INTENSITY_GROWTH * (intensity - 1)) / (1 + INTENSITY_GROWTH * (MAX_INTENSITY - 1));
 
@@ -300,22 +306,29 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   function drawWarning(well: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
     const due = clamp(well.remaining / WELL_TELEGRAPH_SECONDS, 0, 1);
     const size = sizeOf(well.intensity) * (still ? 1 : 1 + OUTLINE_CLOSE * due);
-    ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(time * TAU * OUTLINE_PULSE_HZ));
+    ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * wave(time, OUTLINE_PULSE_HZ);
     put(baker.custom(outlineKey, half, paintOutlineNow), well, size, 0, field);
   }
 
-  function drawActive(well: Readonly<PointHazardState>, field: Field, { glow, time, still }: SceneLook): void {
+  function drawActive(well: Readonly<PointHazardState>, field: Field, look: SceneLook): void {
     const shown = wellPresence(well.remaining);
     const size = sizeOf(well.intensity);
-    // Reduced motion freezes the swirl; a slow breath in its opacity still shows the well is pulling.
-    const breath = still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * (0.5 + 0.5 * Math.sin(time * TAU * STILL_PULSE_HZ)) : 1;
+    drawSwirl(well, size, size * (0.92 + 0.08 * shown), 1, shown, look, field);
+  }
+
+  /**
+   * A swirl at `at`, `size` of the baked sprites: a glow, the arcs at `arcSize` turning `turn` ways (1 or -1), and the
+   * dark lens growing in with `shown`, all at `shown` and the breath.
+   */
+  function drawSwirl(at: Readonly<{ x: number; y: number }>, size: number, arcSize: number, turn: number, shown: number, { glow, time, still }: SceneLook, field: Field): void {
+    const breath = breathOf(time, still);
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = GLOW_ALPHA * glow * shown * breath;
-    put(baker.glow(violet, GLOW_DIAMETER), well, size, 0, field);
+    put(baker.glow(violet, GLOW_DIAMETER), at, size, 0, field);
     ctx.globalAlpha = shown * breath;
-    for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), well, size * (0.92 + 0.08 * shown), (still ? 0 : time * arc.rate) + arc.phase, field);
+    for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), at, arcSize, (still ? 0 : turn * time * arc.rate) + arc.phase, field);
     ctx.globalCompositeOperation = 'source-over';
-    if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), well, size * shown, 0, field);
+    if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), at, size * shown, 0, field);
   }
 
   const holeLensKey = `hole|${palette.id}|lens`;
@@ -355,7 +368,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   /** A black hole's warning: its rings, pulsing faster as it comes due; still under reduced motion. */
   function drawHoleWarning(hole: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
     const due = 1 - clamp(hole.remaining / HOLE_TELEGRAPH_SECONDS, 0, 1);
-    ctx.globalAlpha = still ? 0.7 : 0.4 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * (OUTLINE_PULSE_HZ + 2 * due)));
+    ctx.globalAlpha = still ? 0.7 : 0.4 + 0.4 * wave(time, OUTLINE_PULSE_HZ + 2 * due);
     put(baker.custom(holeWarnKey, holeDiscHalf, paintHoleWarnNow), hole, 1, 0, field);
   }
 
@@ -378,7 +391,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   function drawRepulsionWarning(force: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
     const due = clamp(1 - force.remaining / REPULSE_TELEGRAPH_SECONDS, 0, 1);
     const size = sizeOf(force.intensity) * (still ? 1 : 0.5 + 0.5 * due);
-    ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.sin(time * TAU * OUTLINE_PULSE_HZ));
+    ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * wave(time, OUTLINE_PULSE_HZ);
     put(baker.custom(repulseOutlineKey, half, paintRepulseOutlineNow), force, size, 0, field);
   }
 
@@ -400,33 +413,20 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   /** A warp rift's warning: a dashed ring over each mouth, pulsing faster as the rift comes due. */
   function drawRiftWarning(rift: Readonly<RiftState>, field: Field, { time, still }: SceneLook): void {
     const due = 1 - clamp(rift.remaining / RIFT_TELEGRAPH_SECONDS, 0, 1);
-    ctx.globalAlpha = still ? 0.6 : 0.35 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * (OUTLINE_PULSE_HZ + 2 * due)));
+    ctx.globalAlpha = still ? 0.6 : 0.35 + 0.4 * wave(time, OUTLINE_PULSE_HZ + 2 * due);
     placeMouths(rift);
-    put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouths[0], MOUTH_SCALE, 0, field);
-    put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouths[1], MOUTH_SCALE, 0, field);
+    for (const mouth of mouths) put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouth, MOUTH_SCALE, 0, field);
     drawLink(rift, time, still, 0.35);
   }
 
   /** A warp rift open: each mouth a swirl of the well's arcs over a dark lens, the two linked by a dashed arc. */
-  function drawRiftOpen(rift: Readonly<RiftState>, field: Field, { glow, time, still }: SceneLook): void {
+  function drawRiftOpen(rift: Readonly<RiftState>, field: Field, look: SceneLook): void {
     const shown = presenceOf(rift.remaining, RIFT_SECONDS);
-    const breath = still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * (0.5 + 0.5 * Math.sin(time * TAU * STILL_PULSE_HZ)) : 1;
     placeMouths(rift);
-    drawLink(rift, time, still, shown * breath);
+    drawLink(rift, look.time, look.still, shown * breathOf(look.time, look.still));
     // The two mouths turn in opposite ways, so the pair reads as a pair.
-    drawMouth(mouths[0], 1, shown, breath, time, glow, still, field);
-    drawMouth(mouths[1], -1, shown, breath, time, glow, still, field);
-  }
-
-  /** One of a warp rift's open mouths: a glow, the well's arcs turning at `turn` and a dark lens, all at `shown` and `breath`. */
-  function drawMouth(mouth: Readonly<{ x: number; y: number }>, turn: number, shown: number, breath: number, time: number, glow: number, still: boolean, field: Field): void {
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = GLOW_ALPHA * glow * shown * breath;
-    put(baker.glow(violet, GLOW_DIAMETER), mouth, MOUTH_SCALE, 0, field);
-    ctx.globalAlpha = shown * breath;
-    for (const arc of arcs) put(baker.custom(arc.key, half, arc.paint), mouth, MOUTH_SCALE, (still ? 0 : turn * time * arc.rate) + arc.phase, field);
-    ctx.globalCompositeOperation = 'source-over';
-    if (shown > 0) put(baker.custom(horizonKey, half, paintHorizonNow), mouth, MOUTH_SCALE * shown, 0, field);
+    drawSwirl(mouths[0], MOUTH_SCALE, MOUTH_SCALE, 1, shown, look, field);
+    drawSwirl(mouths[1], MOUTH_SCALE, MOUTH_SCALE, -1, shown, look, field);
   }
 
   /** Sets `mouths` to where a warp rift's two mouths sit. */
@@ -488,7 +488,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     const sprite = warning ? baker.custom(art.warning, zone.w / 2 + ZONE_PAD, art.paintWarning, zone.h / 2 + ZONE_PAD) : baker.custom(art.active, zone.w / 2 + ZONE_PAD, art.paintActive, zone.h / 2 + ZONE_PAD);
     // A warning pulses faster as it comes due; reduced motion holds it steady.
     const due = 1 - clamp(zone.remaining / ZONE_TELEGRAPH_SECONDS, 0, 1);
-    ctx.globalAlpha = warning ? (still ? 0.75 : 0.45 + 0.4 * (0.5 + 0.5 * Math.sin(time * TAU * ZONE_PULSE_HZ * (1 + due)))) : zonePresence(zone.remaining);
+    ctx.globalAlpha = warning ? (still ? 0.75 : 0.45 + 0.4 * wave(time, ZONE_PULSE_HZ * (1 + due))) : zonePresence(zone.remaining);
     stamp(sprite, zone.x, zone.y, 1, 0, Math.max(zone.w, zone.h) / 2, field);
   }
 
