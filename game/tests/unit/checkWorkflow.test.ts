@@ -66,6 +66,7 @@ const rollUpCheck = '        run: test "$SHARDS" = success\n';
 /** The balance shards' own Node setup: the first after the balance-dimension job starts. */
 const balanceNode = (t: string) => t.indexOf(nodeVersionLine, t.indexOf('  balance-dimension:\n'));
 const comment = (line: string) => `    # ${line.trim()}\n`;
+const topPermissions = 'permissions:\n  contents: read\n';
 
 const failingCases: [name: string, mutate: (text: string) => string, message: string, websiteDirs?: string[], balanceFiles?: string[]][] = [
   ['commented-out needs', (t) => replaceOnce(t, needsLine, comment(needsLine)), 'deploy must declare needs: [game, legacy, perf]'],
@@ -165,6 +166,17 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ],
   ['perf without node-version-file', (t) => inPerf(t, nodeVersionLine, ''), 'perf must set up Node with node-version-file: .nvmrc'],
   ['website/assets/next directory', (t) => t, 'website/assets/next is named "next"', ['assets/next']],
+  ['top-level permissions widened', (t) => replaceOnce(t, topPermissions, 'permissions:\n  contents: write\n'), 'top-level permissions must be exactly contents: read'],
+  ['top-level permissions with a write added', (t) => replaceOnce(t, topPermissions, `${topPermissions}  pull-requests: write\n`), 'top-level permissions must be exactly contents: read'],
+  ['top-level permissions removed', (t) => replaceOnce(t, topPermissions, ''), 'top-level permissions must be exactly contents: read'],
+  ['a pull_request_target trigger', (t) => replaceOnce(t, '  workflow_dispatch: {}\n', '  workflow_dispatch: {}\n  pull_request_target:\n    branches: [main]\n'), 'pull_request_target is not allowed'],
+  ['deploy on any push', (t) => replaceOnce(t, ifLine, "    if: github.event_name == 'push'\n"), "deploy must declare if: github.event_name == 'push'"],
+  ['deploy with a second job-level if', (t) => replaceOnce(t, ifLine, `${ifLine}    if: always()\n`), "deploy's only job-level if: must be"],
+  ...(['game', 'legacy', 'perf'] as const).map((id): (typeof failingCases)[number] => [
+    `a job-level if on ${id}, which would skip deploy silently`,
+    (t) => replaceOnce(t, `  ${id}:\n`, `  ${id}:\n    if: github.event_name == 'pull_request'\n`),
+    `${id} must have no job-level if:`,
+  ]),
 ];
 
 describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {

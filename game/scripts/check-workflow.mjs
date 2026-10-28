@@ -17,6 +17,14 @@ function jobBlock(id) {
   return lines.slice(start + 1, end === -1 ? undefined : end);
 }
 
+/** The lines under top-level `key:`, up to the next top-level key, blank ones left out. */
+function topBlock(key) {
+  const start = lines.indexOf(`${key}:`);
+  if (start === -1) return [];
+  const end = lines.findIndex((line, i) => i > start && /^\S/.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end).filter((line) => line !== '');
+}
+
 const jobs = Object.fromEntries(['game', 'legacy', 'perf', 'balance-dimension', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
 const anyLine = (id, test) => jobs[id]?.some((line) => test(line.trim())) ?? false;
@@ -36,11 +44,23 @@ const problems = Object.entries(jobs)
   .filter(([, block]) => block === undefined)
   .map(([id]) => `ci.yml: missing job ${id}:; add a top-level job with id ${id} under jobs:`);
 
+const DEPLOY_IF = "if: github.event_name == 'push' && github.ref == 'refs/heads/main'";
+/** A job's own `if:` lines, at job level. */
+const jobIfs = (id) => jobs[id]?.filter((line) => line.startsWith('    if:')).map((line) => line.trim()) ?? [];
+
 const checks = [
+  [topBlock('permissions').join('\n') === '  contents: read',
+    'ci.yml: top-level permissions must be exactly contents: read; give a job that needs more its own permissions block, as deploy has'],
+  [!lines.some((line) => line.includes('pull_request_target')),
+    'ci.yml: pull_request_target is not allowed: it runs fork pull requests with the repository\'s token and secrets; trigger on pull_request instead'],
+  [jobIfs('deploy').length === 1,
+    `ci.yml: deploy's only job-level if: must be ${DEPLOY_IF}; remove any other`],
+  ...['game', 'legacy', 'perf'].map((id) => [jobIfs(id).length === 0,
+    `ci.yml: ${id} must have no job-level if:, since deploy needs it and a skipped need skips deploy silently; move the condition to its steps`]),
   [hasJobKey('deploy', 'needs: [game, legacy, perf]'),
     'ci.yml: deploy must declare needs: [game, legacy, perf] (job level) so it only runs after both test jobs and the frame-time ceilings pass, and never waits for the report-only balance jobs'],
-  [hasJobKey('deploy', "if: github.event_name == 'push' && github.ref == 'refs/heads/main'"),
-    "ci.yml: deploy must declare if: github.event_name == 'push' && github.ref == 'refs/heads/main' (job level) so only pushes to main publish"],
+  [hasJobKey('deploy', DEPLOY_IF),
+    `ci.yml: deploy must declare ${DEPLOY_IF} (job level) so only pushes to main publish`],
   [hasLine('deploy', 'run: diff -r website _site --exclude next'),
     'ci.yml: deploy must run diff -r website _site --exclude next to prove the site root is the unchanged website/'],
   ...['game', 'legacy', 'perf', 'balance-dimension'].map((id) => [hasLine(id, 'node-version-file: .nvmrc'),
