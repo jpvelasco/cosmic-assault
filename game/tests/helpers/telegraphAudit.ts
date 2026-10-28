@@ -1,7 +1,7 @@
 import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { GUNSHIP, MINE, PHASER } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
-import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
+import { DANGER_ZONE, HAZARD_RULES, stormWells, WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, FoeKind, GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
@@ -9,11 +9,20 @@ import type { Field } from '../../src/sim/field';
 import type { BossView } from '../../src/sim/boss/behaviour';
 import type { Timed } from './bossArena';
 
-/** The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two; none for a shower. */
+/** How many hazards an event of each type shows at `intensity`. */
+const SHOWN: Readonly<Partial<Record<HazardType, (intensity: GalaxyEvent['intensity']) => number>>> = {
+  dangerZone: (intensity) => Math.min(intensity, DANGER_ZONE.maxZones),
+  warpRift: (intensity) => Math.min(intensity, WARP_RIFT.maxPairs),
+  gravityStorm: stormWells,
+};
+
+/**
+ * The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two, and for a gravity
+ * storm each of its wells; none for a shower.
+ */
 export const hazardsShown = (e: GalaxyEvent): HazardType[] => {
   if (e.type === 'meteorShower') return [];
-  const count = e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : e.type === 'warpRift' ? Math.min(e.intensity, WARP_RIFT.maxPairs) : 1;
-  return Array<HazardType>(count).fill(e.type);
+  return Array<HazardType>(SHOWN[e.type]?.(e.intensity) ?? 1).fill(e.type);
 };
 
 /** A bot's run of a galaxy, every event timed, and the field it played on. */

@@ -1,4 +1,4 @@
-import type { Dimension, ForceKind, HazardType } from './types';
+import type { Dimension, ForceKind, GalaxyEvent, HazardType } from './types';
 
 export interface HazardRule {
   /** Seconds it is shown as a warning, harmless, before it turns hostile. */
@@ -88,6 +88,9 @@ export const BLACK_HOLE = {
  */
 export const GRAVITY_STORM = { baseWells: 2, maxWells: 4, spacing: 0.28 } as const;
 
+/** The wells a gravity storm of `intensity` places where the field leaves room: `baseWells` plus the intensity, at most `maxWells`. */
+export const stormWells = (intensity: GalaxyEvent['intensity']): number => Math.min(GRAVITY_STORM.baseWells + intensity, GRAVITY_STORM.maxWells);
+
 /**
  * A gravity well's drawn radius at intensity 1, in field units; its pull reaches the whole field and has no edge. A storm
  * keeps its wells' art inside the field and, where the field leaves room, out from under the HUD and thumb corners.
@@ -98,6 +101,9 @@ export const WELL_RADIUS = 90;
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };
 
 export const isForceKind = (type: HazardType): type is ForceKind => type in FORCE_SIGN;
+
+/** Whether a hazard pulls or pushes the ship once active: the force fields, the gravity storm's wells and the black hole. */
+export const pullsShip = (type: HazardType): boolean => isForceKind(type) || type === 'gravityStorm' || type === 'blackHole';
 
 /**
  * Units per second squared: the most every hazard's pull on the ship adds up to, so however many act at once a

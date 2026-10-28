@@ -1,6 +1,3 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LOOK, SKIN_IDS, TRAIL_IDS, type Look } from '../../src/content/cosmetics';
 import { galaxyById } from '../../src/content/galaxies';
@@ -9,8 +6,8 @@ import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { fakeCanvas } from '../helpers/fakeCanvas';
 import { digestPlay, playScripted, type DigestRun } from '../helpers/eventDigest';
+import { importsOf, resolveImport, sourcesUnder } from '../helpers/sourceImports';
 
-const SRC = fileURLToPath(new URL('../../src/', import.meta.url));
 const FIELD = { width: 1280, height: 720 };
 const SECONDS = 30;
 /** The renderer draws every this many steps; it still takes every step's events, the particles and the stars. */
@@ -18,26 +15,6 @@ const DRAW_EVERY = 12;
 const RUN = { seed: 4, galaxy: '3-2' as const };
 /** Twenty-four rendered thirty-second runs take several seconds on a loaded host. */
 const RENDERED_RUNS_TIMEOUT_MS = 60_000;
-
-/** Every `.ts` file under `dir`, relative to `src/`. */
-function sourcesUnder(dir: string): string[] {
-  return readdirSync(join(SRC, dir), { recursive: true })
-    .map(String)
-    .filter((name) => name.endsWith('.ts') && statSync(join(SRC, dir, name)).isFile())
-    .map((name) => join(dir, name));
-}
-
-/** The import specifiers of `file` (relative to `src/`), static and dynamic. */
-function importsOf(file: string): string[] {
-  const text = readFileSync(join(SRC, file), 'utf8');
-  return [...text.matchAll(/(?:from\s+|import\s*\(\s*|import\s+)['"]([^'"]+)['"]/g)].map((match) => match[1] ?? '');
-}
-
-/** The module an import resolves to, relative to `src/`, or null for a package. */
-function resolveImport(from: string, specifier: string): string | null {
-  if (!specifier.startsWith('.')) return null;
-  return relative(SRC, resolve(SRC, dirname(from), specifier)).replace(/\.ts$/, '');
-}
 
 /** The cosmetic modules: the skins and trails, the Hangar, and the settings that hold the choice. */
 const COSMETIC = /(^|\/)(cosmetics|hangar|hangarCard|settings)$/;

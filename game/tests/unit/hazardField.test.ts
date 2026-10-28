@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HAZARD_RULES, MAX_SHIP_PULL, WELL_SPEED_CAP } from '../../src/content/hazards';
+import { HAZARD_RULES, MAX_SHIP_PULL, pullsShip, WELL_SPEED_CAP } from '../../src/content/hazards';
 import type { GalaxyEvent, HazardType } from '../../src/content/types';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -54,6 +54,16 @@ describe('HAZARD_RULES', () => {
       blackHole: { telegraph: 3, seconds: 75, from: 5 },
       gravityStorm: { telegraph: 3, seconds: 12, from: 2 },
     });
+  });
+
+  it('names as pulling the ship exactly the hazards that pull it once active', () => {
+    for (const type of Object.keys(HAZARD_RULES) as HazardType[]) {
+      const hazards = field([event(type, 5)]);
+      hazards.step(5 + DT, FIELD, []);
+      expect(hazards.states.some((s) => s.stage === 'active'), type).toBe(true);
+      const pull = shipPullAt(hazards.states, 100, 100, 1, { x: 0, y: 0 });
+      expect(pull.x !== 0 || pull.y !== 0, type).toBe(pullsShip(type));
+    }
   });
 
   it('caps the summed pull on the ship at 150 units/s², at most 0.75 of its thrust', () => {

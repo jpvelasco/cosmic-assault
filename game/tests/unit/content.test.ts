@@ -5,34 +5,13 @@ import { EFFECT_SECONDS, INSTANT_PICKUPS, isTimed, PICKUP_IDS, PICKUPS, TIMED_PI
 import { FOES, GUNSHIP, MINE } from '../../src/content/foes';
 import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
 import { galaxyIdOf, type GalaxyDef, type GalaxyEvent, type GalaxyId, type HazardType, type PickupId, type ThreatKind } from '../../src/content/types';
-import { eventSeconds, kindProbability, showerSeconds } from '../../src/content/curves';
+import { eventSeconds, kindProbability, SHOWER_WARNING_SECONDS, showerSeconds, warningSeconds } from '../../src/content/curves';
 import { lullStart, OPENING_SECONDS } from '../../src/content/pacingRules';
+import { galaxyProblems } from '../../src/content/validity';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { fieldBudget, GalaxyDirector, REFERENCE_AREA, THREAT_COST } from '../../src/sim/galaxy/director';
 import { createRng } from '../../src/sim/rng';
-import { phaseAt } from '../../src/sim/galaxy/pacing';
-import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
 
-/** Seconds `e` is warned before it starts. */
-const warning = (e: GalaxyEvent): number => (e.type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[e.type].telegraph);
-
-/**
- * Every event of `events` warned before the previous one of its type has ended: the hazards and the showers run their
- * events one at a time, so such an event would be warned late and its telegraph cut short.
- */
-function sameTypeOverlaps(events: readonly GalaxyEvent[]): string[] {
-  const ends = new Map<GalaxyEvent['type'], GalaxyEvent>();
-  const found: string[] = [];
-  for (const e of [...events].sort((a, b) => a.at - b.at)) {
-    const last = ends.get(e.type);
-    const end = last === undefined ? -Infinity : last.at + eventSeconds(last);
-    if (last !== undefined && e.at - warning(e) < end) found.push(`${e.type} at ${String(e.at)} is warned at ${String(e.at - warning(e))}, before the one at ${String(last.at)} ends at ${String(end)}`);
-    ends.set(e.type, e);
-  }
-  return found;
-}
-
-const KINDS: readonly ThreatKind[] = ['large', 'medium', 'small', 'splitter', 'drone', 'gunship', 'mine'];
 const survival = GALAXIES.filter((g) => g.kind === 'survival');
 
 /** The kinds the director picks from in `galaxy`'s opening, over many seeds. */
@@ -74,24 +53,6 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.duration).toBe(20);
   });
 
-  it('keeps every event inside the window from the opening\'s end to 25 s before the end, a black hole excepted', () => {
-    for (const g of GALAXIES)
-      for (const e of g.events) {
-        // A black hole may start up to its warning's length before the opening ends (Singularity's starts at 12 s, warned from 9 s).
-        if (e.type === 'blackHole') expect(e.at + warning(e), `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
-        else expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
-        expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);
-      }
-  });
-
-  it('sorts events by time and keeps events apart', () => {
-    for (const g of GALAXIES) {
-      const times = g.events.map((e) => e.at);
-      expect(times).toEqual([...times].sort((a, b) => a - b));
-      for (let i = 1; i < times.length; i++) expect((times[i] ?? 0) - (times[i - 1] ?? 0)).toBeGreaterThanOrEqual(10);
-    }
-  });
-
   it('schedules meteor showers as the brief lays out', () => {
     for (const id of ['1-1', '1-2', '1-3'] as const) expect(galaxyById(id).events).toEqual([]);
     expect(galaxyById('1-4').events).toEqual([{ at: 50, type: 'meteorShower', intensity: 1 }]);
@@ -102,40 +63,6 @@ describe('the galaxy table', () => {
       for (const e of showers) expect(e.intensity, g.id).toBe(Math.min(3, g.dimension));
     }
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.events).toEqual([]);
-  });
-
-  it('keeps the lull clear: every shower and hazard ends by the time the lull starts (ending exactly then is allowed)', () => {
-    for (const g of GALAXIES)
-      for (const e of g.events) {
-        expect(['lull', 'warp'], `${g.id} at ${String(e.at)}`).not.toContain(phaseAt(g, e.at));
-        expect(e.at + eventSeconds(e), `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(lullStart(g));
-      }
-  });
-
-  it('holds no hazard before the Dimension it belongs to', () => {
-    for (const g of GALAXIES)
-      for (const e of g.events) if (e.type !== 'meteorShower') expect(g.dimension, `${g.id} ${e.type}`).toBeGreaterThanOrEqual(HAZARD_RULES[e.type].from);
-  });
-
-  it('runs at most two scheduled events at once, showers included, from each warning to its end', () => {
-    for (const g of GALAXIES)
-      for (const e of g.events) {
-        const from = e.at - warning(e);
-        const running = g.events.filter((o) => o.at - warning(o) <= from && from < o.at + eventSeconds(o));
-        expect(running.length, `${g.id} at ${String(from)}`).toBeLessThanOrEqual(2);
-      }
-  });
-
-  it('never overlaps two events of one type: each is warned only once the last has ended, in all 30 galaxies', () => {
-    expect(GALAXIES).toHaveLength(30);
-    for (const g of GALAXIES) expect(sameTypeOverlaps(g.events), g.id).toEqual([]);
-  });
-
-  it('catches a same-type overlap, which would cut the second one\'s telegraph short, but allows two types at once', () => {
-    const repel = (at: number): GalaxyEvent => ({ at, type: 'repulsionField', intensity: 1 });
-    expect(sameTypeOverlaps([repel(20), repel(35)])).toEqual(['repulsionField at 35 is warned at 33, before the one at 20 ends at 34']);
-    expect(sameTypeOverlaps([repel(20), repel(36)])).toEqual([]);
-    expect(sameTypeOverlaps([repel(20), { at: 22, type: 'gravityWell', intensity: 1 }])).toEqual([]);
   });
 
   it('times every hazard by its rule: eventSeconds reads HAZARD_RULES', () => {
@@ -201,12 +128,7 @@ describe('the galaxy table', () => {
     expect(galaxyById('4-1').featured).toEqual(['fieldBomb', 'wingman']);
   });
 
-  it('never lists a pickup before its Dimension, or one that does not exist', () => {
-    for (const g of GALAXIES)
-      for (const id of g.pickups) {
-        expect(PICKUP_IDS, g.id).toContain(id);
-        expect(PICKUPS[id].from, `${g.id} ${id}`).toBeLessThanOrEqual(g.dimension);
-      }
+  it('brings in rapid fire and the spread laser in Ion Reach', () => {
     expect(PICKUPS.rapidFire.from).toBe(2);
     expect(PICKUPS.spreadLaser.from).toBe(2);
   });
@@ -245,18 +167,6 @@ describe('the galaxy table', () => {
       if (g.boss !== null) expect(Object.keys(BOSSES)).toContain(g.boss);
     }
     expect(BOSSES.eclipse.name).toBe('Eclipse');
-  });
-
-  it('keeps every ramp a probability: 0 <= base <= max <= 1', () => {
-    for (const g of GALAXIES)
-      for (const kind of KINDS) {
-        const { base, max, step, from } = g.kinds[kind];
-        expect(base, `${g.id} ${kind}`).toBeGreaterThanOrEqual(0);
-        expect(base, `${g.id} ${kind}`).toBeLessThanOrEqual(max);
-        expect(max, `${g.id} ${kind}`).toBeLessThanOrEqual(1);
-        expect(step).toBeGreaterThanOrEqual(0);
-        expect(from).toBeGreaterThanOrEqual(0);
-      }
   });
 
   it('shares seven ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, Void Rift\'s phasers and armour, Singularity\'s every foe, and a boss\'s field', () => {
@@ -326,13 +236,6 @@ describe('the galaxy table', () => {
     expect(openingOffers(galaxyById('2-3'))).toEqual(new Set(['large', 'medium']));
   });
 
-  it('never ramps a foe in before its Dimension', () => {
-    for (const g of GALAXIES)
-      for (const kind of Object.keys(FOES) as (keyof typeof FOES)[]) {
-        if (g.kinds[kind].max > 0) expect(g.dimension, `${g.id} ${kind}`).toBeGreaterThanOrEqual(FOES[kind].from);
-      }
-  });
-
   it('prices splitters 3 and drones 1, 2 HP and 1 HP, and groups drones 3 to 5', () => {
     expect(FOES.splitter).toMatchObject({ radius: 30, hp: 2, cost: 3, group: [1, 1] });
     expect(FOES.drone).toMatchObject({ hp: 1, cost: 1, speed: 110, points: 100, group: [3, 5] });
@@ -369,6 +272,64 @@ describe('the galaxy table', () => {
       expect(g.palette, g.id).toBe(own[g.dimension]);
       expect(g.theme, g.id).toBe(own[g.dimension]);
     }
+  });
+});
+
+describe('galaxyProblems', () => {
+  const event = (type: GalaxyEvent['type'], at: number, intensity: GalaxyEvent['intensity'] = 1): GalaxyEvent => ({ at, type, intensity });
+  /** `id` with `events` in place of its own. */
+  const scheduled = (id: GalaxyId, ...events: GalaxyEvent[]): GalaxyDef => ({ ...galaxyById(id), events });
+  const ramped = (id: GalaxyId, kind: ThreatKind, ramp: Partial<GalaxyDef['kinds'][ThreatKind]>): GalaxyDef => {
+    const def = galaxyById(id);
+    return { ...def, kinds: { ...def.kinds, [kind]: { ...def.kinds[kind], ...ramp } } };
+  };
+
+  it('finds nothing wrong with any of the 30 galaxies', () => {
+    expect(GALAXIES).toHaveLength(30);
+    for (const g of GALAXIES) expect(galaxyProblems(g), g.id).toEqual([]);
+  });
+
+  it('warns every hazard by its rule and every shower by the shower warning', () => {
+    for (const type of Object.keys(HAZARD_RULES) as HazardType[]) expect(warningSeconds({ type }), type).toBe(HAZARD_RULES[type].telegraph);
+    expect(warningSeconds({ type: 'meteorShower' })).toBe(SHOWER_WARNING_SECONDS);
+  });
+
+  it.each<[string, GalaxyDef, RegExp]>([
+    ['an id that is not its Dimension and index', { ...galaxyById('2-4'), id: '2-5' }, /id 2-5 .*2-4/],
+    ['a survival galaxy with a boss', { ...galaxyById('2-4'), boss: 'hiveCarrier' }, /survival galaxy .*boss/],
+    ['a boss galaxy without one', { ...galaxyById('2-6'), boss: null }, /boss galaxy .*no boss/],
+    ['a sixth galaxy that is not a boss galaxy', { ...galaxyById('2-6'), kind: 'survival', boss: null }, /galaxy 6 .*boss/],
+    ['a boss galaxy with events', scheduled('2-6', event('meteorShower', 15)), /boss galaxy .*events/],
+    ['events out of order', scheduled('2-4', event('meteorShower', 46), event('gravityWell', 32)), /gravityWell at 32 s comes after .*46 s/],
+    ['events under 10 s apart', scheduled('2-4', event('meteorShower', 32), event('gravityWell', 40)), /gravityWell at 40 s starts 8 s after .*at least 10/],
+    ['an event in the opening', scheduled('2-4', event('meteorShower', 10)), /meteorShower at 10 s .*opening.*15 s/],
+    ['a black hole warned before the opening ends', scheduled('5-1', event('blackHole', 11)), /blackHole at 11 s .*opening/],
+    ['an event that runs into the lull', scheduled('2-4', event('meteorShower', 64, 2)), /meteorShower at 64 s ends at 76 s, after the lull starts at 75 s/],
+    ['a hazard before its Dimension', scheduled('2-4', event('dangerZone', 30)), /dangerZone .*Dimension 3/],
+    ['three events at once', scheduled('5-1', event('blackHole', 12), event('dangerZone', 30), event('warpRift', 40)), /3 events run at once at 38 s/],
+    ['two events of one type at once', scheduled('2-4', event('gravityWell', 20), event('gravityWell', 33)), /gravityWell at 33 s is warned at 31 s, before the one at 20 s ends at 34 s/],
+    ['a pull beside a gravity storm', scheduled('2-4', event('gravityStorm', 20), event('gravityWell', 30)), /gravityWell at 30 s pulls while the gravityStorm at 20 s runs/],
+    ['a gravity storm at intensity 3', scheduled('2-4', event('gravityStorm', 20, 3)), /gravityStorm at 20 s has intensity 3.*1 or 2/],
+    ['a ramp whose base passes its max', ramped('2-4', 'splitter', { base: 0.5 }), /splitter ramp .*base 0.5.*max 0.35/],
+    ['a ramp past certainty', ramped('2-4', 'splitter', { max: 1.2 }), /splitter ramp .*max 1.2/],
+    ['a ramp that falls', ramped('2-4', 'splitter', { step: -0.1 }), /splitter ramp .*step -0.1/],
+    ['a ramp from before the start', ramped('2-4', 'splitter', { from: -1 }), /splitter ramp .*from -1/],
+    ['a ramp that is not a number', ramped('2-4', 'splitter', { base: Number.NaN }), /splitter ramp .*base NaN/],
+    ['a foe before its Dimension', ramped('1-4', 'drone', { base: 0.1, max: 0.2 }), /drone .*Dimension 2/],
+    ['a pickup before its Dimension', { ...galaxyById('1-4'), pickups: [...galaxyById('1-4').pickups, 'rapidFire'] }, /rapidFire .*Dimension 2/],
+    ['a pickup that does not exist', { ...galaxyById('1-4'), pickups: ['laser' as PickupId] }, /laser .*no such pickup/],
+    ['a featured pickup it cannot drop', { ...galaxyById('3-2'), featured: ['wingman'] }, /features wingman.*pickups/],
+  ])('finds %s', (_name, def, problem) => {
+    const problems = galaxyProblems(def);
+    expect(problems.some((p) => problem.test(p)), problems.join('\n')).toBe(true);
+  });
+
+  it('allows two types at once, a same-type event once the last has ended, and a pull that ends before a storm is warned', () => {
+    expect(galaxyProblems(scheduled('2-4', event('gravityWell', 20), event('meteorShower', 30, 2)))).toEqual([]);
+    expect(galaxyProblems(scheduled('4-4', event('repulsionField', 20), event('repulsionField', 36)))).toEqual([]);
+    expect(galaxyProblems(scheduled('4-4', event('repulsionField', 20), event('repulsionField', 35)))).toEqual(['repulsionField at 35 s is warned at 33 s, before the one at 20 s ends at 34 s: start it later']);
+    expect(galaxyProblems(scheduled('2-4', event('gravityWell', 20), event('gravityStorm', 37)))).toEqual([]);
+    expect(galaxyProblems(scheduled('2-4', event('gravityWell', 20), event('gravityStorm', 36)))).toEqual(['gravityWell at 20 s pulls while the gravityStorm at 36 s runs: a storm is the only pull on the field, so move one of them']);
   });
 });
 

@@ -3,6 +3,7 @@ import type { AsteroidSize } from './asteroid';
 import { MAX_WEAPON_TIER, PLAYER } from './config';
 import { isPositiveFiniteSize, type Field } from './field';
 import { MIN_PRACTICE_LEVEL, type RulesOption } from './rules';
+import { FRESH_MODE_NAMES, startsFresh } from './scoring';
 import { createShip, type Ship } from './ship';
 
 export interface ShipPlacement {
@@ -33,11 +34,11 @@ export interface WorldOptions {
   readonly initialShip?: ShipPlacement;
   /** Replaces the 3 practice spawns at the start of the run. */
   readonly initialAsteroids?: readonly AsteroidPlacement[];
-  /** Integer 1–3 in practice, 1–5 in Rank; defaults to 3. Free play always starts with 3. */
+  /** Integer 1–3 in practice, 1–5 in Rank; defaults to 3. Free play and the Daily always start with 3. */
   readonly startLives?: number;
   /**
-   * The weapon tier a galaxy run starts at, integer 0–3; defaults to 0. Galaxy rules only, and Free play always starts
-   * at 0: Rank carries the tier from galaxy to galaxy.
+   * The weapon tier a galaxy run starts at, integer 0–3; defaults to 0. Galaxy rules only, and Free play and the
+   * Daily always start at 0: Rank carries the tier from galaxy to galaxy.
    */
   readonly startTier?: WeaponTier;
 }
@@ -97,8 +98,8 @@ function resolveStartTier(opts: WorldOptions, rules: RulesOption): WeaponTier {
   if (!isWeaponTier(tier)) {
     throw new RangeError(`World startTier must be an integer from 0 to ${String(MAX_WEAPON_TIER)} (got ${String(tier)}); pass the tier the Rank run carries`);
   }
-  if (rules.mode === 'free' && tier !== 0) {
-    throw new RangeError(`Free play always starts at weapon tier 0 (got startTier ${String(tier)}); omit startTier, or play mode 'rank' to carry a tier`);
+  if (startsFresh(rules.mode) && tier !== 0) {
+    throw new RangeError(`${FRESH_MODE_NAMES[rules.mode]} always starts at weapon tier 0 (got startTier ${String(tier)}); omit startTier, or play mode 'rank' to carry a tier`);
   }
   return tier;
 }
@@ -145,9 +146,9 @@ export function resolveOptions(opts: WorldOptions): { readonly rules: RulesOptio
   assertField(opts.field);
   const rules = resolveRules(opts);
   const lives = opts.startLives ?? PLAYER.startLives;
-  if (rules.kind === 'galaxy' && rules.mode === 'free' && lives !== PLAYER.startLives) {
+  if (rules.kind === 'galaxy' && startsFresh(rules.mode) && lives !== PLAYER.startLives) {
     throw new RangeError(
-      `Free play always starts with ${String(PLAYER.startLives)} lives (got startLives ${String(lives)}); omit startLives, or play mode 'rank' for 1 to ${String(MAX_GALAXY_START_LIVES)}`,
+      `${FRESH_MODE_NAMES[rules.mode]} always starts with ${String(PLAYER.startLives)} lives (got startLives ${String(lives)}); omit startLives, or play mode 'rank' for 1 to ${String(MAX_GALAXY_START_LIVES)}`,
     );
   }
   assertStartLives(lives, rules.kind === 'galaxy' ? MAX_GALAXY_START_LIVES : PLAYER.startLives);

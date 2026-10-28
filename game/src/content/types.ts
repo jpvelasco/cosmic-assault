@@ -94,4 +94,9 @@ export interface GalaxyDef {
   /** The look it is drawn in, and the theme it plays: one per Dimension. */
   readonly palette: PaletteId;
   readonly theme: MusicThemeId;
+  /**
+   * What the HUD and the cards name it, for a galaxy built on another's id rather than one of the table's own (the
+   * Daily's `'Daily'`); a table galaxy has none and is named by its id.
+   */
+  readonly label?: string;
 }

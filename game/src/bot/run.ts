@@ -30,9 +30,9 @@ export interface RunOptions {
   readonly galaxy: GalaxyDef;
   readonly seed: number;
   readonly profile: BotProfile;
-  /** Defaults to 'free'. */
+  /** 'rank', 'free' or 'daily'; defaults to 'free'. */
   readonly mode?: GalaxyMode;
-  /** Rank only, 1–5; Free play always starts with 3. */
+  /** Rank only, 1–5; Free play and the Daily always start with 3. */
   readonly startLives?: number;
   /** When to give up on a run still going; past its timer by a little for a survival galaxy, 300 s of fight for a boss one. */
   readonly maxSeconds?: number;

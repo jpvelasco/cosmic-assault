@@ -17,7 +17,7 @@ import { createShip, stepShip, type Ship } from '../../src/sim/ship';
 import { hasEnded, World } from '../../src/sim/world';
 import { hazardFoes } from '../helpers/foeAt';
 import { shipAt, turnTowards } from '../helpers/holeEscape';
-import { auditTelegraphs, type TelegraphPair } from '../helpers/telegraphAudit';
+import { auditTelegraphs, hazardsShown, type TelegraphPair } from '../helpers/telegraphAudit';
 import type { Timed } from '../helpers/bossArena';
 
 const DT = STEP_SECONDS;
@@ -371,7 +371,7 @@ describe('a gravity storm\'s telegraph and scope', () => {
       }
       const pairs: TelegraphPair[] = auditTelegraphs(log);
       const storms = pairs.filter((p) => p.kind === 'gravityStorm');
-      expect(storms.length, `seed ${String(seed)}`).toBeGreaterThanOrEqual(2);
+      expect(storms.length, `seed ${String(seed)}`).toBe(hazardsShown({ at: 30, type: 'gravityStorm', intensity: 2 }).length);
       // All warned together, by the one storm.
       expect(new Set(storms.map((p) => p.warned)).size, `seed ${String(seed)}`).toBe(1);
       expect(pairs.filter((p) => p.kind === 'gravityWell').length, `seed ${String(seed)}`).toBeGreaterThanOrEqual(1);

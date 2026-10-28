@@ -6,6 +6,9 @@
  */
 
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** The first and last dates the calendar holds: a date beyond either has no four-digit year. */
+export const FIRST_DATE = '0000-01-01';
+export const LAST_DATE = '9999-12-31';
 
 interface CivilDate {
   readonly year: number;
@@ -72,7 +75,7 @@ export function dayNumber(date: string): number {
 
 function shiftDate(date: string, days: number): string {
   const shifted = civilFromDays(dayNumber(date) + days);
-  if (shifted.year < 0 || shifted.year > 9999) throw new RangeError(`Calendar dates run from 0000-01-01 to 9999-12-31, so ${date} has no neighbour beyond that.`);
+  if (shifted.year < 0 || shifted.year > 9999) throw new RangeError(`Calendar dates run from ${FIRST_DATE} to ${LAST_DATE}, so ${date} has no neighbour beyond that.`);
   return formatDate(shifted);
 }
 

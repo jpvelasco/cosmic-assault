@@ -174,8 +174,8 @@ export function createHud(initial: Palette): Hud {
     if (def !== shownGalaxy || world.practiceLevel !== shownLevel) {
       shownGalaxy = def;
       shownLevel = world.practiceLevel;
-      remeasure(ctx, caption, def === null ? '' : GALAXY_CAPTION, labelFont);
-      remeasure(ctx, level, def === null ? `Practice L${String(shownLevel)}` : galaxyLabel(def.id), def === null ? practiceFont : valueFont);
+      remeasure(ctx, caption, def === null || def.label !== undefined ? '' : GALAXY_CAPTION, labelFont);
+      remeasure(ctx, level, def === null ? `Practice L${String(shownLevel)}` : (def.label ?? galaxyLabel(def.id)), def === null ? practiceFont : valueFont);
     }
     if (world.lives !== shownLives) {
       shownLives = world.lives;

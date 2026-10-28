@@ -8,7 +8,7 @@ import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
 import { HAZARD_RULES } from '../../src/content/hazards';
-import type { GalaxyId, HazardType } from '../../src/content/types';
+import type { GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 import type { AttackId } from '../../src/content/types';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
@@ -54,6 +54,16 @@ describe('auditTelegraphs', () => {
       for (const pair of pairs) expect(pair.minimum).toBe(HAZARD_RULES[pair.kind].telegraph);
     }
   }, PLAY_TIMEOUT_MS);
+
+  it('counts the hazards an event shows: one per zone, rift pair or storm well, none for a shower', () => {
+    const shown = (type: GalaxyEvent['type'], intensity: GalaxyEvent['intensity']): number => hazardsShown({ at: 30, type, intensity }).length;
+    expect(shown('meteorShower', 2)).toBe(0);
+    expect(shown('gravityWell', 2)).toBe(1);
+    expect([1, 2, 3].map((i) => shown('dangerZone', i as GalaxyEvent['intensity']))).toEqual([1, 2, 2]);
+    expect([1, 2, 3].map((i) => shown('warpRift', i as GalaxyEvent['intensity']))).toEqual([1, 2, 2]);
+    expect([1, 2, 3].map((i) => shown('gravityStorm', i as GalaxyEvent['intensity']))).toEqual([3, 4, 4]);
+    expect(hazardsShown({ at: 30, type: 'gravityStorm', intensity: 1 })).toEqual(['gravityStorm', 'gravityStorm', 'gravityStorm']);
+  });
 
   it('pairs a warning and its activation by id, not by order', () => {
     const pairs = auditTelegraphs([

@@ -1,4 +1,4 @@
-import { GRAVITY_STORM, WELL_RADIUS } from '../../content/hazards';
+import { GRAVITY_STORM, stormWells, WELL_RADIUS } from '../../content/hazards';
 import type { Point } from '../math';
 import { clearSpots, cornerClearance, zoneKeepOutBoxes } from './dangerZone';
 import type { WellLayout, WellSpot } from './forceField';
@@ -26,7 +26,7 @@ export function stormLayout({ rng, keepOuts }: Pick<HazardSetup, 'rng' | 'keepOu
     const candidates: Candidate[] = clearSpots(field, keepOuts(field), { inset: WELL_RADIUS, reach: 0, corners: 0 }).map((s) => ({ ...s, clearance: cornerClearance(field, boxes, s.x, s.y) }));
     const apart = GRAVITY_STORM.spacing * field.width;
     const wells: WellSpot[] = [];
-    const count = Math.min(GRAVITY_STORM.baseWells + event.intensity, GRAVITY_STORM.maxWells);
+    const count = stormWells(event.intensity);
     while (wells.length < count) {
       const free = candidates.filter((c) => wells.every((w) => Math.hypot(c.x - w.x, c.y - w.y) >= apart));
       const rung = CORNER_RUNGS.map((least) => free.filter((c) => c.clearance >= least)).find((spots) => spots.length > 0);

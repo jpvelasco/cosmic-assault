@@ -291,6 +291,19 @@ describe('createHud', () => {
     expect(measured()).toBe(4);
   });
 
+  it('labels a galaxy that has a label by it alone, not by the galaxy it is built on', () => {
+    const hud = createHud(DRIFT);
+    const { ctx, texts } = fakeContext();
+    hud.resize(1280, 720);
+    const daily = new World({ seed: 1, field: { width: 1280, height: 720 }, rules: { kind: 'galaxy', galaxy: { ...galaxyById('1-3'), label: 'Daily' }, mode: 'daily' } });
+    hud.draw(ctx, daily, daily.score);
+    expect(texts).toContain('Daily');
+    expect(texts).not.toContain('1-3');
+    expect(texts).not.toContain('GALAXY');
+    // "Daily" (50 px) inside 12 px of padding each side, at scale 1.5.
+    expect(hud.pill('galaxy')?.width).toBe(50 + 2 * 12 * 1.5);
+  });
+
   it('runs a thin timer bar under the galaxy pill, as wide as its straight edge', () => {
     const hud = createHud(DRIFT);
     const { ctx } = fakeContext();

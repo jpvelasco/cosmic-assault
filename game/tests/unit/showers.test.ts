@@ -4,8 +4,8 @@ import type { GalaxyEvent } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import { REFERENCE_AREA } from '../../src/sim/galaxy/director';
-import { eventsOfType, showerSeconds } from '../../src/content/curves';
-import { EDGE_BEARINGS, SHOWER_WARNING_SECONDS, showerCap, showerRate, Showers, type ShowerState } from '../../src/sim/galaxy/showers';
+import { eventsOfType, SHOWER_WARNING_SECONDS, showerSeconds } from '../../src/content/curves';
+import { EDGE_BEARINGS, showerCap, showerRate, Showers, type ShowerState } from '../../src/sim/galaxy/showers';
 import { createRng } from '../../src/sim/rng';
 
 const AREA = 1280 * 720;
