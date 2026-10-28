@@ -39,15 +39,15 @@ const EARLY = GALAXIES.filter((g) => g.dimension <= 2 && g.kind === 'survival');
  * placement changes what these dates play, so it must update them on purpose.
  */
 const GOLDEN = [
-  { date: '2026-10-26', seed: 1692440299, twist: 'gravityStorm', anchor: '2-2', palette: 'drift', target: 15750,
+  { date: '2026-10-26', seed: 1692440299, twist: 'gravityStorm', anchor: '2-2', palette: 'drift', target: 55150,
     events: [{ at: 20, type: 'gravityStorm', intensity: 2 }, { at: 30, type: 'meteorShower', intensity: 2 }] },
-  { date: '2026-10-27', seed: 1675662680, twist: 'doubleMeteors', anchor: '1-3', palette: 'ionReach', target: 11750,
+  { date: '2026-10-27', seed: 1675662680, twist: 'doubleMeteors', anchor: '1-3', palette: 'ionReach', target: 41050,
     events: [{ at: 15, type: 'meteorShower', intensity: 1 }, { at: 30, type: 'meteorShower', intensity: 1 }, { at: 45, type: 'meteorShower', intensity: 1 }] },
-  { date: '2026-10-28', seed: 1658885061, twist: 'splitterField', anchor: '2-2', palette: 'ionReach', target: 14850,
+  { date: '2026-10-28', seed: 1658885061, twist: 'splitterField', anchor: '2-2', palette: 'ionReach', target: 51950,
     events: [{ at: 15, type: 'gravityWell', intensity: 1 }, { at: 25, type: 'meteorShower', intensity: 2 }, { at: 40, type: 'meteorShower', intensity: 2 }] },
-  { date: '2027-01-01', seed: 1475997049, twist: 'droneSwarm', anchor: '2-2', palette: 'ionReach', target: 15250,
+  { date: '2027-01-01', seed: 1475997049, twist: 'droneSwarm', anchor: '2-2', palette: 'ionReach', target: 53400,
     events: [{ at: 15, type: 'gravityWell', intensity: 1 }, { at: 25, type: 'meteorShower', intensity: 2 }, { at: 60, type: 'meteorShower', intensity: 2 }] },
-  { date: '2027-12-31', seed: 4250186330, twist: 'doubleMeteors', anchor: '2-3', palette: 'ionReach', target: 15950,
+  { date: '2027-12-31', seed: 4250186330, twist: 'doubleMeteors', anchor: '2-3', palette: 'ionReach', target: 55800,
     events: [{ at: 20, type: 'meteorShower', intensity: 2 }, { at: 35, type: 'meteorShower', intensity: 2 }, { at: 45, type: 'gravityWell', intensity: 1 }, { at: 55, type: 'meteorShower', intensity: 2 }] },
 ] as const;
 
@@ -208,8 +208,8 @@ describe('dailyGalaxy', () => {
     }
     const mid = DAILIES.filter((d) => d.def.id === '2-1' || d.def.id === '2-2').map((d) => d.target);
     const mean = mid.reduce((sum, t) => sum + t, 0) / mid.length;
-    expect(mean).toBeGreaterThan(13_000);
-    expect(mean).toBeLessThan(16_000);
+    expect(mean).toBeGreaterThan(45_000);
+    expect(mean).toBeLessThan(56_000);
   });
 
   it('plays in the World as a Daily: the same run from the same seed', () => {

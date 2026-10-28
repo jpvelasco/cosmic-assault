@@ -54,10 +54,10 @@ export const DAILY_GRID_SECONDS = 5;
 
 /**
  * The target is `TARGET_K × duration × threatBudget(tier) × targetScale`, times a spread from `TARGET_SPREAD.low` to
- * `low + width`, rounded to `TARGET_ROUNDING`. `TARGET_K` is an initial value: it sets a target near 14,500 on a mid
- * anchor, until the bots' scores calibrate it.
+ * `low + width`, rounded to `TARGET_ROUNDING`. `TARGET_K` is calibrated on the bots' scores over the Daily suite's dates:
+ * the expert beats the target on about 97% of them and the casual on about 38%. (A tuning value.)
  */
-export const TARGET_K = 8;
+export const TARGET_K = 28;
 export const TARGET_SPREAD = { low: 0.92, width: 0.16 } as const;
 export const TARGET_ROUNDING = 50;
 
