@@ -14,6 +14,7 @@ import { galaxyById } from '../../src/content/galaxies';
 import { boltKey } from '../../src/render/boltPass';
 import { foeKeys, mineMarkKeys } from '../../src/render/foePass';
 import { MINE } from '../../src/content/foes';
+import { WINGMAN } from '../../src/sim/config';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
 import type { Bolt } from '../../src/sim/foes/bolts';
 import { foeAt } from '../helpers/foeAt';
@@ -30,6 +31,8 @@ interface DrawCall {
   readonly image: unknown;
   /** The transform's x scale when the image was drawn: the field scale, times the sprite's own turn and scale. */
   readonly a: number;
+  /** The transform's x skew when the image was drawn: the sine of the sprite's turn, times its scale. */
+  readonly b: number;
   /** The transform's x and y offset when the image was drawn. */
   readonly e: number;
   readonly f: number;
@@ -47,7 +50,7 @@ interface FakeCanvas {
   readonly stops: string[];
   /** Arcs begun so far; the stars are the only thing drawn as arcs in the stub scene. */
   arcs: number;
-  /** Every point a line was drawn to, with the alpha then. */
+  /** Every point a line or curve was drawn to, with the alpha then. */
   readonly lines: { x: number; y: number; alpha: number }[];
   getContext(kind: string): unknown;
 }
@@ -56,6 +59,7 @@ interface FakeCanvas {
 function fakeCanvas(): FakeCanvas {
   const draws: DrawCall[] = [];
   let a = 1;
+  let b = 0;
   let e = 0;
   let f = 0;
   let alpha = 1;
@@ -68,17 +72,20 @@ function fakeCanvas(): FakeCanvas {
       get: (_target, name) => {
         switch (name) {
           case 'setTransform':
-            return (nextA: number, _b: number, _c: number, _d: number, nextE: number, nextF: number) => {
+            return (nextA: number, nextB: number, _c: number, _d: number, nextE: number, nextF: number) => {
               a = nextA;
+              b = nextB;
               e = nextE;
               f = nextF;
             };
           case 'drawImage':
-            return (image: unknown) => draws.push({ image, a, e, f, alpha, smoothing });
+            return (image: unknown) => draws.push({ image, a, b, e, f, alpha, smoothing });
           case 'arc':
             return () => fake.arcs++;
           case 'lineTo':
             return (x: number, y: number) => fake.lines.push({ x, y, alpha });
+          case 'quadraticCurveTo':
+            return (_cx: number, _cy: number, x: number, y: number) => fake.lines.push({ x, y, alpha });
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
@@ -724,12 +731,161 @@ describe('createRenderer', () => {
         for (const name of [...ARCS, 'horizon', 'outline']) expect(sprite(name)).toBeUndefined();
       });
 
-      it('draws only gravity wells as wells: a repulsion field waits for its own look', () => {
+      it('draws a repulsion field in its own look, with none of a well\'s sprites', () => {
         const { stub, world } = stubWorld();
         renderer.resize(1280, 720, FIELD);
         stub.hazards = well('active').map((h) => ({ ...h, type: 'repulsionField' }));
         drawFrame(world, 1);
         for (const name of [...ARCS, 'horizon', 'outline']) expect(sprite(name)).toBeUndefined();
+        expect(drawsOf(baker.cached('repulse|drift|ripple')?.canvas).length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('a repulsion field', () => {
+      const force = (stage: 'warning' | 'active', remaining = 5): HazardState[] => [{ id: 3, type: 'repulsionField', stage, x: 600, y: 300, intensity: 2, remaining }];
+      const sprite = (name: string): HTMLCanvasElement | undefined => baker.cached(`repulse|drift|${name}`)?.canvas;
+
+      it('warns with a ring that grows outward as it comes due, and holds it at full size under reduced motion', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        const ring = (remaining: number): DrawCall | undefined => {
+          stub.hazards = force('warning', remaining);
+          drawFrame(world, 1);
+          return drawsOf(sprite('outline'))[0];
+        };
+        const early = ring(2);
+        const late = ring(0.2);
+        expect(early?.e).toBe(600);
+        expect(late?.a).toBeGreaterThan(early?.a ?? Infinity);
+        expect(sprite('ripple')).toBeUndefined();
+        renderer.effects.reducedMotion = true;
+        expect(ring(2)?.a).toBe(ring(0.2)?.a);
+        expect(ring(2)?.alpha).toBe(0.5);
+      });
+
+      it('pushes as ripples spreading out from its heart, which hold their places under reduced motion', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.hazards = force('active');
+        const ripples = (elapsed: number): number[] => {
+          stub.elapsed = elapsed;
+          drawFrame(world, 1);
+          return drawsOf(sprite('ripple')).map((call) => call.a);
+        };
+        const first = ripples(0);
+        expect(first.length).toBeGreaterThan(1);
+        expect(new Set(first).size).toBe(first.length);
+        expect(ripples(0.3)).not.toEqual(first);
+        expect(sprite('outline')).toBeUndefined();
+        renderer.effects.reducedMotion = true;
+        expect(ripples(0.3)).toEqual(ripples(0));
+      });
+    });
+
+    describe('a warp rift', () => {
+      const rift = (stage: 'warning' | 'active', remaining = 5): HazardState[] => [{ id: 4, type: 'warpRift', stage, x: 300, y: 300, toX: 900, toY: 400, intensity: 1, remaining }];
+      const outline = (): HTMLCanvasElement | undefined => baker.cached('rift|drift|outline')?.canvas;
+      const arc = (): HTMLCanvasElement | undefined => baker.cached('well|drift|arc0')?.canvas;
+
+      it('warns with a dashed ring over each mouth, drawn over the rocks, and the link between them', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.hazards = rift('warning', 1);
+        drawFrame(world, 1);
+        expect(drawsOf(outline()).map((call) => [call.e, call.f])).toEqual([[300, 300], [900, 400]]);
+        const rock = canvas.draws.findIndex((call) => call.image === baker.asteroid(stub.asteroids[0] as Asteroid, DRIFT).canvas);
+        expect(canvas.draws.findIndex((call) => call.image === outline())).toBeGreaterThan(rock);
+        expect(canvas.lines).toContainEqual(expect.objectContaining({ x: 900, y: 400 }));
+        expect(arc()).toBeUndefined();
+      });
+
+      it('opens as a swirl at each mouth, the two turning opposite ways, held still under reduced motion', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.hazards = rift('active');
+        stub.elapsed = 0.5;
+        drawFrame(world, 1);
+        expect(outline()).toBeUndefined();
+        const turning = drawsOf(arc());
+        expect(turning.map((call) => [call.e, call.f])).toEqual([[300, 300], [900, 400]]);
+        // Turned by equal angles either way, the two share their cosine and differ in the sign of their sine.
+        expect(Math.abs(turning[0]?.b ?? 0)).toBeGreaterThan(0.01);
+        expect(turning[1]?.b).toBeCloseTo(-(turning[0]?.b ?? 0), 9);
+        renderer.effects.reducedMotion = true;
+        drawFrame(world, 1);
+        const still = drawsOf(arc()).map((call) => [call.a, call.b]);
+        expect(still[0]).toEqual(still[1]);
+        stub.elapsed = 1.5;
+        drawFrame(world, 1);
+        expect(drawsOf(arc()).map((call) => [call.a, call.b])).toEqual(still);
+      });
+    });
+
+    describe('the Wingman', () => {
+      const drone = (): HTMLCanvasElement | undefined => baker.cached('wingman|drift')?.canvas;
+
+      it('flies off the ship\'s left wing, where its shot starts, only while the effect runs', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        drawFrame(world, 1);
+        expect(drone()).toBeUndefined();
+        stub.effects.wingman = 8;
+        drawFrame(world, 1);
+        const [call, ...others] = drawsOf(drone());
+        expect(others).toEqual([]);
+        // Upright sprites land on whole device pixels, so it sits within a pixel of the point.
+        expect(Math.abs((call?.e ?? 0) - 640)).toBeLessThan(1);
+        expect(Math.abs((call?.f ?? 0) - (360 - WINGMAN.offset))).toBeLessThan(1);
+        expect(call?.alpha).toBe(1);
+      });
+
+      it('blinks as the effect ends, as a pickup does', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.effects.wingman = 1.9;
+        drawFrame(world, 1);
+        expect(drawsOf(drone())[0]?.alpha).toBeLessThan(1);
+      });
+
+      it('blinks hidden with the ship while it is invulnerable, and is gone at game over', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.effects.wingman = 8;
+        stub.ship.invulnerable = true;
+        stub.elapsed = 0.06;
+        drawFrame(world, 1);
+        expect(drawsOf(drone())).toEqual([]);
+        stub.elapsed = 0.11;
+        drawFrame(world, 1);
+        expect(drawsOf(drone())).toHaveLength(1);
+        stub.ship.invulnerable = false;
+        stub.status = 'gameOver';
+        drawFrame(world, 1);
+        expect(drawsOf(drone())).toEqual([]);
+      });
+    });
+
+    describe('a phaser', () => {
+      const outline = (): HTMLCanvasElement | undefined => baker.cached(mineMarkKeys(DRIFT).outline)?.canvas;
+
+      it('marks where it will blink with its outline only while it warns, blinking, and steady under reduced motion', () => {
+        const { stub, world } = stubWorld();
+        renderer.resize(1280, 720, FIELD);
+        stub.foes.push(foeAt('phaser', 400, 300, { id: 6, aimX: 800, aimY: 200 }));
+        drawFrame(world, 1);
+        expect(outline()).toBeUndefined();
+        (stub.foes[0] as Foe).charging = true;
+        const alphas = [0, 0.05, 0.1, 0.15].map((elapsed) => {
+          stub.elapsed = elapsed;
+          drawFrame(world, 1);
+          const calls = drawsOf(outline());
+          expect(calls.map((call) => [call.e, call.f])).toEqual([[800, 200]]);
+          return calls[0]?.alpha;
+        });
+        expect(new Set(alphas).size).toBeGreaterThan(1);
+        renderer.effects.reducedMotion = true;
+        drawFrame(world, 1);
+        expect(drawsOf(outline())[0]?.alpha).toBe(0.7);
       });
     });
 
