@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runGalaxy } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
-import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { PLAYER } from '../../src/sim/config';
 import { BALANCE_SEEDS } from '../helpers/botRuns';
 import { ringGaps, wardenGaps } from '../helpers/ringGaps';
+import { fightSeconds } from './targets';
 
 // The Warden's kill rate and the lives it takes off an idle ship are pinned with the rest of 3-★'s targets
 // (d3-targets.test.ts); this file audits its ring's gaps through the expert's fights.
@@ -12,8 +12,8 @@ import { ringGaps, wardenGaps } from '../helpers/ringGaps';
 /** Each of the ring's two gaps stays at least this wide at every step. */
 const WIDE_GAP = 50;
 const GALAXY = galaxyById('3-6');
-/** The longest the expert may take to beat it (its bar in targets.ts), after its approach and arrival. */
-const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 120;
+/** The longest the expert may take to beat it: its approach, its arrival and its bar. */
+const FIGHT_SECONDS = fightSeconds('warden');
 /** 40 whole boss fights. */
 const TIMEOUT_MS = 600_000;
 

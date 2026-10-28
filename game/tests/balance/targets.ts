@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { DIMENSION_NUMBERS, GALAXIES, GALAXY_INDEXES, galaxyById, galaxyIdOf, galaxyLabel, galaxyOrdinal } from '../../src/content/galaxies';
 import type { BossId, Dimension, GalaxyId } from '../../src/content/types';
+import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT } from '../../src/sim/config';
 import { BALANCE_SEEDS } from '../helpers/botRuns';
 
@@ -32,7 +33,9 @@ const FIRST_CASUAL_PERCENT = 90;
  * How long after its arrival the expert must have beaten each boss, on every seed: a bar that catches a fight that can
  * stall, not a measure of skill. The later bosses fight longer, the Eclipse longest.
  */
-const BOSS_KILL_SECONDS: Readonly<Record<BossId, number>> = { monolith: 120, hiveCarrier: 120, warden: 120, leviathan: 165, eclipse: 240 };
+export const BOSS_KILL_SECONDS: Readonly<Record<BossId, number>> = { monolith: 120, hiveCarrier: 120, warden: 120, leviathan: 165, eclipse: 240 };
+/** How long a run must last for the expert to have beaten `boss` within its bar: the approach, the arrival and the bar. */
+export const fightSeconds = (boss: BossId): number => BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + BOSS_KILL_SECONDS[boss];
 /** The pace the expert keeps against the Leviathan on most seeds, so a slower fight shows before it reaches the bar. */
 const LEVIATHAN_PACE = { seconds: 150, seeds: 38 } as const;
 /**

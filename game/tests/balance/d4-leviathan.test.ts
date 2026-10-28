@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { runGalaxy } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
-import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { recordRun, replayControls } from '../helpers/botReplay';
+import { fightSeconds } from './targets';
 
 // The Leviathan's kill rates and the lives it takes off an idle ship are pinned with the rest of 4-★'s targets
 // (d4-targets.test.ts).
 const GALAXY = galaxyById('4-6');
-/** The longest the expert may take to beat it (its bar in targets.ts), after its approach and arrival. */
-const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 165;
+/** The longest the expert may take to beat it: its approach, its arrival and its bar. */
+const FIGHT_SECONDS = fightSeconds('leviathan');
 /** One whole fight, twice over, on a loaded host. */
 const TIMEOUT_MS = 120_000;
 
