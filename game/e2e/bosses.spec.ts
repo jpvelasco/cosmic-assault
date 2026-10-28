@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { defaultSave, type SaveData } from '../src/meta/save';
+import { defaultSave } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { bossHp, BOSSES } from '../src/content/bosses';
 import { SEGMENT_COUNT, SEGMENT_HP } from '../src/sim/boss/leviathan';
@@ -31,18 +31,45 @@ async function bossOf(page: Page): Promise<NonNullable<CosmicAssaultTestState['b
   return boss;
 }
 
+/**
+ * Plays boss galaxy `galaxy` from the map in Free play, with the save's frontier there and the clock seed `seed`, so its
+ * clear is saved; the next Dimension is still shut on the way.
+ */
+async function playBossFromMap(page: Page, galaxy: GalaxyId, seed: number): Promise<void> {
+  const dimension = Number(galaxy.slice(0, 1));
+  await seedSave(page, { ...defaultSave(), frontier: galaxy });
+  await pinClockSeed(page, seed);
+  await openFreshGame(page);
+  await page.getByTestId('play').click();
+  await page.getByTestId('mode-free').click();
+  await expect(page.getByTestId(`dimension-${String(dimension + 1)}`)).toBeDisabled();
+  await page.getByTestId(`dimension-${String(dimension)}`).click();
+  await page.getByTestId(`galaxy-${galaxy}`).click();
+  await expectMode(page, 'playing');
+}
+
+/** Kills the fighting boss and checks the clear opened the next Dimension: saved, and on the map with its first galaxy open. */
+async function killAndOpenNextDimension(page: Page, galaxy: GalaxyId): Promise<void> {
+  const dimension = Number(galaxy.slice(0, 1)) + 1;
+  const first = `${String(dimension)}-1`;
+  await damageBoss(page, KILL_SHOTS);
+  // The killing blow ends the galaxy on the next step.
+  await fastForward(page, STEP_SECONDS);
+  const { screen, galaxy: played } = await gameState(page);
+  expect({ screen, galaxy: played }).toEqual({ screen: 'results', galaxy });
+  await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
+  const stored = await storedSave(page);
+  expect(stored.frontier).toBe(first);
+  expect(stored.galaxies?.[galaxy]?.stars).toBeGreaterThan(0);
+  await clickPastGuard(page, 'results-map', 'map');
+  await expect(page.getByTestId(`dimension-${String(dimension)}`)).toBeEnabled();
+  await page.getByTestId(`dimension-${String(dimension)}`).click();
+  await expect(page.getByTestId(`galaxy-${first}`)).toBeEnabled();
+}
+
 test.describe(`the Monolith in ${BOSS_GALAXY}`, () => {
   test('is shielded while four or more shards remain, bare after, and its defeat opens the next Dimension', async ({ page }) => {
-    const save: SaveData = { ...defaultSave(), frontier: BOSS_GALAXY };
-    await seedSave(page, save);
-    await pinClockSeed(page, seedFor('boss-fight'));
-    await openFreshGame(page);
-    await page.getByTestId('play').click();
-    await page.getByTestId('mode-free').click();
-    await expect(page.getByTestId('dimension-2')).toBeDisabled();
-    await page.getByTestId('dimension-1').click();
-    await page.getByTestId(`galaxy-${BOSS_GALAXY}`).click();
-    await expectMode(page, 'playing');
+    await playBossFromMap(page, BOSS_GALAXY, seedFor('boss-fight'));
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     const shielded = await bossOf(page);
@@ -66,19 +93,7 @@ test.describe(`the Monolith in ${BOSS_GALAXY}`, () => {
 
     await damageBoss(page, 1);
     expect((await bossOf(page)).hp).toBe(shielded.maxHp - 1);
-
-    await damageBoss(page, KILL_SHOTS);
-    // The killing blow ends the galaxy on the next step: the boss dies under the results card.
-    await fastForward(page, STEP_SECONDS);
-    expect((await gameState(page)).screen).toBe('results');
-    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
-    const stored = await storedSave(page);
-    expect(stored.frontier).toBe('2-1');
-    expect(stored.galaxies?.[BOSS_GALAXY]?.stars).toBeGreaterThan(0);
-    await clickPastGuard(page, 'results-map', 'map');
-    await expect(page.getByTestId('dimension-2')).toBeEnabled();
-    await page.getByTestId('dimension-2').click();
-    await expect(page.getByTestId('galaxy-2-1')).toBeEnabled();
+    await killAndOpenNextDimension(page, BOSS_GALAXY);
   });
 });
 
@@ -120,42 +135,6 @@ test.describe(`the Hive Carrier in ${CARRIER_GALAXY}`, () => {
     await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
   });
 });
-
-/**
- * Plays boss galaxy `galaxy` from the map in Free play, with the save's frontier there and the clock seed `seed`, so its
- * clear is saved; the next Dimension is still shut on the way.
- */
-async function playBossFromMap(page: Page, galaxy: GalaxyId, seed: number): Promise<void> {
-  const dimension = Number(galaxy.slice(0, 1));
-  await seedSave(page, { ...defaultSave(), frontier: galaxy });
-  await pinClockSeed(page, seed);
-  await openFreshGame(page);
-  await page.getByTestId('play').click();
-  await page.getByTestId('mode-free').click();
-  await expect(page.getByTestId(`dimension-${String(dimension + 1)}`)).toBeDisabled();
-  await page.getByTestId(`dimension-${String(dimension)}`).click();
-  await page.getByTestId(`galaxy-${galaxy}`).click();
-  await expectMode(page, 'playing');
-}
-
-/** Kills the fighting boss and checks the clear opened the next Dimension: saved, and on the map with its first galaxy open. */
-async function killAndOpenNextDimension(page: Page, galaxy: GalaxyId): Promise<void> {
-  const dimension = Number(galaxy.slice(0, 1)) + 1;
-  const first = `${String(dimension)}-1`;
-  await damageBoss(page, KILL_SHOTS);
-  // The killing blow ends the galaxy on the next step.
-  await fastForward(page, STEP_SECONDS);
-  const { screen, galaxy: played } = await gameState(page);
-  expect({ screen, galaxy: played }).toEqual({ screen: 'results', galaxy });
-  await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
-  const stored = await storedSave(page);
-  expect(stored.frontier).toBe(first);
-  expect(stored.galaxies?.[galaxy]?.stars).toBeGreaterThan(0);
-  await clickPastGuard(page, 'results-map', 'map');
-  await expect(page.getByTestId(`dimension-${String(dimension)}`)).toBeEnabled();
-  await page.getByTestId(`dimension-${String(dimension)}`).click();
-  await expect(page.getByTestId(`galaxy-${first}`)).toBeEnabled();
-}
 
 const WARDEN_HP = bossHp(BOSSES.warden, 3);
 

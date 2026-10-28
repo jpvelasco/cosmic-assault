@@ -214,6 +214,13 @@ export async function expectMode(page: Page, mode: CosmicAssaultTestState['mode'
   await expect.poll(async () => (await gameState(page)).mode, timeout === undefined ? {} : { timeout }).toBe(mode);
 }
 
+/** Starts the run the title shows: a tap on a phone, Space at a desk. */
+export async function startRun(page: Page, isMobile: boolean): Promise<void> {
+  if (isMobile) await page.getByRole('heading', { name: 'Cosmic Assault' }).tap();
+  else await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+}
+
 export function speed({ vx, vy }: CosmicAssaultTestShip): number {
   return Math.hypot(vx, vy);
 }

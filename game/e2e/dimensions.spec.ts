@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { BLACK_HOLE, HAZARD_RULES } from '../src/content/hazards';
 import { STEP_SECONDS } from '../src/sim/config';
-import { expect, expectMode, fastForward, gameState, openGame, test } from './fixtures';
+import { expect, fastForward, gameState, openGame, startRun, test } from './fixtures';
 import {
   CRIMSON_GALAXY,
   WATCH_LIVES,
@@ -15,13 +15,6 @@ import {
   warnedSeconds,
 } from './seeds';
 import { FIGHT_SLACK_SECONDS } from '../tests/helpers/seedClaims';
-
-/** Starts the run the title shows: a tap on a phone, Space at a desk. */
-async function start(page: Page, isMobile: boolean): Promise<void> {
-  if (isMobile) await page.getByRole('heading', { name: 'Cosmic Assault' }).tap();
-  else await page.keyboard.press('Space');
-  await expectMode(page, 'playing');
-}
 
 /** The run's first hazard of `type` as the bridge shows it; fails if there is none. */
 async function hazardOf(page: Page, type: CosmicAssaultTestState['hazards'][number]['type']): Promise<CosmicAssaultTestState['hazards'][number]> {
@@ -93,7 +86,7 @@ function watch(page: Page, seconds: number, want: 'mine' | 'gunship'): Promise<S
 test.describe(`Crimson Nebula ${CRIMSON_GALAXY}`, () => {
   test('a danger zone warns, then turns lethal, and a mine arms, then blasts', async ({ page, isMobile }) => {
     await openGame(page, { seed: seedFor('crimson-hazards'), galaxy: CRIMSON_GALAXY, lives: WATCH_LIVES });
-    await start(page, isMobile);
+    await startRun(page, isMobile);
 
     const warned = warnedSeconds(CRIMSON_GALAXY, 'dangerZone');
     await fastForward(page, warned);
@@ -118,7 +111,7 @@ test.describe(`Crimson Nebula ${CRIMSON_GALAXY}`, () => {
 test.describe(`a gunship in ${GUNSHIP_GALAXY}`, () => {
   test('winds up, then fires a bolt, and a bolt leaves across the field edge rather than wrapping', async ({ page, isMobile }) => {
     await openGame(page, { seed: seedFor('gunship-bolt'), galaxy: GUNSHIP_GALAXY, lives: WATCH_LIVES });
-    await start(page, isMobile);
+    await startRun(page, isMobile);
 
     const seen = await watch(page, GUNSHIP_WATCH_SECONDS, 'gunship');
     expect(seen.windup, 'a gunship winding up').not.toBeNull();
@@ -134,7 +127,7 @@ test.describe(`a gunship in ${GUNSHIP_GALAXY}`, () => {
 test.describe(`Void Rift ${VOID_RIFT_GALAXY}`, () => {
   test('a warp rift shows its two mouths as a warning, then opens them, with the idle ship still in play', { tag: '@desktop' }, async ({ page }) => {
     await openGame(page, { seed: seedFor('void-rift'), galaxy: VOID_RIFT_GALAXY });
-    await start(page, false);
+    await startRun(page, false);
 
     await fastForward(page, warnedSeconds(VOID_RIFT_GALAXY, 'warpRift'));
     const warning = await hazardOf(page, 'warpRift');
@@ -154,7 +147,7 @@ test.describe(`Void Rift ${VOID_RIFT_GALAXY}`, () => {
 test.describe(`Singularity ${SINGULARITY_GALAXY}`, () => {
   test('a black hole warns at the centre, then forms, and a ship it takes comes back clear of it', { tag: '@desktop' }, async ({ page }) => {
     await openGame(page, { seed: seedFor('singularity-hole'), galaxy: SINGULARITY_GALAXY });
-    await start(page, false);
+    await startRun(page, false);
 
     await fastForward(page, warnedSeconds(SINGULARITY_GALAXY, 'blackHole'));
     const { field } = await gameState(page);
