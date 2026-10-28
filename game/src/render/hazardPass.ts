@@ -254,11 +254,6 @@ function presenceOf(remaining: number, seconds: number): number {
   return Math.min(clamp((seconds - remaining) / FADE_IN_SECONDS, 0, 1), clamp(remaining / FADE_OUT_SECONDS, 0, 1));
 }
 
-/** How strongly an active well with `remaining` seconds to go is drawn: swirling up as it starts, fading as it ends. */
-export function wellPresence(remaining: number): number {
-  return presenceOf(remaining, WELL_SECONDS);
-}
-
 /** A wave from 0 to 1 and back, `hz` times a second, `time` seconds in. */
 const wave = (time: number, hz: number): number => 0.5 + 0.5 * Math.sin(time * TAU * hz);
 
@@ -311,7 +306,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   }
 
   function drawActive(well: Readonly<PointHazardState>, field: Field, look: SceneLook): void {
-    const shown = wellPresence(well.remaining);
+    const shown = presenceOf(well.remaining, WELL_SECONDS);
     const size = sizeOf(well.intensity);
     drawSwirl(well, size, size * (0.92 + 0.08 * shown), 1, shown, look, field);
   }

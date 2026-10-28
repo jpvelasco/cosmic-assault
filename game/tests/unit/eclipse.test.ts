@@ -22,8 +22,8 @@ const MAX_HP = 134;
 const EARLIER = { monolith: BOSSES.monolith, hiveCarrier: BOSSES.hiveCarrier, warden: BOSSES.warden, leviathan: BOSSES.leviathan };
 
 /** An Eclipse on a stub arena of `arena`'s field, with a bolt field and a foe field of its own. */
-const eclipse = (seed = 1, arena?: StubArena): BossRig => bossRig(DEF, createEclipse, MAX_HP, { seed, ...(arena === undefined ? {} : { arena }) });
-const fighting = (seed = 1, arena?: StubArena): BossRig => fightingRig(DEF, createEclipse, MAX_HP, { seed, ...(arena === undefined ? {} : { arena }) });
+const eclipse = (seed = 1, arena?: StubArena): BossRig => bossRig(DEF, createEclipse, MAX_HP, { seed, arena });
+const fighting = (seed = 1, arena?: StubArena): BossRig => fightingRig(DEF, createEclipse, MAX_HP, { seed, arena });
 
 const ATTACKS = createEclipse({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()), foes: eclipse().foes }).attacks;
 

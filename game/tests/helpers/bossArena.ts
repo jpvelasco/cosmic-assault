@@ -118,7 +118,7 @@ export interface BossRig {
 /** What a rig is made with: the fight's seed, its arena, and the seed of its foes' stream. */
 export interface RigOptions {
   readonly seed?: number;
-  readonly arena?: StubArena;
+  readonly arena?: StubArena | undefined;
   readonly foesSeed?: number;
 }
 
