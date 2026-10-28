@@ -1,8 +1,8 @@
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU } from '../math';
+import { type Point, TAU } from '../math';
 import { clearSlot } from './attacks';
-import type { AttackContext, BossPart, BossPhase, BossSetup, BossView, Point } from './behaviour';
+import type { AttackContext, BossPart, BossPhase, BossSetup, BossView } from './behaviour';
 import { bossHome } from './bossRules';
 
 /** A ring of turrets about a boss's core, as a boss's definition of it sets it up. */

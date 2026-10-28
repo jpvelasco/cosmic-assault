@@ -1,10 +1,9 @@
 import { FOES } from '../../content/foes';
 import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
-import type { Point } from '../boss/behaviour';
 import type { Foe } from '../foes/foe';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import { nudge } from '../math';
+import { nudge, type Point } from '../math';
 import { clearSpot, respawnBand, RESPAWN_MARGIN, type RespawnPart } from '../respawn';
 import { HazardSchedule } from './schedule';
 import type { ZoneBox } from './dangerZone';

@@ -1,6 +1,6 @@
 import { clamp } from '../../content/curves';
-import { outAndBack, TAU } from '../math';
-import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView, Point } from './behaviour';
+import { outAndBack, type Point, TAU } from '../math';
+import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView } from './behaviour';
 import { clearSlot } from './attacks';
 import { bossHome } from './bossRules';
 

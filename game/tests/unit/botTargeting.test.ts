@@ -4,7 +4,8 @@ import { chooseTarget, leadHeading, type Target } from '../../src/bot/targeting'
 import { createView, readView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { FoeKind } from '../../src/content/types';
-import type { BossPart, BossView, Point } from '../../src/sim/boss/behaviour';
+import type { Point } from '../../src/sim/math';
+import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Foe } from '../../src/sim/foes/foe';
 import { createRng } from '../../src/sim/rng';

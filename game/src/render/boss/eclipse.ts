@@ -1,8 +1,8 @@
 import type { PaletteId } from '../../content/types';
 import { launchSlot, launchSlotsFor } from '../../sim/boss/attacks';
-import type { BossPart, BossView, Point } from '../../sim/boss/behaviour';
+import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { ECLIPSE_REACH, ECLIPSE_WAVES, GROW_SECONDS } from '../../sim/boss/eclipse';
-import { TAU } from '../../sim/math';
+import { type Point, TAU } from '../../sim/math';
 import { blitCore, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { ECLIPSE_ART_REACH, paintCoronaShard, paintEclipseCore, paintSpoke, paintWarnRing } from './eclipseArt';
 import { PartClocks } from './partClocks';

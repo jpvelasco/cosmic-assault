@@ -3,10 +3,10 @@ import { clamp } from '../../content/curves';
 import type { AttackId } from '../../content/types';
 import { PLAYER } from '../config';
 import type { Field } from '../field';
-import { smoothstep, TAU, turnBetween } from '../math';
+import { type Point, smoothstep, TAU, turnBetween } from '../math';
 import { rescale } from '../wrap';
 import { dashAttack, fireBolt } from './attacks';
-import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossSetup, BossView, Point } from './behaviour';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossSetup, BossView } from './behaviour';
 import { SerpentTrail } from './serpentTrail';
 
 /** Its body: segments of this radius and HP, each this far along the head's trail from the next. */

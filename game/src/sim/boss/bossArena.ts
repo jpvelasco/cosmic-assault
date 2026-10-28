@@ -1,8 +1,8 @@
 import type { Field } from '../field';
-import type { Moving } from '../math';
+import type { Moving, Point } from '../math';
 import { clearSpot, RESPAWN_MARGIN } from '../respawn';
 import type { Arena } from '../rules';
-import type { BossView, Point } from './behaviour';
+import type { BossView } from './behaviour';
 import { BossRunner, type HitResult, type PartHitResult } from './bossRunner';
 
 /**

@@ -2,7 +2,8 @@ import type { BossDef } from '../../content/bosses';
 import { MIN_WINDUP_SECONDS } from '../../content/pacingRules';
 import type { AttackId } from '../../content/types';
 import type { Field } from '../field';
-import type { AttackSpec, BossBehaviour, BossPhase, BossThreat, BossView, Point } from './behaviour';
+import type { Point } from '../math';
+import type { AttackSpec, BossBehaviour, BossPhase, BossThreat, BossView } from './behaviour';
 
 // The rules every boss fight keeps, apart from the runner that steps one: where a boss arrives, where a shot does harm,
 // how its HP sets its phase, and what its definition and behaviour must hold. Where a ship respawns clear of it is

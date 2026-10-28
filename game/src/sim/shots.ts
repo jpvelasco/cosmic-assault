@@ -1,10 +1,9 @@
 import { clamp } from '../content/curves';
-import type { Point } from './boss/behaviour';
 import { HOMING, PROJECTILE } from './config';
 import type { SimEvent } from './events';
 import type { Field } from './field';
 import { removeFlagged, resetFlags } from './flagged';
-import { turnBetween } from './math';
+import { type Point, turnBetween } from './math';
 import { wingmanShot } from './pickups/wingman';
 import { FOE_DEFLECTED } from './foes/foeField';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';

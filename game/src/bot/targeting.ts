@@ -1,7 +1,7 @@
-import type { BossPart, BossView, Point } from '../sim/boss/behaviour';
+import type { BossPart, BossView } from '../sim/boss/behaviour';
 import { bossTarget } from '../sim/boss/bossRules';
 import { PLAYER, PROJECTILE, STEP_SECONDS } from '../sim/config';
-import { turnBetween } from '../sim/math';
+import { type Point, turnBetween } from '../sim/math';
 import { wrapDelta } from '../sim/wrap';
 import type { Foe } from '../sim/foes/foe';
 import type { BotView } from './view';

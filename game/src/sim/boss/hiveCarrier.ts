@@ -2,9 +2,9 @@ import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { smoothstep, TIME_EPSILON, turnBetween } from '../math';
+import { type Point, smoothstep, TIME_EPSILON, turnBetween } from '../math';
 import { clearSlot, hullPoint, lane, launchDrones, transientRock, turnToward } from './attacks';
-import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure, Point } from './behaviour';
+import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure } from './behaviour';
 
 /** Seconds the hangar stays open after each launch. */
 export const HANGAR_OPEN_SECONDS = 4;

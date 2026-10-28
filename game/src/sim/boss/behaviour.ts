@@ -2,16 +2,12 @@ import type { AttackId, BossId, FoeKind } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import type { Bolts } from '../foes/bolts';
+import type { Point } from '../math';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 
 export type BossState = 'intro' | 'fighting' | 'dying' | 'down';
 export type BossPhase = 1 | 2 | 3;
-
-export interface Point {
-  x: number;
-  y: number;
-}
 
 /**
  * A piece of a boss apart from its core, an orbiting shard say, with HP of its own. Parts are pooled: one at 0 HP is

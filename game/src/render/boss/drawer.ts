@@ -1,4 +1,5 @@
-import type { BossPart, BossView, Point } from '../../sim/boss/behaviour';
+import type { Point } from '../../sim/math';
+import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import type { Field } from '../../sim/field';
 import type { SimEvent } from '../../sim/events';
 import type { FieldPen } from '../fieldPen';

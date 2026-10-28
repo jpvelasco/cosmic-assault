@@ -3,8 +3,8 @@ import { BOLT, FOES } from '../../content/foes';
 import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU, TIME_EPSILON, turnBetween } from '../math';
-import type { AttackContext, AttackSpec, BossFoes, BossPart, BossPhase, BossView, Point } from './behaviour';
+import { type Point, TAU, TIME_EPSILON, turnBetween } from '../math';
+import type { AttackContext, AttackSpec, BossFoes, BossPart, BossPhase, BossView } from './behaviour';
 
 // The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
 // moves instead of copying them.

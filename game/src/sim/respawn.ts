@@ -1,4 +1,4 @@
-import type { Point } from './boss/behaviour';
+import type { Point } from './math';
 import { ASTEROID, PLAYER } from './config';
 import type { Field } from './field';
 import { zoneClearance, type ZoneBox } from './hazards/dangerZone';
