@@ -10,7 +10,8 @@ import type { Field } from '../../src/sim/field';
 import type { Bolt } from '../../src/sim/foes/bolts';
 import { Bolts } from '../../src/sim/foes/bolts';
 import type { Foe } from '../../src/sim/foes/foe';
-import { BlackHole, holeAcceleration, holeShare } from '../../src/sim/hazards/blackHole';
+import { BlackHole } from '../../src/sim/hazards/blackHole';
+import { holeAcceleration, holeShare } from '../../src/sim/hazards/pull';
 import { zoneClearance } from '../../src/sim/hazards/dangerZone';
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
@@ -18,8 +19,9 @@ import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
 import { RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { createRng } from '../../src/sim/rng';
 import { wrappedDistance } from '../../src/sim/wrap';
-import { foeAt } from '../helpers/foeAt';
+import { foeAt, hazardFoes } from '../helpers/foeAt';
 import { clearTime, CONTACT, flyOut, shipAt } from '../helpers/holeEscape';
+import { foeRig, placeFoe } from '../helpers/foeRig';
 
 const FIELD: Field = { width: 1280, height: FIELD_HEIGHT };
 const DT = STEP_SECONDS;
@@ -81,7 +83,7 @@ describe('the black hole\'s pull', () => {
   it('pulls a rock inward, speeding it no further than the hole\'s rock cap', () => {
     const rock = rockAt(3, CENTRE.x + 200, CENTRE.y);
     const field = holeField(START_AT + 1);
-    field.move(DT, shipAt(60, 60), [rock], [], []);
+    field.move(DT, shipAt(60, 60), [rock], hazardFoes(), []);
     expect(rock.vx).toBeLessThan(0);
     expect(Math.hypot(rock.vx, rock.vy)).toBeLessThanOrEqual(BLACK_HOLE.rockSpeedCap);
   });
@@ -89,7 +91,7 @@ describe('the black hole\'s pull', () => {
   it('pulls a foe that is pulled, and not one that steers itself', () => {
     const pulled = foeAt('splitter', CENTRE.x + 200, CENTRE.y, { id: 4 });
     const steering = foeAt('phaser', CENTRE.x - 200, CENTRE.y, { id: 5 });
-    holeField(START_AT + 1).move(DT, shipAt(60, 60), [], [pulled, steering], []);
+    holeField(START_AT + 1).move(DT, shipAt(60, 60), [], hazardFoes(pulled, steering), []);
     expect(pulled.vx).toBeLessThan(0);
     expect(steering.vx).toBe(0);
   });
@@ -150,21 +152,22 @@ describe('swallowing', () => {
     const inside = rockAt(10, CENTRE.x + 20, CENTRE.y, 15);
     const outside = rockAt(11, CENTRE.x + 200, CENTRE.y, 15);
     const rocks = [inside, outside];
-    holeField(START_AT + 1).move(DT, shipAt(60, 60), rocks, [], out);
+    holeField(START_AT + 1).move(DT, shipAt(60, 60), rocks, hazardFoes(), out);
     expect(rocks).toEqual([outside]);
     expect(out).toContainEqual({ type: 'asteroidLeft', id: 10 });
     expect(out.some((e) => e.type === 'asteroidDestroyed')).toBe(false);
   });
 
-  it('destroys a foe inside the horizon for 0 points, leaving nothing behind: foeDestroyed at 0, and its hp at 0', () => {
-    const out: SimEvent[] = [];
-    const inside = foeAt('splitter', CENTRE.x, CENTRE.y + 10, { id: 20 });
-    const outside = foeAt('drone', CENTRE.x + 200, CENTRE.y, { id: 21 });
-    holeField(START_AT + 1).move(DT, shipAt(60, 60), [], [inside, outside], out);
+  it('destroys a foe inside the horizon through the foe field for 0 points, leaving nothing behind: foeDestroyed at 0, and its hp at 0', () => {
+    const { foes, arena } = foeRig({ field: FIELD });
+    const inside = placeFoe(foes, 'splitter', CENTRE.x, CENTRE.y + 10);
+    const outside = placeFoe(foes, 'drone', CENTRE.x + 200, CENTRE.y);
+    arena.events.length = 0;
+    holeField(START_AT + 1).move(DT, shipAt(60, 60), [], foes, arena.events);
     expect(inside.hp).toBe(0);
     expect(outside.hp).toBeGreaterThan(0);
-    expect(out).toContainEqual({ type: 'foeDestroyed', id: 20, kind: 'splitter', x: inside.x, y: inside.y, points: 0 });
-    expect(out.some((e) => e.type === 'foeDestroyed' && e.id === 21)).toBe(false);
+    // A splitter broken by a shot leaves fragments; one the horizon takes leaves none.
+    expect(arena.events).toEqual([{ type: 'foeDestroyed', id: inside.id, kind: 'splitter', x: inside.x, y: inside.y, points: 0 }]);
   });
 
   it('clears a bolt inside the horizon, silently, and leaves the bolts outside it flying', () => {
@@ -172,7 +175,7 @@ describe('swallowing', () => {
     const bolts = boltsFor(out);
     bolts.fire(CENTRE.x + 20, CENTRE.y, 0, 230, 'drone');
     bolts.fire(CENTRE.x + 200, CENTRE.y, 0, 230, 'drone');
-    holeField(START_AT + 1).move(DT, shipAt(60, 60), [], [], out, bolts);
+    holeField(START_AT + 1).move(DT, shipAt(60, 60), [], hazardFoes(), out, bolts);
     expect(bolts.list.map((b: Readonly<Bolt>) => b.x)).toEqual([CENTRE.x + 200]);
   });
 
@@ -209,7 +212,7 @@ describe('the hole\'s life', () => {
   it('pulls nothing and strikes nothing while it only warns', () => {
     const rock = rockAt(3, CENTRE.x + 200, CENTRE.y);
     const field = holeField(START_AT - 1);
-    field.move(DT, shipAt(60, 60), [rock], [], []);
+    field.move(DT, shipAt(60, 60), [rock], hazardFoes(), []);
     expect(rock.vx).toBe(0);
   });
 
@@ -243,11 +246,11 @@ describe('the hole\'s life', () => {
   it('moves the respawn point off a swarm gathered on it, to a spot clear of every live foe and of the hole, the same for the same foes', () => {
     const hazards = holeField(START_AT + 1);
     const ship = shipAt(60, 60);
-    hazards.move(DT, ship, [], [], []);
+    hazards.move(DT, ship, [], hazardFoes(), []);
     const first = hazards.respawnPoint();
     if (first === null) throw new Error('the hole is active, so it has a respawn point');
     const swarm = [foeAt('drone', first.x, first.y, { id: 1 }), foeAt('drone', first.x + 30, first.y, { id: 2 }), foeAt('drone', first.x, first.y - 30, { id: 3 })];
-    hazards.move(DT, ship, [], swarm, []);
+    hazards.move(DT, ship, [], hazardFoes(...swarm), []);
     const moved = hazards.respawnPoint();
     if (moved === null) throw new Error('the hole is active, so it has a respawn point');
     for (const foe of swarm) expect(Math.hypot(moved.x - foe.x, moved.y - foe.y) - foe.radius).toBeGreaterThanOrEqual(RESPAWN_MARGIN);

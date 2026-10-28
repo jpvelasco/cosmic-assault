@@ -9,6 +9,7 @@ import type { SimEvent } from '../../src/sim/events';
 import { comboMultiplier } from '../../src/sim/scoring';
 import { World } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
+import { placeFoe } from '../helpers/foeRig';
 
 const FIELD = { width: 1280, height: 720 };
 const CENTRE = { x: 640, y: 360, angle: -Math.PI / 2 };
@@ -83,12 +84,7 @@ describe('a Field Bomb', () => {
     const w = world();
     const foes = run(w)['foes'];
     const roll = vi.spyOn(run(w)['pickupField'], 'roll');
-    for (const x of [700, 640 + 220 + 30 - 1, 640 + 220 + 30 + 1]) {
-      const foe = foes.acquire('splitter');
-      if (foe === null) throw new Error('foe pool full');
-      Object.assign(foe, { x, y: 360 });
-      foes.commit(foe);
-    }
+    for (const x of [700, 640 + 220 + 30 - 1, 640 + 220 + 30 + 1]) placeFoe(foes, 'splitter', x, 360);
     const events = collectAtShip(w, 'fieldBomb');
     const destroyed = ofType(events, 'foeDestroyed');
     expect(destroyed.map((e) => e.x)).toEqual([700, 640 + 220 + 30 - 1]);
@@ -104,10 +100,7 @@ describe('a blast across the wrap', () => {
     // The ship sits 20 in from the right edge; the rock 40 past the left edge is 80 away across the wrap band.
     const w = world([still(-40, 360, 3), still(640, 360, 3)], { x: 1260, y: 360, angle: 0 });
     const foes = run(w)['foes'];
-    const foe = foes.acquire('drone');
-    if (foe === null) throw new Error('foe pool full');
-    Object.assign(foe, { x: 1260, y: -30 });
-    foes.commit(foe);
+    placeFoe(foes, 'drone', 1260, -30);
     const events = collectAtShip(w, 'fieldBomb');
     expect(ofType(events, 'asteroidDestroyed').map((e) => e.x)).toEqual([-40]);
     expect(w.asteroids.map((a) => a.x)).toEqual([640]);

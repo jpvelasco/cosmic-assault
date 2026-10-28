@@ -4,6 +4,7 @@ import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import type { Bolts } from '../foes/bolts';
 import type { Foe } from '../foes/foe';
+import type { FoeField } from '../foes/foeField';
 import type { Moving } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
@@ -24,11 +25,14 @@ export interface Circle {
 /** What a hazard may do to the galaxy's bolts: read them, and clear the ones a black hole's horizon reaches. */
 export type HazardBolts = Pick<Bolts, 'list' | 'clearWithin'>;
 
+/** What a hazard may do to the foes: read them, and destroy the ones a black hole's horizon swallows. */
+export type HazardFoes = Pick<FoeField, 'list' | 'swallow'>;
+
 /** What a hazard can act on: the ship and the World's own rock list, and the foes. */
 export interface Bodies {
   readonly ship: Ship;
   readonly rocks: Asteroid[];
-  readonly foes: readonly Foe[];
+  readonly foes: HazardFoes;
   /**
    * The galaxy's hostile bolts: a rift jump may leave the ship in one's path, which grants it a windup's grace, and a black
    * hole's horizon clears the ones that reach it. Null where the galaxy has none (a bare field, a practice run).

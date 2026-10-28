@@ -14,6 +14,7 @@ import { createShip, type Ship } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
 import { auditTelegraphs, type TimedEvent } from '../helpers/telegraphAudit';
+import { hazardFoes } from '../helpers/foeAt';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const FIELD_43: Field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
@@ -34,7 +35,7 @@ function play(events: readonly GalaxyEvent[], opts: { seed?: number; field?: Fie
   for (let i = 1; i <= Math.round(seconds / DT); i++) {
     const t = i * DT;
     out.length = 0;
-    hazards.move(DT, ship, [], [], []);
+    hazards.move(DT, ship, [], hazardFoes(), []);
     hazards.step(t, field, out);
     for (const event of out) log.push({ elapsed: t, event: { ...event } });
     each?.(hazards, t);

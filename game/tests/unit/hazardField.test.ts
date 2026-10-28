@@ -6,7 +6,7 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { galaxyStreams } from '../../src/sim/galaxy/streams';
-import { wellAcceleration } from '../../src/sim/hazards/forceField';
+import { wellAcceleration } from '../../src/sim/hazards/pull';
 import type { Hazard, HazardFactory, HazardSetup, HazardState, PointHazardState } from '../../src/sim/hazards/hazard';
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt } from '../../src/sim/hazards/shipPull';
@@ -17,7 +17,7 @@ import { createShip } from '../../src/sim/ship';
 import type { SimEvent } from '../../src/sim/events';
 import type { Foe } from '../../src/sim/foes/foe';
 import { World } from '../../src/sim/world';
-import { foeAt } from '../helpers/foeAt';
+import { foeAt, hazardFoes } from '../helpers/foeAt';
 import { calmGalaxy } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -161,13 +161,13 @@ describe('HazardField', () => {
     const expected = { vx: 12, vy: -7 };
     const pull = shipPullAt(hazards.states, ship.x, ship.y, DT, { x: 0, y: 0 });
     nudge(expected, pull.x, pull.y, WELL_SPEED_CAP);
-    hazards.move(DT, ship, [], [], []);
+    hazards.move(DT, ship, [], hazardFoes(), []);
     expect({ vx: ship.vx, vy: ship.vy }).toEqual(expected);
   });
 
   it('caps the stacked pull on the ship at MAX_SHIP_PULL', () => {
     const ship = createShip(600, 360);
-    holding(active('gravityWell', 650, 360), active('gravityWell', 650, 360, 1, 2)).move(DT, ship, [], [], []);
+    holding(active('gravityWell', 650, 360), active('gravityWell', 650, 360, 1, 2)).move(DT, ship, [], hazardFoes(), []);
     expect(ship.vx).toBeCloseTo(MAX_SHIP_PULL * DT, 12);
     expect(ship.vy).toBe(0);
   });
@@ -175,16 +175,16 @@ describe('HazardField', () => {
   it('never speeds the ship past 300 units/s by pulling, and never slows a faster ship', () => {
     const ship = Object.assign(createShip(600, 360), { vx: WELL_SPEED_CAP - 0.1 });
     const hazards = holding(active('gravityWell', 650, 360));
-    hazards.move(DT, ship, [], [], []);
+    hazards.move(DT, ship, [], hazardFoes(), []);
     expect(Math.hypot(ship.vx, ship.vy)).toBeCloseTo(WELL_SPEED_CAP, 9);
     ship.vx = 340;
-    hazards.move(DT, ship, [], [], []);
+    hazards.move(DT, ship, [], hazardFoes(), []);
     expect(ship.vx).toBeCloseTo(340, 9);
   });
 
   it('leaves the ship alone when nothing pulls it, not even turning -0 into 0', () => {
     const ship = Object.assign(createShip(600, 360), { vx: -0, vy: 5 });
-    holding({ ...active('gravityWell', 650, 360), stage: 'warning' }).move(DT, ship, [], [], []);
+    holding({ ...active('gravityWell', 650, 360), stage: 'warning' }).move(DT, ship, [], hazardFoes(), []);
     expect(Object.is(ship.vx, -0)).toBe(true);
   });
 
@@ -198,7 +198,7 @@ describe('HazardField', () => {
   it('carries bodies after the pull, for teleports and swallowing', () => {
     const order: string[] = [];
     const hazards = field([event('gravityWell')], { gravityWell: () => standIn({ pull: () => order.push('pull'), carry: () => order.push('carry') }) });
-    hazards.move(DT, createShip(0, 0), [], [], []);
+    hazards.move(DT, createShip(0, 0), [], hazardFoes(), []);
     expect(order).toEqual(['pull', 'carry']);
   });
 
@@ -212,7 +212,7 @@ describe('HazardField', () => {
   it('keeps placed hazards out of the centre, the spot a respawn takes with nothing in the way by a respawn\'s margin, and the ship\'s safe radius', () => {
     const ship = createShip(100, 200);
     const hazards = field([event('gravityWell')], { gravityWell: () => standIn({ respawnSpot: () => ({ x: 640, y: 576 }), respawnPoint: () => ({ x: 1, y: 1 }) }) });
-    hazards.move(DT, ship, [], [], []);
+    hazards.move(DT, ship, [], hazardFoes(), []);
     expect(ASTEROID.safeRadius).toBe(150);
     expect(hazards.keepOuts(FIELD)).toEqual([
       { x: 640, y: 360, r: 150 },
@@ -221,7 +221,7 @@ describe('HazardField', () => {
     ]);
     const plain = field([event('gravityWell')], { gravityWell: () => standIn() });
     expect(plain.keepOuts(FIELD), 'no ship moved yet').toHaveLength(1);
-    plain.move(DT, ship, [], [], []);
+    plain.move(DT, ship, [], hazardFoes(), []);
     expect(plain.keepOuts(FIELD)).toHaveLength(2);
   });
 
@@ -237,7 +237,7 @@ describe('HazardField', () => {
         hazards.step(t, FIELD, out);
         const spot = crowded ? hazards.respawnPoint() : null;
         if (spot !== null && foes.length < 12) foes.push(foeAt('drone', spot.x, spot.y, { id: foes.length + 1 }));
-        hazards.move(DT, ship, [], foes, []);
+        hazards.move(DT, ship, [], hazardFoes(...foes), []);
       }
       return out.filter((e) => e.type === 'riftWarning' || e.type === 'zoneWarning');
     }
@@ -249,7 +249,7 @@ describe('HazardField', () => {
   it('hands each hazard the keep-outs, read when it places, from the ship it last moved', () => {
     let setup: HazardSetup | null = null;
     const ship = createShip(10, 20);
-    field([event('gravityWell')], { gravityWell: (s) => ((setup = s), standIn()) }).move(DT, ship, [], [], []);
+    field([event('gravityWell')], { gravityWell: (s) => ((setup = s), standIn()) }).move(DT, ship, [], hazardFoes(), []);
     ship.x = 300;
     expect((setup as HazardSetup | null)?.keepOuts(FIELD).at(-1)).toEqual({ x: 300, y: 20, r: ASTEROID.safeRadius });
   });

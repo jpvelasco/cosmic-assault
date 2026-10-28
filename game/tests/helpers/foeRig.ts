@@ -1,5 +1,6 @@
 import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
+import type { FoeKind } from '../../src/content/types';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
 import type { Foe } from '../../src/sim/foes/foe';
@@ -59,5 +60,14 @@ export function runFoes(r: FoeRig, seconds: number, each?: (t: number) => void):
 export function onlyFoe(r: FoeRig): Foe {
   const foe = r.foes.list[0];
   if (foe === undefined) throw new Error('a foe should have arrived: spawn one first');
+  return foe;
+}
+
+/** Brings a foe of `kind` onto `foes` at (x, y), any other field set from `over`, as a spawn would: fails if the pool is full. */
+export function placeFoe(foes: FoeField, kind: FoeKind, x: number, y: number, over: Partial<Foe> = {}): Foe {
+  const foe = foes.acquire(kind);
+  if (foe === null) throw new Error(`the foe pool is full: no room to place a ${kind}`);
+  Object.assign(foe, { x, y, ...over });
+  foes.commit(foe);
   return foe;
 }

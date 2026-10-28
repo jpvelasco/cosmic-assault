@@ -4,6 +4,7 @@ import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { hazardStreams, HazardField } from '../../src/sim/hazards/hazardField';
 import { createShip } from '../../src/sim/ship';
+import { hazardFoes } from './foeAt';
 
 /** Every body radius a jump can carry: the ship, a small rock, a foe, and a large rock. */
 export const JUMP_RADII = [PLAYER.radius, 15, 40, ASTEROID.radii[0]];
@@ -33,7 +34,7 @@ export function strobeGaps(seed: number, field: Field): { readonly where: string
   const ship = createShip(5, 5);
   ship.invulnerable = false;
   const hazards = new HazardField([{ at: RIFT_AT, type: 'warpRift', intensity: 2 }], hazardStreams(seed), () => ++id);
-  hazards.move(0, ship, [], [], []);
+  hazards.move(0, ship, [], hazardFoes(), []);
   for (let t = STEP_SECONDS; t <= SWEEP_FROM + 1e-9; t += STEP_SECONDS) hazards.step(t, field, []);
   const entries = hazards.states.flatMap((state) => (state.type === 'warpRift' ? [{ x: state.x, y: state.y }, { x: state.toX, y: state.toY }] : []));
   const gaps: { where: string; gap: number }[] = [];
@@ -47,7 +48,7 @@ export function strobeGaps(seed: number, field: Field): { readonly where: string
           hazards.step(SWEEP_FROM + (step + 1) * STEP_SECONDS, field, out);
           rock.px = rock.x;
           rock.py = rock.y;
-          hazards.move(STEP_SECONDS, ship, [rock], [], out);
+          hazards.move(STEP_SECONDS, ship, [rock], hazardFoes(), out);
           if (out.some((e) => e.type === 'riftJump' && !e.ship)) jumpSteps.push(step);
           rock.x += rock.vx * STEP_SECONDS;
           rock.y += rock.vy * STEP_SECONDS;

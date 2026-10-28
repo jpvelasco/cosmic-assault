@@ -1,26 +1,13 @@
-import { FOES } from '../../content/foes';
 import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
 import type { Foe } from '../foes/foe';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import { nudge, type Point } from '../math';
+import type { Point } from '../math';
 import { clearSpot, respawnBand, RESPAWN_MARGIN, type RespawnPart } from '../respawn';
-import { HazardSchedule } from './schedule';
+import { HazardSchedule, ScheduledHazard } from './schedule';
 import type { ZoneBox } from './dangerZone';
-import type { Bodies, Hazard, HazardSetup, HazardState, PointHazardState, Pullable } from './hazard';
-
-/** The pull a black hole of `intensity` has on a body `distance` away: `min(maxAccel, strength · intensity / max(r, minRadius))`. */
-export function holeAcceleration(distance: number, intensity: number): number {
-  return Math.min(BLACK_HOLE.maxAccel, (BLACK_HOLE.strength * intensity) / Math.max(distance, BLACK_HOLE.minRadius));
-}
-
-/**
- * The share of a body's offset to a hole of `intensity`, `distance` away, that is its velocity change over `dt` (over
- * 1 s, its acceleration); 0 at the centre itself. Multiply it by the offset (toward the hole) to get the change.
- */
-export function holeShare(distance: number, intensity: number, dt: number): number {
-  return distance === 0 ? 0 : (holeAcceleration(distance, intensity) * dt) / distance;
-}
+import type { Bodies, Hazard, HazardSetup, HazardState, PointHazardState } from './hazard';
+import { pullBodies, type PulledBodies } from './pull';
 
 /** A hair past a ring's radius, so a spot placed on it is not judged inside it by rounding. */
 const RING_SLACK = 1;
@@ -50,19 +37,16 @@ interface Hole extends PointHazardState {
  * shots that reach it for no points and no drop; touching it costs the ship a life; and a respawning ship comes back at
  * its respawn point from its warning on. It draws from no stream: its place is the field's centre.
  */
-export class BlackHole implements Hazard {
-  private readonly nextId: () => number;
+export class BlackHole extends ScheduledHazard<Hole> implements Hazard {
   private readonly inPlay: () => readonly Readonly<HazardState>[];
-  private readonly schedule: HazardSchedule<Hole>;
-  /** The field as of the last step or resize; null before the first. */
-  private field: Field | null = null;
+  protected readonly schedule: HazardSchedule<Hole>;
 
   constructor({ events, nextId, inPlay }: HazardSetup) {
-    this.nextId = nextId;
+    super();
     this.inPlay = inPlay;
     this.schedule = new HazardSchedule<Hole>(events, HAZARD_RULES.blackHole.telegraph, {
       warn: (event, elapsed, field, into, out) => {
-        const id = this.nextId();
+        const id = nextId();
         const x = field.width / 2;
         const y = field.height / 2;
         out.push({ type: 'holeWarning', id, x, y, at: event.at });
@@ -77,21 +61,10 @@ export class BlackHole implements Hazard {
     });
   }
 
-  get states(): readonly HazardState[] {
-    return this.schedule.live;
-  }
-
-  step(elapsed: number, field: Field, out: SimEvent[]): void {
-    this.field = field;
-    this.schedule.step(elapsed, field, out);
-  }
-
-  /** The hole's pull on the rocks and the foes it pulls, by `dt` seconds of it; the ship's is `shipPullAt`'s. */
-  pull(dt: number, { rocks, foes }: Pick<Bodies, 'rocks' | 'foes'>): void {
+  /** The hole's pull on the rocks and the foes it pulls, by `dt` seconds of it, none past `BLACK_HOLE.rockSpeedCap`; the ship's is `shipPullAt`'s. */
+  pull(dt: number, bodies: PulledBodies): void {
     const hole = this.active();
-    if (hole === null) return;
-    for (const rock of rocks) this.pullBody(hole, rock, dt);
-    for (const foe of foes) if (FOES[foe.kind].pulled) this.pullBody(hole, foe, dt);
+    if (hole !== null) pullBodies(hole, bodies, dt, BLACK_HOLE.rockSpeedCap);
   }
 
   /** Swallows the rocks, foes and bolts the horizon reaches, for no points and no drop. */
@@ -105,12 +78,8 @@ export class BlackHole implements Hazard {
       else rocks[kept++] = rock;
     }
     rocks.length = kept;
-    for (const foe of bodies.foes) {
-      if (foe.hp > 0 && this.touches(hole, foe.x, foe.y, foe.radius)) {
-        foe.hp = 0;
-        out.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points: 0 });
-      }
-    }
+    const { foes } = bodies;
+    for (const foe of foes.list) if (foe.hp > 0 && this.touches(hole, foe.x, foe.y, foe.radius)) foes.swallow(foe);
     bodies.bolts?.clearWithin(hole.x, hole.y, BLACK_HOLE.horizon);
   }
 
@@ -149,15 +118,6 @@ export class BlackHole implements Hazard {
     return this.ring(field)[0] ?? null;
   }
 
-  resize(old: Field, field: Field): void {
-    this.field = field;
-    this.centre(field);
-  }
-
-  stop(): void {
-    this.schedule.stop();
-  }
-
   /** The spots a respawn tries first while the hole is warning or active: a respawn's margin outside its `exitReach`. */
   private ring(field: Field): Point[] {
     const hole = this.schedule.live[0];
@@ -170,24 +130,14 @@ export class BlackHole implements Hazard {
     return hole?.stage === 'active' ? hole : null;
   }
 
-  /** Keeps every hole at the centre of `field`, as a resize leaves it. */
-  private centre(field: Field): void {
-    for (const hole of this.schedule.live) {
-      hole.x = field.width / 2;
-      hole.y = field.height / 2;
-    }
+  /** Keeps the hole at the centre of `field`, as a resize leaves it. */
+  protected override rescaleState(hole: Hole, old: Field, field: Field): void {
+    hole.x = field.width / 2;
+    hole.y = field.height / 2;
   }
 
   /** Whether a body of radius `r` at (x, y) reaches the horizon of `hole`. */
   private touches(hole: Readonly<Hole>, x: number, y: number, r: number): boolean {
     return Math.hypot(x - hole.x, y - hole.y) < BLACK_HOLE.horizon + r;
-  }
-
-  /** Speeds `body` toward the hole by its share of the pull, but not past `BLACK_HOLE.rockSpeedCap`. */
-  private pullBody(hole: Readonly<Hole>, body: Pullable, dt: number): void {
-    const dx = hole.x - body.x;
-    const dy = hole.y - body.y;
-    const share = holeShare(Math.hypot(dx, dy), hole.intensity, dt);
-    if (share !== 0) nudge(body, dx * share, dy * share, BLACK_HOLE.rockSpeedCap);
   }
 }

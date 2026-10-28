@@ -5,8 +5,6 @@ import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import type { HazardBolts } from './hazard';
-import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
 import { RESPAWN_MARGIN } from '../respawn';
 import { createRng, deriveSeed, type Rng } from '../rng';
@@ -14,7 +12,7 @@ import type { Ship } from '../ship';
 import { BlackHole } from './blackHole';
 import { DangerZones } from './dangerZone';
 import { ForceField } from './forceField';
-import type { Bodies, Circle, Hazard, HazardFactory, HazardState } from './hazard';
+import type { Bodies, Circle, Hazard, HazardBolts, HazardFactory, HazardFoes, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
 import { WarpRifts } from './warpRift';
 
@@ -90,7 +88,7 @@ export class HazardField {
    * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it always has:
    * invulnerability spares the ship collisions, not physics.
    */
-  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: HazardBolts | null = null): void {
+  move(dt: number, ship: Ship, rocks: Asteroid[], foes: HazardFoes, out: SimEvent[], bolts: HazardBolts | null = null): void {
     const bodies = (this.bodies ??= { ship, rocks, foes, bolts });
     bodies.ship = ship;
     bodies.rocks = rocks;
@@ -116,7 +114,7 @@ export class HazardField {
 
   /** Where a respawning ship must come back, if an active hazard says so, clear of the foes as of the last move; else null. */
   respawnPoint(): Readonly<{ x: number; y: number }> | null {
-    const foes = this.bodies?.foes ?? [];
+    const foes = this.bodies?.foes.list ?? [];
     for (const hazard of this.hazards) {
       const spot = hazard.respawnPoint?.(foes) ?? null;
       if (spot !== null) return spot;

@@ -12,7 +12,7 @@ import type { Ship } from '../ship';
 import { rescale, wrapDelta, wrapPosition } from '../wrap';
 import { zoneClearance, zoneKeepOutBoxes, type ZoneBox } from './dangerZone';
 import type { Bodies, Circle, Hazard, HazardSetup, HazardState, RiftState } from './hazard';
-import { HazardSchedule } from './schedule';
+import { HazardSchedule, ScheduledHazard } from './schedule';
 
 /** The grid a mouth is placed on, in field units: fine enough to find a spot on any field the game plays at. */
 const GRID_STEP = 10;
@@ -109,21 +109,20 @@ function touchesWithin(field: Field, ship: Readonly<Ship>, body: Mover, radius: 
  * from their pair: placed from their own stream. While a black hole is in play they also keep out of its reach, on the
  * first of `HOLE_RUNGS` that leaves room, and a pair with room on neither is not placed.
  */
-export class WarpRifts implements Hazard {
+export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
   private readonly rng: Rng;
   private readonly nextId: () => number;
   private readonly keepOuts: (field: Field) => readonly Circle[];
   private readonly inPlay: () => readonly Readonly<HazardState>[];
   /** The schedule, holding the pairs warning or open: none, or up to two. */
-  private readonly schedule: HazardSchedule<Pair>;
-  /** The field the mouths lie in, as of the last step or resize; null before the first step. */
-  private field: Field | null = null;
+  protected readonly schedule: HazardSchedule<Pair>;
   /** The galaxy's seconds as of the last step. */
   private elapsed = 0;
   /** Bodies that have jumped, by id, and the seconds each may jump again at: a body rests `WARP_RIFT.rest` after a jump. */
   private readonly rested = new Map<number, number>();
 
   constructor({ events, rng, nextId, keepOuts, inPlay }: HazardSetup) {
+    super();
     this.rng = rng;
     this.nextId = nextId;
     this.keepOuts = keepOuts;
@@ -141,28 +140,9 @@ export class WarpRifts implements Hazard {
     });
   }
 
-  get states(): readonly HazardState[] {
-    return this.schedule.live;
-  }
-
-  step(elapsed: number, field: Field, out: SimEvent[]): void {
-    this.field = field;
+  override step(elapsed: number, field: Field, out: SimEvent[]): void {
     this.elapsed = elapsed;
-    this.schedule.step(elapsed, field, out);
-  }
-
-  resize(old: Field, field: Field): void {
-    this.field = field;
-    for (const pair of this.schedule.live) {
-      pair.x = rescale(pair.x, old.width, field.width);
-      pair.y = rescale(pair.y, old.height, field.height);
-      pair.toX = rescale(pair.toX, old.width, field.width);
-      pair.toY = rescale(pair.toY, old.height, field.height);
-    }
-  }
-
-  stop(): void {
-    this.schedule.stop();
+    super.step(elapsed, field, out);
   }
 
   /**
@@ -178,7 +158,7 @@ export class WarpRifts implements Hazard {
     const shipJumped = this.carryBody(field, ship, PLAYER.radius, SHIP_KEY, true, out);
     for (const rock of bodies.rocks) this.carryOther(field, ship, rock, rock.radius, rock.id, shipJumped, true, out);
     // A phaser that is warning is on its way to its blink spot: carrying it would leave its blink spot where it is not.
-    for (const foe of bodies.foes) {
+    for (const foe of bodies.foes.list) {
       const jumped = this.carryOther(field, ship, foe, foe.radius, foe.id, shipJumped, !(foe.kind === 'phaser' && foe.charging), out);
       // A charging mine that blasts within the windup reaches the ship by its blast radius, whether the mine or the ship jumped.
       if ((shipJumped || jumped) && foe.kind === 'mine' && foe.charging && foe.timer <= MIN_WINDUP_SECONDS) this.grace(field, ship, foe, MINE.blastRadius, foe.timer);
@@ -288,6 +268,13 @@ export class WarpRifts implements Hazard {
     body.px = body.x;
     body.py = body.y;
     out.push({ type: 'riftJump', id: pair.id, x: fromX, y: fromY, toX, toY, ship });
+  }
+
+  /** Stretches both of the pair's mouths to the new field. */
+  protected override rescaleState(pair: Pair, old: Field, field: Field): void {
+    super.rescaleState(pair, old, field);
+    pair.toX = rescale(pair.toX, old.width, field.width);
+    pair.toY = rescale(pair.toY, old.height, field.height);
   }
 
   /** Grants the ship its invulnerability for a windup if `body` (of `radius`) reaches it within `seconds`. */

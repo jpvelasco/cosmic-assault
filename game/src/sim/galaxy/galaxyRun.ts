@@ -170,7 +170,7 @@ export class GalaxyRun implements Spawner {
    * and the bolts move, at the enemies' time scale.
    */
   moveOwn(dt: number, ship: Ship): void {
-    this.hazards.move(dt, ship, this.arena.asteroids, this.foes.list, this.arena.events, this.bolts);
+    this.hazards.move(dt, ship, this.arena.asteroids, this.foes, this.arena.events, this.bolts);
     this.bosses.shove(ship);
     const enemyDt = dt * this.enemyTimeScale();
     this.foes.step(enemyDt);

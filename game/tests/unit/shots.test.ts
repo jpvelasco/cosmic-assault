@@ -12,6 +12,7 @@ import { createShip, type Shot } from '../../src/sim/ship';
 import { PlayerShots, type ShotRules, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
+import { placeFoe } from '../helpers/foeRig';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
@@ -267,12 +268,7 @@ describe('player shots in a galaxy', () => {
     const w = world(['piercingBeam']);
     const foes = w['run']?.['foes'];
     if (foes === undefined) throw new Error('no foes');
-    for (const x of [400, 412]) {
-      const foe = foes.acquire('splitter');
-      if (foe === null) throw new Error('foe pool full');
-      Object.assign(foe, { x, y: 360, hp: 5 });
-      foes.commit(foe);
-    }
+    for (const x of [400, 412]) placeFoe(foes, 'splitter', x, 360, { hp: 5 });
     const log = fireOnce(w, 0.6);
     const hits = log.filter((e): e is Extract<SimEvent, { type: 'foeHit' }> => e.type === 'foeHit');
     expect(hits.map((e) => e.hp)).toEqual([4, 4]);

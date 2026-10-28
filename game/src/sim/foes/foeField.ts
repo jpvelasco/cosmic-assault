@@ -210,6 +210,12 @@ export class FoeField implements FoeWorld, BossFoes {
     return false;
   }
 
+  /** A black hole's horizon has taken `foe`: it is destroyed for 0 points, leaving nothing behind. */
+  swallow(foe: Foe): void {
+    foe.hp = 0;
+    this.destroy(foe, 0, false);
+  }
+
   /** Clears every foe for 0 points, with no fragments: the galaxy is over. */
   clear(): void {
     for (const foe of this.pool.live) this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points: 0 });

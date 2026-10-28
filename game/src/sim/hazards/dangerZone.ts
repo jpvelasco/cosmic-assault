@@ -3,9 +3,9 @@ import type { GalaxyEvent } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import type { Rng } from '../rng';
-import { rescale, wrapDelta } from '../wrap';
+import { wrapDelta } from '../wrap';
 import type { Circle, Hazard, HazardSetup, HazardState, ZoneState } from './hazard';
-import { HazardSchedule } from './schedule';
+import { HazardSchedule, ScheduledHazard } from './schedule';
 
 /** A zone's place and size: the `w` by `h` rectangle centred on (x, y). */
 export type ZoneBox = Readonly<Pick<ZoneState, 'x' | 'y' | 'w' | 'h'>>;
@@ -55,16 +55,15 @@ interface Zone extends ZoneState {
  * They are placed inside the field, clear of each other and of every keep-out as they warn (the field's centre, the
  * spot a respawn takes with nothing in the way, and the ship), from their own stream.
  */
-export class DangerZones implements Hazard {
+export class DangerZones extends ScheduledHazard<Zone> implements Hazard {
   private readonly rng: Rng;
   private readonly nextId: () => number;
   private readonly keepOuts: (field: Field) => readonly Circle[];
   /** The schedule, holding the zones warning or active: none, one or two. */
-  private readonly schedule: HazardSchedule<Zone>;
-  /** The field the zones lie in, as of the last step or resize; null before the first step. */
-  private field: Field | null = null;
+  protected readonly schedule: HazardSchedule<Zone>;
 
   constructor({ events, rng, nextId, keepOuts }: HazardSetup) {
+    super();
     this.rng = rng;
     this.nextId = nextId;
     this.keepOuts = keepOuts;
@@ -81,33 +80,12 @@ export class DangerZones implements Hazard {
     });
   }
 
-  get states(): readonly HazardState[] {
-    return this.schedule.live;
-  }
-
-  step(elapsed: number, field: Field, out: SimEvent[]): void {
-    this.field = field;
-    this.schedule.step(elapsed, field, out);
-  }
-
   /** True when a ship of radius `r` at (x, y) touches an active zone, measured across the wrap of the field it was last stepped in. */
   strikes(x: number, y: number, r: number): boolean {
     const field = this.field;
     if (field === null) return false;
     for (const zone of this.schedule.live) if (zone.stage === 'active' && zoneClearance(field, zone, x, y) < r) return true;
     return false;
-  }
-
-  resize(old: Field, field: Field): void {
-    this.field = field;
-    for (const zone of this.schedule.live) {
-      zone.x = rescale(zone.x, old.width, field.width);
-      zone.y = rescale(zone.y, old.height, field.height);
-    }
-  }
-
-  stop(): void {
-    this.schedule.stop();
   }
 
   /** Shows the event's zones into `into`, one per intensity up to two, each where it fits. */

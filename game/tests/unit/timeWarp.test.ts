@@ -8,6 +8,7 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
 import { calmGalaxy } from '../helpers/mute';
 import { practiceScript } from '../helpers/practiceLog';
+import { placeFoe } from '../helpers/foeRig';
 
 const FIELD = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
@@ -40,10 +41,7 @@ describe('Time Warp', () => {
       const w = world(calmGalaxy('5-2'), { rocks: [{ x: 300, y: 200, size: 1, angle: 0.4, speedMultiplier: 1 }] });
       const run = w['run'];
       if (run === null) throw new Error('not a galaxy');
-      const foe = run['foes'].acquire('splitter');
-      if (foe === null) throw new Error('foe pool full');
-      Object.assign(foe, { x: 900, y: 500, vx: 60, vy: -30 });
-      run['foes'].commit(foe);
+      const foe = placeFoe(run['foes'], 'splitter', 900, 500, { vx: 60, vy: -30 });
       run['pickupField'].list.push({ id: 1, kind: 'shield', x: 100, y: 600, px: 100, py: 600, vx: 20, vy: 0, expiresIn: PICKUP.lifespan });
       if (warp) run.loadout.collect('timeWarp');
       const rock = w.asteroids[0];

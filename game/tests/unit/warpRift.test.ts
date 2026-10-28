@@ -17,7 +17,7 @@ import { createShip } from '../../src/sim/ship';
 import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT } from '../../src/sim/config';
 import { zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
 import type { Asteroid } from '../../src/sim/asteroid';
-import { foeAt } from '../helpers/foeAt';
+import { foeAt, hazardFoes } from '../helpers/foeAt';
 import { JUMP_HEADINGS, JUMP_RADII, QUARTER_SECOND_STEPS, rockAt, strobeGaps } from '../helpers/riftStrobe';
 
 const FIELD_43: Field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
@@ -41,7 +41,7 @@ function rig(opts: { seed?: number; field?: Field; intensity?: 1 | 2 | 3; at?: n
   const hazards = new HazardField(events, streams, () => ++lastId);
   const ship = createShip(opts.ship?.x ?? field.width / 2, opts.ship?.y ?? field.height / 2);
   ship.invulnerable = false;
-  hazards.move(0, ship, [], [], []);
+  hazards.move(0, ship, [], hazardFoes(), []);
   return { hazards, ship, events: [] };
 }
 
@@ -137,7 +137,7 @@ describe('warp rift passage', () => {
     if (warned === undefined) return;
     r.ship.x = warned.x;
     r.ship.y = warned.y;
-    r.hazards.move(DT, r.ship, [], [], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(), []);
     expect(r.ship.x).toBe(warned.x);
     expect(r.ship.y).toBe(warned.y);
   });
@@ -152,7 +152,7 @@ describe('warp rift passage', () => {
     r.ship.vx = 100;
     r.ship.vy = 0;
     const out: SimEvent[] = [];
-    r.hazards.move(DT, r.ship, [], [], out);
+    r.hazards.move(DT, r.ship, [], hazardFoes(), out);
     const exit = { x: pair.toX, y: pair.toY };
     expect(dist(r.ship, exit)).toBeGreaterThanOrEqual(R + PLAYER.radius);
     expect(dist(r.ship, exit)).toBeLessThanOrEqual(R + PLAYER.radius + 4);
@@ -173,7 +173,7 @@ describe('warp rift passage', () => {
     r.ship.py = pair.y;
     r.ship.vx = 0;
     r.ship.vy = 80;
-    r.hazards.move(DT, r.ship, [], [], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(), []);
     expect(r.ship.px).toBe(r.ship.x);
     expect(r.ship.py).toBe(r.ship.y);
   });
@@ -186,7 +186,7 @@ describe('warp rift passage', () => {
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = r.ship.vy = 0;
-    r.hazards.move(DT, r.ship, [], [], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(), []);
     const awayAngle = Math.atan2(pair.toY - pair.y, pair.toX - pair.x);
     expect(Math.atan2(r.ship.y - pair.toY, r.ship.x - pair.toX)).toBeCloseTo(awayAngle, 6);
   });
@@ -202,7 +202,7 @@ describe('warp rift passage', () => {
     r.ship.vy = 0;
     const out: SimEvent[] = [];
     for (let i = 0; i < 120; i++) {
-      r.hazards.move(DT, r.ship, [], [], out);
+      r.hazards.move(DT, r.ship, [], hazardFoes(), out);
       r.ship.x += r.ship.vx * DT;
       r.ship.y += r.ship.vy * DT;
     }
@@ -216,7 +216,7 @@ describe('warp rift passage', () => {
     if (pair === undefined) throw new Error('a rift should be open');
     const rock = { id: 500, x: pair.x, y: pair.y, px: pair.x - 30, py: pair.y, vx: 0, vy: -90, radius: ASTEROID.radii[1], size: 1 } as unknown as Asteroid;
     const out: SimEvent[] = [];
-    r.hazards.move(DT, r.ship, [rock], [], out);
+    r.hazards.move(DT, r.ship, [rock], hazardFoes(), out);
     expect(dist(rock, { x: pair.toX, y: pair.toY })).toBeGreaterThanOrEqual(R + rock.radius);
     expect(rock.px).toBe(rock.x);
     expect(rock.py).toBe(rock.y);
@@ -229,7 +229,7 @@ describe('warp rift passage', () => {
     const [pair] = riftStates(r);
     if (pair === undefined) throw new Error('a rift should be open');
     const drone = foeAt('drone', pair.x, pair.y, { id: 501 });
-    r.hazards.move(DT, r.ship, [], [drone], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(drone), []);
     expect(dist(drone, { x: pair.toX, y: pair.toY })).toBeGreaterThanOrEqual(R + FOES.drone.radius);
     expect(r.hazards.strikes(pair.x, pair.y, PLAYER.radius)).toBe(false);
   });
@@ -281,7 +281,7 @@ describe('warp rift chaining', () => {
             for (let h = 0; h < JUMP_HEADINGS; h++) {
               const rock = rockAt(entry, (h * 2 * Math.PI) / JUMP_HEADINGS, radius);
               const out: SimEvent[] = [];
-              r.hazards.move(DT, r.ship, [rock], [], out);
+              r.hazards.move(DT, r.ship, [rock], hazardFoes(), out);
               const where = `${String(field.width)} seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`;
               expect(out.filter((e) => e.type === 'riftJump' && !e.ship), where).toHaveLength(1);
               for (const m of all) {
@@ -318,7 +318,7 @@ describe('warp rift exit grace', () => {
     // The ship comes out of the other mouth 42 units east of it; a large rock lies 100 out, beyond its reach (90), so it
     // does not jump, yet it touches the ship there (60 + 10 against 58).
     const rock = { id: 701, x: pair.toX + 100, y: pair.toY, px: pair.toX + 100, py: pair.toY, vx: 0, vy: 0, radius: 60, size: 1 } as unknown as Asteroid;
-    r.hazards.move(DT, r.ship, [rock], [], []);
+    r.hazards.move(DT, r.ship, [rock], hazardFoes(), []);
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
   });
@@ -335,7 +335,7 @@ describe('warp rift exit grace', () => {
     r.ship.y = pair.toY + uy * 80;
     r.ship.vx = r.ship.vy = 0;
     const rock = { id: 702, x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: ux * 100, vy: uy * 100, radius: 40, size: 1 } as unknown as Asteroid;
-    r.hazards.move(DT, r.ship, [rock], [], []);
+    r.hazards.move(DT, r.ship, [rock], hazardFoes(), []);
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
   });
@@ -346,7 +346,7 @@ describe('warp rift exit grace', () => {
     r.ship.y = pair.y;
     r.ship.vx = 100;
     r.ship.vy = 0;
-    r.hazards.move(DT, r.ship, [], [], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(), []);
     expect(r.ship.invulnerable).toBe(false);
   });
 
@@ -358,7 +358,7 @@ describe('warp rift exit grace', () => {
     r.ship.vy = 0;
     // The exit is 42 east of the mouth; a bolt 60 further east flies back at the ship at 230 units a second.
     const bolt = { id: 801, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: -230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
-    r.hazards.move(DT, r.ship, [], [], [], poolOf(bolt));
+    r.hazards.move(DT, r.ship, [], hazardFoes(), [], poolOf(bolt));
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
   });
@@ -371,7 +371,7 @@ describe('warp rift exit grace', () => {
     r.ship.vy = 0;
     // The mine lies 60 past the exit and blasts in 0.2 s; its reach (80) and the ship's radius (10) cover the gap.
     const mine = foeAt('mine', pair.toX + 102, pair.toY, { id: 802, timer: 0.2, charging: true });
-    r.hazards.move(DT, r.ship, [], [mine], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(mine), []);
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
   });
@@ -384,7 +384,7 @@ describe('warp rift exit grace', () => {
     r.ship.vy = 0;
     const late = foeAt('mine', pair.toX + 102, pair.toY, { id: 803, timer: 1, charging: true });
     const away = { id: 804, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
-    r.hazards.move(DT, r.ship, [], [late], [], poolOf(away));
+    r.hazards.move(DT, r.ship, [], hazardFoes(late), [], poolOf(away));
     expect(r.ship.invulnerable).toBe(false);
   });
 
@@ -402,7 +402,7 @@ describe('warp rift exit grace', () => {
     r.ship.vx = r.ship.vy = 0;
     const mine = foeAt('mine', pair.x, pair.y, { id: 805, timer: 0.2, charging: true });
     const out: SimEvent[] = [];
-    r.hazards.move(DT, r.ship, [], [mine], out);
+    r.hazards.move(DT, r.ship, [], hazardFoes(mine), out);
     expect(out.filter((e) => e.type === 'riftJump' && !e.ship)).toHaveLength(1);
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
@@ -417,7 +417,7 @@ describe('warp rift exit grace', () => {
     r.ship.y = pair.toY + (dy / length) * 200;
     r.ship.vx = r.ship.vy = 0;
     const mine = foeAt('mine', pair.x, pair.y, { id: 806, timer: 0.2, charging: true });
-    r.hazards.move(DT, r.ship, [], [mine], []);
+    r.hazards.move(DT, r.ship, [], hazardFoes(mine), []);
     expect(r.ship.invulnerable).toBe(false);
   });
 });

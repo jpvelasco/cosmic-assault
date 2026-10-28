@@ -13,7 +13,7 @@ import { shipPullAt } from '../../src/sim/hazards/shipPull';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView } from '../helpers/botScene';
-import { foeAt } from '../helpers/foeAt';
+import { foeAt, hazardFoes } from '../helpers/foeAt';
 import { MUTED_KINDS } from '../helpers/mute';
 
 /** The pilot's intent after two looks at `view`. */
@@ -92,7 +92,7 @@ describe("the expert's prediction of a hazard's pull", () => {
   function simPull(world: World): { x: number; y: number } {
     const hazards = world['run']?.['hazards'] as HazardField;
     const ship = { ...world.ship };
-    hazards.move(STEP_SECONDS, ship, [], [], []);
+    hazards.move(STEP_SECONDS, ship, [], hazardFoes(), []);
     return { x: (ship.vx - world.ship.vx) / STEP_SECONDS, y: (ship.vy - world.ship.vy) / STEP_SECONDS };
   }
 
