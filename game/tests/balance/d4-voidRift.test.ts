@@ -1,13 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
-import { ASTEROID, FIELD_HEIGHT, MIN_ASPECT, PLAYER } from '../../src/sim/config';
-import type { Asteroid } from '../../src/sim/asteroid';
-import type { SimEvent } from '../../src/sim/events';
-import { hazardStreams, HazardField } from '../../src/sim/hazards/hazardField';
-import { createShip } from '../../src/sim/ship';
+import { FIELD_HEIGHT, MIN_ASPECT } from '../../src/sim/config';
 import type { GalaxyId } from '../../src/content/types';
 import { BOT_SEEDS } from '../helpers/botRuns';
+import { QUARTER_SECOND_STEPS, strobeGaps } from '../helpers/riftStrobe';
 import { auditFoeAttacks, auditTelegraphs, type FoeAttackPair, type TelegraphPair, type TimedEvent } from '../helpers/telegraphAudit';
 
 /** Void Rift's survival galaxies, each played on the ten bot seeds. */
@@ -76,38 +73,7 @@ describe('Void Rift, played by the bots', { timeout: TIMEOUT_MS }, () => {
 describe('warp rift strobe sweep, 4:3', { timeout: 600_000 }, () => {
   it('never carries a body through a second pair more than once in any quarter second, from every exit of 60 seeds at 4:3', () => {
     const field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
-    const DT = 1 / 120;
-    const RADII = [PLAYER.radius, 15, 40, ASTEROID.radii[0]];
-    const QUARTER_SECOND_STEPS = 30;
-    let rockId = 1000;
-    for (let seed = 1; seed <= 60; seed++) {
-      let id = 0;
-      const ship = createShip(5, 5);
-      ship.invulnerable = false;
-      const hazards = new HazardField([{ at: 20, type: 'warpRift', intensity: 2 }], hazardStreams(seed), () => ++id);
-      hazards.move(0, ship, [], [], []);
-      hazards.step(22, field, []);
-      const entries = hazards.states.flatMap((state) => (state.type === 'warpRift' ? [{ x: state.x, y: state.y }, { x: state.toX, y: state.toY }] : []));
-      for (const entry of entries)
-        for (const radius of RADII)
-          for (let h = 0; h < 16; h++) {
-            const angle = (h * 2 * Math.PI) / 16;
-            const rock = { id: rockId++, x: entry.x, y: entry.y, px: entry.x, py: entry.y, vx: Math.cos(angle) * 100, vy: Math.sin(angle) * 100, radius, size: 0 } as unknown as Asteroid;
-            const jumpSteps: number[] = [];
-            for (let step = 0; step < 240; step++) {
-              const out: SimEvent[] = [];
-              hazards.step(22 + (step + 1) * DT, field, out);
-              rock.px = rock.x;
-              rock.py = rock.y;
-              hazards.move(DT, ship, [rock], [], out);
-              if (out.some((e) => e.type === 'riftJump' && !e.ship)) jumpSteps.push(step);
-              rock.x += rock.vx * DT;
-              rock.y += rock.vy * DT;
-            }
-            const gaps = jumpSteps.slice(1).map((step, i) => step - (jumpSteps[i] ?? 0));
-            expect(Math.min(Infinity, ...gaps), `seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`).toBeGreaterThanOrEqual(QUARTER_SECOND_STEPS);
-          }
-    }
+    for (let seed = 1; seed <= 60; seed++) for (const { where, gap } of strobeGaps(seed, field)) expect(gap, where).toBeGreaterThanOrEqual(QUARTER_SECOND_STEPS);
   });
 });
 

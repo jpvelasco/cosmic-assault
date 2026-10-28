@@ -18,6 +18,7 @@ import { createShip } from '../../src/sim/ship';
 import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT } from '../../src/sim/config';
 import { zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
 import type { Asteroid } from '../../src/sim/asteroid';
+import { JUMP_HEADINGS, JUMP_RADII, QUARTER_SECOND_STEPS, rockAt, strobeGaps } from '../helpers/riftStrobe';
 
 const FIELD_43: Field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
 const FIELD_169: Field = { width: 1280, height: 720 };
@@ -236,12 +237,6 @@ describe('warp rift passage', () => {
 });
 
 describe('warp rift chaining', () => {
-  /** Every body radius a jump can carry: the ship, a small rock, a foe, and a large rock. */
-  const RADII = [PLAYER.radius, 15, 40, ASTEROID.radii[0]];
-  const HEADINGS = 16;
-  /** A quarter second in fixed steps: a body that strobes between two pairs would jump again within it. */
-  const QUARTER_SECOND_STEPS = 30;
-
   /** The least distance between a mouth of one pair and a mouth of the other: the spacing a configuration actually has. */
   function leastBetweenPairs(pairs: readonly RiftState[]): number {
     const [a, b] = pairs;
@@ -251,12 +246,6 @@ describe('warp rift chaining', () => {
       for (const n of [{ x: b.x, y: b.y }, { x: b.toX, y: b.toY }]) least = Math.min(least, dist(m, n));
     return least;
   }
-
-  /** Each rock a test makes has its own id, since a body that has jumped rests under its id. */
-  let nextRockId = 1000;
-  /** A rock at `entry`, heading `angle` at 100 units a second, of `radius`. */
-  const rockAt = (entry: { x: number; y: number }, angle: number, radius: number): Asteroid =>
-    ({ id: nextRockId++, x: entry.x, y: entry.y, px: entry.x, py: entry.y, vx: Math.cos(angle) * 100, vy: Math.sin(angle) * 100, radius, size: 0 }) as unknown as Asteroid;
 
   it('places a second pair only at MOUTH_SPACING or not at all, at 4:3, 16:9 and 21:9', () => {
     expect(MOUTH_SPACING).toBe(2 * WARP_RIFT.radius + 2 * ASTEROID.radii[0] + 2);
@@ -288,9 +277,9 @@ describe('warp rift chaining', () => {
           { x: pair.toX, y: pair.toY, to: { x: pair.x, y: pair.y } },
         ]);
         for (const entry of mouths)
-          for (const radius of RADII)
-            for (let h = 0; h < HEADINGS; h++) {
-              const rock = rockAt(entry, (h * 2 * Math.PI) / HEADINGS, radius);
+          for (const radius of JUMP_RADII)
+            for (let h = 0; h < JUMP_HEADINGS; h++) {
+              const rock = rockAt(entry, (h * 2 * Math.PI) / JUMP_HEADINGS, radius);
               const out: SimEvent[] = [];
               r.hazards.move(DT, r.ship, [rock], [], out);
               const where = `${String(field.width)} seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`;
@@ -306,33 +295,7 @@ describe('warp rift chaining', () => {
 
   it('never carries a body through a second pair more than once in any quarter second, over two seconds of motion, from every exit of every 4:3 configuration', () => {
     // The first seeds already strobe on the module this test guards against; the full sweep lives in the balance suite.
-    for (let seed = 1; seed <= 4; seed++) {
-      const r = rig({ seed, field: FIELD_43, intensity: 2, ship: { x: 5, y: 5 } });
-      stepTo(r, FIELD_43, 22);
-      const entries = riftStates(r).flatMap((pair) => [
-        { x: pair.x, y: pair.y },
-        { x: pair.toX, y: pair.toY },
-      ]);
-      for (const entry of entries)
-        for (const radius of RADII)
-          for (let h = 0; h < HEADINGS; h++) {
-            const rock = rockAt(entry, (h * 2 * Math.PI) / HEADINGS, radius);
-            const jumpSteps: number[] = [];
-            for (let step = 0; step < 240; step++) {
-              const out: SimEvent[] = [];
-              const now = 22 + (step + 1) * DT;
-              r.hazards.step(now, FIELD_43, out);
-              rock.px = rock.x;
-              rock.py = rock.y;
-              r.hazards.move(DT, r.ship, [rock], [], out);
-              if (out.some((e) => e.type === 'riftJump' && !e.ship)) jumpSteps.push(step);
-              rock.x += rock.vx * DT;
-              rock.y += rock.vy * DT;
-            }
-            const gaps = jumpSteps.slice(1).map((step, i) => step - (jumpSteps[i] ?? 0));
-            expect(Math.min(Infinity, ...gaps), `seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`).toBeGreaterThanOrEqual(QUARTER_SECOND_STEPS);
-          }
-    }
+    for (let seed = 1; seed <= 4; seed++) for (const { where, gap } of strobeGaps(seed, FIELD_43)) expect(gap, where).toBeGreaterThanOrEqual(QUARTER_SECOND_STEPS);
   }, 30_000);
 });
 
