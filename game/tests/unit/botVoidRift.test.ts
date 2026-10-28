@@ -5,6 +5,7 @@ import { createShip } from '../../src/sim/ship';
 import { chooseTarget, type Target } from '../../src/bot/targeting';
 import type { BotView } from '../../src/bot/view';
 import { foeAt } from '../helpers/foeAt';
+import { noEffects } from '../../src/content/pickups';
 
 const FIELD = { width: 1280, height: FIELD_HEIGHT };
 const SHIP_X = 640;
@@ -17,7 +18,7 @@ const facing = (kind: Foe['kind'], id: number, x: number, y: number, rotation = 
 function viewWith(foes: Foe[]): BotView {
   const ship = createShip(SHIP_X, SHIP_Y);
   ship.angle = 0;
-  return { field: FIELD, status: 'playing', elapsed: 10, ship, asteroids: [], foes, bolts: [], pickups: [], boss: null, hazards: [] };
+  return { field: FIELD, status: 'playing', elapsed: 10, ship, asteroids: [], foes, bolts: [], pickups: [], boss: null, hazards: [], effects: noEffects() };
 }
 
 const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0, wraps: true, weakPoint: false });

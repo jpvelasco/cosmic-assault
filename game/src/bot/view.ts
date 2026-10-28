@@ -1,3 +1,4 @@
+import type { TimedPickupId } from '../content/pickups';
 import type { BossView } from '../sim/boss/behaviour';
 import type { Controls } from '../sim/controls';
 import type { Field } from '../sim/field';
@@ -24,6 +25,8 @@ export interface BotView {
   pickups: readonly Readonly<Pickup>[];
   boss: Readonly<BossView> | null;
   hazards: readonly Readonly<HazardState>[];
+  /** Seconds left on each timed effect: Time Warp's says how fast the enemies' clock runs. */
+  effects: Readonly<Record<TimedPickupId, number>>;
 }
 
 /** A bot: it reads the view and answers with the controls for the next step. The returned object may be reused. */
@@ -32,7 +35,7 @@ export interface Bot {
 }
 
 /** The World's getters a bot reads, and nothing it could change the run with. */
-export type WorldReadout = Pick<World, 'field' | 'status' | 'elapsed' | 'ship' | 'asteroids' | 'foes' | 'bolts' | 'pickups' | 'boss' | 'hazards'>;
+export type WorldReadout = Pick<World, 'field' | 'status' | 'elapsed' | 'ship' | 'asteroids' | 'foes' | 'bolts' | 'pickups' | 'boss' | 'hazards' | 'effects'>;
 
 /** Refills `view` from `world`, without touching it. */
 export function readView(world: WorldReadout, view: BotView): BotView {
@@ -46,11 +49,12 @@ export function readView(world: WorldReadout, view: BotView): BotView {
   view.pickups = world.pickups;
   view.boss = world.boss;
   view.hazards = world.hazards;
+  view.effects = world.effects;
   return view;
 }
 
 /** A view of `world` as it stands; refill it with `readView` after every step. */
 export function createView(world: WorldReadout): BotView {
-  const { field, status, elapsed, ship, asteroids, foes, bolts, pickups, boss, hazards } = world;
-  return { field, status, elapsed, ship, asteroids, foes, bolts, pickups, boss, hazards };
+  const { field, status, elapsed, ship, asteroids, foes, bolts, pickups, boss, hazards, effects } = world;
+  return { field, status, elapsed, ship, asteroids, foes, bolts, pickups, boss, hazards, effects };
 }

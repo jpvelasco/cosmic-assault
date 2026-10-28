@@ -24,6 +24,7 @@ import { rescale } from '../../src/sim/wrap';
 import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, ofType, rigStepper, runFor, stubArena, timedOfType } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 import { bearingOf, ringGaps, wardenGapBearings, wardenGaps, WIDE_GAP } from '../helpers/ringGaps';
+import { noEffects } from '../../src/content/pickups';
 
 const DEF = BOSSES.warden;
 const MAX_HP = 76;
@@ -452,7 +453,7 @@ describe('the Warden\'s attacks', () => {
 describe('the Warden as the expert bot sees it', () => {
   /** A view of the fight with the ship at `ship`, still, and nothing else on the field. */
   function viewAt(r: BossRunner, ship: { x: number; y: number }) {
-    return createView({ field: BOSS_FIELD, status: 'playing', elapsed: 30, ship: { ...stubArena().ship, ...ship, vx: 0, vy: 0 }, asteroids: [], foes: [], bolts: [], pickups: [], boss: r.view, hazards: [] });
+    return createView({ field: BOSS_FIELD, status: 'playing', elapsed: 30, ship: { ...stubArena().ship, ...ship, vx: 0, vy: 0 }, asteroids: [], foes: [], bolts: [], pickups: [], boss: r.view, hazards: [], effects: noEffects() });
   }
 
   /** The target the bot picks from 300 out along `bearing` from the core, with no choice before it. */

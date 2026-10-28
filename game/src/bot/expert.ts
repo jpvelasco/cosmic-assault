@@ -5,6 +5,7 @@ import type { AttackId } from '../content/types';
 import { dashAim, radialShove } from '../sim/boss/attacks';
 import type { BossThreat, BossView } from '../sim/boss/behaviour';
 import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
+import { enemyTimeScale } from '../sim/pickups/effects';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
 import type { Foe } from '../sim/foes/foe';
 import { zoneClearance } from '../sim/hazards/dangerZone';
@@ -224,10 +225,16 @@ export class Pilot {
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
-  /** The boss's current attack and its threat, and when its windup began; null between attacks. */
+  /**
+   * The boss's current attack and its threat, and when its windup began; null between attacks. The boss's clock runs
+   * behind the galaxy's under Time Warp: `strikeLag` is how far, in seconds, since the windup began.
+   */
   private strike: AttackId | null = null;
   private strikeThreat: Readonly<BossThreat> | null = null;
   private strikeAt = 0;
+  private strikeLag = 0;
+  /** The galaxy's seconds at the last plan. */
+  private lastElapsed = 0;
   /** Where a lane threat ends; reused. */
   private readonly laneEnd: Point = { x: 0, y: 0 };
   /** Seconds until a boss's shove lands, from now; infinite when none is coming. */
@@ -377,7 +384,8 @@ export class Pilot {
 
   /**
    * Notes a boss attack as its windup begins, with its threat and when it began, and rolls whether to dodge it; and
-   * forgets it once the attack is over; and while an attack that shoves winds up, when its shove will land.
+   * forgets it once the attack is over; and while an attack that shoves winds up, when its shove will land, in the
+   * galaxy's seconds: the windup runs on the boss's clock, which Time Warp slows (`enemyTimeScale`).
    */
   private trackStrike(view: Readonly<BotView>): void {
     // First, while the attack that ran last step is still remembered: an attack with no active time (a launch, a quake,
@@ -385,17 +393,22 @@ export class Pilot {
     this.trackSpawns(view);
     const boss = view.boss;
     const attack = boss === null ? null : (boss.windup ?? boss.active);
+    const scale = enemyTimeScale(view.effects);
     if (attack === null) {
       this.strike = this.strikeThreat = null;
     } else if (this.strike === null) {
       this.strike = attack;
       this.strikeThreat = boss?.threat ?? null;
       this.strikeAt = view.elapsed;
+      this.strikeLag = 0;
       this.dodgingStrike = this.roll(this.telegraphDodgeChance);
+    } else {
+      this.strikeLag += (view.elapsed - this.lastElapsed) * (1 - scale);
     }
+    this.lastElapsed = view.elapsed;
     const threat = this.strikeThreat;
     const windingUp = boss !== null && boss.windup !== null;
-    this.shoveIn = windingUp && threat?.kind === 'shove' ? Math.max(0, this.strikeAt + threat.windup - view.elapsed) : Infinity;
+    this.shoveIn = windingUp && threat?.kind === 'shove' ? Math.max(0, this.strikeAt + threat.windup - view.elapsed + this.strikeLag) / scale : Infinity;
   }
 
   /**

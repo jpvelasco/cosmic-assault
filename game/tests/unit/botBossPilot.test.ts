@@ -7,6 +7,8 @@ import { createRng } from '../../src/sim/rng';
 import { wrapDelta } from '../../src/sim/wrap';
 import { flyingBolt, SCENE_SHIP, sceneView, stage, threatOf, type Staged } from '../helpers/botScene';
 import { still } from '../helpers/mute';
+import { noEffects } from '../../src/content/pickups';
+import { TIME_WARP_SCALE } from '../../src/sim/config';
 
 /** The pilot's intent on the step `seconds` after its first look at `view`, which it watches throughout. */
 function after(view: BotView, seconds: number): Intent {
@@ -65,6 +67,24 @@ describe('the expert pilot against a boss', () => {
     const late = threatOf('pulse').windup - 0.1;
     expect(after(stage(sceneView([rock]), {}), late).thrust).toBe(false);
     expect(after(stage(sceneView([rock]), { windup: 'pulse' }), late).thrust).toBe(true);
+  });
+
+  it("times a pulse's shove on the boss's own clock, which Time Warp slows", () => {
+    const { windup } = threatOf('pulse');
+    /** Seconds the pilot expects the shove in, 0.2 s of real time into the windup, with `warp` seconds of Time Warp left. */
+    const shoveIn = (warp: number): number => {
+      const view = stage(sceneView(), { windup: 'pulse' });
+      view.effects = { ...noEffects(), timeWarp: warp };
+      const pilot = new Pilot({ rng: createRng(1) });
+      const intent = idleIntent();
+      pilot.plan(view, intent);
+      view.elapsed += 0.2;
+      pilot.plan(view, intent);
+      return pilot['shoveIn'];
+    };
+    expect(shoveIn(0)).toBeCloseTo(windup - 0.2, 9);
+    // At half time the boss has wound up 0.1 s of its own, and the rest of its windup takes twice as long to come.
+    expect(shoveIn(5)).toBeCloseTo((windup - 0.2 * TIME_WARP_SCALE) / TIME_WARP_SCALE, 9);
   });
 
   it("lets a boss's own rocks, which fly straight, pass closer than the field's before it dodges", () => {
