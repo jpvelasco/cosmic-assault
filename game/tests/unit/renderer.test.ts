@@ -294,6 +294,22 @@ describe('createRenderer', () => {
       expect(drawsOf(baker.cached(boltKey(paletteFor('crimsonNebula')))?.canvas)).toHaveLength(1);
     });
 
+    it('draws a bolt crossing the field edge once, where it is, with no copy at the far edge: bolts leave the field, they never wrap', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { stub, world } = stubWorld();
+      // Half out across the left edge, and across the bottom one, each on its way out.
+      stub.bolts.push({ id: 12, x: -2, y: 300, px: 2, py: 300, vx: -230, vy: 0, radius: 5, age: 1, source: 'gunship', owner: 5, fromAttack: false });
+      stub.bolts.push({ id: 13, x: 640, y: FIELD.height + 2, px: 640, py: FIELD.height - 2, vx: 0, vy: 230, radius: 5, age: 1, source: 'gunship', owner: 5, fromAttack: false });
+      drawFrame(world, 1);
+      const draws = drawsOf(baker.cached(boltKey(DRIFT))?.canvas);
+      expect(draws).toHaveLength(2);
+      // The field fills the 1280 x 720 canvas, so a far-edge copy would sit about a field's width or height off the bolt.
+      for (const { e, f } of draws) {
+        expect(e < 40 || Math.abs(e - 640) < 40, `x ${String(e)}`).toBe(true);
+        expect(Math.abs(f - 300) < 40 || f > FIELD.height - 40, `y ${String(f)}`).toBe(true);
+      }
+    });
+
     it('rebuilds the palette-derived sprites on each step of a D3 to D4 to D5 switch', () => {
       renderer.resize(1280, 720, FIELD);
       const { stub, world } = stubWorld();

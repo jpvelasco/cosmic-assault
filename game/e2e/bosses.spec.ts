@@ -5,6 +5,8 @@ import { bossHp, BOSSES } from '../src/content/bosses';
 import { SEGMENT_COUNT, SEGMENT_HP } from '../src/sim/boss/leviathan';
 import { ECLIPSE_CORONA } from '../src/sim/boss/eclipse';
 import { EXPOSED_AT } from '../src/sim/boss/monolith';
+import type { GalaxyId } from '../src/content/types';
+import { startRank, type RankRun } from '../src/meta/rankRun';
 import {
   clickPastGuard,
   damageBoss,
@@ -20,7 +22,7 @@ import {
   storedSave,
   test,
 } from './fixtures';
-import { BOSS_GALAXY, CARRIER_GALAXY, HULL_FIRE_SECONDS, seedFor, TO_BOSS_FIGHT_SECONDS } from './seeds';
+import { BOSS_GALAXY, CARRIER_GALAXY, ECLIPSE_GALAXY, HULL_FIRE_SECONDS, LEVIATHAN_GALAXY, seedFor, TO_BOSS_FIGHT_SECONDS, WARDEN_GALAXY } from './seeds';
 
 /** The boss as the bridge shows it; fails if the boss has not arrived. */
 async function bossOf(page: Page): Promise<NonNullable<CosmicAssaultTestState['boss']>> {
@@ -119,15 +121,47 @@ test.describe(`the Hive Carrier in ${CARRIER_GALAXY}`, () => {
   });
 });
 
-/** The Warden's galaxy. Its case leans on no seed: five lives carry the idle ship through the approach whatever hits it. */
-const WARDEN_GALAXY = '3-6';
+/**
+ * Plays boss galaxy `galaxy` from the map in Free play, with the save's frontier there and the clock seed `seed`, so its
+ * clear is saved; the next Dimension is still shut on the way.
+ */
+async function playBossFromMap(page: Page, galaxy: GalaxyId, seed: number): Promise<void> {
+  const dimension = Number(galaxy.slice(0, 1));
+  await seedSave(page, { ...defaultSave(), frontier: galaxy });
+  await pinClockSeed(page, seed);
+  await openFreshGame(page);
+  await page.getByTestId('play').click();
+  await page.getByTestId('mode-free').click();
+  await expect(page.getByTestId(`dimension-${String(dimension + 1)}`)).toBeDisabled();
+  await page.getByTestId(`dimension-${String(dimension)}`).click();
+  await page.getByTestId(`galaxy-${galaxy}`).click();
+  await expectMode(page, 'playing');
+}
+
+/** Kills the fighting boss and checks the clear opened the next Dimension: saved, and on the map with its first galaxy open. */
+async function killAndOpenNextDimension(page: Page, galaxy: GalaxyId): Promise<void> {
+  const dimension = Number(galaxy.slice(0, 1)) + 1;
+  const first = `${String(dimension)}-1`;
+  await damageBoss(page, KILL_SHOTS);
+  // The killing blow ends the galaxy on the next step.
+  await fastForward(page, STEP_SECONDS);
+  const { screen, galaxy: played } = await gameState(page);
+  expect({ screen, galaxy: played }).toEqual({ screen: 'results', galaxy });
+  await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
+  const stored = await storedSave(page);
+  expect(stored.frontier).toBe(first);
+  expect(stored.galaxies?.[galaxy]?.stars).toBeGreaterThan(0);
+  await clickPastGuard(page, 'results-map', 'map');
+  await expect(page.getByTestId(`dimension-${String(dimension)}`)).toBeEnabled();
+  await page.getByTestId(`dimension-${String(dimension)}`).click();
+  await expect(page.getByTestId(`galaxy-${first}`)).toBeEnabled();
+}
+
 const WARDEN_HP = bossHp(BOSSES.warden, 3);
 
 test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
-  test('arrives inside its ring of 14 turrets with its core open, and its defeat records the clear', async ({ page }) => {
-    await openGame(page, { galaxy: WARDEN_GALAXY, lives: 5 });
-    await page.keyboard.press('Space');
-    await expectMode(page, 'playing');
+  test('arrives inside its ring of 14 turrets with its core open, and its defeat opens Void Rift', async ({ page }) => {
+    await playBossFromMap(page, WARDEN_GALAXY, seedFor('warden-fight'));
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     const warden = await bossOf(page);
@@ -136,27 +170,13 @@ test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
     await damageBoss(page, 1);
     expect(await bossOf(page)).toMatchObject({ hp: WARDEN_HP - 1, liveParts: 14 });
 
-    await damageBoss(page, KILL_SHOTS);
-    // The killing blow ends the galaxy on the next step.
-    await fastForward(page, STEP_SECONDS);
-    const { screen, galaxy, save } = await gameState(page);
-    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: WARDEN_GALAXY });
-    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
-    expect(save.galaxies[WARDEN_GALAXY]?.stars).toBeGreaterThan(0);
+    await killAndOpenNextDimension(page, WARDEN_GALAXY);
   });
 });
 
-/**
- * The Leviathan's galaxy. The case plays `openGame`'s default seed, whose idle ship loses a life or so to the approach's
- * rocks and reaches the fight with the rest of its five; no seed claim guards that yet.
- */
-const LEVIATHAN_GALAXY = '4-6';
-
 test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {
-  test('is hurt only on its tail, lays its head bare once the last segment breaks, and falls to shots on the head', async ({ page }) => {
-    await openGame(page, { galaxy: LEVIATHAN_GALAXY, lives: 5 });
-    await page.keyboard.press('Space');
-    await expectMode(page, 'playing');
+  test('is hurt only on its tail, lays its head bare once the last segment breaks, and its defeat opens Singularity', async ({ page }) => {
+    await playBossFromMap(page, LEVIATHAN_GALAXY, seedFor('leviathan-fight'));
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     const whole = await bossOf(page);
@@ -177,27 +197,22 @@ test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {
 
     await damageBoss(page, 1);
     expect((await bossOf(page)).hp).toBe(bare.hp - 1);
-    await damageBoss(page, KILL_SHOTS);
-    await fastForward(page, STEP_SECONDS);
-    const { screen, galaxy } = await gameState(page);
-    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: LEVIATHAN_GALAXY });
-    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
+    await killAndOpenNextDimension(page, LEVIATHAN_GALAXY);
   });
 });
 
-/**
- * The Eclipse's galaxy. The case plays Free play, where a clear ends on the results card: a Rank run's last galaxy ends
- * on Rank complete instead. It plays `openGame`'s default seed, whose idle ship reaches the corona with its three lives;
- * no seed claim guards that yet.
- */
-const ECLIPSE_GALAXY = '5-6';
 const ECLIPSE_HP = bossHp(BOSSES.eclipse, 5);
 
 test.describe(`the Eclipse in ${ECLIPSE_GALAXY}`, () => {
-  test('is shielded by its corona, bare once four shards remain, and falls to shots on its core', async ({ page }) => {
-    await openGame(page, { galaxy: ECLIPSE_GALAXY });
-    await page.keyboard.press('Space');
+  test('is shielded by its corona, bare once four shards remain, and its defeat ends a Rank run on Rank complete', async ({ page }) => {
+    // A Rank run waiting at the last galaxy, as the one before it left it.
+    const run: RankRun = { ...startRank('2026-10-28'), next: ECLIPSE_GALAXY, score: 4000 };
+    await seedSave(page, { ...defaultSave(), frontier: ECLIPSE_GALAXY, rankRun: run, rankSeq: 1 }, { once: true });
+    await pinClockSeed(page, seedFor('eclipse-rank'));
+    await openFreshGame(page);
+    await page.getByTestId('resume-rank').click();
     await expectMode(page, 'playing');
+    expect((await gameState(page)).galaxy).toBe(ECLIPSE_GALAXY);
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     const shielded = await bossOf(page);
@@ -216,11 +231,15 @@ test.describe(`the Eclipse in ${ECLIPSE_GALAXY}`, () => {
     expect((await bossOf(page)).hp).toBe(ECLIPSE_HP - 1);
 
     await damageBoss(page, KILL_SHOTS);
-    // The killing blow ends the galaxy on the next step.
+    // The killing blow ends the galaxy, and with it the run: no next galaxy, only the end of the campaign.
     await fastForward(page, STEP_SECONDS);
-    const { screen, galaxy, save } = await gameState(page);
-    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: ECLIPSE_GALAXY });
-    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
-    expect(save.galaxies[ECLIPSE_GALAXY]?.stars).toBeGreaterThan(0);
+    const { screen, galaxy, rankRun } = await gameState(page);
+    expect({ screen, galaxy, rankRun }).toEqual({ screen: 'rankComplete', galaxy: ECLIPSE_GALAXY, rankRun: null });
+    await expect(page.getByRole('heading', { name: 'Rank complete' })).toBeVisible();
+    await expect(page.getByTestId('results-next')).toBeHidden();
+    const stored = await storedSave(page);
+    expect(stored.rankRun).toBeNull();
+    expect(stored.rankBoard).toEqual([expect.objectContaining({ reached: 'D5 · ★', continued: false })]);
+    expect(stored.rankBoard?.[0]?.score).toBeGreaterThan(run.score);
   });
 });

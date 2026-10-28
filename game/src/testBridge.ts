@@ -1,5 +1,6 @@
 import type { E2eHooks } from './app/e2eHooks';
 import type { App } from './app/game';
+import type { HazardState } from './sim/hazards/hazard';
 import type { World } from './sim/world';
 
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
@@ -21,6 +22,15 @@ function bossOf(world: World | null): CosmicAssaultTestState['boss'] {
   if (boss === null || boss === undefined) return null;
   const { id, state, hp, maxHp, phase, windup, active, vulnerable, parts, target } = boss;
   return { id, state, hp, maxHp, phase, windup, active, vulnerable, liveParts: parts.filter((part) => part.hp > 0).length, target: target === null ? null : { x: target.x, y: target.y } };
+}
+
+/** A hazard as plain data: a zone's size and a rift's second mouth with the rest. */
+function hazardOf(hazard: Readonly<HazardState>): CosmicAssaultTestState['hazards'][number] {
+  const { id, type, stage, x, y, intensity, remaining } = hazard;
+  const base = { id, type, stage, x, y, intensity, remaining };
+  if (hazard.type === 'dangerZone') return { ...base, w: hazard.w, h: hazard.h };
+  if (hazard.type === 'warpRift') return { ...base, toX: hazard.toX, toY: hazard.toY };
+  return base;
 }
 
 /** A copy of `value` frozen all the way down, so a spec cannot change the game's state through it. */
@@ -49,8 +59,10 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
     asteroidCount: world?.asteroids.length ?? 0,
     projectileCount: world?.projectiles.length ?? 0,
     pickups: world?.pickups.map(({ id, kind, x, y, expiresIn }) => ({ id, kind, x, y, expiresIn })) ?? [],
-    foes: world?.foes.map(({ id, kind, x, y }) => ({ id, kind, x, y })) ?? [],
-    hazards: world?.hazards.map(({ id, type, stage, x, y, intensity, remaining }) => ({ id, type, stage, x, y, intensity, remaining })) ?? [],
+    field: world === null ? null : { width: world.field.width, height: world.field.height },
+    foes: world?.foes.map(({ id, kind, x, y, charging }) => ({ id, kind, x, y, charging })) ?? [],
+    bolts: world?.bolts.map(({ id, source, owner, x, y, radius }) => ({ id, source, owner, x, y, radius })) ?? [],
+    hazards: world?.hazards.map(hazardOf) ?? [],
     boss: bossOf(world),
     events: { ...hooks.e2eEventCounts },
     effects: world === null ? {} : runningEffects(world),
@@ -69,6 +81,7 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
     audioState: app.audioState,
     logSize: app.log.size,
     fullscreen: app.fullscreen,
+    spriteCache: hooks.e2eSpriteCache?.() ?? null,
   };
 }
 
