@@ -591,6 +591,29 @@ describe('the gravity well hum', () => {
     for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('holds the hum while any well still pulls, so one well letting go never silences another', () => {
+    const e = playingEngine();
+    e.handle([START, { type: 'wellStart', id: 2, kind: 'gravityStorm' }, { type: 'wellStart', id: 3, kind: 'gravityStorm' }]);
+    const hum = looping();
+    e.handle([END]);
+    expect(looping()).toEqual(hum);
+    e.handle([{ type: 'wellEnd', id: 2, kind: 'gravityStorm' }, { type: 'wellEnd', id: 2, kind: 'gravityStorm' }]);
+    expect(looping()).toEqual(hum);
+    e.handle([{ type: 'wellEnd', id: 3, kind: 'gravityStorm' }]);
+    expect(looping()).toEqual([]);
+  });
+
+  it('holds the zone hum while any zone is lethal', () => {
+    const e = playingEngine();
+    e.handle([{ type: 'zoneStart', id: 2 }, { type: 'zoneStart', id: 3 }]);
+    const hum = looping();
+    expect(hum.length).toBeGreaterThan(0);
+    e.handle([{ type: 'zoneEnd', id: 2 }]);
+    expect(looping()).toEqual(hum);
+    e.handle([{ type: 'zoneEnd', id: 3 }]);
+    expect(looping()).toEqual([]);
+  });
+
   it("runs a danger zone's hum beside a well's: each starts and stops on its own events", () => {
     const e = playingEngine();
     e.handle([START]);
