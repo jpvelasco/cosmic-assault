@@ -41,7 +41,7 @@ export default defineConfig({
       grepInvert: /@desktop/,
       use: { ...devices['Pixel 5 landscape'] },
     },
-    // Report-only frame times under a CPU slowdown. `npm run test:e2e` leaves this project out; run it with `npm run test:perf`.
+    // Frame times under a CPU slowdown, held to the ceilings in e2e/perfThresholds.ts. `npm run test:e2e` leaves this project out; run it with `npm run test:perf`.
     {
       name: 'perf',
       testMatch: '**/perf.spec.ts',
