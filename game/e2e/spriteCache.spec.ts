@@ -14,6 +14,8 @@ const CAPACITY_HEADROOM = 1.5;
 /** How often the spec reads the cache during a hold, in ms. */
 const SAMPLE_MS = 250;
 const REPORT_PATH = 'test-results/sprite-cache.json';
+/** How long the spec thrusts after the hold, so the engine trail bakes its glows too. */
+const THRUST_MS = 1000;
 
 /** The glow colours a trail bakes: its colours, and its core when it draws one. */
 const trailColours = (id: TrailId): number => new Set([...TRAILS[id].colors, ...(TRAILS[id].coreShare > 0 ? [TRAILS[id].core] : [])]).size;
@@ -71,20 +73,29 @@ for (const scene of SCENES) {
     const start = await cacheUse(page);
     let peak = start.size;
     let last = start;
-    for (let held = 0; held < CACHE_HOLD_SECONDS * 1000; held += SAMPLE_MS) {
-      await page.waitForTimeout(SAMPLE_MS);
-      last = await cacheUse(page);
-      peak = Math.max(peak, last.size);
-    }
+    const sample = async (ms: number): Promise<void> => {
+      for (let held = 0; held < ms; held += SAMPLE_MS) {
+        await page.waitForTimeout(SAMPLE_MS);
+        last = await cacheUse(page);
+        peak = Math.max(peak, last.size);
+      }
+    };
+    await sample(CACHE_HOLD_SECONDS * 1000);
+    const { screen } = await gameState(page);
+    // The seeds hold the scene in play for the hold alone; thrusting after it draws the engine trail.
+    const beforeThrust = last.size;
+    await page.keyboard.down('ArrowUp');
+    await sample(THRUST_MS);
+    await page.keyboard.up('ArrowUp');
     await page.keyboard.up('ArrowLeft');
     await page.keyboard.up('Space');
 
-    const { screen } = await gameState(page);
     const evictions = last.evictions - start.evictions;
-    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), look: HEAVIEST_LOOK, holdMs: CACHE_HOLD_SECONDS * 1000, peak, evictions, endSize: last.size, screen };
+    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), look: HEAVIEST_LOOK, holdMs: CACHE_HOLD_SECONDS * 1000, thrustMs: THRUST_MS, peak, evictions, endSize: last.size, screen };
     console.log(`sprite cache ${scene.name}: ${JSON.stringify(reports[scene.name])}`);
 
     expect(screen, 'the scene stays in play through the hold').toBe('playing');
+    expect(peak, 'the thrust bakes the trail\'s glows').toBeGreaterThan(beforeThrust);
     expect(evictions, `evictions in steady play, at a capacity of ${String(SPRITE_CACHE_CAPACITY)}`).toBeLessThanOrEqual(MAX_STEADY_EVICTIONS);
     expect(peak * CAPACITY_HEADROOM, `the capacity (${String(SPRITE_CACHE_CAPACITY)}) against ${String(CAPACITY_HEADROOM)} times the peak in use`).toBeLessThanOrEqual(SPRITE_CACHE_CAPACITY);
   });
