@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dropChance, kindProbability, rockSpeedMultiplier, sawtooth, spawnInterval, threatBudget } from '../../src/content/curves';
+import { tierOf } from '../../src/content/galaxies';
 
 describe('spawnInterval', () => {
   it('shrinks from 2.4 s by 0.82 per tier', () => {
@@ -85,7 +86,7 @@ describe('sawtooth', () => {
 
   it('holds every later survival galaxy\'s rock budget within Ion Reach\'s: no more than its largest, and no less than 0.85 of its smallest', () => {
     const survival = [1, 2, 3, 4, 5] as const;
-    const budget = (dimension: 2 | 3 | 4 | 5, index: (typeof survival)[number]): number => threatBudget(dimension - 1 + (index - 1) / 5) * sawtooth({ dimension, index });
+    const budget = (dimension: 2 | 3 | 4 | 5, index: (typeof survival)[number]): number => threatBudget(tierOf({ dimension, index })) * sawtooth({ dimension, index });
     const ionReach = survival.map((index) => budget(2, index));
     for (const dimension of [3, 4, 5] as const) {
       for (const index of survival) {

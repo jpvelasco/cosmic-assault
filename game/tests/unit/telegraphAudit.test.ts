@@ -49,7 +49,7 @@ describe('auditTelegraphs', () => {
     for (const g of HAZARD_GALAXIES) for (const type of g.hazards) expect(HAZARD_TELEGRAPHS[type], `${g.id} ${type}`).toBeDefined();
   });
 
-  // Singularity's galaxies take seconds apiece, so `tests/balance/singularity.test.ts` audits them over ten seeds.
+  // Singularity's galaxies take seconds apiece, so `tests/balance/d5-singularity.test.ts` audits them over ten seeds.
   it.each(HAZARD_GALAXIES.filter((g) => !g.id.startsWith('5-')))('finds every hazard and foe attack of $id warned its full telegraph before it turns hostile, on seeds 1–3', ({ id, hazards }) => {
     for (const seed of SEEDS) {
       const log = timedLog(id, seed);

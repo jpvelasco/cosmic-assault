@@ -17,7 +17,11 @@ const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS);
 const FIRE: Controls = { ...NO_CONTROLS, fire: true };
 const WARP_SECONDS = 1.5;
-/** The most rocks seen at once in the seed-8 3-5 run below, recorded for the curves and field share the bots were tuned to. */
+/**
+ * The most rocks seen at once in the seed-8 3-5 run below, recorded for the curves and field share the bots were tuned to.
+ * It was 44 on seed 6 until Crimson Nebula's field share brought its rock budget near Ion Reach's; on that field seed 6's
+ * spinning ship loses its five lives before the second shower, which the run must see, and seed 8's last to the end.
+ */
 const PINNED_3_5_PEAK = 30;
 
 /** A galaxy whose director never spawns; `events` keeps or drops its showers. */
