@@ -62,16 +62,23 @@
   - Pickups and weapon tiers (`sim/pickups/`, `content/pickups.ts`): a kill can
     drop a pickup, with a chance that follows the level's difficulty and a pool
     of kinds that widens by set; the `'pickups'` stream decides both. A
-    `Loadout` holds the weapon tier (0 to 3; one kind raises it, and a Rank death
-    lowers it by one) and the timed effects, each with a clock; collecting a
-    running kind refreshes it and never stacks. `volley.ts` composes the ship's
-    barrels from the tier and the running effects, and effects only ever add
-    shots or shorten the fire interval. A protective pickup absorbs one hit.
-    The HUD shows a pill with a countdown for each running timed effect
+    `Loadout` holds the weapon tier (0 to 3; one kind raises it, and a Rank
+    death lowers it by one) and the timed effects, each with a clock; collecting
+    a running kind refreshes it and never stacks. `volley.ts` composes the
+    ship's barrels from the tier and the running effects (effects only ever add
+    barrels or shorten the fire interval), and the shot rules: how many targets
+    a shot pierces, which shots home, and whether the Wingman adds its shot. A
+    protective pickup absorbs one hit. Field Bomb and Nova blasts score their
+    kills with the combo but never drop pickups. Time Warp runs the rocks, foes,
+    bolts and boss at `TIME_WARP_SCALE` of real time (`enemyTimeScale` in
+    `sim/pickups/effects.ts`; a beaten boss dies in real time), while the ship,
+    player shots, pickups, hazards, the director and the galaxy clock stay in
+    real time; the boss pass times windups on the boss's own clock. The HUD
+    shows a pill with a countdown for each running timed effect
     (`render/hudPickups.ts`). Which kinds the player has collected is saved
-    (`seenPickups`) and decided in `app/pickupNotices.ts`, because the sim
-    knows nothing of what the player has seen: a kind's first drop is announced
-    once, and collecting it ends the callout for good.
+    (`seenPickups`) and decided in `app/pickupNotices.ts`, because the sim knows
+    nothing of what the player has seen: a kind's first drop is announced once,
+    and collecting it ends the callout for good.
   - Foes and hazards: `content/foes.ts` and `content/hazards.ts` hold their
     stats and schedules as typed data; `sim/foes/` has one behaviour per foe
     kind over a pooled `Foe` (never hold one across steps), and `FoeField` owns
@@ -115,7 +122,7 @@
     renderer. Its look in `render/boss/` implements `BossDrawer` (`drawer.ts`):
     a glow and a `body`, with optional underglow, `advance`, `handle` and
     `reset`; the boss pass draws what every boss shares (windup rings,
-    shockwave, hit flash) and looks the drawer up by boss id. A drawer bakes its
+    shockwave, hit flash, and a dive's aim line) and looks the drawer up by boss id. A drawer bakes its
     sprites by key and allocates nothing per frame. Cover a new boss with unit
     tests for its behaviour and drawer, a bot kill-rate case in
     `game/tests/balance/`, and an e2e spec that fights it through the bridge's
