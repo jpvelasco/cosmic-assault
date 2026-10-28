@@ -605,6 +605,23 @@ describe('Leviathan determinism', () => {
     expect(play()).toEqual(first);
     expect(random).not.toHaveBeenCalled();
   });
+
+  it('draws which way its swim turns first, so seeds differ on an empty field: the two sides are mirror images', () => {
+    const body = (seed: number): readonly BossPart[] => createLeviathan({ maxHp: MAX_HP, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()) }).parts ?? [];
+    const bySide = new Map<number, readonly BossPart[]>();
+    for (let seed = 1; seed <= 20; seed++) {
+      const parts = body(seed);
+      bySide.set(Math.sign((parts[0] as BossPart).x - BOSS_FIELD.width / 2), parts);
+    }
+    const right = bySide.get(1);
+    const left = bySide.get(-1);
+    if (right === undefined || left === undefined) throw new Error('20 seeds should give both sides');
+    for (const [i, part] of right.entries()) {
+      const twin = left[i] as BossPart;
+      expect(twin.x).toBeCloseTo(BOSS_FIELD.width - part.x, 6);
+      expect(twin.y).toBeCloseTo(part.y, 6);
+    }
+  });
 });
 
 describe('the Leviathan in 4-★', () => {

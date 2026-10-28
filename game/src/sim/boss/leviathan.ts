@@ -59,9 +59,15 @@ const MOVES: ReadonlySet<AttackId> = new Set<AttackId>(['dive', 'coil']);
 export const swimRate = (field: Field): number =>
   SWIM_SPEED / Math.hypot(SWIM_X_TURNS * (field.width / 2 - SWIM_MARGIN), SWIM_Y_TURNS * (field.height / 2 - SWIM_MARGIN));
 
-/** Writes into `out`, and returns, the swim path's point at `phase` in `field`; phase 0 is at the top, in the middle. */
-export function swimPoint(field: Field, phase: number, out: Point): Point {
-  out.x = field.width / 2 + (field.width / 2 - SWIM_MARGIN) * Math.sin(SWIM_X_TURNS * phase);
+/** Which way across the field the swim path first turns: 1 to the right, -1 to the left, its mirror image. */
+export type SwimSide = 1 | -1;
+
+/**
+ * Writes into `out`, and returns, the swim path's point at `phase` in `field`, turning first to `side`; phase 0 is at the
+ * top, in the middle.
+ */
+export function swimPoint(field: Field, phase: number, out: Point, side: SwimSide = 1): Point {
+  out.x = field.width / 2 + side * (field.width / 2 - SWIM_MARGIN) * Math.sin(SWIM_X_TURNS * phase);
   out.y = field.height / 2 - (field.height / 2 - SWIM_MARGIN) * Math.cos(SWIM_Y_TURNS * phase);
   return out;
 }
@@ -129,12 +135,12 @@ export function coilPoint(plan: Readonly<CoilPlan>, aim: Readonly<Point>, elapse
 }
 
 /** The phase of the swim path's point nearest (x, y), of `REJOIN_SAMPLES` round a lap; the first of equals. */
-function nearestPhase(field: Field, x: number, y: number, probe: Point): number {
+function nearestPhase(field: Field, side: SwimSide, x: number, y: number, probe: Point): number {
   let best = 0;
   let nearest = Infinity;
   for (let i = 0; i < REJOIN_SAMPLES; i++) {
     const phase = (i / REJOIN_SAMPLES) * TAU;
-    swimPoint(field, phase, probe);
+    swimPoint(field, phase, probe, side);
     const distance = Math.hypot(probe.x - x, probe.y - y);
     if (distance >= nearest) continue;
     best = phase;
@@ -170,6 +176,8 @@ class Leviathan implements BossBehaviour {
   readonly attacks: Readonly<Record<LeviathanAttack, AttackSpec>>;
   private readonly trail = new SerpentTrail(TRAIL_CAPACITY, TRAIL_STEP);
   private field: Field;
+  /** Which way its swim path turns first, drawn as the fight begins, so seeds differ even on an empty field. */
+  private readonly side: SwimSide;
   /** Where the head is: written onto the view every step, so nothing else moves it. */
   private headX = 0;
   private headY = 0;
@@ -188,6 +196,7 @@ class Leviathan implements BossBehaviour {
 
   constructor(setup: BossSetup) {
     this.field = setup.field;
+    this.side = setup.rng.chance(0.5) ? -1 : 1;
     this.parts = Array.from({ length: SEGMENT_COUNT }, () => ({ x: 0, y: 0, px: 0, py: 0, radius: SEGMENT_RADIUS, hp: SEGMENT_HP, maxHp: SEGMENT_HP }));
     this.attacks = {
       dive: dashAttack(WINDUPS.dive, DIVE_SECONDS, HEAD_RADIUS),
@@ -235,12 +244,12 @@ class Leviathan implements BossBehaviour {
     const need = SEGMENT_COUNT * SEGMENT_GAP + TRAIL_STEP;
     let steps = 0;
     for (let length = 0; length < need; steps++) {
-      const { x, y } = swimPoint(field, -steps * step, spot);
-      swimPoint(field, -(steps + 1) * step, spot);
+      const { x, y } = swimPoint(field, -steps * step, spot, this.side);
+      swimPoint(field, -(steps + 1) * step, spot, this.side);
       length += Math.hypot(spot.x - x, spot.y - y);
     }
     for (let k = steps; k >= 0; k--) {
-      swimPoint(field, -k * step, spot);
+      swimPoint(field, -k * step, spot, this.side);
       this.trail.follow(spot.x, spot.y);
     }
     this.headX = spot.x;
@@ -298,7 +307,7 @@ class Leviathan implements BossBehaviour {
   private swim(dt: number): void {
     const { field } = this;
     this.phase = (this.phase + swimRate(field) * dt) % TAU;
-    swimPoint(field, this.phase, spot);
+    swimPoint(field, this.phase, spot, this.side);
     if (this.easeAge >= EASE_SECONDS) {
       this.headX = spot.x;
       this.headY = spot.y;
@@ -315,7 +324,7 @@ class Leviathan implements BossBehaviour {
     this.easeX = this.headX;
     this.easeY = this.headY;
     this.easeAge = 0;
-    this.phase = nearestPhase(this.field, this.headX, this.headY, spot);
+    this.phase = nearestPhase(this.field, this.side, this.headX, this.headY, spot);
   }
 
   /** Plans the coil as its windup begins: about the view's aim, from where the head holds, against where the ship is. */
@@ -362,5 +371,5 @@ class Leviathan implements BossBehaviour {
 /** The Leviathan's behaviour, with its attacks spelled out. */
 export type LeviathanBehaviour = BossBehaviour & { readonly attacks: Readonly<Record<LeviathanAttack, AttackSpec>> };
 
-/** Makes the Leviathan for one fight. It draws nothing from the fight's stream: its swim, its body and its attacks are all set by the fight. */
+/** Makes the Leviathan for one fight. It draws once from the fight's stream, which way its swim turns first; the rest is set by the fight. */
 export const createLeviathan = (setup: BossSetup): LeviathanBehaviour => new Leviathan(setup);
