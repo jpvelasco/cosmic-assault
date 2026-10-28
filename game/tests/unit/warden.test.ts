@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { BOLT } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, GalaxyDef } from '../../src/content/types';
 import { chooseTarget, type Target } from '../../src/bot/targeting';
 import { createView } from '../../src/bot/view';
-import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { crosses } from '../../src/sim/boss/attacks';
 import { BossArena } from '../../src/sim/boss/bossArena';
 import { respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
@@ -21,13 +21,12 @@ import { createRng, deriveSeed } from '../../src/sim/rng';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { World } from '../../src/sim/world';
 import { rescale } from '../../src/sim/wrap';
-import { BOSS_FIELD, breakPart, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, ofType, rigStepper, runFor, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 import { ringGaps, wardenGapBearings, wardenGaps } from '../helpers/ringGaps';
 
 const DEF = BOSSES.warden;
 const MAX_HP = 76;
-const INTRO = 2;
 const APPROACH = 20;
 const SLOT = TAU / WARDEN_RING.slots;
 /** Room either side of a ship flying a straight line through a gap. */
@@ -35,32 +34,11 @@ const PATH_MARGIN = 10;
 /** Each of the ring's two gaps must stay at least this wide. */
 const WIDE_GAP = 50;
 
-interface Rig {
-  readonly r: BossRunner;
-  readonly arena: StubArena;
-  readonly bolts: Bolts;
-}
-
-function warden(seed = 1, arena: StubArena = stubArena()): Rig {
-  const bolts = new Bolts(arena);
-  const setup: BossSetup = { maxHp: MAX_HP, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD, bolts };
-  return { r: new BossRunner(DEF, createWarden(setup), setup), arena, bolts };
-}
+const warden = (seed = 1): BossRig => bossRig(DEF, createWarden, MAX_HP, { seed });
 
 const ATTACKS = createWarden({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()) }).attacks;
 
-/** Steps the Warden and flies its bolts, as a galaxy does. */
-const stepper = (rig: Rig) => (dt: number, arena: StubArena) => {
-  rig.bolts.step(dt);
-  rig.r.step(dt, arena);
-};
-
-function fighting(seed = 1, arena?: StubArena): Rig {
-  const rig = warden(seed, arena);
-  runFor(stepper(rig), rig.arena, INTRO + 0.05);
-  expect(rig.r.state).toBe('fighting');
-  return rig;
-}
+const fighting = (seed = 1): BossRig => fightingRig(DEF, createWarden, MAX_HP, { seed });
 
 /** Takes the core down to `hp`, so the fight is in that HP's phase. */
 function woundTo(r: BossRunner, hp: number): void {
@@ -157,7 +135,7 @@ describe('the Warden\'s turret ring', () => {
     let before = bearingOf(r.view, turret);
     let turned = 0;
     let steps = 0;
-    runFor(stepper(rig), arena, 0.5, () => {
+    runFor(rigStepper(rig), arena, 0.5, () => {
       const now = bearingOf(r.view, turret);
       if (r.view.active !== 'spin' && r.view.active !== 'ringPulse') {
         turned += turnBetween(before, now);
@@ -174,7 +152,7 @@ describe('the Warden\'s turret ring', () => {
       const rng = createRng(seed * 17);
       let narrowestGap = Infinity;
       let widestShut = 0;
-      runFor(stepper(rig), rig.arena, 90, () => {
+      runFor(rigStepper(rig), rig.arena, 90, () => {
         breakSome(rig.r, rng);
         if (rig.r.state !== 'fighting') return;
         narrowestGap = Math.min(narrowestGap, wardenGaps(rig.r.view)[0]);
@@ -192,7 +170,7 @@ describe('the Warden\'s turret ring', () => {
     let checked = 0;
     /** The least room any live turret left beside a path out through a gap, past its own radius. */
     let room = Infinity;
-    runFor(stepper(rig), rig.arena, 30, () => {
+    runFor(rigStepper(rig), rig.arena, 30, () => {
       const { view } = rig.r;
       for (const gap of wardenGapBearings(view)) {
         const far = { x: view.x + Math.cos(gap) * 400, y: view.y + Math.sin(gap) * 400 };
@@ -208,7 +186,7 @@ describe('the Warden\'s turret ring', () => {
     const track = (seed: number): number[] => {
       const rig = fighting(seed);
       const bearings: number[] = [];
-      runFor(stepper(rig), rig.arena, 20, () => bearings.push(wardenGapBearings(rig.r.view)[0]));
+      runFor(rigStepper(rig), rig.arena, 20, () => bearings.push(wardenGapBearings(rig.r.view)[0]));
       return bearings;
     };
     expect(track(7)).toEqual(track(7));
@@ -226,7 +204,7 @@ describe('the Warden\'s regrowth', () => {
     const counts: number[] = [];
     /** The nearest any live turret came to a gap slot's bearing. */
     let nearestGap = Infinity;
-    runFor(stepper(rig), rig.arena, 40, () => {
+    runFor(rigStepper(rig), rig.arena, 40, () => {
       counts.push(liveParts(r.view).length);
       const gaps = wardenGapBearings(r.view);
       for (const part of liveParts(r.view)) for (const gap of gaps) nearestGap = Math.min(nearestGap, Math.abs(turnBetween(gap, bearingOf(r.view, part))));
@@ -255,7 +233,7 @@ describe('the Warden\'s regrowth', () => {
     const brokenAt = arena.elapsed();
     const was = parts.map((p) => p.hp);
     const grown: { part: number; at: number; clearance: number }[] = [];
-    runFor(stepper(rig), arena, 20, () => {
+    runFor(rigStepper(rig), arena, 20, () => {
       parts.forEach((p, i) => {
         if (was[i] === 0 && p.hp === p.maxHp) grown.push({ part: i, at: arena.elapsed(), clearance: Math.hypot(p.x - arena.ship.x, p.y - arena.ship.y) });
         was[i] = p.hp;
@@ -297,7 +275,7 @@ describe('the Warden\'s core', () => {
     woundTo(rig.r, 20);
     let moved = 0;
     const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
-    runFor(stepper(rig), rig.arena, 60, () => {
+    runFor(rigStepper(rig), rig.arena, 60, () => {
       const { view } = rig.r;
       if (view.active === null && view.windup === null) moved = Math.max(moved, Math.hypot(view.x - view.px, view.y - view.py) / STEP_SECONDS);
       for (const p of liveParts(view)) {
@@ -319,7 +297,7 @@ describe('the Warden\'s attacks', () => {
   it('shows where the ship was as each windup began, which an aimed attack fires at, and stretches it with the field', () => {
     const rig = fighting();
     Object.assign(rig.arena.ship, { x: 900, y: 560 });
-    runFor(stepper(rig), rig.arena, 3, () => {
+    runFor(rigStepper(rig), rig.arena, 3, () => {
       if (rig.r.view.windup !== null) Object.assign(rig.arena.ship, { x: 100, y: 650 });
     });
     expect(rig.r.view.aim).toEqual({ x: 900, y: 560 });
@@ -331,7 +309,7 @@ describe('the Warden\'s attacks', () => {
     const order = (hp: number): AttackId[] => {
       const rig = fighting(4);
       woundTo(rig.r, hp);
-      return timedOfType(runFor(stepper(rig), rig.arena, 40), 'bossWindup').map((l) => l.event.attack).slice(0, 8);
+      return timedOfType(runFor(rigStepper(rig), rig.arena, 40), 'bossWindup').map((l) => l.event.attack).slice(0, 8);
     };
     expect(order(MAX_HP)).toEqual(['turretVolley', 'lockOn', 'turretVolley', 'lockOn', 'turretVolley', 'lockOn', 'turretVolley', 'lockOn']);
     expect(order(45)).toEqual(['turretVolley', 'spin', 'lockOn', 'turretVolley', 'spin', 'lockOn', 'turretVolley', 'spin']);
@@ -346,7 +324,7 @@ describe('the Warden\'s attacks', () => {
     let windupSteps = 0;
     const turret = rig.r.view.parts[0] as BossPart;
     let before = bearingOf(rig.r.view, turret);
-    runFor(stepper(rig), rig.arena, 30, () => {
+    runFor(rigStepper(rig), rig.arena, 30, () => {
       const { view } = rig.r;
       const now = bearingOf(view, turret);
       const turned = turnBetween(before, now) / STEP_SECONDS;
@@ -372,7 +350,7 @@ describe('the Warden\'s attacks', () => {
       woundTo(r, hp);
       for (const i of [1, 5]) breakPart(r, i);
       const seen: { at: number; bolts: number; outward: boolean }[] = [];
-      runFor(stepper(rig), rig.arena, 12, () => {
+      runFor(rigStepper(rig), rig.arena, 12, () => {
         if (r.view.active !== 'turretVolley') return;
         const fired = ofType(rig.arena.events, 'boltFired');
         if (fired.length === 0) return;
@@ -399,7 +377,7 @@ describe('the Warden\'s attacks', () => {
     let fired: { x: number; y: number; angle: number }[] = [];
     let nearest: number[] = [];
     let locking = false;
-    runFor(stepper(rig), rig.arena, 8, () => {
+    runFor(rigStepper(rig), rig.arena, 8, () => {
       // A lock-on has no active time: it fires on the step after its windup ends, and is over by the end of it.
       if (locking && fired.length === 0) {
         fired = ofType(rig.arena.events, 'boltFired').map((e) => ({ x: e.x, y: e.y, angle: e.angle }));
@@ -430,7 +408,7 @@ describe('the Warden\'s attacks', () => {
     const rates: number[] = [];
     let spinSteps = 0;
     let spinning = false;
-    runFor(stepper(rig), rig.arena, 12, () => {
+    runFor(rigStepper(rig), rig.arena, 12, () => {
       const now = bearingOf(rig.r.view, turret);
       // The step that ends the windup shows the spin on, but the spin turns the ring from the next step.
       if (spinning) rates.push(turnBetween(before, now) / STEP_SECONDS);
@@ -450,7 +428,7 @@ describe('the Warden\'s attacks', () => {
     woundTo(rig.r, 20);
     const radii: number[] = [];
     const rooms: number[] = [];
-    runFor(stepper(rig), rig.arena, 6, () => {
+    runFor(rigStepper(rig), rig.arena, 6, () => {
       if (rig.r.view.active !== 'ringPulse') return;
       radii.push(ringRadius(rig.r.view));
       rooms.push(stretchRoom(rig.r.view, BOSS_FIELD, WARDEN_RING.radius, WARDEN_RING.turretRadius));
@@ -465,7 +443,7 @@ describe('the Warden\'s attacks', () => {
     woundTo(mid.r, 20);
     Object.assign(mid.r.view, { x: 640, y: 360 });
     let widest = 0;
-    runFor(stepper(mid), mid.arena, 6, () => {
+    runFor(rigStepper(mid), mid.arena, 6, () => {
       if (mid.r.view.active === 'ringPulse') widest = Math.max(widest, ringRadius(mid.r.view));
     });
     expect(widest).toBeCloseTo(PULSE_RADIUS, 1);
@@ -549,7 +527,7 @@ describe('the Warden in 3-★', () => {
     const play = (seed: number): number[] => {
       const w = world(seed);
       const trace: number[] = [];
-      for (let i = 0; i < Math.round((APPROACH + INTRO + 30) / STEP_SECONDS); i++) {
+      for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 30) / STEP_SECONDS); i++) {
         w.step(STEP_SECONDS, NO_CONTROLS);
         for (const b of w.bolts) trace.push(b.x, b.y);
         if (w.boss !== null) for (const p of w.boss.parts) trace.push(p.x, p.y);
@@ -564,7 +542,7 @@ describe('the Warden in 3-★', () => {
     for (const seed of [1, 2, 3]) {
       const w = world(seed);
       const hitsAt: string[] = [];
-      for (let i = 0; i < Math.round((APPROACH + INTRO + 120) / STEP_SECONDS) && w.status === 'playing'; i++) {
+      for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 120) / STEP_SECONDS) && w.status === 'playing'; i++) {
         for (const e of w.step(STEP_SECONDS, NO_CONTROLS)) if (e.type === 'shipHit') hitsAt.push(w.boss?.state ?? 'none');
       }
       expect(w.boss?.id).toBe('warden');
@@ -577,7 +555,7 @@ describe('the Warden in 3-★', () => {
     let respawns = 0;
     for (const seed of [1, 2, 3]) {
       const w = world(seed);
-      for (let i = 0; i < Math.round((APPROACH + INTRO + 120) / STEP_SECONDS) && w.status === 'playing'; i++) {
+      for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 120) / STEP_SECONDS) && w.status === 'playing'; i++) {
         if (!w.step(STEP_SECONDS, NO_CONTROLS).some((e) => e.type === 'shipHit') || w.lives === 0) continue;
         const boss = w.boss;
         if (boss === null) throw new Error('only the Warden hits the ship here');
@@ -601,7 +579,7 @@ describe('the Warden in 3-★', () => {
   it('fires its bolts at the bolts\' own speed, from the pool, and never more than it holds', () => {
     const w = world(2);
     let most = 0;
-    for (let i = 0; i < Math.round((APPROACH + INTRO + 60) / STEP_SECONDS) && w.status === 'playing'; i++) {
+    for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 60) / STEP_SECONDS) && w.status === 'playing'; i++) {
       w.step(STEP_SECONDS, NO_CONTROLS);
       most = Math.max(most, w.bolts.length);
       for (const b of w.bolts) expect(Math.hypot(b.vx, b.vy)).toBeCloseTo(BOLT.speed, 6);

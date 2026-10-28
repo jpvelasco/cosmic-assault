@@ -3,7 +3,7 @@ import { bossHp, BOSSES } from '../../src/content/bosses';
 import { DRONE_SEPARATION } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { BossSetup, BossView } from '../../src/sim/boss/behaviour';
@@ -24,7 +24,6 @@ import { MUTED_KINDS } from '../helpers/mute';
 const DEF = BOSSES.hiveCarrier;
 /** The rigs' HP: enough to space out the phase thresholds the tests wound it to. */
 const MAX_HP = 70;
-const INTRO = 2;
 const APPROACH = 20;
 /** The foes stream's seed in these rigs. */
 const FOES_SEED = 99;
@@ -52,7 +51,7 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
 /** A Hive Carrier whose intro is over. */
 function fighting(seed = 1, arena?: StubArena): Rig {
   const rig = carrier(seed, arena);
-  runFor(stepper(rig.r), rig.arena, INTRO + 0.05);
+  runFor(stepper(rig.r), rig.arena, BOSS_INTRO_SECONDS + 0.05);
   expect(rig.r.state).toBe('fighting');
   return rig;
 }
@@ -117,7 +116,7 @@ describe('the Hive Carrier definition', () => {
 describe('the Hive Carrier\'s hangar', () => {
   it('is shut through the intro and the first rest: every blow deflects, and nothing aims at it', () => {
     const rig = carrier();
-    runFor(stepper(rig.r), rig.arena, INTRO + 1);
+    runFor(stepper(rig.r), rig.arena, BOSS_INTRO_SECONDS + 1);
     expect(rig.r.view.vulnerable).toBe(false);
     expect(bossTarget(rig.r.view)).toBeNull();
     expect(hitAt(rig, rim(rig, 0))).toBe('deflected');
@@ -528,7 +527,7 @@ describe('the Hive Carrier in 2-★', () => {
 
   it('spends a shot that strikes its hull with a spark, leaving the drone and the rock behind it whole', () => {
     const world = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('2-6'), mode: 'free' } });
-    for (let i = 0; i < Math.round((APPROACH + INTRO + 0.5) / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
+    for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 0.5) / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
     const boss = world.boss;
     if (boss?.state !== 'fighting') throw new Error('the Hive Carrier should be fighting 22.5 s into 2-6');
     // The stern, which never takes a hit, just outside the hull.
@@ -553,7 +552,7 @@ describe('the Hive Carrier in 2-★', () => {
       const hitsAt: string[] = [];
       let firstLaunch = Number.NaN;
       let firstHit = Number.NaN;
-      for (let i = 0; i < Math.round((APPROACH + INTRO + 120) / STEP_SECONDS) && world.status === 'playing'; i++) {
+      for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 120) / STEP_SECONDS) && world.status === 'playing'; i++) {
         for (const e of world.step(STEP_SECONDS, NO_CONTROLS)) {
           if (e.type === 'hangarOpen' && Number.isNaN(firstLaunch)) firstLaunch = world.elapsed;
           if (e.type !== 'shipHit') continue;

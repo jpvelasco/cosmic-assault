@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
@@ -18,7 +18,6 @@ import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF = BOSSES.monolith;
 const MAX_HP = 60;
-const INTRO = 2;
 const APPROACH = 20;
 const ATTACKS = createMonolith(setupFor(1)).attacks;
 /** Positions settle to float residue, not exactly. */
@@ -41,7 +40,7 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
 /** A Monolith whose intro is over. */
 function fighting(seed = 1, arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
   const r = monolith(seed);
-  runFor(stepper(r), arena, INTRO + 0.05);
+  runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
   expect(r.state).toBe('fighting');
   return { r, arena };
 }
@@ -392,7 +391,7 @@ describe('the Monolith in 1-★', () => {
     for (const seed of [1, 2, 3]) {
       const world = new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('1-6'), mode: 'free' } });
       const hitsAt: string[] = [];
-      for (let i = 0; i < Math.round((APPROACH + INTRO + 120) / STEP_SECONDS) && world.status === 'playing'; i++) {
+      for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 120) / STEP_SECONDS) && world.status === 'playing'; i++) {
         for (const e of world.step(STEP_SECONDS, NO_CONTROLS)) if (e.type === 'shipHit') hitsAt.push(world.boss?.state ?? 'none');
       }
       expect(world.boss?.id).toBe('monolith');

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
@@ -19,7 +20,6 @@ import { BOSS_FIELD, breakPart, FIXTURE, FIXTURE_DEF, liveParts, ofType, runFor,
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF: BossDef = FIXTURE_DEF;
-const INTRO = 2;
 const PARTS = 4;
 /** How far the probe's parts sit from the core's centre. */
 const PART_REACH = 100;
@@ -73,7 +73,7 @@ function runnerOf(behaviour: BossBehaviour, maxHp = 30): BossRunner {
 
 function fighting(behaviour: BossBehaviour = probe(), arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
   const r = runnerOf(behaviour);
-  runFor(stepper(r), arena, INTRO + 0.05);
+  runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
   expect(r.state).toBe('fighting');
   return { r, arena };
 }
@@ -128,7 +128,7 @@ describe('a boss with parts', () => {
     const behaviour = probe();
     const r = runnerOf(behaviour, 1);
     const arena = stubArena();
-    runFor(stepper(r), arena, INTRO + 0.05);
+    runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
     for (let i = 0; i < PARTS - 1; i++) breakPart(r, i);
     expect(r.hit(1)).toBe('killed');
     runFor(stepper(r), arena, 3);
@@ -136,7 +136,7 @@ describe('a boss with parts', () => {
     expect(states).toEqual(new Set(['intro', 'fighting', 'dying']));
     for (const [dt] of behaviour.seen) expect(dt).toBe(STEP_SECONDS);
     // The step it goes down on runs none.
-    expect(behaviour.seen.length).toBe(Math.round((INTRO + 0.05 + DYING_SECONDS) / STEP_SECONDS) - 1);
+    expect(behaviour.seen.length).toBe(Math.round((BOSS_INTRO_SECONDS + 0.05 + DYING_SECONDS) / STEP_SECONDS) - 1);
   });
 
   it('stretches its parts to a resized field', () => {
@@ -202,7 +202,7 @@ describe('a boss whose core is only sometimes vulnerable', () => {
     const arena = stubArena();
     runFor(stepper(r), arena, 0.5);
     expect(bossTarget(r.view)).toBeNull();
-    runFor(stepper(r), arena, INTRO);
+    runFor(stepper(r), arena, BOSS_INTRO_SECONDS);
     expect(bossTarget(r.view)).toBe(r.view.parts[0]);
     breakPart(r, 0);
     expect(bossTarget(r.view)).toBe(r.view.parts[1]);

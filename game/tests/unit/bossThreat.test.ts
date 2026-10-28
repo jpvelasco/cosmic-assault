@@ -17,8 +17,7 @@ const BOT_DIR = new URL('../../src/bot/', import.meta.url);
 /** The boss modules a bot may read: the seam's types, the rules every fight keeps and the shared attack library. */
 const GENERIC_BOSS_MODULES = ['attacks', 'behaviour', 'bossRules'];
 
-/** A fight of boss `id` with the galaxy's foes to launch into, its intro over. */
-/** A fight of the boss `id` in the test fixture's place, or of the fixture itself. */
+/** A fight of boss `id`, or of the test fixture, with the galaxy's foes to launch into, its intro over. */
 function fight(id: BossId | 'fixture', arena: StubArena = stubArena()): { runner: BossRunner; arena: StubArena } {
   const foes = new FoeField(arena, createRng(2), { score: (base) => base, killed: () => undefined });
   const setup = { maxHp: 60, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, foes, bolts: new Bolts(arena) };

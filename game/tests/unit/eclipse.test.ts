@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId } from '../../src/content/types';
 import { launchSlot, launchSlotsFor } from '../../src/sim/boss/attacks';
 import { createEclipse, DIVE_SECONDS, ECLIPSE_CAP, ECLIPSE_CORONA, ECLIPSE_REACH, ECLIPSE_VOLLEY, ECLIPSE_WAVES, QUAKE_ROCKS } from '../../src/sim/boss/eclipse';
@@ -11,47 +11,19 @@ import { clearSpot, respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respa
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { Bolts } from '../../src/sim/foes/bolts';
-import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
-import { BOSS_FIELD, breakPart, liveParts, runFor, type StubArena, stubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, rigStepper, runFor, type StubArena, stubArena } from '../helpers/bossArena';
 
 const DEF = BOSSES.eclipse;
 const spot: Point = { x: 0, y: 0 };
 const MAX_HP = 134;
-const INTRO = 2;
-const FOES_SEED = 99;
 /** The earlier bosses whose moves the Eclipse remixes, by id. */
 const EARLIER = { monolith: BOSSES.monolith, hiveCarrier: BOSSES.hiveCarrier, warden: BOSSES.warden, leviathan: BOSSES.leviathan };
 
-interface Rig {
-  readonly r: BossRunner;
-  readonly arena: StubArena;
-  readonly bolts: Bolts;
-  readonly foes: FoeField;
-}
-
 /** An Eclipse on a stub arena of `arena`'s field, with a bolt field and a foe field of its own. */
-function eclipse(seed = 1, arena: StubArena = stubArena()): Rig {
-  const bolts = new Bolts(arena);
-  const foes = new FoeField(arena, createRng(FOES_SEED), { score: (base) => base, killed: () => undefined });
-  const setup: BossSetup = { maxHp: MAX_HP, rng: createRng(seed), rockSpeed: 1, field: arena.field(), bolts, foes };
-  return { r: new BossRunner(DEF, createEclipse(setup), setup), arena, bolts, foes };
-}
-
-/** Steps the Eclipse and flies its bolts and foes, as a galaxy does. */
-const stepper = (rig: Rig) => (dt: number, arena: StubArena) => {
-  rig.bolts.step(dt);
-  rig.foes.step(dt);
-  rig.r.step(dt, arena);
-};
-
-function fighting(seed = 1, arena?: StubArena): Rig {
-  const rig = eclipse(seed, arena);
-  runFor(stepper(rig), rig.arena, INTRO + 0.05);
-  expect(rig.r.state).toBe('fighting');
-  return rig;
-}
+const eclipse = (seed = 1, arena?: StubArena): BossRig => bossRig(DEF, createEclipse, MAX_HP, { seed, ...(arena === undefined ? {} : { arena }) });
+const fighting = (seed = 1, arena?: StubArena): BossRig => fightingRig(DEF, createEclipse, MAX_HP, { seed, ...(arena === undefined ? {} : { arena }) });
 
 const ATTACKS = createEclipse({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()), foes: eclipse().foes }).attacks;
 
@@ -63,19 +35,19 @@ function breakUntil(r: BossRunner, count: number): void {
 }
 
 /** Takes the Eclipse to `phase` by blows on its core, breaking shards whenever its core is shielded. */
-function toPhase(rig: Rig, phase: BossPhase): void {
+function toPhase(rig: BossRig, phase: BossPhase): void {
   for (let i = 0; i < 4000 && rig.r.view.phase < phase; i++) {
     if (rig.r.view.vulnerable) rig.r.hit(1);
     else breakUntil(rig.r, 4);
-    stepper(rig)(STEP_SECONDS, rig.arena);
+    rigStepper(rig)(STEP_SECONDS, rig.arena);
   }
   expect(rig.r.view.phase).toBe(phase);
 }
 
 /** Steps until `done` holds, returning how many steps that took; fails if it takes longer than `seconds`. */
-function stepUntil(rig: Rig, done: (view: Readonly<BossView>) => boolean, seconds = 60): number {
+function stepUntil(rig: BossRig, done: (view: Readonly<BossView>) => boolean, seconds = 60): number {
   for (let step = 1; step <= seconds / STEP_SECONDS; step++) {
-    stepper(rig)(STEP_SECONDS, rig.arena);
+    rigStepper(rig)(STEP_SECONDS, rig.arena);
     if (done(rig.r.view)) return step;
   }
   throw new Error(`the condition did not hold within ${String(seconds)} s`);
@@ -160,9 +132,9 @@ describe('the Eclipse corona', () => {
     const rig = fighting();
     breakUntil(rig.r, 4);
     const { regrowSeconds } = ECLIPSE_CORONA;
-    runFor(stepper(rig), rig.arena, regrowSeconds - 0.2);
+    runFor(rigStepper(rig), rig.arena, regrowSeconds - 0.2);
     expect(liveParts(rig.r.view)).toHaveLength(4);
-    runFor(stepper(rig), rig.arena, 0.4);
+    runFor(rigStepper(rig), rig.arena, 0.4);
     expect(liveParts(rig.r.view)).toHaveLength(5);
     expect(rig.r.view.vulnerable).toBe(false);
   });
@@ -177,7 +149,7 @@ describe('the Eclipse corona', () => {
     for (let step = 0; step < 90 / STEP_SECONDS; step++) {
       if (step % 240 === 0) Object.assign(rig.arena.ship, { x: rng.range(0, BOSS_FIELD.width), y: rng.range(0, BOSS_FIELD.height) });
       const before = rig.r.view.parts.map((p) => p.hp);
-      stepper(rig)(STEP_SECONDS, rig.arena);
+      rigStepper(rig)(STEP_SECONDS, rig.arena);
       rig.r.view.parts.forEach((part, i) => {
         if ((before[i] ?? 0) > 0 || part.hp <= 0) return;
         regrown++;
@@ -195,7 +167,7 @@ describe('the Eclipse corona', () => {
     const rig = fighting(9);
     breakUntil(rig.r, 4);
     // Just before the regrowth is due, the ship takes the first broken slot.
-    runFor(stepper(rig), rig.arena, ECLIPSE_CORONA.regrowSeconds - 0.05);
+    runFor(rigStepper(rig), rig.arena, ECLIPSE_CORONA.regrowSeconds - 0.05);
     const first = rig.r.view.parts.findIndex((p) => p.hp <= 0);
     expect(first).toBeGreaterThanOrEqual(0);
     Object.assign(rig.arena.ship, { x: rig.r.view.parts[first]?.x, y: rig.r.view.parts[first]?.y });
@@ -203,7 +175,7 @@ describe('the Eclipse corona', () => {
     // Steps on until the regrowth falls due and a shard grows back, the ship still on the slot it left empty.
     const grownNow = () => rig.r.view.parts.some((p, i) => (before[i] ?? 0) <= 0 && p.hp > 0);
     for (let step = 0; step < 1 / STEP_SECONDS && !grownNow(); step++) {
-      stepper(rig)(STEP_SECONDS, rig.arena);
+      rigStepper(rig)(STEP_SECONDS, rig.arena);
       expect(rig.r.view.parts[first]?.hp, 'the slot the ship is on stays empty').toBe(0);
     }
     const { parts } = rig.r.view;
@@ -225,11 +197,11 @@ describe('the Eclipse corona', () => {
         const arena = stubArena(undefined, { width: 720 * aspect, height: 720 });
         const rig = eclipse(seed, arena);
         const rng = createRng(seed * 7 + 1);
-        runFor(stepper(rig), arena, INTRO + 0.05);
+        runFor(rigStepper(rig), arena, BOSS_INTRO_SECONDS + 0.05);
         for (let step = 0; step < 40 / STEP_SECONDS && rig.r.state === 'fighting'; step++) {
           if (step % 240 === 0) Object.assign(arena.ship, { x: rng.range(0, arena.field().width), y: rng.range(0, arena.field().height) });
           if (rng.chance(0.01)) breakUntil(rig.r, rng.int(4, 10));
-          stepper(rig)(STEP_SECONDS, arena);
+          rigStepper(rig)(STEP_SECONDS, arena);
           for (const part of liveParts(rig.r.view)) {
             expect(part.x - part.radius, `seed ${String(seed)} aspect ${aspect.toFixed(2)}`).toBeGreaterThanOrEqual(-1e-6);
             expect(part.x + part.radius).toBeLessThanOrEqual(arena.field().width + 1e-6);
@@ -251,11 +223,11 @@ describe('the Eclipse corona', () => {
   it('keeps every shard its volley throws inside the field, even with the ship in a corner', () => {
     const arena = stubArena(createShip(2, 2));
     const rig = eclipse(1, arena);
-    runFor(stepper(rig), arena, INTRO + 0.05);
+    runFor(rigStepper(rig), arena, BOSS_INTRO_SECONDS + 0.05);
     stepUntil(rig, (view) => view.active === 'shardVolley', 30);
     let flights = 0;
     for (let step = 0; step < ECLIPSE_VOLLEY.seconds / STEP_SECONDS && rig.r.view.active === 'shardVolley'; step++) {
-      stepper(rig)(STEP_SECONDS, arena);
+      rigStepper(rig)(STEP_SECONDS, arena);
       flights++;
       for (const part of liveParts(rig.r.view)) {
         expect(part.x).toBeGreaterThanOrEqual(part.radius - 1e-6);
@@ -291,7 +263,7 @@ describe('the Eclipse moves', () => {
       const rig = fighting(phase);
       if (phase > 1) toPhase(rig, phase);
       for (let step = 0; step < 40 / STEP_SECONDS; step++) {
-        stepper(rig)(STEP_SECONDS, rig.arena);
+        rigStepper(rig)(STEP_SECONDS, rig.arena);
         const threat = rig.r.view.threat;
         if (threat !== null) seen[threat.attack] = threat;
       }
@@ -313,7 +285,7 @@ describe('the Eclipse moves', () => {
       stepUntil(rig, (view) => view.windup === 'quake', 60);
       rig.arena.asteroids.length = 0;
       stepUntil(rig, (view) => view.active === 'quake', 5);
-      stepper(rig)(STEP_SECONDS, rig.arena);
+      rigStepper(rig)(STEP_SECONDS, rig.arena);
       expect(rig.arena.asteroids, `phase ${String(phase)}`).toHaveLength(QUAKE_ROCKS[phase]);
       for (const rock of rig.arena.asteroids) expect(rock.transient).toBe(true);
     }
@@ -329,7 +301,7 @@ describe('the Eclipse moves', () => {
     expect(threat).toMatchObject({ kind: 'shove' });
     stepUntil(rig, (view) => view.active === 'pulse', 5);
     // The pulse's shove is asked for on the step its run first makes it, and the ship takes it on the hazard path.
-    stepper(rig)(STEP_SECONDS, rig.arena);
+    rigStepper(rig)(STEP_SECONDS, rig.arena);
     rig.r.shove(ship);
     const shoved = Math.hypot(ship.vx, ship.vy);
     expect(ship.vy).toBeGreaterThan(0);
@@ -340,7 +312,7 @@ describe('the Eclipse moves', () => {
   it('dives its core to the aim as a dash held inside the field, with its lane declared at the full reach of the corona', () => {
     const arena = stubArena(createShip(BOSS_FIELD.width - 2, BOSS_FIELD.height - 2));
     const rig = eclipse(2, arena);
-    runFor(stepper(rig), arena, INTRO + 0.05);
+    runFor(rigStepper(rig), arena, BOSS_INTRO_SECONDS + 0.05);
     toPhase(rig, 3);
     stepUntil(rig, (view) => view.windup === 'dive', 60);
     expect(rig.r.view.threat).toMatchObject({ kind: 'lane', reach: ECLIPSE_REACH });
@@ -358,10 +330,10 @@ describe('the Eclipse moves', () => {
     toPhase(rig, 3);
     rig.foes.clear();
     stepUntil(rig, (view) => view.active === 'launch', 60);
-    stepper(rig)(STEP_SECONDS, rig.arena);
+    rigStepper(rig)(STEP_SECONDS, rig.arena);
     expect(rig.foes.launched).toBe(ECLIPSE_WAVES[3]);
     for (let step = 0; step < 60 / STEP_SECONDS; step++) {
-      stepper(rig)(STEP_SECONDS, rig.arena);
+      rigStepper(rig)(STEP_SECONDS, rig.arena);
       expect(rig.foes.launched).toBeLessThanOrEqual(ECLIPSE_CAP);
     }
   });
@@ -376,7 +348,7 @@ describe('the Eclipse moves', () => {
     launchSlot(rig.r.view, 0, wave, spot);
     Object.assign(rig.arena.ship, { x: spot.x, y: spot.y });
     stepUntil(rig, (view) => view.active === 'launch', 5);
-    stepper(rig)(STEP_SECONDS, rig.arena);
+    rigStepper(rig)(STEP_SECONDS, rig.arena);
     const marks = launchSlotsFor(rig.r.view, BOSS_FIELD, rig.arena.ship, wave, wave, []).map((slot) => {
       launchSlot(rig.r.view, slot, wave, spot);
       return { x: spot.x, y: spot.y };
@@ -395,7 +367,7 @@ describe('the Eclipse moves', () => {
     stepUntil(rig, (view) => view.active === 'turretVolley', 5);
     // Its run makes the bolts on the step after the one that made it active.
     const standing = liveParts(rig.r.view);
-    stepper(rig)(STEP_SECONDS, rig.arena);
+    rigStepper(rig)(STEP_SECONDS, rig.arena);
     const bolts = rig.bolts.list.filter((b) => b.fromAttack && b.age === 0);
     expect(bolts).toHaveLength(standing.length);
     for (const bolt of bolts) {
@@ -414,7 +386,7 @@ describe('the Eclipse\'s fairness', () => {
     const rig = fighting(7);
     const margin = RESPAWN_MARGIN;
     for (let step = 0; step < 30 / STEP_SECONDS; step++) {
-      stepper(rig)(STEP_SECONDS, rig.arena);
+      rigStepper(rig)(STEP_SECONDS, rig.arena);
       const spot = clearSpot(rig.r.view, rig.r.reach, rig.arena.field(), margin);
       expect(respawnClearance(rig.r.view, rig.r.reach, spot.x, spot.y)).toBeGreaterThanOrEqual(margin);
     }
@@ -441,7 +413,7 @@ describe('the Eclipse\'s fairness', () => {
       const trail = (seed: number): number[] => {
         const rig = eclipse(seed);
         const poses: number[] = [];
-        runFor(stepper(rig), rig.arena, 30, () => poses.push(rig.r.view.x, rig.r.view.y));
+        runFor(rigStepper(rig), rig.arena, 30, () => poses.push(rig.r.view.x, rig.r.view.y));
         return poses;
       };
       expect(trail(9)).toEqual(trail(9));

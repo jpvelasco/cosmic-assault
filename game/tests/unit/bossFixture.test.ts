@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { Dimension, GalaxyDef, GalaxyId } from '../../src/content/types';
@@ -22,7 +23,6 @@ import { MUTED_KINDS } from '../helpers/mute';
 const DEF = FIXTURE_DEF;
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS);
 const APPROACH = 20;
-const INTRO = 2;
 const FIXTURE_HP = 20;
 
 function runnerFor(maxHp = FIXTURE_HP, seed = 5): BossRunner {
@@ -37,7 +37,7 @@ const step = (r: BossRunner) => (dt: number, arena: StubArena) => {
 function fightingAt(hp: number, field: Field = BOSS_FIELD): { r: BossRunner; arena: StubArena } {
   const r = runnerFor(30);
   const arena = stubArena(undefined, field);
-  runFor(step(r), arena, INTRO + 0.05);
+  runFor(step(r), arena, BOSS_INTRO_SECONDS + 0.05);
   if (hp < 30) r.hit(30 - hp);
   return { r, arena };
 }
@@ -99,7 +99,7 @@ describe('the fixture\'s ring', () => {
     const ring = (seed: number): number[] => {
       const r = new BossRunner(DEF, FIXTURE, { maxHp: 30, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD });
       const arena = stubArena();
-      runFor(step(r), arena, INTRO + 0.05);
+      runFor(step(r), arena, BOSS_INTRO_SECONDS + 0.05);
       arena.asteroids.length = 0;
       runFor(step(r), arena, 4);
       return arena.asteroids.map((a) => Math.atan2(a.vy, a.vx));
@@ -287,7 +287,7 @@ describe('a boss in its galaxy', () => {
 
   it('takes 1 damage and reports a bossHit for each shot spent on the core', () => {
     const g = bossWorld(CORE_BOSS_GALAXY, { initialShip: { ...HOME, angle: -Math.PI / 2 } });
-    playWorld(g, APPROACH + INTRO + 0.05);
+    playWorld(g, APPROACH + BOSS_INTRO_SECONDS + 0.05);
     const consumedBy = shotWatcher(g.world);
     const boss = g.world.boss;
     let [lost, previous] = [0, boss?.hp ?? 0];
@@ -317,7 +317,7 @@ describe('a boss in its galaxy', () => {
 
   it('counts the core touching the ship as a ship hit, but not during the intro', () => {
     const g = bossWorld(CORE_BOSS_GALAXY, { initialShip: { ...HOME, angle: 0 } });
-    playWorld(g, APPROACH + INTRO - 0.1);
+    playWorld(g, APPROACH + BOSS_INTRO_SECONDS - 0.1);
     expect(g.world.lives).toBe(3);
     playWorld(g, 0.3);
     const hits = ofType(g.log, 'shipHit');
@@ -329,7 +329,7 @@ describe('a boss in its galaxy', () => {
   it('lets an invulnerable ship pass through the core', () => {
     const g = bossWorld(CORE_BOSS_GALAXY, { initialShip: { ...HOME, angle: 0 } });
     const ship: Ship = g.world.ship;
-    playWorld(g, APPROACH + INTRO - 0.1);
+    playWorld(g, APPROACH + BOSS_INTRO_SECONDS - 0.1);
     ship.invulnerable = true;
     ship.invulnerableFor = 100;
     playWorld(g, 0.5);
@@ -381,7 +381,7 @@ describe('beating a boss', () => {
   /** A 3-6 game in which the ship dies on the core at the start of the fight, then a chain of 4 kills is built and the boss is beaten. */
   function beaten(mode: GalaxyMode): GalaxyWorld {
     const g = bossWorld(CORE_BOSS_GALAXY, { initialShip: { ...HOME, angle: 0 } }, mode);
-    playWorld(g, APPROACH + INTRO + 0.1);
+    playWorld(g, APPROACH + BOSS_INTRO_SECONDS + 0.1);
     expect(g.world.deaths).toBe(1);
     const run = runOf(g.world);
     for (let i = 0; i < 4; i++) run.scoreKill(0);
@@ -439,7 +439,7 @@ describe('beating a boss', () => {
 
   it('cannot lose the clear once the killing shot lands: a last-life ship on the dying core, under a rock, stays unhit', () => {
     const g = bossWorld(CORE_BOSS_GALAXY, { startLives: 1 });
-    playWorld(g, APPROACH + INTRO + 0.1);
+    playWorld(g, APPROACH + BOSS_INTRO_SECONDS + 0.1);
     const boss = g.world.boss;
     if (boss === null) throw new Error('the boss should be fighting by now');
     const run = runOf(g.world);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, GalaxyDef } from '../../src/content/types';
 import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
@@ -43,7 +43,6 @@ import { auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 const DEF = BOSSES.leviathan;
 /** Its HP in 4-★, the only galaxy it guards. */
 const MAX_HP = bossHp(DEF, 4);
-const INTRO = 2;
 const APPROACH = 20;
 const CENTRE = { x: BOSS_FIELD.width / 2, y: BOSS_FIELD.height / 2 };
 /** Float residue from summing steps. */
@@ -71,7 +70,7 @@ const stepper = (rigged: Rig) => (dt: number, arena: StubArena) => {
 /** A Leviathan whose intro is over. */
 function fighting(seed = 1, ship = CENTRE): Rig {
   const rigged = rig(seed, ship);
-  runFor(stepper(rigged), rigged.arena, INTRO + STEP_SECONDS);
+  runFor(stepper(rigged), rigged.arena, BOSS_INTRO_SECONDS + STEP_SECONDS);
   expect(rigged.r.state).toBe('fighting');
   return rigged;
 }
@@ -156,7 +155,7 @@ describe('the Leviathan body', () => {
   it('holds still at home through its intro', () => {
     const rigged = rig();
     const before = [rigged.r.view.x, rigged.r.view.y, ...segments(rigged.r).flatMap((p) => [p.x, p.y])];
-    runFor(stepper(rigged), rigged.arena, INTRO - STEP_SECONDS);
+    runFor(stepper(rigged), rigged.arena, BOSS_INTRO_SECONDS - STEP_SECONDS);
     expect(rigged.r.state).toBe('intro');
     expect([rigged.r.view.x, rigged.r.view.y, ...segments(rigged.r).flatMap((p) => [p.x, p.y])]).toEqual(before);
   });
@@ -340,7 +339,7 @@ describe('dismantling the Leviathan', () => {
   it('is always beatable: one blow a second where a shot does harm beats it within two minutes of its arrival, on every seed tried', () => {
     for (const seed of [1, 2, 3, 4]) {
       const rigged = rig(seed);
-      batter(rigged, INTRO + 120);
+      batter(rigged, BOSS_INTRO_SECONDS + 120);
       expect(rigged.r.state, `seed ${String(seed)}`).not.toBe('fighting');
     }
   });
@@ -629,7 +628,7 @@ describe('the Leviathan in 4-★', () => {
   const calm: GalaxyDef = { ...galaxyById('4-6'), kinds: MUTED_KINDS, events: [] };
   const world = (seed: number): World => new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm, mode: 'free' } });
   const toFight = (w: World): BossView => {
-    for (let i = 0; i < Math.round((APPROACH + INTRO + 0.5) / STEP_SECONDS); i++) w.step(STEP_SECONDS, NO_CONTROLS);
+    for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 0.5) / STEP_SECONDS); i++) w.step(STEP_SECONDS, NO_CONTROLS);
     if (w.boss?.state !== 'fighting') throw new Error('the Leviathan should be fighting');
     return w.boss;
   };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AttackId } from '../../src/content/types';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -9,7 +9,6 @@ import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed,
 
 const DEF = FIXTURE_DEF;
 const MAX_HP = 30;
-const INTRO = 2;
 const DYING = 2;
 const EPS = STEP_SECONDS * 2.5;
 
@@ -25,7 +24,7 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
 function fighting(maxHp = MAX_HP, behaviour: BossBehaviour = FIXTURE): { r: BossRunner; arena: StubArena } {
   const r = runnerFor(behaviour, maxHp);
   const arena = stubArena();
-  runFor(stepper(r), arena, INTRO + 0.05);
+  runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
   return { r, arena };
 }
 
@@ -39,7 +38,7 @@ describe('BossRunner intro and phases', () => {
   it('announces itself once and cannot be hurt for the 2 s intro', () => {
     const r = runnerFor();
     const arena = stubArena();
-    const log = runFor(stepper(r), arena, INTRO - 0.1, () => {
+    const log = runFor(stepper(r), arena, BOSS_INTRO_SECONDS - 0.1, () => {
       expect(r.state).toBe('intro');
       expect(r.hit(5)).toBe('blocked');
     });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { BOSSES } from '../../src/content/bosses';
 import { FOES } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
@@ -14,7 +15,6 @@ import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF = FIXTURE_DEF;
-const INTRO = 2;
 /** The probe's weak point: the half of its rim facing right, and only while it says its door is open. */
 const WEAK_SIDE = 1;
 
@@ -62,7 +62,7 @@ function runnerOf(behaviour: BossBehaviour): BossRunner {
 function fighting(behaviour: BossBehaviour): { r: BossRunner; arena: StubArena } {
   const r = runnerOf(behaviour);
   const arena = stubArena();
-  runFor(stepper(r), arena, INTRO + 0.05);
+  runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
   expect(r.state).toBe('fighting');
   return { r, arena };
 }
@@ -104,7 +104,7 @@ describe('a boss hurt only at a weak point', () => {
     probe.open = true;
     runFor(stepper(r), arena, 0.5);
     expect(bossTarget(r.view)).toBeNull();
-    runFor(stepper(r), arena, INTRO);
+    runFor(stepper(r), arena, BOSS_INTRO_SECONDS);
     expect(bossTarget(r.view)).toEqual({ x: r.view.x + r.view.radius, y: r.view.y });
     probe.open = false;
     runFor(stepper(r), arena, STEP_SECONDS);
@@ -127,7 +127,7 @@ describe('a boss hurt only at a weak point', () => {
   it('faces down the field until its behaviour turns it', () => {
     const r = runnerOf(doorProbe());
     expect(r.view.facing).toBe(Math.PI / 2);
-    runFor(stepper(r), stubArena(), INTRO + 1);
+    runFor(stepper(r), stubArena(), BOSS_INTRO_SECONDS + 1);
     expect(r.view.facing).toBe(Math.PI / 2);
   });
 });

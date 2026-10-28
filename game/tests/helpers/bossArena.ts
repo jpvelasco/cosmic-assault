@@ -1,8 +1,11 @@
 import type { BossDef } from '../../src/content/bosses';
+import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { ASTEROID, STEP_SECONDS } from '../../src/sim/config';
 import { dashAttack, rockRingAttack } from '../../src/sim/boss/attacks';
-import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
-import type { BossRunner } from '../../src/sim/boss/bossRunner';
+import type { AttackSpec, BossBehaviour, BossFactory, BossSetup } from '../../src/sim/boss/behaviour';
+import { BossRunner } from '../../src/sim/boss/bossRunner';
+import { Bolts } from '../../src/sim/foes/bolts';
+import { FoeField } from '../../src/sim/foes/foeField';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { createRng } from '../../src/sim/rng';
@@ -102,4 +105,42 @@ export const liveParts = <P extends { readonly hp: number }>(of: { readonly part
 /** Breaks part `index` of the fight `r` runs with as many 1-damage blows as it takes, while the fight lasts. */
 export function breakPart(r: BossRunner, index: number): void {
   while ((r.view.parts[index]?.hp ?? 0) > 0 && r.state === 'fighting') r.hitPart(index, 1);
+}
+
+/** A boss's fight on a stub arena, with bolts and foes of its own to fire and launch. */
+export interface BossRig {
+  readonly r: BossRunner;
+  readonly arena: StubArena;
+  readonly bolts: Bolts;
+  readonly foes: FoeField;
+}
+
+/** What a rig is made with: the fight's seed, its arena, and the seed of its foes' stream. */
+export interface RigOptions {
+  readonly seed?: number;
+  readonly arena?: StubArena;
+  readonly foesSeed?: number;
+}
+
+/** Boss `def`, made by `make` with `maxHp`, on `arena` (a fresh stub's by default), its fight drawn from `seed`. */
+export function bossRig(def: BossDef, make: BossFactory, maxHp: number, { seed = 1, arena = stubArena(), foesSeed = 99 }: RigOptions = {}): BossRig {
+  const bolts = new Bolts(arena);
+  const foes = new FoeField(arena, createRng(foesSeed), { score: (base) => base, killed: () => undefined });
+  const setup: BossSetup = { maxHp, rng: createRng(seed), rockSpeed: 1, field: arena.field(), bolts, foes };
+  return { r: new BossRunner(def, make(setup), setup), arena, bolts, foes };
+}
+
+/** Steps a rig's bolts, its foes, then its boss, as a galaxy does. */
+export const rigStepper = (rig: BossRig): Stepper => (dt, arena) => {
+  rig.bolts.step(dt);
+  rig.foes.step(dt);
+  rig.r.step(dt, arena);
+};
+
+/** `bossRig`, stepped through the boss's intro into its fight; fails if the fight has not begun. */
+export function fightingRig(def: BossDef, make: BossFactory, maxHp: number, options: RigOptions = {}): BossRig {
+  const rig = bossRig(def, make, maxHp, options);
+  runFor(rigStepper(rig), rig.arena, BOSS_INTRO_SECONDS + 0.05);
+  if (rig.r.state !== 'fighting') throw new Error(`${def.id} is ${rig.r.state} after its intro, not fighting: check its intro length`);
+  return rig;
 }
