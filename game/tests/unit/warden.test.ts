@@ -21,7 +21,7 @@ import { createRng, deriveSeed } from '../../src/sim/rng';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { World } from '../../src/sim/world';
 import { rescale } from '../../src/sim/wrap';
-import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 import { ringGaps, wardenGapBearings, wardenGaps } from '../helpers/ringGaps';
 
@@ -67,9 +67,8 @@ function woundTo(r: BossRunner, hp: number): void {
   if (hp < r.hp) expect(r.hit(r.hp - hp)).toBe('hit');
 }
 
-const live = (boss: Readonly<BossView>): Readonly<BossPart>[] => boss.parts.filter((p) => p.hp > 0);
 const bearingOf = (boss: Readonly<BossView>, p: Readonly<{ x: number; y: number }>): number => Math.atan2(p.y - boss.y, p.x - boss.x);
-const ringRadius = (boss: Readonly<BossView>): number => Math.max(...live(boss).map((p) => Math.hypot(p.x - boss.x, p.y - boss.y)));
+const ringRadius = (boss: Readonly<BossView>): number => Math.max(...liveParts(boss).map((p) => Math.hypot(p.x - boss.x, p.y - boss.y)));
 
 /** Distance from (px, py) to the segment from (ax, ay) to (bx, by). */
 function toSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
@@ -82,9 +81,7 @@ function toSegment(px: number, py: number, ax: number, ay: number, bx: number, b
 /** Breaks the live turrets of `r` that `rng` picks, now and then, to stress the ring through a fight. */
 function breakSome(r: BossRunner, rng: ReturnType<typeof createRng>): void {
   if (!rng.chance(0.01)) return;
-  const i = rng.int(0, r.view.parts.length);
-  const part = r.view.parts[i] as BossPart;
-  while (part.hp > 0 && r.state === 'fighting') r.hitPart(i, 1);
+  breakPart(r, rng.int(0, r.view.parts.length));
 }
 
 describe('crosses', () => {
@@ -199,7 +196,7 @@ describe('the Warden\'s turret ring', () => {
       const { view } = rig.r;
       for (const gap of wardenGapBearings(view)) {
         const far = { x: view.x + Math.cos(gap) * 400, y: view.y + Math.sin(gap) * 400 };
-        for (const part of live(view)) room = Math.min(room, toSegment(part.x, part.y, view.x, view.y, far.x, far.y) - part.radius);
+        for (const part of liveParts(view)) room = Math.min(room, toSegment(part.x, part.y, view.x, view.y, far.x, far.y) - part.radius);
         checked++;
       }
     });
@@ -225,14 +222,14 @@ describe('the Warden\'s regrowth', () => {
     const { r } = rig;
     // Park the ship far off, so no slot is too near it to grow in.
     Object.assign(rig.arena.ship, { x: 60, y: 660 });
-    for (const i of [0, 3, 6, 9]) while ((r.view.parts[i] as BossPart).hp > 0) r.hitPart(i, 1);
+    for (const i of [0, 3, 6, 9]) breakPart(r, i);
     const counts: number[] = [];
     /** The nearest any live turret came to a gap slot's bearing. */
     let nearestGap = Infinity;
     runFor(stepper(rig), rig.arena, 40, () => {
-      counts.push(live(r.view).length);
+      counts.push(liveParts(r.view).length);
       const gaps = wardenGapBearings(r.view);
-      for (const part of live(r.view)) for (const gap of gaps) nearestGap = Math.min(nearestGap, Math.abs(turnBetween(gap, bearingOf(r.view, part))));
+      for (const part of liveParts(r.view)) for (const gap of gaps) nearestGap = Math.min(nearestGap, Math.abs(turnBetween(gap, bearingOf(r.view, part))));
     });
     expect(nearestGap).toBeGreaterThan(SLOT / 2);
     const regrownAt = counts.flatMap((n, i) => (i > 0 && n > (counts[i - 1] ?? 0) ? [Math.round((i + 1) * STEP_SECONDS)] : []));
@@ -254,7 +251,7 @@ describe('the Warden\'s regrowth', () => {
     const due = below - WARDEN_RING.speeds[1] * WARDEN_RING.regrowSeconds;
     const parts = r.view.parts;
     const late = parts.reduce((best, p, i) => (Math.abs(turnBetween(due, bearingOf(r.view, p))) < Math.abs(turnBetween(due, bearingOf(r.view, parts[best] as BossPart))) ? i : best), 0);
-    while ((parts[late] as BossPart).hp > 0) r.hitPart(late, 1);
+    breakPart(r, late);
     const brokenAt = arena.elapsed();
     const was = parts.map((p) => p.hp);
     const grown: { part: number; at: number; clearance: number }[] = [];
@@ -303,7 +300,7 @@ describe('the Warden\'s core', () => {
     runFor(stepper(rig), rig.arena, 60, () => {
       const { view } = rig.r;
       if (view.active === null && view.windup === null) moved = Math.max(moved, Math.hypot(view.x - view.px, view.y - view.py) / STEP_SECONDS);
-      for (const p of live(view)) {
+      for (const p of liveParts(view)) {
         bounds.left = Math.min(bounds.left, p.x - p.radius);
         bounds.top = Math.min(bounds.top, p.y - p.radius);
         bounds.right = Math.max(bounds.right, p.x + p.radius);
@@ -373,7 +370,7 @@ describe('the Warden\'s attacks', () => {
       const rig = fighting(2);
       const { r } = rig;
       woundTo(r, hp);
-      for (const i of [1, 5]) while ((r.view.parts[i] as BossPart).hp > 0) r.hitPart(i, 1);
+      for (const i of [1, 5]) breakPart(r, i);
       const seen: { at: number; bolts: number; outward: boolean }[] = [];
       runFor(stepper(rig), rig.arena, 12, () => {
         if (r.view.active !== 'turretVolley') return;
@@ -407,7 +404,7 @@ describe('the Warden\'s attacks', () => {
       if (locking && fired.length === 0) {
         fired = ofType(rig.arena.events, 'boltFired').map((e) => ({ x: e.x, y: e.y, angle: e.angle }));
         // Where the turrets stood as they fired, before the ring's step moved them on.
-        nearest = live(rig.r.view).map((p) => Math.hypot(p.px - aim.x, p.py - aim.y)).sort((a, b) => a - b).slice(0, 2);
+        nearest = liveParts(rig.r.view).map((p) => Math.hypot(p.px - aim.x, p.py - aim.y)).sort((a, b) => a - b).slice(0, 2);
       }
       locking = rig.r.view.active === 'lockOn';
     });
@@ -496,7 +493,7 @@ describe('the Warden as the expert bot sees it', () => {
     expect(pick(r, gap)).toMatchObject({ x: r.view.x, y: r.view.y, weakPoint: true });
     const blocked = pick(r, gap + 4 * SLOT);
     const ship = { x: r.view.x + Math.cos(gap + 4 * SLOT) * 300, y: r.view.y + Math.sin(gap + 4 * SLOT) * 300 };
-    const nearest = live(r.view).reduce((a, b) => (Math.hypot(a.x - ship.x, a.y - ship.y) <= Math.hypot(b.x - ship.x, b.y - ship.y) ? a : b));
+    const nearest = liveParts(r.view).reduce((a, b) => (Math.hypot(a.x - ship.x, a.y - ship.y) <= Math.hypot(b.x - ship.x, b.y - ship.y) ? a : b));
     expect(blocked).toMatchObject({ x: nearest.x, y: nearest.y, weakPoint: false });
   });
 

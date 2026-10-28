@@ -2,6 +2,7 @@ import type { BossDef } from '../../src/content/bosses';
 import { ASTEROID, STEP_SECONDS } from '../../src/sim/config';
 import { dashAttack, rockRingAttack } from '../../src/sim/boss/attacks';
 import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
+import type { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { createRng } from '../../src/sim/rng';
@@ -93,4 +94,12 @@ export function ofType<T extends SimEvent['type']>(events: readonly SimEvent[], 
 /** The logged events of one type, narrowed to its shape. */
 export function timedOfType<T extends SimEvent['type']>(log: readonly Timed[], type: T): (Timed & { event: Extract<SimEvent, { type: T }> })[] {
   return log.filter((l): l is Timed & { event: Extract<SimEvent, { type: T }> } => l.event.type === type);
+}
+
+/** The parts of a boss, or of a ring of them, with HP left. */
+export const liveParts = <P extends { readonly hp: number }>(of: { readonly parts: readonly P[] }): P[] => of.parts.filter((p) => p.hp > 0);
+
+/** Breaks part `index` of the fight `r` runs with as many 1-damage blows as it takes, while the fight lasts. */
+export function breakPart(r: BossRunner, index: number): void {
+  while ((r.view.parts[index]?.hp ?? 0) > 0 && r.state === 'fighting') r.hitPart(index, 1);
 }

@@ -36,7 +36,7 @@ import { TAU, turnBetween } from '../../src/sim/math';
 import { createRng, type Rng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 import { auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
@@ -77,14 +77,11 @@ function fighting(seed = 1, ship = CENTRE): Rig {
 }
 
 const segments = (r: BossRunner): readonly BossPart[] => r.view.parts;
-const liveSegments = (r: BossRunner): number => segments(r).filter((p) => p.hp > 0).length;
 const distance = (a: Readonly<{ x: number; y: number }>, b: Readonly<{ x: number; y: number }>): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** Breaks the tail-most live segment with blows on it. */
 function breakTail(r: BossRunner): void {
-  const index = segments(r).findIndex((p) => p.hp > 0);
-  const part = segments(r)[index] as BossPart;
-  while (part.hp > 0) r.hitPart(index, 1);
+  breakPart(r, segments(r).findIndex((p) => p.hp > 0));
 }
 
 /** Steps until `attack` winds up, or throws after `seconds`. */
@@ -301,7 +298,7 @@ describe('dismantling the Leviathan', () => {
     const { r } = fighting();
     for (let broken = 1; broken < SEGMENT_COUNT; broken++) {
       breakTail(r);
-      expect(liveSegments(r)).toBe(SEGMENT_COUNT - broken);
+      expect(liveParts(r.view).length).toBe(SEGMENT_COUNT - broken);
       expect(r.view.target).toBe(segments(r)[broken]);
       expect(r.hp).toBe(MAX_HP - (DEF.partBreakDamage ?? 0) * broken);
       expect(r.view.vulnerable).toBe(false);

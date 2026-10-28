@@ -11,7 +11,7 @@ import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF, FIXTURE } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE, FIXTURE_DEF, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { ATTACK_TELEGRAPHS, auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
 const BOSS_IDS = Object.keys(BOSS_BEHAVIOURS) as BossId[];
@@ -118,7 +118,6 @@ describe('the shared attack library', () => {
 
 describe('a ShardOrbit', () => {
   const OPTIONS = { counts: [6, 6], hp: 2, radius: 10, orbit: 80, speed: 1, exposedAt: 3, regrowSeconds: 1, regrowCap: 3 } as const;
-  const liveShards = (orbit: ShardOrbit): number => orbit.parts.filter((p) => p.hp > 0).length;
 
   function orbiting(): { orbit: ShardOrbit; runner: BossRunner; arena: StubArena } {
     const arena = stubArena();
@@ -143,16 +142,16 @@ describe('a ShardOrbit', () => {
 
   it('lays the core bare at its threshold, and regrows a shard a second while bare, up to its cap', () => {
     const { orbit, runner, arena } = orbiting();
-    for (let i = 0; i < 2; i++) while ((orbit.parts[i]?.hp ?? 0) > 0) runner.hitPart(i, 1);
+    for (let i = 0; i < 2; i++) breakPart(runner, i);
     expect(orbit.exposed).toBe(false);
-    for (let i = 2; i < 4; i++) while ((orbit.parts[i]?.hp ?? 0) > 0) runner.hitPart(i, 1);
-    expect(liveShards(orbit)).toBe(2);
+    for (let i = 2; i < 4; i++) breakPart(runner, i);
+    expect(liveParts(orbit).length).toBe(2);
     expect(orbit.exposed).toBe(true);
     runFor((dt, a) => { runner.step(dt, a); }, arena, 1.05);
-    expect(liveShards(orbit)).toBe(3);
+    expect(liveParts(orbit).length).toBe(3);
     // Still bare at three, it is the cap that stops it.
     runFor((dt, a) => { runner.step(dt, a); }, arena, 3);
-    expect(liveShards(orbit)).toBe(3);
+    expect(liveParts(orbit).length).toBe(3);
     expect(orbit.exposed).toBe(true);
   });
 

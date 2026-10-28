@@ -13,7 +13,7 @@ import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF = BOSSES.monolith;
@@ -37,7 +37,6 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
   r.step(dt, arena);
 };
 
-const liveShards = (boss: Readonly<BossView>): number => boss.parts.filter((p) => p.hp > 0).length;
 
 /** A Monolith whose intro is over. */
 function fighting(seed = 1, arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
@@ -50,7 +49,7 @@ function fighting(seed = 1, arena: StubArena = stubArena()): { r: BossRunner; ar
 /** Breaks live shards, lowest first, until `left` remain. */
 function breakTo(r: BossRunner, left: number): void {
   r.view.parts.forEach((part, i) => {
-    while (part.hp > 0 && liveShards(r.view) > left) r.hitPart(i, 1);
+    while (part.hp > 0 && liveParts(r.view).length > left) r.hitPart(i, 1);
   });
 }
 
@@ -144,7 +143,7 @@ describe('Monolith regrowth', () => {
   /** Shards alive after each step, for `seconds`. */
   function liveCounts(r: BossRunner, arena: StubArena, seconds: number): number[] {
     const counts: number[] = [];
-    runFor(stepper(r), arena, seconds, () => counts.push(liveShards(r.view)));
+    runFor(stepper(r), arena, seconds, () => counts.push(liveParts(r.view).length));
     return counts;
   }
 
@@ -154,7 +153,7 @@ describe('Monolith regrowth', () => {
     const log: SimEvent[] = [];
     const counts: number[] = [];
     runFor(stepper(r), arena, 40, () => {
-      counts.push(liveShards(r.view));
+      counts.push(liveParts(r.view).length);
       log.push(...arena.events);
     });
     const regrownAt = counts.flatMap((n, i) => (i > 0 && n > (counts[i - 1] ?? 0) ? [(i + 1) * STEP_SECONDS] : []));
@@ -194,10 +193,10 @@ describe('Monolith regrowth', () => {
       let regrown = 0;
       breakTo(r, 0);
       runFor(stepper(r), arena, 120, () => {
-        const before = liveShards(r.view);
+        const before = liveParts(r.view).length;
         if (rng.chance(0.004)) breakTo(r, rng.int(0, before + 1));
-        regrown = Math.max(regrown, liveShards(r.view));
-        expect(liveShards(r.view)).toBeLessThanOrEqual(REGROW_CAP);
+        regrown = Math.max(regrown, liveParts(r.view).length);
+        expect(liveParts(r.view).length).toBeLessThanOrEqual(REGROW_CAP);
       });
       expect(regrown).toBeGreaterThan(0);
     }
@@ -373,7 +372,7 @@ describe('Monolith determinism', () => {
       const { r, arena } = fighting(seed);
       const poses: number[] = [];
       const log = runFor(stepper(r), arena, 40, () => {
-        if (arena.elapsed() > 12 && liveShards(r.view) > 0 && !r.view.vulnerable) breakTo(r, EXPOSED_AT);
+        if (arena.elapsed() > 12 && liveParts(r.view).length > 0 && !r.view.vulnerable) breakTo(r, EXPOSED_AT);
         if (r.view.vulnerable && arena.elapsed() > 14 && arena.elapsed() < 15) r.hit(1);
         for (const p of r.view.parts) poses.push(p.x, p.y, p.hp);
       });

@@ -15,7 +15,7 @@ import { comboMultiplier } from '../../src/sim/scoring';
 import { createShip } from '../../src/sim/ship';
 import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF, FIXTURE } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE, FIXTURE_DEF, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF: BossDef = FIXTURE_DEF;
@@ -29,7 +29,6 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
   r.step(dt, arena);
 };
 
-const livePartsOf = (boss: Readonly<BossView>): number => boss.parts.filter((p) => p.hp > 0).length;
 
 interface Probe extends BossBehaviour {
   /** Every dt the step hook saw, with the boss's state at the time. */
@@ -63,7 +62,7 @@ function probe(shove = 0): Probe {
         part.y = ctx.boss.y + Math.sin((i / PARTS) * TAU) * PART_REACH;
       });
     },
-    vulnerable: (boss) => livePartsOf(boss) <= 1,
+    vulnerable: (boss) => liveParts(boss).length <= 1,
     seen,
   };
 }
@@ -77,11 +76,6 @@ function fighting(behaviour: BossBehaviour = probe(), arena: StubArena = stubAre
   runFor(stepper(r), arena, INTRO + 0.05);
   expect(r.state).toBe('fighting');
   return { r, arena };
-}
-
-/** Breaks part `index` with as many 1-damage hits as it takes. */
-function breakPart(r: BossRunner, index: number): void {
-  while ((r.view.parts[index]?.hp ?? 0) > 0) r.hitPart(index, 1);
 }
 
 describe('a boss with parts', () => {

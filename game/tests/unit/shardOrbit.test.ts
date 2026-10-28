@@ -3,7 +3,7 @@ import type { AttackSpec, BossBehaviour, BossSetup } from '../../src/sim/boss/be
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { ShardOrbit, type ShardOrbitOptions } from '../../src/sim/boss/shardOrbit';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, FIXTURE_DEF, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, runFor, type StubArena, stubArena } from '../helpers/bossArena';
 
 /** Six shards of radius 10 on an orbit of 80, held still so each slot stays where it is. */
 const STILL: ShardOrbitOptions = { counts: [6, 6], hp: 2, radius: 10, orbit: 80, speed: 0, exposedAt: 3, regrowSeconds: 1, regrowCap: 4 };
@@ -23,11 +23,9 @@ function bareOrbit(options: ShardOrbitOptions): Orbit {
   const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { quake: SPEC, dive: SPEC }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
   const runner = new BossRunner({ ...FIXTURE_DEF, phases: [['quake'], ['quake'], ['quake']] }, behaviour, setup);
   runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
-  for (let i = 0; i < orbit.parts.length && !runner.view.vulnerable; i++) while ((orbit.parts[i]?.hp ?? 0) > 0) runner.hitPart(i, 1);
+  for (let i = 0; i < orbit.parts.length && !runner.view.vulnerable; i++) breakPart(runner, i);
   return { orbit, runner, arena };
 }
-
-const standing = (orbit: ShardOrbit): number => orbit.parts.filter((p) => p.hp > 0).length;
 
 describe('a shard orbit\'s regrowth', () => {
   it('with no grow clearance, grows the first broken shard back even where the ship lies on it, as the Monolith\'s always has', () => {
@@ -46,7 +44,7 @@ describe('a shard orbit\'s regrowth', () => {
     runFor((dt, a) => { runner.step(dt, a); }, arena, 1.2);
     expect(orbit.parts[0]?.hp, 'the slot the ship is on stays empty').toBe(0);
     expect(orbit.parts[1]?.hp, 'the next broken slot clear of the ship grows').toBe(2);
-    expect(standing(orbit)).toBe(4);
+    expect(liveParts(orbit).length).toBe(4);
   });
 
   it('waits while every broken slot lies too near the ship, then grows in once one is clear, never nearer than the clearance', () => {
@@ -55,10 +53,10 @@ describe('a shard orbit\'s regrowth', () => {
     // Every slot lies 80 from the core's centre, inside 150: the ship is on the core.
     Object.assign(arena.ship, { x: runner.view.x, y: runner.view.y });
     runFor((dt, a) => { runner.step(dt, a); }, arena, 3.5);
-    expect(standing(orbit), 'deferred while every slot is near').toBe(3);
+    expect(liveParts(orbit).length, 'deferred while every slot is near').toBe(3);
     Object.assign(arena.ship, { x: 40, y: 40 });
     runFor((dt, a) => { runner.step(dt, a); }, arena, 0.1);
-    expect(standing(orbit), 'grows once a slot is clear').toBe(4);
+    expect(liveParts(orbit).length, 'grows once a slot is clear').toBe(4);
     const grown = orbit.parts.filter((p) => p.hp > 0 && p.maxHp === 2).find((p) => Math.hypot(p.x - arena.ship.x, p.y - arena.ship.y) < clearance);
     expect(grown, 'no regrown shard sits within the clearance of the ship').toBeUndefined();
   });

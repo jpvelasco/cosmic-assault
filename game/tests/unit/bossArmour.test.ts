@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
-import type { AttackSpec, BossBehaviour, BossFactory, BossPart, BossView } from '../../src/sim/boss/behaviour';
+import type { AttackSpec, BossBehaviour, BossFactory, BossPart } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const PARTS = 4;
@@ -18,7 +18,6 @@ const PART_SPACING = 60;
 const BREAK_DAMAGE = 6;
 const DEF: BossDef = { ...FIXTURE_DEF, partBreakDamage: BREAK_DAMAGE };
 
-const live = (boss: Readonly<BossView>): number => boss.parts.filter((p) => p.hp > 0).length;
 
 /**
  * A boss with a tail of four 2 HP parts in a row below its core. Only the tail-most live part can be hurt, the others
@@ -39,7 +38,7 @@ function segmented(): BossBehaviour {
         part.y = ctx.boss.y + 140;
       });
     },
-    vulnerable: (boss) => live(boss) === 0,
+    vulnerable: (boss) => liveParts(boss).length === 0,
     partVulnerable: (index) => index === tail(),
   };
 }
@@ -65,14 +64,14 @@ describe('armoured boss parts', () => {
   it('show which live parts are armoured on the view, refreshed as the tail moves', () => {
     const { r } = fighting();
     expect(r.view.parts.map((p) => p.armoured)).toEqual([true, true, true, false]);
-    while ((r.view.parts[3]?.hp ?? 0) > 0) r.hitPart(3, 1);
+    breakPart(r, 3);
     expect(r.view.parts.slice(0, 3).map((p) => p.armoured)).toEqual([true, true, false]);
   });
 
   it('leave bossTarget on the first live part a shot can hurt, not the first live part', () => {
     const { r } = fighting();
     expect(bossTarget(r.view)).toBe(r.view.parts[3]);
-    while ((r.view.parts[3]?.hp ?? 0) > 0) r.hitPart(3, 1);
+    breakPart(r, 3);
     expect(bossTarget(r.view)).toBe(r.view.parts[2]);
   });
 
@@ -89,7 +88,7 @@ describe('part break damage', () => {
   it('takes the definition\'s break damage off the core with each part broken, though the core is shielded', () => {
     const { r } = fighting();
     expect(r.view.vulnerable).toBe(false);
-    while ((r.view.parts[3]?.hp ?? 0) > 0) r.hitPart(3, 1);
+    breakPart(r, 3);
     expect(r.hp).toBe(30 - BREAK_DAMAGE);
   });
 
@@ -106,7 +105,7 @@ describe('part break damage', () => {
 
   it('never kills: a break that would empty the core leaves it 1 HP, fighting', () => {
     const { r } = fighting(DEF, 8);
-    for (let i = PARTS - 1; i >= 0; i--) while ((r.view.parts[i]?.hp ?? 0) > 0) r.hitPart(i, 1);
+    for (let i = PARTS - 1; i >= 0; i--) breakPart(r, i);
     expect(r.hp).toBe(1);
     expect(r.state).toBe('fighting');
     expect(r.hit(1)).toBe('killed');
@@ -114,7 +113,7 @@ describe('part break damage', () => {
 
   it('is nothing for a boss whose definition gives none', () => {
     const { r } = fighting(FIXTURE_DEF);
-    while ((r.view.parts[3]?.hp ?? 0) > 0) r.hitPart(3, 1);
+    breakPart(r, 3);
     expect(r.hp).toBe(30);
   });
 });

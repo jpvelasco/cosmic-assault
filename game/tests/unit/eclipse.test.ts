@@ -6,7 +6,7 @@ import type { AttackId } from '../../src/content/types';
 import { launchSlot, launchSlotsFor } from '../../src/sim/boss/attacks';
 import { createEclipse, DIVE_SECONDS, ECLIPSE_CAP, ECLIPSE_CORONA, ECLIPSE_REACH, ECLIPSE_VOLLEY, ECLIPSE_WAVES, QUAKE_ROCKS } from '../../src/sim/boss/eclipse';
 import type { Point } from '../../src/sim/math';
-import type { BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossBehaviour, BossPhase, BossSetup, BossView } from '../../src/sim/boss/behaviour';
 import { clearSpot, respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -14,7 +14,7 @@ import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
-import { BOSS_FIELD, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, liveParts, runFor, type StubArena, stubArena } from '../helpers/bossArena';
 
 const DEF = BOSSES.eclipse;
 const spot: Point = { x: 0, y: 0 };
@@ -55,12 +55,10 @@ function fighting(seed = 1, arena?: StubArena): Rig {
 
 const ATTACKS = createEclipse({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()), foes: eclipse().foes }).attacks;
 
-const live = (boss: Readonly<BossView>): Readonly<BossPart>[] => boss.parts.filter((p) => p.hp > 0);
-
 /** Breaks shards, in part order, until `count` are left standing. */
 function breakUntil(r: BossRunner, count: number): void {
-  for (let i = 0; i < r.view.parts.length && live(r.view).length > count; i++) {
-    while ((r.view.parts[i]?.hp ?? 0) > 0 && r.state === 'fighting') r.hitPart(i, 1);
+  for (let i = 0; i < r.view.parts.length && liveParts(r.view).length > count; i++) {
+    breakPart(r, i);
   }
 }
 
@@ -149,11 +147,11 @@ describe('the Eclipse corona', () => {
     const rig = fighting();
     expect(rig.r.view.vulnerable).toBe(false);
     breakUntil(rig.r, 5);
-    expect(live(rig.r.view)).toHaveLength(5);
+    expect(liveParts(rig.r.view)).toHaveLength(5);
     expect(rig.r.view.vulnerable).toBe(false);
     expect(rig.r.hit(1)).toBe('deflected');
     breakUntil(rig.r, 4);
-    expect(live(rig.r.view)).toHaveLength(4);
+    expect(liveParts(rig.r.view)).toHaveLength(4);
     expect(rig.r.view.vulnerable).toBe(true);
     expect(rig.r.hit(1)).toBe('hit');
   });
@@ -163,9 +161,9 @@ describe('the Eclipse corona', () => {
     breakUntil(rig.r, 4);
     const { regrowSeconds } = ECLIPSE_CORONA;
     runFor(stepper(rig), rig.arena, regrowSeconds - 0.2);
-    expect(live(rig.r.view)).toHaveLength(4);
+    expect(liveParts(rig.r.view)).toHaveLength(4);
     runFor(stepper(rig), rig.arena, 0.4);
-    expect(live(rig.r.view)).toHaveLength(5);
+    expect(liveParts(rig.r.view)).toHaveLength(5);
     expect(rig.r.view.vulnerable).toBe(false);
   });
 
@@ -232,7 +230,7 @@ describe('the Eclipse corona', () => {
           if (step % 240 === 0) Object.assign(arena.ship, { x: rng.range(0, arena.field().width), y: rng.range(0, arena.field().height) });
           if (rng.chance(0.01)) breakUntil(rig.r, rng.int(4, 10));
           stepper(rig)(STEP_SECONDS, arena);
-          for (const part of live(rig.r.view)) {
+          for (const part of liveParts(rig.r.view)) {
             expect(part.x - part.radius, `seed ${String(seed)} aspect ${aspect.toFixed(2)}`).toBeGreaterThanOrEqual(-1e-6);
             expect(part.x + part.radius).toBeLessThanOrEqual(arena.field().width + 1e-6);
             expect(part.y - part.radius).toBeGreaterThanOrEqual(-1e-6);
@@ -240,7 +238,7 @@ describe('the Eclipse corona', () => {
           }
           if (!rig.r.view.vulnerable) {
             shielded++;
-            expect(live(rig.r.view).length, 'a shielded core keeps at least five shards').toBeGreaterThan(4);
+            expect(liveParts(rig.r.view).length, 'a shielded core keeps at least five shards').toBeGreaterThan(4);
             expect(rig.r.view.target, 'a shielded core offers a shard').not.toBeNull();
           }
         }
@@ -259,7 +257,7 @@ describe('the Eclipse corona', () => {
     for (let step = 0; step < ECLIPSE_VOLLEY.seconds / STEP_SECONDS && rig.r.view.active === 'shardVolley'; step++) {
       stepper(rig)(STEP_SECONDS, arena);
       flights++;
-      for (const part of live(rig.r.view)) {
+      for (const part of liveParts(rig.r.view)) {
         expect(part.x).toBeGreaterThanOrEqual(part.radius - 1e-6);
         expect(part.y).toBeGreaterThanOrEqual(part.radius - 1e-6);
       }
@@ -396,7 +394,7 @@ describe('the Eclipse moves', () => {
     stepUntil(rig, (view) => view.windup === 'turretVolley', 60);
     stepUntil(rig, (view) => view.active === 'turretVolley', 5);
     // Its run makes the bolts on the step after the one that made it active.
-    const standing = live(rig.r.view);
+    const standing = liveParts(rig.r.view);
     stepper(rig)(STEP_SECONDS, rig.arena);
     const bolts = rig.bolts.list.filter((b) => b.fromAttack && b.age === 0);
     expect(bolts).toHaveLength(standing.length);
