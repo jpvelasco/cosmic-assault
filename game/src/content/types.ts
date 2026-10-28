@@ -3,6 +3,11 @@ export type GalaxyIndex = 1 | 2 | 3 | 4 | 5 | 6;
 /** `'3-4'`: Dimension 3, galaxy 4. Galaxy 6 is the Dimension's boss. */
 export type GalaxyId = `${Dimension}-${GalaxyIndex}`;
 
+/** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
+export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
+  return `${String(dimension)}-${String(index)}` as GalaxyId;
+}
+
 /** The colour looks a galaxy can wear: one per Dimension. */
 export type PaletteId = 'drift' | 'ionReach' | 'crimsonNebula' | 'voidRift' | 'singularity';
 

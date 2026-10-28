@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
-import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
+import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, INSTANT_PICKUPS, isTimed, PICKUP_IDS, PICKUPS, TIMED_PICKUPS } from '../../src/content/pickups';
 import { FOES, GUNSHIP, MINE } from '../../src/content/foes';
 import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
-import type { GalaxyDef, GalaxyId, HazardType, PickupId, ThreatKind } from '../../src/content/types';
+import { galaxyIdOf, type GalaxyDef, type GalaxyEvent, type GalaxyId, type HazardType, type PickupId, type ThreatKind } from '../../src/content/types';
 import { eventSeconds, kindProbability, showerSeconds } from '../../src/content/curves';
 import { lullStart, OPENING_SECONDS } from '../../src/content/pacingRules';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -12,7 +12,6 @@ import { fieldBudget, GalaxyDirector, REFERENCE_AREA, THREAT_COST } from '../../
 import { createRng } from '../../src/sim/rng';
 import { phaseAt } from '../../src/sim/galaxy/pacing';
 import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
-import type { GalaxyEvent } from '../../src/content/types';
 
 /** Seconds `e` is warned before it starts. */
 const warning = (e: GalaxyEvent): number => (e.type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[e.type].telegraph);

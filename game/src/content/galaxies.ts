@@ -1,7 +1,7 @@
 import { showerSeconds } from './curves';
 import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
 import { newIn, poolFor } from './pickups';
-import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, MusicThemeId, PaletteId, ThreatKind } from './types';
+import { galaxyIdOf, type BossId, type Dimension, type GalaxyDef, type GalaxyEvent, type GalaxyId, type GalaxyIndex, type KindRamp, type MusicThemeId, type PaletteId, type ThreatKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   1: 'The Drift',
@@ -130,11 +130,6 @@ const HAZARDS: Readonly<Partial<Record<Dimension, Readonly<Partial<Record<Galaxy
 };
 
 const hazards = (dimension: Dimension, index: GalaxyIndex): readonly GalaxyEvent[] => HAZARDS[dimension]?.[index] ?? [];
-
-/** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
-export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
-  return `${String(dimension)}-${String(index)}` as GalaxyId;
-}
 
 function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
   const boss = index === 6;

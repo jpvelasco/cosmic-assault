@@ -52,10 +52,13 @@ export function radialShove(boss: Readonly<Pick<BossView, 'x' | 'y' | 'radius'>>
   return out;
 }
 
-/** Turns `boss` toward `target` by at most `rate` radians per second over `dt`: how a boss that faces the ship keeps its facing. */
-export function turnToward(boss: BossView, target: Readonly<Point>, rate: number, dt: number): void {
+/**
+ * Turns `boss` toward `target`, as seen from `from` (its core by default), by at most `rate` radians per second over `dt`:
+ * how a boss that faces the ship keeps its facing.
+ */
+export function turnToward(boss: BossView, target: Readonly<Point>, rate: number, dt: number, from: Readonly<Point> = boss): void {
   const limit = rate * dt;
-  boss.facing += clamp(turnBetween(boss.facing, Math.atan2(target.y - boss.y, target.x - boss.x)), -limit, limit);
+  boss.facing += clamp(turnBetween(boss.facing, Math.atan2(target.y - from.y, target.x - from.x)), -limit, limit);
 }
 
 /** The shove a pulse asks for; one point, reused. */

@@ -1,5 +1,5 @@
-import { DIMENSIONS, GALAXY_INDEXES, galaxyIdOf, galaxyLabel } from '../content/galaxies';
-import type { Dimension, GalaxyId, GalaxyIndex } from '../content/types';
+import { DIMENSIONS, GALAXY_INDEXES, galaxyLabel } from '../content/galaxies';
+import { galaxyIdOf, type Dimension, type GalaxyId, type GalaxyIndex } from '../content/types';
 import { isUnlocked } from '../meta/progress';
 import type { GalaxyProgress, SaveData } from '../meta/save';
 import { button, element, lockIcon, menuCard, spokenGalaxy, spokenScore, spokenStars, starRow, withTestId, type Act, type MenuCard, type StarRow } from './dom';

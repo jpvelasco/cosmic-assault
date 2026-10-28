@@ -1,5 +1,5 @@
 import { HAZARD_RULES } from './hazards';
-import type { GalaxyDef, GalaxyEvent, GalaxyId, KindRamp } from './types';
+import { galaxyIdOf, type GalaxyDef, type GalaxyEvent, type GalaxyId, type KindRamp } from './types';
 
 function finite(value: number, name: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be a finite number, got ${String(value)}: pass a finite number (a tier comes from tierOf())`);
@@ -66,7 +66,7 @@ const FIELD_SHARE: Readonly<Partial<Record<GalaxyId, number>>> = {
  * Dimension, so the game and every new Dimension start gently.
  */
 export function sawtooth(g: Pick<GalaxyDef, 'dimension' | 'index'>): number {
-  return (g.index === 1 ? 0.85 : 1) * (FIELD_SHARE[`${String(g.dimension)}-${String(g.index)}` as GalaxyId] ?? 1);
+  return (g.index === 1 ? 0.85 : 1) * (FIELD_SHARE[galaxyIdOf(g.dimension, g.index)] ?? 1);
 }
 
 /** The chance a kill drops a pickup at tier `t`. */

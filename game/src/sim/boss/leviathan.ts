@@ -5,7 +5,7 @@ import { PLAYER } from '../config';
 import type { Field } from '../field';
 import { type Point, smoothstep, TAU, turnBetween } from '../math';
 import { rescale } from '../wrap';
-import { dashAttack, fireBolt } from './attacks';
+import { dashAttack, fireBolt, turnToward } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossSetup, BossView } from './behaviour';
 import { SerpentTrail } from './serpentTrail';
 
@@ -294,8 +294,9 @@ class Leviathan implements BossBehaviour {
   private turn(ctx: AttackContext): void {
     const { boss, dt } = ctx;
     if (boss.windup === 'dive') {
-      const limit = AIM_TURN_RATE * dt;
-      boss.facing += clamp(turnBetween(boss.facing, Math.atan2(boss.aim.y - this.headY, boss.aim.x - this.headX)), -limit, limit);
+      spot.x = this.headX;
+      spot.y = this.headY;
+      turnToward(boss, boss.aim, AIM_TURN_RATE, dt, spot);
       return;
     }
     const dx = this.headX - boss.px;
