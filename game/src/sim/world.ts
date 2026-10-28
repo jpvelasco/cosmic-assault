@@ -420,7 +420,7 @@ export class World {
     return true;
   }
 
-  /** A shot at (x, y) breaks the last-indexed unbroken rock it overlaps, scoring it; returns the rock's id, or -1 (each shot strikes once a step: CA-021). */
+  /** A shot at (x, y) breaks the last-indexed unbroken rock it overlaps, scoring it; returns the rock's id, or -1 (each shot strikes once a step). */
   private breakRock(x: number, y: number, radius: number): number {
     const index = this.lastOverlap(x, y, radius);
     if (index < 0) return -1;

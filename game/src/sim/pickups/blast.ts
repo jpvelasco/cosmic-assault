@@ -18,7 +18,7 @@ export interface BlastScene {
 
 /**
  * Sets off a Field Bomb or a Nova at (x, y). It destroys every rock and foe it reaches, across the wrap as homing
- * measures it, for score through the combo, but nothing it kills drops a pickup and no rock splits (M6-R5); it clears
+ * measures it, for score through the combo, but nothing it kills drops a pickup and no rock splits; it clears
  * the bolts it reaches. A fighting boss takes the blast's part damage on each live
  * part it reaches, then its core damage if the core is in reach: the blow lands on the core's rim toward the blast, so
  * a shielded core, or one hurt only from another side, takes none, silently. Parts are struck in index order, each

@@ -27,7 +27,7 @@ export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory
   blackHole: (setup) => new BlackHole(setup),
 };
 
-/** The stream a hazard type draws from: the gravity wells keep M5's `'hazards'`, so Ion Reach does not move. */
+/** The stream a hazard type draws from: the gravity wells keep the `'hazards'` stream they first drew from, so Ion Reach does not move. */
 export const hazardStreamName = (type: HazardType): string => (type === 'gravityWell' ? 'hazards' : `hazards:${type}`);
 
 /** The hazard streams of a run with `seed`: each type's made on first ask and the same one after, so none is drawn twice over. */
@@ -87,7 +87,7 @@ export class HazardField {
 
   /**
    * Applies every hazard's pull to the rocks and foes, nudges the ship once by `shipPullAt` (summed, capped), then lets
-   * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
+   * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it always has:
    * invulnerability spares the ship collisions, not physics.
    */
   move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: HazardBolts | null = null): void {

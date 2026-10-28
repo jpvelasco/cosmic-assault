@@ -86,7 +86,7 @@ describe('hazard streams', () => {
 });
 
 describe('shipPullAt', () => {
-  it('is one active well\'s pull as M5 applied it: a x dt toward it, bit for bit', () => {
+  it('is one active well\'s pull as the wells first applied it: a x dt toward it, bit for bit', () => {
     const well = active('gravityWell', 600, 300, 3);
     const out = shipPullAt([well], 690, 260, DT, { x: 0, y: 0 });
     const [dx, dy] = [600 - 690, 300 - 260];

@@ -43,7 +43,7 @@ export interface ViewSync {
   needsRotation(): boolean;
   /** Hides the cursor after it rests for `IDLE_CURSOR_MS` in play; any move, and leaving play or a crash, brings it back. */
   armIdleCursor(): void;
-  /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button (CA-024). */
+  /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button. */
   syncHudBounds(): void;
   dispose(): void;
 }

@@ -20,7 +20,7 @@ async function startRun(page: Page): Promise<void> {
   await nextFrames(page, 3);
 }
 
-/** CA-024: on a touch screen the HUD pills stay on screen and out from under the pause button. */
+/** On a touch screen the HUD pills stay on screen and out from under the pause button. */
 async function expectHudClearOfPause(page: Page): Promise<void> {
   await startRun(page);
 

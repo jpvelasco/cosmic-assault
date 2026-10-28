@@ -28,7 +28,7 @@ export interface Projectile {
 /** Absorbs float residue from summing many dt steps so a full lifespan always expires. */
 const LIFE_EPSILON = 1e-9;
 
-/** A projectile flying from `shot`; by default it neither pierces nor homes, as every shot did before the M6 pickups. */
+/** A projectile flying from `shot`; by default it neither pierces nor homes, as every shot does without a Piercing Beam or Homing Missiles. */
 export function projectileFromShot(shot: Shot, id = 0, pierce = 0, homing = false): Projectile {
   return { id, x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, px: shot.x, py: shot.y, life: PROJECTILE.lifespan, pierce, homing, struck: [] };
 }

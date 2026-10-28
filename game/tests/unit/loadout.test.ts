@@ -163,7 +163,7 @@ describe('Loadout death', () => {
     expect(l.tier).toBe(2);
   });
 
-  it('ends every M6 effect with the ship too: piercing, homing, the wingman and time warp', () => {
+  it('ends every Dimension 3–5 effect with the ship too: piercing, homing, the wingman and time warp', () => {
     const l = new Loadout();
     for (const kind of TIMED_PICKUPS) l.collect(kind);
     const events: SimEvent[] = [];

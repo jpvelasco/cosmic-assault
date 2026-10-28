@@ -181,7 +181,7 @@ export class GalaxyRun implements Spawner {
     return this.loadout.shotRules;
   }
 
-  /** Half while Time Warp runs (M6-R4): the rocks, the foes and the fighting boss run at it; the clock, the hazards, the pickups and the ship never do. */
+  /** Half while Time Warp runs: the rocks, the foes and the fighting boss run at it; the clock, the hazards, the pickups and the ship never do. */
   enemyTimeScale(): number {
     return this.loadout.timeScale;
   }

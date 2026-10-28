@@ -85,7 +85,7 @@ describe('armoured boss parts', () => {
   });
 });
 
-describe('part break damage (M6-R9)', () => {
+describe('part break damage', () => {
   it('takes the definition\'s break damage off the core with each part broken, though the core is shielded', () => {
     const { r } = fighting();
     expect(r.view.vulnerable).toBe(false);

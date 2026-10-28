@@ -57,7 +57,7 @@ function age(flashes: { left: number }[], dt: number): void {
 }
 
 /**
- * The hit-object juice (CA-027): a white flash on whatever was hit, and a squash on the ship when it is.
+ * The hit-object juice: a white flash on whatever was hit, and a squash on the ship when it is.
  *
  * A destroyed rock is gone from the world by the time the renderer hears of it, so the flash is the rock's own white
  * silhouette held at the spot it broke, not its fragments: every size gives one (the tiny rocks split into none),

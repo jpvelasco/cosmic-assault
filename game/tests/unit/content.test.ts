@@ -127,7 +127,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('never overlaps two events of one type: each is warned only once the last has ended (Ruling R10), in all 30 galaxies', () => {
+  it('never overlaps two events of one type: each is warned only once the last has ended, in all 30 galaxies', () => {
     expect(GALAXIES).toHaveLength(30);
     for (const g of GALAXIES) expect(sameTypeOverlaps(g.events), g.id).toEqual([]);
   });
@@ -181,7 +181,7 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES) expect(g.pickups, g.id).toEqual(pools[g.dimension]);
   });
 
-  it('enters the M6 pickups at their Dimensions with their weights', () => {
+  it('enters the Dimension 3–5 pickups at their Dimensions with their weights', () => {
     const rows = (['piercingBeam', 'homingMissiles', 'fieldBomb', 'wingman', 'nova', 'timeWarp'] as const).map((id) => [id, PICKUPS[id].from, PICKUPS[id].weight]);
     expect(rows).toEqual([
       ['piercingBeam', 3, 2],

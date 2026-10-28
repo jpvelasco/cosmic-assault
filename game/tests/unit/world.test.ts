@@ -363,7 +363,7 @@ describe('World splitting and removal', () => {
     expect(w.asteroids.filter((a) => a.x === 260 && a.y === 360)).toHaveLength(0);
   });
 
-  it('consumes a projectile once even when it overlaps two asteroids (CA-021)', () => {
+  it('consumes a projectile once even when it overlaps two asteroids', () => {
     const w = world({ initialShip: SHOOTER, initialAsteroids: [still(400, 360, 2), still(400, 360, 2)] });
     const [lower, upper] = w.asteroids;
     let older: unknown;
