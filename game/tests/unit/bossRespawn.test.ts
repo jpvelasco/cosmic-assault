@@ -2,19 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
 import type { BossPart } from '../../src/sim/boss/behaviour';
-import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE, respawnClearance } from '../../src/sim/respawn';
-import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { WARP_RIFT } from '../../src/content/hazards';
+import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE, RESPAWN_MARGIN, respawnClearance } from '../../src/sim/respawn';
+import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
+import { wrapDelta } from '../../src/sim/wrap';
 import { BOSS_FIELD, stubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const NARROW: Field = { width: 960, height: 720 };
 /** The Monolith's reach (orbit 118 + shard 15), plus the ship and the safe margin. */
-const MONOLITH_CLEARANCE = 133 + PLAYER.radius + ASTEROID.safeRadius;
+const MONOLITH_CLEARANCE = 133 + RESPAWN_MARGIN;
 
 function inside(spot: { x: number; y: number }, field: Field): boolean {
   return spot.x >= RESPAWN_INSET && spot.x <= field.width - RESPAWN_INSET && spot.y >= RESPAWN_INSET && spot.y <= field.height * RESPAWN_LOWEST_SHARE;
@@ -40,10 +42,19 @@ describe('clearSpot', () => {
     expect(clearSpot({ x: 640, y: 201.6 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: 640, y: BOSS_FIELD.height * 0.8 });
     expect(clearSpot({ x: 700, y: 587 }, MONOLITH_CLEARANCE, BOSS_FIELD)).toEqual({ x: RESPAWN_INSET, y: RESPAWN_INSET });
   });
+
+  it('keeps a respawn clear of a rift mouth across the wrap, as the mouth catches a ship there', () => {
+    const edge = { x: RESPAWN_INSET, y: 300 };
+    const mid = { x: BOSS_FIELD.width / 2, y: 300 };
+    const mouth = { x: BOSS_FIELD.width - 10, y: 300, radius: WARP_RIFT.radius };
+    expect(Math.abs(wrapDelta(edge.x - mouth.x, BOSS_FIELD.width)) - mouth.radius, 'near across the wrap').toBeLessThan(RESPAWN_MARGIN);
+    const core = { x: mid.x, y: 100 };
+    expect(clearSpot(core, 10, BOSS_FIELD, RESPAWN_MARGIN, [edge, mid])).toEqual(edge);
+    expect(clearSpot({ ...core, mouths: [mouth] }, 10, BOSS_FIELD, RESPAWN_MARGIN, [edge, mid])).toEqual(mid);
+  });
 });
 
 describe('clearSpot with its usual spots blocked', () => {
-  const MARGIN = PLAYER.radius + ASTEROID.safeRadius;
   /** One part on each of the five usual spots of a small core at (640, 300). */
   const blocker = (): { x: number; y: number; parts: BossPart[] } => {
     const [left, right, top, bottom] = [RESPAWN_INSET, BOSS_FIELD.width - RESPAWN_INSET, RESPAWN_INSET, BOSS_FIELD.height * RESPAWN_LOWEST_SHARE];
@@ -53,15 +64,15 @@ describe('clearSpot with its usual spots blocked', () => {
 
   it('searches a grid across the respawn band for a spot clear of every part, the same one every time', () => {
     const boss = blocker();
-    const spot = clearSpot(boss, 10, BOSS_FIELD, MARGIN);
-    expect(respawnClearance(boss, 10, spot.x, spot.y)).toBeGreaterThanOrEqual(MARGIN);
+    const spot = clearSpot(boss, 10, BOSS_FIELD, RESPAWN_MARGIN);
+    expect(respawnClearance(boss, 10, spot.x, spot.y)).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
     expect(inside(spot, BOSS_FIELD)).toBe(true);
-    expect(clearSpot(boss, 10, BOSS_FIELD, MARGIN)).toEqual(spot);
+    expect(clearSpot(boss, 10, BOSS_FIELD, RESPAWN_MARGIN)).toEqual(spot);
   });
 
   it('with nowhere clear, takes the clearest spot of all: the far corner from a core whose reach covers the field', () => {
     const boss = { x: 300, y: 200 };
-    expect(clearSpot(boss, 5000, BOSS_FIELD, MARGIN)).toEqual({ x: BOSS_FIELD.width - RESPAWN_INSET, y: BOSS_FIELD.height * RESPAWN_LOWEST_SHARE });
+    expect(clearSpot(boss, 5000, BOSS_FIELD, RESPAWN_MARGIN)).toEqual({ x: BOSS_FIELD.width - RESPAWN_INSET, y: BOSS_FIELD.height * RESPAWN_LOWEST_SHARE });
   });
 });
 

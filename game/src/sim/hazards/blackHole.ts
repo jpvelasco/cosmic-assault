@@ -135,13 +135,13 @@ export class BlackHole implements Hazard {
   respawnPoint(foes: readonly Readonly<Foe>[]): Readonly<Point> | null {
     const hole = this.schedule.live[0];
     if (this.field === null || hole === undefined) return null;
-    const parts: RespawnPart[] = [...foes];
+    const mouths: RespawnPart[] = [];
     const zones: ZoneBox[] = [];
     for (const hazard of this.inPlay()) {
       if (hazard.type === 'dangerZone') zones.push(hazard);
-      else if (hazard.type === 'warpRift') parts.push({ x: hazard.x, y: hazard.y, radius: WARP_RIFT.radius }, { x: hazard.toX, y: hazard.toY, radius: WARP_RIFT.radius });
+      else if (hazard.type === 'warpRift') mouths.push({ x: hazard.x, y: hazard.y, radius: WARP_RIFT.radius }, { x: hazard.toX, y: hazard.toY, radius: WARP_RIFT.radius });
     }
-    return clearSpot({ x: hole.x, y: hole.y, parts, zones }, BLACK_HOLE.exitReach, this.field, RESPAWN_MARGIN, this.ring(this.field));
+    return clearSpot({ x: hole.x, y: hole.y, parts: foes, mouths, zones }, BLACK_HOLE.exitReach, this.field, RESPAWN_MARGIN, this.ring(this.field));
   }
 
   /** While the hole is warning or active, where its respawn comes back in `field` with nothing in the way, whatever the foes; else null. */

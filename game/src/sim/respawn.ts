@@ -2,6 +2,7 @@ import type { Point } from './math';
 import { ASTEROID, PLAYER } from './config';
 import type { Field } from './field';
 import { zoneClearance, type ZoneBox } from './hazards/dangerZone';
+import { wrappedDistance } from './wrap';
 
 // Where a lost ship comes back when something holds the field's centre: a boss, or a black hole and what gathers round
 // it. The search keeps a respawn clear of every body it is given, in the band a respawn may take.
@@ -21,10 +22,12 @@ export type RespawnPart = Readonly<{ x: number; y: number; radius: number; hp?: 
 
 /**
  * What a respawn keeps clear of, as its reach is measured: a core (a boss's, or a black hole), the round parts about it
- * (a boss's parts, the foes round a hole, rift mouths) and any danger zones. Only the live parts count.
+ * (a boss's parts, the foes round a hole), any rift mouths and any danger zones. Only the live parts count.
  */
 export type RespawnBodies = Readonly<Point> & {
   readonly parts?: readonly RespawnPart[];
+  /** Kept clear of by their own radius as they catch a ship, across the wrap. */
+  readonly mouths?: readonly RespawnPart[];
   /** Kept clear of as they strike, across the wrap. */
   readonly zones?: readonly ZoneBox[];
 };
@@ -32,7 +35,7 @@ export type RespawnBodies = Readonly<Point> & {
 /**
  * How far (x, y) lies outside the bodies: outside the circle of `reach` about the core, and outside every live part by
  * that part's own radius, whichever is nearer. Negative inside either. A part that trails far beyond the core's reach,
- * a serpent's tail say, counts as much as the core. Zones need the field and are `clearSpot`'s to measure.
+ * a serpent's tail say, counts as much as the core. Mouths and zones need the field and are `clearSpot`'s to measure.
  */
 export function respawnClearance(bodies: RespawnBodies, reach: number, x: number, y: number): number {
   let clearance = Math.hypot(x - bodies.x, y - bodies.y) - reach;
@@ -52,7 +55,7 @@ export function respawnBand(field: Field): Readonly<{ left: number; right: numbe
 }
 
 /**
- * Where a ship can respawn at least `margin` outside the bodies (`respawnClearance`, and every zone): the first clear spot
+ * Where a ship can respawn at least `margin` outside the bodies (`respawnClearance`, and every mouth and zone): the first clear spot
  * of `prefer`, by default low in the middle, at `RESPAWN_LOWEST_SHARE` of the height, or, if the core lies too near it,
  * the corner farthest from the core, as low or as near the top, or, if a part lies on that too, the first other corner
  * that is clear. If none of those is, the first clear point of a grid across the respawn band, row by row from the
@@ -66,6 +69,7 @@ export function clearSpot(bodies: RespawnBodies, reach: number, field: Field, ma
   /** Whether `spot` is clear by `margin`, noting it if it is the clearest yet. */
   const clear = (spot: Point): boolean => {
     let clearance = respawnClearance(bodies, reach, spot.x, spot.y);
+    for (const mouth of bodies.mouths ?? []) clearance = Math.min(clearance, wrappedDistance(mouth, spot, field) - mouth.radius);
     for (const zone of bodies.zones ?? []) clearance = Math.min(clearance, zoneClearance(field, zone, spot.x, spot.y));
     if (clearance > bestClearance) [best, bestClearance] = [spot, clearance];
     return clearance >= margin;
