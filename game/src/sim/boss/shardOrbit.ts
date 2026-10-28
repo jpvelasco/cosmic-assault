@@ -126,12 +126,7 @@ export class ShardOrbit {
   /** Puts every shard on its orbit around (x, y). */
   private placeAll(x: number, y: number): void {
     const { parts } = this;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i] as BossPart;
-      const bearing = this.spin + (i / parts.length) * TAU;
-      part.x = x + Math.cos(bearing) * this.options.orbit;
-      part.y = y + Math.sin(bearing) * this.options.orbit;
-    }
+    for (let i = 0; i < parts.length; i++) this.slotOf(i, x, y, parts[i] as BossPart);
   }
 
   /**
@@ -170,7 +165,7 @@ export class ShardOrbit {
     return -1;
   }
 
-  /** Writes into `out` where shard `i`'s slot on the orbit about (x, y) is, as `placeAll` puts it, and returns it. */
+  /** Writes into `out` where shard `i`'s slot on the orbit about (x, y) is, and returns it. */
   private slotOf(i: number, x: number, y: number, out: Point): Point {
     const bearing = this.spin + (i / this.parts.length) * TAU;
     out.x = x + Math.cos(bearing) * this.options.orbit;
