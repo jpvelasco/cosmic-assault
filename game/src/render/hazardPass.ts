@@ -16,7 +16,8 @@ export interface HazardPass {
    * A repulsion field: a warning ring growing outward, then ripples spreading out from its heart. A warp rift, once
    * open: a swirl at each mouth linked by a dashed arc. A lethal danger zone: filled, hatched and outlined solid in the
    * hostile hue (its warning is `drawWarnings`'). A black hole: a dark lens with a bent-light halo and an accretion ring
-   * turning over it (still under reduced motion), its warning a dashed ring in the hostile hue. Expects `source-over`, which it leaves as it found it, with alpha 1.
+   * turning over it (still under reduced motion), its warning a dashed ring in the hostile hue. Expects `source-over`,
+   * which it leaves as it found it, with alpha 1.
    */
   drawHazards(hazards: readonly Readonly<HazardState>[], field: Field, look: SceneLook): void;
   /** The danger zones' and warp rifts' warnings, drawn over the rocks and foes so nothing hides one. */
@@ -29,8 +30,8 @@ export interface HazardPass {
  */
 const { telegraph: HOLE_TELEGRAPH_SECONDS, seconds: HOLE_SECONDS } = HAZARD_RULES.blackHole;
 const HOLE_HORIZON = BLACK_HOLE.horizon;
-const HOLE_LENS_RADIUS = HOLE_HORIZON * 2.4;
-const HOLE_DISC_RADIUS = HOLE_HORIZON * 2.4;
+/** The lens's halo and the accretion ring's reach, both the warning ring's radius (`BLACK_HOLE.warnRadius`). */
+const HOLE_RING_RADIUS = BLACK_HOLE.warnRadius;
 const HOLE_DISC_SQUASH = 0.32;
 const HOLE_SPIN_RATE = 0.9;
 const HOLE_GLOW_DIAMETER = 520;
@@ -190,11 +191,11 @@ function paintHorizon(ctx: CanvasRenderingContext2D, r: number, rim: string): vo
 
 /** The black hole's lens: a bent-light halo just beyond the horizon, the dark disc within it and a bright photon ring at its rim. */
 function paintLens(ctx: CanvasRenderingContext2D, rim: string): void {
-  const halo = ctx.createRadialGradient(0, 0, HOLE_HORIZON, 0, 0, HOLE_LENS_RADIUS);
+  const halo = ctx.createRadialGradient(0, 0, HOLE_HORIZON, 0, 0, HOLE_RING_RADIUS);
   halo.addColorStop(0, rgba(rim, 0.5));
   halo.addColorStop(1, rgba(rim, 0));
   ctx.fillStyle = halo;
-  ctx.fillRect(-HOLE_LENS_RADIUS, -HOLE_LENS_RADIUS, HOLE_LENS_RADIUS * 2, HOLE_LENS_RADIUS * 2);
+  ctx.fillRect(-HOLE_RING_RADIUS, -HOLE_RING_RADIUS, HOLE_RING_RADIUS * 2, HOLE_RING_RADIUS * 2);
   const dark = ctx.createRadialGradient(0, 0, 0, 0, 0, HOLE_HORIZON * 1.1);
   dark.addColorStop(0, rgba('#000000', 1));
   dark.addColorStop(0.85, rgba('#000000', 0.97));
@@ -208,8 +209,8 @@ function paintLens(ctx: CanvasRenderingContext2D, rim: string): void {
 
 /** The accretion ring: a flat, glowing ellipse, with a hot head on one side that carries the turn. */
 function paintDisc(ctx: CanvasRenderingContext2D, color: string): void {
-  const rx = HOLE_DISC_RADIUS;
-  const ry = HOLE_DISC_RADIUS * HOLE_DISC_SQUASH;
+  const rx = HOLE_RING_RADIUS;
+  const ry = HOLE_RING_RADIUS * HOLE_DISC_SQUASH;
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.ellipse(0, 0, rx, ry, 0, 0, TAU);
@@ -226,7 +227,7 @@ function paintDisc(ctx: CanvasRenderingContext2D, color: string): void {
 function paintHoleWarning(ctx: CanvasRenderingContext2D, color: string): void {
   ctx.setLineDash([12, 9]);
   ctx.beginPath();
-  ctx.arc(0, 0, HOLE_DISC_RADIUS, 0, TAU);
+  ctx.arc(0, 0, HOLE_RING_RADIUS, 0, TAU);
   strokePath(ctx, rgba(color, 0.9), 2.5);
   ctx.setLineDash([]);
   ctx.beginPath();
@@ -332,9 +333,9 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   const paintHoleWarnNow = (c: CanvasRenderingContext2D): void => {
     paintHoleWarning(c, palette.hostile);
   };
-  const holeLensHalf = HOLE_LENS_RADIUS + SPRITE_PAD;
-  const holeDiscHalf = HOLE_DISC_RADIUS + SPRITE_PAD;
-  const holeDiscHalfH = HOLE_DISC_RADIUS * HOLE_DISC_SQUASH + SPRITE_PAD;
+  const holeLensHalf = HOLE_RING_RADIUS + SPRITE_PAD;
+  const holeDiscHalf = HOLE_RING_RADIUS + SPRITE_PAD;
+  const holeDiscHalfH = HOLE_RING_RADIUS * HOLE_DISC_SQUASH + SPRITE_PAD;
 
   /**
    * An active black hole: its glow over the field, the dark lens at its horizon and the accretion ring turning over it.

@@ -113,8 +113,6 @@ const PICKUP_DROP_BURST: Counts = { shards: 0, sparks: 8, rings: 1, smoke: 0, sh
 const PICKUP_TAKE_BURST: Counts = { shards: 0, sparks: 12, rings: 1, smoke: 0, shake: 0, flash: 0 };
 /** The Shield taking a hit for the ship: it shatters, with a little shake but none of a lost life's weight. */
 const SHIELD_BREAK_BURST: Counts = { shards: 10, sparks: 14, rings: 1, smoke: 0, shake: 3, flash: 0 };
-/** The black hole's horizon, where its opening ring starts. */
-const HOLE_HORIZON = BLACK_HOLE.horizon;
 /** A black hole opening: a ring at its horizon and a shake, the one sudden thing the field gets when it starts pulling. */
 const HOLE_OPEN_BURST: Counts = { shards: 0, sparks: 8, rings: 2, smoke: 0, shake: 10, flash: 0 };
 /** A rock the warp clears: a light puff, so a busy field does not go up in one frame of full blasts. */
@@ -388,7 +386,7 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
       case 'riftClose':
         return null;
       case 'holeStart':
-        return writeOrigin(origin, event.x, event.y, HOLE_HORIZON, emitter.palette.accent[1]);
+        return writeOrigin(origin, event.x, event.y, BLACK_HOLE.horizon, emitter.palette.accent[1]);
     }
   };
 
