@@ -1,5 +1,5 @@
 import { HAZARD_RULES } from './hazards';
-import type { GalaxyDef, GalaxyEvent, KindRamp } from './types';
+import type { GalaxyDef, GalaxyEvent, GalaxyId, KindRamp } from './types';
 
 function finite(value: number, name: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be a finite number, got ${String(value)}: pass a finite number (a tier comes from tierOf())`);
@@ -47,9 +47,26 @@ export function eventsOfType(events: readonly GalaxyEvent[], type: GalaxyEvent['
   return events.filter((event) => event.type === type);
 }
 
-/** Eases the first galaxy of each Dimension, so the game and every new Dimension start gently. */
+/**
+ * The share of its tier's budget each galaxy from Crimson Nebula on fields, on top of the first galaxy's ease. Past Ion
+ * Reach the rock budget stops growing with the tier: these shares hold it near Ion Reach's, so the later Dimensions get
+ * harder through their foes, hazards and bosses rather than through ever more rocks and fragments, and each galaxy's
+ * casual clear rate stays on the trend line (tests/balance). A boss galaxy fields a token share: room for a rock or two
+ * in its approach, so no two seeds meet its boss alike, and next to none in the fight. The first two Dimensions field
+ * their whole budget.
+ */
+const FIELD_SHARE: Readonly<Partial<Record<GalaxyId, number>>> = {
+  '3-1': 0.85, '3-2': 0.75, '3-3': 0.78, '3-4': 0.68, '3-5': 0.66, '3-6': 0.25,
+  '4-1': 0.64, '4-2': 0.64, '4-3': 0.7, '4-4': 0.6, '4-5': 0.62, '4-6': 0.24,
+  '5-1': 0.65, '5-2': 0.6, '5-3': 0.52, '5-4': 0.46, '5-5': 0.41, '5-6': 0.15,
+};
+
+/**
+ * The share of its tier's budget a galaxy fields: its `FIELD_SHARE`, eased further in the first galaxy of each
+ * Dimension, so the game and every new Dimension start gently.
+ */
 export function sawtooth(g: Pick<GalaxyDef, 'dimension' | 'index'>): number {
-  return g.index === 1 ? 0.85 : 1;
+  return (g.index === 1 ? 0.85 : 1) * (FIELD_SHARE[`${String(g.dimension)}-${String(g.index)}` as GalaxyId] ?? 1);
 }
 
 /** The chance a kill drops a pickup at tier `t`. */

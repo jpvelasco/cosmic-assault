@@ -58,12 +58,12 @@ describe('Singularity content', () => {
     expect(planned('5-4')).toEqual([
       ['blackHole', 12, 2],
       ['repulsionField', 25, 1],
-      ['dangerZone', 100, 2],
+      ['dangerZone', 100, 1],
     ]);
     expect(planned('5-5')).toEqual([
       ['blackHole', 12, 3],
-      ['warpRift', 22, 2],
-      ['dangerZone', 60, 2],
+      ['warpRift', 22, 1],
+      ['dangerZone', 60, 1],
     ]);
     for (const id of SINGULARITY) expect(scheduled(id).filter((e) => e.type === 'blackHole'), id).toHaveLength(1);
   });

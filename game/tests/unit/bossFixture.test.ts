@@ -257,7 +257,7 @@ describe('a boss in its galaxy', () => {
   it('takes its HP from the Dimension', () => {
     const g = bossWorld(CORE_BOSS_GALAXY);
     playWorld(g, APPROACH + 0.1);
-    expect(g.world.boss?.maxHp).toBe(76);
+    expect(g.world.boss?.maxHp).toBe(54);
   });
 
   it('hands out one view object that it updates in place', () => {
@@ -279,7 +279,7 @@ describe('a boss in its galaxy', () => {
     });
     expect(g.world.boss?.state).toBe('intro');
     expect(consumed).toBeGreaterThanOrEqual(3);
-    expect(g.world.boss?.hp).toBe(76);
+    expect(g.world.boss?.hp).toBe(54);
     expect(ofType(g.log, 'bossHit')).toEqual([]);
   });
 
@@ -309,7 +309,7 @@ describe('a boss in its galaxy', () => {
     expect(lost).toBeGreaterThanOrEqual(3);
     const hits = ofType(g.log, 'bossHit');
     // The log also holds any hit from before the window opened.
-    expect(hits.map((h) => h.hp)).toEqual(Array.from({ length: 76 - (boss?.hp ?? 0) }, (_, i) => 75 - i));
+    expect(hits.map((h) => h.hp)).toEqual(Array.from({ length: 54 - (boss?.hp ?? 0) }, (_, i) => 53 - i));
     expect(g.world.score).toBe(0);
   });
 
@@ -375,7 +375,7 @@ function runOf(world: World): GalaxyRun {
 
 describe('beating a boss', () => {
   const BOSS_DIMENSION = 3;
-  const BOSS_HP = 76;
+  const BOSS_HP = 54;
 
   /** A 3-6 game in which the ship dies on the core at the start of the fight, then a chain of 4 kills is built and the boss is beaten. */
   function beaten(mode: GalaxyMode): GalaxyWorld {
@@ -501,17 +501,17 @@ describe('BossArena.hitBoss', () => {
     const intro = approach(21);
     expect(intro.run.bosses.hitBoss(HOME.x, HOME.y, 3)).toBe(true);
     expect(intro.arena.events).toEqual([]);
-    expect(intro.run.boss?.hp).toBe(76);
+    expect(intro.run.boss?.hp).toBe(54);
 
     const { arena, run } = approach(22.1);
     const hits: number[] = [];
-    for (let i = 0; i < 76; i++) {
+    for (let i = 0; i < 54; i++) {
       arena.events.length = 0;
       expect(run.bosses.hitBoss(HOME.x + 5, HOME.y - 6, 3)).toBe(true);
-      expect(arena.events).toEqual([{ type: 'bossHit', x: HOME.x + 5, y: HOME.y - 6, hp: 75 - i }]);
+      expect(arena.events).toEqual([{ type: 'bossHit', x: HOME.x + 5, y: HOME.y - 6, hp: 53 - i }]);
       hits.push(run.boss?.hp ?? -1);
     }
-    expect(hits).toEqual(Array.from({ length: 76 }, (_, i) => 75 - i));
+    expect(hits).toEqual(Array.from({ length: 54 }, (_, i) => 53 - i));
     expect(run.boss?.state).toBe('dying');
     arena.events.length = 0;
     expect(run.bosses.hitBoss(HOME.x, HOME.y, 3)).toBe(true);

@@ -107,9 +107,9 @@ describe('crosses', () => {
 });
 
 describe('the Warden definition', () => {
-  it('is a radius-48, 64 HP core (76 at 3-★) on three phases of volleys, lock-ons, spins and ring pulses, resting less each phase', () => {
-    expect(DEF).toMatchObject({ name: 'Warden', radius: 48, hp: 64 });
-    expect(bossHp(DEF, 3)).toBe(76);
+  it('is a radius-48, 42 HP core (54 at 3-★) on three phases of volleys, lock-ons, spins and ring pulses, resting less each phase', () => {
+    expect(DEF).toMatchObject({ name: 'Warden', radius: 48, hp: 42 });
+    expect(bossHp(DEF, 3)).toBe(54);
     expect(DEF.phases).toEqual([['turretVolley', 'lockOn'], ['turretVolley', 'spin', 'lockOn'], ['ringPulse', 'turretVolley', 'spin', 'lockOn']]);
     expect(DEF.rest).toEqual([2.0, 1.5, 1.0]);
     expect(ATTACKS.turretVolley.windup).toBe(0.6);

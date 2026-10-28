@@ -102,10 +102,10 @@ function untilActive(rigged: Rig): void {
 }
 
 describe('the Leviathan definition', () => {
-  it('is a radius-34 head of 70 HP, 88 in 4-★, losing 6 for each segment broken, on its three phases and rests', () => {
-    expect(DEF).toMatchObject({ id: 'leviathan', name: 'Leviathan', hp: 70, radius: 34, partBreakDamage: 6, rest: [1.8, 1.4, 1.0] });
+  it('is a radius-34 head of 22 HP, 40 in 4-★, losing 3 for each segment broken, on its three phases and rests', () => {
+    expect(DEF).toMatchObject({ id: 'leviathan', name: 'Leviathan', hp: 22, radius: 34, partBreakDamage: 3, rest: [2.5, 1.95, 1.4] });
     expect(DEF.phases).toEqual([['spit', 'dive'], ['dive', 'spit', 'coil'], ['coil', 'dive', 'spit', 'dive']]);
-    expect(MAX_HP).toBe(88);
+    expect(MAX_HP).toBe(40);
   });
 
   it('guards 4-★', () => {
@@ -231,11 +231,14 @@ describe('the Leviathan segment chain', () => {
   }
 
   it('lays every segment on the way the head has come, and the same way for the same seed', () => {
-    const { head, parts } = poses(2, 60);
-    expect(poses(2, 60)).toEqual({ head, parts });
-    // Within a trail step of the way the head went over the last 5 s, checked every half second.
-    const history = Math.round(5 / STEP_SECONDS);
-    for (let s = history; s < parts.length; s += Math.round(0.5 / STEP_SECONDS)) {
+    // 40 s: the fight is still on, short of the blows that beat it, whose dying no longer swims.
+    const { head, parts } = poses(2, 40);
+    expect(poses(2, 40)).toEqual({ head, parts });
+    // Within a trail step of the way the head went over the last 8 s (long enough for it to swim the body's length
+    // between the windups it holds still through), checked every half second from 10 s in, once the body trails wholly
+    // along the way the head swam in the fight, not the way it came on.
+    const history = Math.round(8 / STEP_SECONDS);
+    for (let s = Math.round(10 / STEP_SECONDS); s < parts.length; s += Math.round(0.5 / STEP_SECONDS)) {
       for (const [x = 0, y = 0] of parts[s] ?? []) {
         let nearest = Infinity;
         for (let k = s - history; k < s; k++) nearest = Math.min(nearest, offPath(x, y, head[k] ?? [], head[k + 1] ?? []));
@@ -293,13 +296,13 @@ describe('dismantling the Leviathan', () => {
     expect(r.hp).toBe(MAX_HP);
   });
 
-  it('shortens tail first: each break moves the target to the next segment and takes 6 off the head', () => {
+  it('shortens tail first: each break moves the target to the next segment and takes 3 off the head', () => {
     const { r } = fighting();
     for (let broken = 1; broken < SEGMENT_COUNT; broken++) {
       breakTail(r);
       expect(liveSegments(r)).toBe(SEGMENT_COUNT - broken);
       expect(r.view.target).toBe(segments(r)[broken]);
-      expect(r.hp).toBe(MAX_HP - 6 * broken);
+      expect(r.hp).toBe(MAX_HP - (DEF.partBreakDamage ?? 0) * broken);
       expect(r.view.vulnerable).toBe(false);
     }
   });
@@ -316,7 +319,7 @@ describe('dismantling the Leviathan', () => {
     const log = runFor(stepper(rigged), rigged.arena, 2);
     expect(timedOfType(log, 'bossExposed')).toHaveLength(1);
     expect(r.hit(1)).toBe('hit');
-    expect(r.hp).toBe(MAX_HP - 6 * SEGMENT_COUNT - 1);
+    expect(r.hp).toBe(MAX_HP - (DEF.partBreakDamage ?? 0) * SEGMENT_COUNT - 1);
   });
 
   it('advances its phases as it is dismantled, but no break ever kills it', () => {
@@ -348,7 +351,7 @@ describe('dismantling the Leviathan', () => {
 describe('Leviathan attacks', () => {
   it('runs each phase\'s list in order', () => {
     const rigged = fighting();
-    const log = runFor(stepper(rigged), rigged.arena, 12);
+    const log = runFor(stepper(rigged), rigged.arena, 16);
     expect(timedOfType(log, 'bossWindup').map((l) => l.event.attack).slice(0, 4)).toEqual(['spit', 'dive', 'spit', 'dive']);
   });
 

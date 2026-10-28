@@ -39,19 +39,21 @@ const ROCKS: Ramps = {
 const SPLITTERS: Ramps = { ...ROCKS, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.35 } };
 /** Ion Reach trades some of the large rocks, and their fragments, for drones that come more often galaxy by galaxy. */
 const SWARMS: Ramps = { ...SPLITTERS, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, drone: { from: 1, base: 0.15, step: 0.3, max: 0.45 } };
-/** Crimson Nebula keeps Ion Reach's table, and brings in gunships from its first galaxy and mines from its second. */
-const GUNSHIPS: Ramps = { ...SWARMS, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.3 }, mine: { from: 2, base: 0, step: 0.3, max: 0.18 } };
-/** A boss galaxy brings no large rocks and no foes but the boss's own, so its fight is not fought among fragments. */
 /**
- * Void Rift keeps Crimson Nebula's foes at slightly lower maxima, and brings in phasers and armoured rocks from its first
- * galaxy, each at its base there and climbing from it.
+ * Crimson Nebula keeps Ion Reach's table, and brings in gunships from its first galaxy and mines from its second, both
+ * climbing gently, so the Dimension's later galaxies are not much more crowded with foes than its first.
+ */
+const GUNSHIPS: Ramps = { ...SWARMS, gunship: { from: 2, base: 0.1, step: 0.1, max: 0.2 }, mine: { from: 2, base: 0, step: 0.15, max: 0.12 } };
+/**
+ * Void Rift keeps Crimson Nebula's foes at the maxima they reach there, and brings in phasers and armoured rocks from its
+ * first galaxy, each at its base there and climbing slowly from it.
  */
 const VOID: Ramps = {
   ...GUNSHIPS,
-  gunship: { from: 2, base: 0.1, step: 0.2, max: 0.26 },
-  mine: { from: 2, base: 0, step: 0.3, max: 0.16 },
-  phaser: { from: 3, base: 0.12, step: 0.1, max: 0.3 },
-  armoured: { from: 3, base: 0.1, step: 0.1, max: 0.28 },
+  gunship: { from: 2, base: 0.1, step: 0.2, max: 0.2 },
+  mine: { from: 2, base: 0, step: 0.3, max: 0.12 },
+  phaser: { from: 3, base: 0.12, step: 0.05, max: 0.3 },
+  armoured: { from: 3, base: 0.1, step: 0.05, max: 0.28 },
 };
 /**
  * Singularity brings every foe into the mix, each at a maximum of about a fifth to a quarter of the budget, the rocks
@@ -67,6 +69,7 @@ const SINGULARITY: Ramps = {
   phaser: { from: 3, base: 0.12, step: 0.1, max: 0.25 },
   armoured: { from: 3, base: 0.1, step: 0.1, max: 0.25 },
 };
+/** A boss galaxy brings no large rocks and no foes but the boss's own, so its fight is not fought among fragments. */
 const BOSS_FIELD: Ramps = { ...ROCKS, large: ABSENT };
 
 /**
@@ -123,7 +126,7 @@ const HAZARDS: Readonly<Partial<Record<Dimension, Readonly<Partial<Record<Galaxy
   // other event starts 10 s or more after the one before it, and no more than two run at once, showers included: 5-4's
   // repulsion field moves from 30 to 25 so it ends before the shower at 45 warns (from 42), and its zone from 95 to 100,
   // 10 s after the shower at 90. 5-5's rift moves from 20 to 22 for the same 10 s.
-  5: { 1: [hole(12, 1)], 2: [hole(12, 1), zone(30, 1)], 3: [hole(12, 2), rift(25, 1), zone(100, 1)], 4: [hole(12, 2), repulsion(25, 1), zone(100, 2)], 5: [hole(12, 3), rift(22, 2), zone(60, 2)] },
+  5: { 1: [hole(12, 1)], 2: [hole(12, 1), zone(30, 1)], 3: [hole(12, 2), rift(25, 1), zone(100, 1)], 4: [hole(12, 2), repulsion(25, 1), zone(100, 1)], 5: [hole(12, 3), rift(22, 1), zone(60, 1)] },
 };
 
 const hazards = (dimension: Dimension, index: GalaxyIndex): readonly GalaxyEvent[] => HAZARDS[dimension]?.[index] ?? [];

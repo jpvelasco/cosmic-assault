@@ -42,8 +42,8 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   warden: {
     id: 'warden',
     name: 'Warden',
-    // `bossHp` adds two Dimensions' share in 3-★, the only galaxy it guards: 76.
-    hp: 64,
+    // `bossHp` adds two Dimensions' share in 3-★, the only galaxy it guards: 54.
+    hp: 42,
     radius: 48,
     phases: [['turretVolley', 'lockOn'], ['turretVolley', 'spin', 'lockOn'], ['ringPulse', 'turretVolley', 'spin', 'lockOn']],
     rest: [2.0, 1.5, 1.0],
@@ -51,18 +51,18 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   leviathan: {
     id: 'leviathan',
     name: 'Leviathan',
-    // `bossHp` adds three Dimensions' share in 4-★, the only galaxy it guards: 88.
-    hp: 70,
+    // `bossHp` adds three Dimensions' share in 4-★, the only galaxy it guards: 40.
+    hp: 22,
     radius: 34,
     phases: [['spit', 'dive'], ['dive', 'spit', 'coil'], ['coil', 'dive', 'spit', 'dive']],
-    rest: [1.8, 1.4, 1.0],
-    partBreakDamage: 6,
+    rest: [2.5, 1.95, 1.4],
+    partBreakDamage: 3,
   },
   eclipse: {
     id: 'eclipse',
     name: 'Eclipse',
-    // `bossHp` adds four Dimensions' share in 5-★, the only galaxy it guards: 134.
-    hp: 110,
+    // `bossHp` adds four Dimensions' share in 5-★, the only galaxy it guards: 80, twice the Leviathan's.
+    hp: 56,
     radius: 70,
     phases: [['shardVolley', 'quake', 'pulse'], ['launch', 'turretVolley', 'shardVolley'], ['dive', 'turretVolley', 'launch', 'quake', 'pulse']],
     rest: [1.8, 1.3, 0.9],

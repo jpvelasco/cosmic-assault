@@ -20,7 +20,7 @@ export const CARRIER_GALAXY: GalaxyId = '2-6';
 /** The `?galaxy=` the game-over specs play with `?lives=1`, which makes it a one-life Rank run: a late galaxy, whose busier field ends an idle run within a few seconds, where 1-1 takes ten or more. */
 export const GAME_OVER_GALAXY: GalaxyId = '5-5';
 
-/** The `?galaxy=` the perf spec plays: the busiest field early on, 15 to 20 rocks by 15 s with the ship firing. */
+/** The `?galaxy=` the perf spec plays: a busy field early on, among Void Rift's foes and hazards, with the ship firing. */
 export const PERF_GALAXY: GalaxyId = '4-5';
 
 /** The `?galaxy=` the Ion Reach spec plays: it has a gravity well from 46 s and the first Dimension with drones. */
@@ -44,7 +44,7 @@ const ENTRIES = [
   // The Ion Reach spec: the idle ship lives to the well's warning, with a foe on the field, and on into the pull.
   { seed: 12, claim: 'ion-reach-hazards', galaxy: ION_REACH_GALAXY },
   // The perf spec measures frame time, not an outcome; this seed pins a busy field so every run spawns the same rocks.
-  { seed: 1, claim: 'busy-field', galaxy: PERF_GALAXY },
+  { seed: 234, claim: 'busy-field', galaxy: PERF_GALAXY },
   // The perf spec's boss scene: skipped to the Hive Carrier's fight, a ship firing and turning keeps it fighting.
   { seed: 2, claim: 'carrier-fight', galaxy: CARRIER_GALAXY },
 ] as const satisfies readonly { readonly seed: number; readonly claim: string; readonly galaxy: GalaxyId }[];

@@ -86,9 +86,9 @@ function stepUntil(rig: Rig, done: (view: Readonly<BossView>) => boolean, second
 const earlierOf = (id: AttackId): string[] => Object.entries(EARLIER).filter(([, def]) => def.phases.flat().includes(id)).map(([name]) => name);
 
 describe('the Eclipse definition', () => {
-  it('is a radius-70 core of 110 HP (134 at 5-★) on three phases of moves, resting less each phase', () => {
-    expect(DEF).toMatchObject({ name: 'Eclipse', radius: 70, hp: 110 });
-    expect(bossHp(DEF, 5)).toBe(134);
+  it('is a radius-70 core of 56 HP (80 at 5-★) on three phases of moves, resting less each phase', () => {
+    expect(DEF).toMatchObject({ name: 'Eclipse', radius: 70, hp: 56 });
+    expect(bossHp(DEF, 5)).toBe(80);
     expect(DEF.phases).toEqual([
       ['shardVolley', 'quake', 'pulse'],
       ['launch', 'turretVolley', 'shardVolley'],

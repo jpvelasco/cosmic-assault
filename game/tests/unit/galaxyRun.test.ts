@@ -17,8 +17,8 @@ const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS);
 const FIRE: Controls = { ...NO_CONTROLS, fire: true };
 const WARP_SECONDS = 1.5;
-/** The most rocks seen at once in the seed-6 3-5 run below, recorded for the curves the bots were tuned to. */
-const PINNED_3_5_PEAK = 44;
+/** The most rocks seen at once in the seed-8 3-5 run below, recorded for the curves and field share the bots were tuned to. */
+const PINNED_3_5_PEAK = 30;
 
 /** A galaxy whose director never spawns; `events` keeps or drops its showers. */
 function calm(id: GalaxyId, keepShowers = false): GalaxyDef {
@@ -123,9 +123,9 @@ describe('a galaxy run on resize', () => {
   it('budgets for the new field, exactly as a run started on it', () => {
     const narrow: Field = { width: 960, height: 720 };
     const wide: Field = { width: 1680, height: 720 };
-    const resized = new World({ seed: 8, field: narrow, rules: { kind: 'galaxy', galaxy: galaxyById('3-3'), mode: 'rank' }, startLives: 5 });
+    const resized = new World({ seed: 8, field: narrow, rules: { kind: 'galaxy', galaxy: galaxyById('2-5'), mode: 'rank' }, startLives: 5 });
     resized.resize(wide);
-    const native = new World({ seed: 8, field: wide, rules: { kind: 'galaxy', galaxy: galaxyById('3-3'), mode: 'rank' }, startLives: 5 });
+    const native = new World({ seed: 8, field: wide, rules: { kind: 'galaxy', galaxy: galaxyById('2-5'), mode: 'rank' }, startLives: 5 });
     const log = eventsOf(play(native, 40));
     expect(ofType(log, 'asteroidDestroyed').length + native.asteroids.length + ofType(log, 'foeSpawned').length).toBeGreaterThan(8);
     expect(eventsOf(play(resized, 40))).toEqual(log);
@@ -349,7 +349,7 @@ describe('meteors pass through', () => {
     const area = FIELD.width * FIELD.height;
     const peakBudget = Math.max(...Array.from({ length: g.duration * 10 }, (_, i) => fieldBudget(g, i / 10, 1, area)));
     const meteorCap = Math.floor(showerCap(3, area));
-    const w = galaxyWorld(g, { seed: 6, mode: 'rank', startLives: 5 });
+    const w = galaxyWorld(g, { seed: 8, mode: 'rank', startLives: 5 });
     let peak = 0;
     const turnAndFire: Controls = { ...FIRE, turn: 1 };
     const log = play(w, g.duration + 2, turnAndFire, () => {
@@ -381,14 +381,14 @@ describe('mercy after a death', () => {
   }
 
   it('holds the director back for the 4 s after a death, then lets it spawn again', () => {
-    // Two large rocks and a medium (cost 10) fill most of 5-3's opening budget (about 14) but sit over a 0.4 budget.
-    const corners = [still(100, 100, 0), still(1180, 100, 0), still(100, 620, 1)];
+    // A large rock and a medium (cost 6) fill most of 2-5's opening budget (about 9) but sit over a 0.4 budget.
+    const corners = [still(100, 100, 0), still(100, 620, 1)];
     let normal = 0;
     let merciful = 0;
     let after = 0;
     for (let seed = 1; seed <= 12; seed++) {
-      const calmShip = galaxyWorld(galaxyById('5-3'), { seed, mode: 'rank', initialAsteroids: [...corners, still(1180, 620, 3)] });
-      const hit = galaxyWorld(galaxyById('5-3'), { seed, mode: 'rank', initialAsteroids: [...corners, still(CENTRE.x, CENTRE.y, 3)] });
+      const calmShip = galaxyWorld(galaxyById('2-5'), { seed, mode: 'rank', initialAsteroids: [...corners, still(1180, 620, 3)] });
+      const hit = galaxyWorld(galaxyById('2-5'), { seed, mode: 'rank', initialAsteroids: [...corners, still(CENTRE.x, CENTRE.y, 3)] });
       directorSpawns(hit, 0, 3.5);
       expect(hit.deaths, `seed ${String(seed)}`).toBe(1);
       directorSpawns(calmShip, 0, 3.5);

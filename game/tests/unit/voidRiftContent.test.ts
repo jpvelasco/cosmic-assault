@@ -23,15 +23,15 @@ describe('Void Rift content', () => {
     expect(kindProbability(first.kinds.armoured, tierOf(first))).toBeCloseTo(0.1, 9);
   });
 
-  it('leaves Crimson Nebula\'s gunship and mine ramps on Dimension 3 as they were', () => {
-    expect(galaxyById('3-1').kinds.gunship).toEqual({ from: 2, base: 0.1, step: 0.2, max: 0.3 });
-    expect(galaxyById('3-1').kinds.mine).toEqual({ from: 2, base: 0, step: 0.3, max: 0.18 });
+  it('leaves Crimson Nebula\'s own gunship and mine ramps on Dimension 3', () => {
+    expect(galaxyById('3-1').kinds.gunship).toEqual({ from: 2, base: 0.1, step: 0.1, max: 0.2 });
+    expect(galaxyById('3-1').kinds.mine).toEqual({ from: 2, base: 0, step: 0.15, max: 0.12 });
   });
 
-  it("keeps Dimension 3's foes at slightly lower maxima on Void Rift", () => {
+  it("keeps Dimension 3's foes on Void Rift at the maxima they reach in Dimension 3", () => {
     for (const id of VOID_RIFT) {
-      expect(galaxyById(id).kinds.gunship.max, id).toBeLessThan(0.3);
-      expect(galaxyById(id).kinds.mine.max, id).toBeLessThan(0.18);
+      expect(galaxyById(id).kinds.gunship.max, id).toBe(galaxyById('3-1').kinds.gunship.max);
+      expect(galaxyById(id).kinds.mine.max, id).toBe(galaxyById('3-1').kinds.mine.max);
     }
   });
 
