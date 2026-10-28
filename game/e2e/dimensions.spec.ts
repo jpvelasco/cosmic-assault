@@ -28,9 +28,9 @@ interface Sightings {
   /** A gunship winding up, then a bolt it fired after. */
   readonly windup: { readonly id: number; readonly at: number } | null;
   readonly aimedBolt: { readonly id: number; readonly at: number } | null;
-  /** A mine armed (charging), then a mine blast. */
+  /** A mine armed (charging), then a mine blast, with the id of the armed mine it took off the field (-1 if none went). */
   readonly armed: { readonly id: number; readonly at: number } | null;
-  readonly blast: { readonly at: number } | null;
+  readonly blast: { readonly id: number; readonly at: number } | null;
   /** A bolt lying across the field's edge, the step it was gone at, and whether it ever turned up across the field. */
   readonly edge: { readonly id: number; readonly x: number; readonly y: number; readonly at: number; readonly goneAt: number | null; readonly wrapped: boolean } | null;
   readonly screen: string;
@@ -51,6 +51,7 @@ function watch(page: Page, seconds: number, want: 'mine' | 'gunship'): Promise<S
     let blast: Sightings['blast'] = null;
     let edge: { id: number; x: number; y: number; at: number; goneAt: number | null; wrapped: boolean } | null = null;
     const woundUp = new Set<number>();
+    const armedIds = new Set<number>();
     let state = api.getState();
     const done = (): boolean => (wanted === 'mine' ? blast !== null : aimedBolt !== null && edge !== null && edge.goneAt !== null);
     for (let t = 0; t < limit && state.screen === 'playing' && !done(); t += step) {
@@ -64,11 +65,18 @@ function watch(page: Page, seconds: number, want: 'mine' | 'gunship'): Promise<S
           woundUp.add(foe.id);
           windup ??= { id: foe.id, at: t };
         }
-        if (foe.kind === 'mine' && foe.charging) armed ??= { id: foe.id, at: t };
+        if (foe.kind === 'mine' && foe.charging) {
+          armedIds.add(foe.id);
+          armed ??= { id: foe.id, at: t };
+        }
       }
       const aimed = state.bolts.find((bolt) => bolt.source === 'gunship' && woundUp.has(bolt.owner));
       if (aimed !== undefined) aimedBolt ??= { id: aimed.id, at: t };
-      if (armed !== null && (state.events.mineBlast ?? 0) > blastsBefore) blast ??= { at: t };
+      if (armed !== null && (state.events.mineBlast ?? 0) > blastsBefore) {
+        // A mine's blast takes it off the field on the step it goes off.
+        const gone = [...armedIds].find((id) => !state.foes.some((foe) => foe.id === id));
+        blast ??= { id: gone ?? -1, at: t };
+      }
       if (edge === null) {
         const across = state.bolts.find((b) => b.x < b.radius || b.x > field.width - b.radius || b.y < b.radius || b.y > field.height - b.radius);
         if (across !== undefined) edge = { id: across.id, x: across.x, y: across.y, at: t, goneAt: null, wrapped: false };
@@ -104,6 +112,7 @@ test.describe(`Crimson Nebula ${CRIMSON_GALAXY}`, () => {
     const seen = await watch(page, CRIMSON_WATCH_SECONDS, 'mine');
     expect(seen.armed, 'a mine armed').not.toBeNull();
     expect(seen.blast?.at, 'that mine blasting after it armed').toBeGreaterThan(seen.armed?.at ?? Infinity);
+    expect(seen.blast?.id, 'the blast is the armed mine\'s').toBe(seen.armed?.id);
     expect(seen.screen).toBe('playing');
   });
 });

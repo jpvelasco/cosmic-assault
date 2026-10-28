@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { GalaxyId } from '../src/content/types';
 import { SPRITE_CACHE_CAPACITY } from '../src/render/sprites';
-import { expect, expectMode, fastForward, gameState, openGame, test } from './fixtures';
+import { expect, fastForward, gameState, openGame, startRun, test } from './fixtures';
 import { CACHE_GALAXY, CACHE_HOLD_SECONDS, CACHE_LIVES, ECLIPSE_GALAXY, LEVIATHAN_GALAXY, seedFor, TO_BOSS_FIGHT_SECONDS, WARDEN_GALAXY, type ClaimId } from './seeds';
 
 /** Evictions the cache may make in a scene's steady play: a cache sized for the scene should make next to none. */
@@ -47,8 +47,7 @@ for (const scene of SCENES) {
   test(`the sprite cache holds ${scene.name} in ${scene.galaxy} without evicting what it draws`, async ({ page }) => {
     test.setTimeout(CACHE_HOLD_SECONDS * 1000 + 40_000);
     await openGame(page, { seed: seedFor(scene.claim), galaxy: scene.galaxy, lives: CACHE_LIVES });
-    await page.keyboard.press('Space');
-    await expectMode(page, 'playing');
+    await startRun(page, false);
     if (scene.skipSeconds > 0) await fastForward(page, scene.skipSeconds);
 
     // Fire and turn left through the hold, as the perf spec does, so shots, hits and breaks bake their sprites too.
