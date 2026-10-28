@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clockSeed, E2E_QUERY_MARK, isDebugRun, parseGalaxy, parseLives, parseQuality, parseSeed } from '../../src/app/seed';
+import { clockSeed, E2E_QUERY_MARK, isDebugRun, parseGalaxy, parseLives, parseQuality, parseSeed, parseStorm, playedGalaxy, withStorm } from '../../src/app/seed';
+import { galaxyById } from '../../src/content/galaxies';
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('parseSeed', () => {
@@ -81,17 +83,58 @@ describe('parseGalaxy', () => {
 });
 
 describe('isDebugRun', () => {
-  const none = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
+  const none = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined };
 
-  it('is true when ?galaxy=, ?seed= or ?lives= is in force, so the run never writes the save', () => {
+  it('is true when ?galaxy=, ?seed=, ?lives= or ?storm= is in force, so the run never writes the save', () => {
     expect(isDebugRun({ ...none, galaxy: '1-1' })).toBe(true);
     expect(isDebugRun({ ...none, seed: 0 })).toBe(true);
     expect(isDebugRun({ ...none, startLives: 2 })).toBe(true);
+    expect(isDebugRun({ ...none, storm: 4 })).toBe(true);
   });
 
   it('is false with none of them; ?quality= alone changes nothing a save could record', () => {
     expect(isDebugRun(none)).toBe(false);
     expect(isDebugRun({ ...none, quality: 2 })).toBe(false);
+  });
+});
+
+describe('the ?storm= override', () => {
+  it('reads a storm second from 3 to 600, and warns of and ignores anything else', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(parseStorm(null)).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+    expect(parseStorm('4')).toBe(4);
+    expect(parseStorm('600')).toBe(600);
+    expect(parseStorm('2')).toBeUndefined();
+    expect(parseStorm('601')).toBeUndefined();
+    expect(parseStorm('x')).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`${E2E_QUERY_MARK} Ignoring ?storm=2`));
+    expect(warn).toHaveBeenCalledTimes(3);
+  });
+
+  it('adds one gravity storm of intensity 2, in time order, and leaves the authored galaxy untouched', () => {
+    const def = galaxyById('2-2');
+    const played = withStorm(def, 4);
+    expect(played.events.filter((e) => e.type === 'gravityStorm')).toEqual([{ at: 4, type: 'gravityStorm', intensity: 2 }]);
+    expect(played.events.map((e) => e.at)).toEqual(played.events.map((e) => e.at).sort((a, b) => a - b));
+    expect(played.events.length).toBe(def.events.length + 1);
+    expect(def.events.some((e) => e.type === 'gravityStorm')).toBe(false);
+  });
+
+  it('plays the galaxy with the storm in a dev or e2e build, and as it is with no storm given', () => {
+    const def = galaxyById('2-2');
+    expect(playedGalaxy(def, undefined)).toBe(def);
+    expect(playedGalaxy(def, 4)).toEqual(withStorm(def, 4));
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', 'e2e');
+    expect(playedGalaxy(def, 4)).toEqual(withStorm(def, 4));
+  });
+
+  it('never adds the storm in a release build, which returns the galaxy before it reads the override', () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', 'production');
+    const def = galaxyById('2-2');
+    expect(playedGalaxy(def, 4)).toBe(def);
   });
 });
 

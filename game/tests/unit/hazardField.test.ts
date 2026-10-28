@@ -52,6 +52,7 @@ describe('HAZARD_RULES', () => {
       dangerZone: { telegraph: 2, seconds: 10, from: 3 },
       warpRift: { telegraph: 2, seconds: 16, from: 4 },
       blackHole: { telegraph: 3, seconds: 75, from: 5 },
+      gravityStorm: { telegraph: 3, seconds: 12, from: 2 },
     });
   });
 
@@ -66,6 +67,7 @@ describe('hazard streams', () => {
     expect(hazardStreamName('gravityWell')).toBe('hazards');
     expect(hazardStreamName('repulsionField')).toBe('hazards:repulsionField');
     expect(hazardStreamName('blackHole')).toBe('hazards:blackHole');
+    expect(hazardStreamName('gravityStorm')).toBe('hazards:gravityStorm');
   });
 
   it('asks for the stream of each type in the schedule, once', () => {
@@ -130,8 +132,8 @@ describe('HazardField', () => {
     ]);
   });
 
-  it('builds hazards from the shared table: wells, repulsion fields, danger zones, warp rifts and the black hole', () => {
-    expect(Object.keys(HAZARD_FACTORIES).sort()).toEqual(['blackHole', 'dangerZone', 'gravityWell', 'repulsionField', 'warpRift']);
+  it('builds hazards from the shared table: wells, repulsion fields, danger zones, warp rifts, the black hole and the gravity storm', () => {
+    expect(Object.keys(HAZARD_FACTORIES).sort()).toEqual(['blackHole', 'dangerZone', 'gravityStorm', 'gravityWell', 'repulsionField', 'warpRift']);
   });
 
   it('says what to do when a scheduled hazard has no factory yet', () => {

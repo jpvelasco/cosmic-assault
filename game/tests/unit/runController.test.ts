@@ -17,7 +17,7 @@ import { CALLOUT_MS, TOAST_MS } from '../../src/ui/toast';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
-const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
+const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined };
 
 /** A presence where no other tab ever answers, unless `owner` is set: then one owns every run. */
 function fakePresence(owner = false): TabPresence {

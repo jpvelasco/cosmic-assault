@@ -52,9 +52,13 @@ interface HazardBase {
   readonly remaining: number;
 }
 
-/** A hazard round a point: a force field, a rift or a hole. */
+/**
+ * A hazard round a point: a force field or a hole. A gravity storm shows as gravity wells marked `storm`, which its art
+ * links; a field has at most one storm in play.
+ */
 export interface PointHazardState extends HazardBase {
-  readonly type: Exclude<HazardType, 'dangerZone' | 'warpRift'>;
+  readonly type: Exclude<HazardType, 'dangerZone' | 'warpRift' | 'gravityStorm'>;
+  readonly storm?: true;
 }
 
 /** A danger zone: the `w` by `h` rectangle centred on (x, y), lethal to touch once active. */

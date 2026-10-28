@@ -16,7 +16,7 @@ import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
 import { createFlowController } from './flowController';
 import { createPickupNotices } from './pickupNotices';
 import { createSaveStore, type StorageEvents } from './saveStore';
-import { clockSeed, isDebugRun, type RunOverrides } from './seed';
+import { clockSeed, isDebugRun, playedGalaxy, type RunOverrides } from './seed';
 
 export interface RunControllerDeps {
   /** Where the save lives; null where the browser refuses storage. */
@@ -60,7 +60,7 @@ export interface RunController {
   /** The run in play or on its end card; null on the title and menu screens. */
   readonly world: World | null;
   readonly flow: FlowState;
-  /** The save in memory. A debug run (`?galaxy=`, `?seed=`, `?lives=`) never writes it to storage. */
+  /** The save in memory. A debug run (`?galaxy=`, `?seed=`, `?lives=`, `?storm=`) never writes it to storage. */
   readonly save: SaveData;
   /** The score the run stands on: in Rank, the run's score so far plus this galaxy's; in Free play, the galaxy's. */
   readonly runTotal: number;
@@ -121,7 +121,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
     if (galaxy === null || mode === null) {
       throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow, from mode select or galaxy select');
     }
-    const def = galaxyById(galaxy);
+    const def = playedGalaxy(galaxyById(galaxy), overrides.storm);
     world = new World({
       seed: overrides.seed ?? clockSeed(),
       field,

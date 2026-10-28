@@ -278,6 +278,11 @@ const SFX: Readonly<Record<SfxName, (bed: VoiceBed, out: AudioNode, t: number) =
   wellClose: (bed, out, t) => {
     tone(bed, out, { type: 'sine', from: 50, to: 170, start: t, duration: 0.5, peak: 0.16, attack: 0.05 });
   },
+  // A storm forming: three falling notes under a gusting band of noise, heard once however many wells it places.
+  stormSting: (bed, out, t) => {
+    for (const [i, start] of [0, 0.22, 0.44].entries()) tone(bed, out, { type: 'triangle', from: 420 - 60 * i, to: 230 - 30 * i, start: t + start, duration: 0.2, peak: 0.13 });
+    noiseBurst(bed, out, { filter: 'bandpass', from: 700, to: 260, q: 1.5, start: t, duration: 0.7, peak: 0.1 });
+  },
   // A shot glancing off a shielded core: a dry metallic tick, quiet, as held fire makes many.
   deflect: (bed, out, t) => {
     tone(bed, out, { type: 'triangle', from: 2600, to: 1900, start: t, duration: 0.05, peak: 0.05 });

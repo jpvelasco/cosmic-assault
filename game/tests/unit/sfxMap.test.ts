@@ -143,13 +143,21 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'splitter', x: 0, y: 0 })).toBeNull();
   });
 
-  it('caps the swarm buzz, deflections and boss bolts at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1 });
+  it('caps the swarm buzz, deflections, boss bolts and a storm\'s sting, openings and closings at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1, stormSting: 1, wellOpen: 1, wellClose: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
     expect(sfxFor({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 0 })).toBeNull();
     expect(sfxFor({ type: 'foeDestroyed', id: 1, kind: 'drone', x: 0, y: 0, points: 0 })).toBeNull();
+  });
+
+  it('gives a storm one sting for its wells, whose warnings come in one step, a gravity well\'s opening and closing, and its hum', () => {
+    expect(nameOf({ type: 'wellWarning', id: 1, kind: 'gravityStorm', x: 0, y: 0, at: 30 })).toBe('stormSting');
+    expect(nameOf({ type: 'wellStart', id: 1, kind: 'gravityStorm' })).toBe('wellOpen');
+    expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityStorm' })).toBe('wellClose');
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'gravityStorm' })).toEqual(humFor({ type: 'wellStart', id: 1, kind: 'gravityWell' }));
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityStorm' })).toEqual(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' }));
   });
 
   it('gives a gravity well a warning, an opening and a closing of its own', () => {

@@ -14,7 +14,7 @@
 - `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
   Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
   Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
-  carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=` URL overrides,
+  carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=`/`?storm=` URL overrides,
   and checks that it does), `check:no-bridge` (fails if the release `dist/`
   contains the bridge or that URL parsing), and `record:parity` (records the
   parity traces), `icons` (re-renders the committed PNG icons in
@@ -30,8 +30,9 @@
   `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
   and a case in `tests/unit/checkNoBridge.test.ts`; a new hook needs all three.
-  `?galaxy=` jumps straight into a level (see `app/seed.ts`). A run started with `?galaxy=`,
-  `?seed=` or `?lives=` never writes the save.
+  `?galaxy=` jumps straight into a level and `?storm=<seconds>` adds a gravity storm to
+  the level played (see `app/seed.ts`). A run started with `?galaxy=`, `?seed=`,
+  `?lives=` or `?storm=` never writes the save.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
   enforces it. Ship handling is pinned to recorded traces of the live game in
   `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
@@ -86,7 +87,8 @@
     threat budget as rocks, by cost. Foe motion draws from the `'foes'` stream.
     `HAZARD_RULES` in `content/hazards.ts` is the hazard table: each type's
     telegraph, length and first set (gravity wells, repulsion fields, danger
-    zones, warp rifts and the black hole). A level event schedules a hazard; it
+    zones, warp rifts, the black hole and the gravity storm, a set of gravity
+    wells placed together that no level schedules yet). A level event schedules a hazard; it
     shows as a harmless warning for its telegraph, then turns hostile.
     `HazardField` (`sim/hazards/`) runs one `Hazard` per type a level names,
     made by `HAZARD_FACTORIES`, each from its own stream (`hazardStreamName`:

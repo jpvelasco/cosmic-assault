@@ -23,6 +23,7 @@ export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory
   dangerZone: (setup) => new DangerZones(setup),
   warpRift: (setup) => new WarpRifts(setup),
   blackHole: (setup) => new BlackHole(setup),
+  gravityStorm: (setup) => new ForceField('gravityStorm', setup),
 };
 
 /** The stream a hazard type draws from: the gravity wells keep the `'hazards'` stream they first drew from, so Ion Reach does not move. */

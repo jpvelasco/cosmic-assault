@@ -49,7 +49,7 @@ describe('check-no-bridge (release build)', { timeout: SPAWN_TIMEOUT_MS }, () =>
     const result = runGuard(dist);
     expect(result.status).toBe(1);
     expect(result.output).toContain(
-      `release build ${dist} contains the e2e ?seed=, ?lives=, ?quality= and ?galaxy= parsing; release builds must not — check the import.meta.env.MODE guard in src/app/seed.ts`,
+      `release build ${dist} contains the e2e ?seed=, ?lives=, ?quality=, ?galaxy= and ?storm= parsing; release builds must not — check the import.meta.env.MODE guard in src/app/seed.ts`,
     );
     expect(result.output).toContain(join('assets', 'index.js'));
   });
@@ -82,7 +82,7 @@ describe('check-no-bridge --e2e (e2e build)', { timeout: SPAWN_TIMEOUT_MS }, () 
     const result = runGuard('--e2e', dist);
     expect(result.status).toBe(1);
     expect(result.output).toContain(
-      `e2e build ${dist} lacks the e2e ?seed=, ?lives=, ?quality= and ?galaxy= parsing (__E2E_QUERY__); the release check scans for that mark, so keep it in src/app/seed.ts or update scripts/check-no-bridge.mjs`,
+      `e2e build ${dist} lacks the e2e ?seed=, ?lives=, ?quality=, ?galaxy= and ?storm= parsing (__E2E_QUERY__); the release check scans for that mark, so keep it in src/app/seed.ts or update scripts/check-no-bridge.mjs`,
     );
   });
 

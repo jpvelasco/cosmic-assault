@@ -48,17 +48,20 @@ export interface GameQuery {
   readonly quality?: string;
   /** The galaxy the title's Play jumps straight into; null for the normal flow through mode select. */
   readonly galaxy?: string | null;
+  /** Seconds into that galaxy at which a gravity storm is added to it (see src/app/seed.ts). */
+  readonly storm?: number;
 }
 
 /**
  * Opens the e2e build (the 'lanes-clear' seed and galaxy E2E_GALAXY unless overridden) and waits for the test bridge, which
  * loads after an `import()`. Any of these switches makes it a debug run, which never writes the save.
  */
-export async function openGame(page: Page, { seed = seedFor('lanes-clear'), lives, quality, galaxy = E2E_GALAXY }: GameQuery = {}): Promise<void> {
+export async function openGame(page: Page, { seed = seedFor('lanes-clear'), lives, quality, galaxy = E2E_GALAXY, storm }: GameQuery = {}): Promise<void> {
   const query = new URLSearchParams({ seed: String(seed) });
   if (galaxy !== null) query.set('galaxy', galaxy);
   if (lives !== undefined) query.set('lives', String(lives));
   if (quality !== undefined) query.set('quality', quality);
+  if (storm !== undefined) query.set('storm', String(storm));
   await page.goto(`/?${query.toString()}`);
   await waitForBridge(page);
 }

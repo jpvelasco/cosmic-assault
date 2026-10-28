@@ -1,5 +1,5 @@
 import type { BlastKind, TimedPickupId } from '../content/pickups';
-import type { AttackId, BossId, FoeKind, ForceKind, GalaxyId, PickupId } from '../content/types';
+import type { AttackId, BossId, FoeKind, GalaxyId, PickupId, WellKind } from '../content/types';
 import type { AsteroidSize } from './asteroid';
 import type { BoltSource } from './foes/bolts';
 import type { Stars } from './scoring';
@@ -80,10 +80,13 @@ export type SimEvent =
   /** Danger zone `id` is active: touching it is a hit. */
   | { type: 'zoneStart'; id: number }
   | { type: 'zoneEnd'; id: number }
-  /** Force field `id` of `kind` (a gravity well or a repulsion field) will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
-  | { type: 'wellWarning'; id: number; kind: ForceKind; x: number; y: number; at: number }
-  | { type: 'wellStart'; id: number; kind: ForceKind }
-  | { type: 'wellEnd'; id: number; kind: ForceKind }
+  /**
+   * Force field `id` of `kind` (a gravity well, a repulsion field, or one of a gravity storm's wells) will start at `at`
+   * seconds into the galaxy, drawn at (x, y) from now.
+   */
+  | { type: 'wellWarning'; id: number; kind: WellKind; x: number; y: number; at: number }
+  | { type: 'wellStart'; id: number; kind: WellKind }
+  | { type: 'wellEnd'; id: number; kind: WellKind }
   /** A shot struck armoured foe `id` at (x, y) outside its soft arc: it is spent, with no harm. */
   | { type: 'foeDeflected'; id: number; x: number; y: number }
   /** Phaser `id` will blink from (x, y) to (toX, toY) once its warning runs out; nothing is there to strike until `phaserBlink`. */

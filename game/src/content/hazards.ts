@@ -16,6 +16,7 @@ export const HAZARD_RULES: Readonly<Record<HazardType, HazardRule>> = {
   dangerZone: { telegraph: 2, seconds: 10, from: 3 },
   warpRift: { telegraph: 2, seconds: 16, from: 4 },
   blackHole: { telegraph: 3, seconds: 75, from: 5 },
+  gravityStorm: { telegraph: 3, seconds: 12, from: 2 },
 };
 
 /** A rectangle at one corner of the field, `width` by `height` field units, and no wider than `widthShare` of the field if given. */
@@ -80,6 +81,18 @@ export const BLACK_HOLE = {
   exitReach: 284,
   exitFallback: 248,
 } as const;
+
+/**
+ * A gravity storm places `baseWells` plus its intensity of gravity wells, at most `maxWells`, all at once, each of
+ * intensity 1 and pulling like one. They sit at least `spacing` of the field's width apart. (Tuning values.)
+ */
+export const GRAVITY_STORM = { baseWells: 2, maxWells: 4, spacing: 0.28 } as const;
+
+/**
+ * A gravity well's drawn radius at intensity 1, in field units; its pull reaches the whole field and has no edge. A storm
+ * keeps its wells' art inside the field and, where the field leaves room, out from under the HUD and thumb corners.
+ */
+export const WELL_RADIUS = 90;
 
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };

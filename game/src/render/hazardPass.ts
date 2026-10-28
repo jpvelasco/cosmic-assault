@@ -1,8 +1,8 @@
 import { clamp } from '../content/curves';
-import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../content/hazards';
+import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT, WELL_RADIUS, type HazardRule } from '../content/hazards';
 import type { Field } from '../sim/field';
 import type { HazardState, PointHazardState, RiftState, ZoneState } from '../sim/hazards/hazard';
-import { TAU } from '../sim/math';
+import { TAU, type Point } from '../sim/math';
 import { BLACK, mix, rgba, WHITE } from './color';
 import type { FieldPen } from './fieldPen';
 import type { Palette } from './palette';
@@ -13,6 +13,8 @@ export interface HazardPass {
   /**
    * The hazards in play. A gravity well: a faint outline closing in and pulsing while it is a warning; once it pulls,
    * a glow, three arcs swirling round it (held still and breathing under reduced motion) and a dark lens at its heart.
+   * A gravity storm's wells are gravity wells, each pair linked by a thin arc, and while they warn one dotted ring round
+   * them all; the links and ring hold still under reduced motion.
    * A repulsion field: a warning ring growing outward, then ripples spreading out from its heart. A warp rift, once
    * open: a swirl at each mouth linked by a dashed arc. A lethal danger zone: filled, hatched and outlined solid in the
    * hostile hue (its warning is `drawWarnings`'). A black hole: a dark lens with a bent-light halo and an accretion ring
@@ -48,10 +50,20 @@ const RIFT_LINK_DASH: number[] = [8, 6];
 const RIFT_LINK_MARCH = 40;
 const RIFT_LINK_WIDTH = 2;
 const RIFT_LINK_BOW = 0.18;
+/**
+ * A gravity storm: its wells linked by thin solid arcs, bowed less than a rift's, and its warning circled by one dotted ring
+ * round their middle, reaching half a well past the outermost.
+ */
+const STORM_LINK_WIDTH = 2;
+const STORM_LINK_BOW = 0.14;
+const STORM_LINK_SOLID: readonly number[] = [];
+const STORM_RING_DOTS: readonly number[] = [1.5, 7];
+const STORM_RING_WIDTH = 3;
+const STORM_RING_REACH = WELL_RADIUS / 2;
 
-const { telegraph: WELL_TELEGRAPH_SECONDS, seconds: WELL_SECONDS } = HAZARD_RULES.gravityWell;
-/** The drawn radius of an intensity-1 well; its pull reaches the whole field and has no edge. Each intensity adds a share. */
-const WELL_RADIUS = 90;
+/** A well's telegraph and length: a gravity storm's, for one of its wells, else a gravity well's. */
+const wellRule = (well: Readonly<PointHazardState>): HazardRule => HAZARD_RULES[well.storm === true ? 'gravityStorm' : 'gravityWell'];
+/** Each intensity adds a share to a well's drawn radius (`WELL_RADIUS` at intensity 1). */
 const INTENSITY_GROWTH = 0.2;
 const MAX_INTENSITY = 3;
 /** Sprites are baked for the largest well and drawn scaled down for the others, so they are never blown up. */
@@ -255,6 +267,18 @@ const wave = (time: number, hz: number): number => 0.5 + 0.5 * Math.sin(time * T
 /** An open swirl's opacity: 1 while it turns; under reduced motion, which freezes it, a slow breath shows it still acts. */
 const breathOf = (time: number, still: boolean): number => (still ? STILL_PULSE_LOW + (1 - STILL_PULSE_LOW) * wave(time, STILL_PULSE_HZ) : 1);
 
+/** A link between two points: how far it bows to one side (a share of its length), its width and colour, and its dash, marching this fast. */
+interface LinkStyle {
+  readonly bow: number;
+  readonly width: number;
+  readonly color: string;
+  readonly dash: readonly number[];
+  readonly march: number;
+}
+
+/** Whether `hazard` is one of a gravity storm's wells. */
+const isStormWell = (hazard: Readonly<HazardState>): hazard is Readonly<PointHazardState> => hazard.type === 'gravityWell' && hazard.storm === true;
+
 /** The drawn size of a well of `intensity`, as a share of the baked sprites. */
 const sizeOf = (intensity: number): number => (1 + INTENSITY_GROWTH * (intensity - 1)) / (1 + INTENSITY_GROWTH * (MAX_INTENSITY - 1));
 
@@ -294,14 +318,14 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
   }
 
   function drawWarning(well: Readonly<PointHazardState>, field: Field, { time, still }: SceneLook): void {
-    const due = clamp(well.remaining / WELL_TELEGRAPH_SECONDS, 0, 1);
+    const due = clamp(well.remaining / wellRule(well).telegraph, 0, 1);
     const size = sizeOf(well.intensity) * (still ? 1 : 1 + OUTLINE_CLOSE * due);
     ctx.globalAlpha = still ? 0.5 : 0.3 + 0.35 * wave(time, OUTLINE_PULSE_HZ);
     put(baker.custom(outlineKey, half, paintOutlineNow), well, size, 0, field);
   }
 
   function drawActive(well: Readonly<PointHazardState>, field: Field, look: SceneLook): void {
-    const shown = presenceOf(well.remaining, WELL_SECONDS);
+    const shown = presenceOf(well.remaining, wellRule(well).seconds);
     const size = sizeOf(well.intensity);
     drawSwirl(well, size, size * (0.92 + 0.08 * shown), 1, shown, look, field);
   }
@@ -406,14 +430,14 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     ctx.globalAlpha = still ? 0.6 : 0.35 + 0.4 * wave(time, OUTLINE_PULSE_HZ + 2 * due);
     placeMouths(rift);
     for (const mouth of mouths) put(baker.custom(riftOutlineKey, half, paintRiftOutlineNow), mouth, MOUTH_SCALE, 0, field);
-    drawLink(rift, time, still, 0.35);
+    drawLink(mouths[0], mouths[1], riftLink, time, still, 0.35);
   }
 
   /** A warp rift open: each mouth a swirl of the well's arcs over a dark lens, the two linked by a dashed arc. */
   function drawRiftOpen(rift: Readonly<RiftState>, field: Field, look: SceneLook): void {
     const shown = presenceOf(rift.remaining, RIFT_SECONDS);
     placeMouths(rift);
-    drawLink(rift, look.time, look.still, shown * breathOf(look.time, look.still));
+    drawLink(mouths[0], mouths[1], riftLink, look.time, look.still, shown * breathOf(look.time, look.still));
     // The two mouths turn in opposite ways, so the pair reads as a pair.
     drawSwirl(mouths[0], MOUTH_SCALE, MOUTH_SCALE, 1, shown, look, field);
     drawSwirl(mouths[1], MOUTH_SCALE, MOUTH_SCALE, -1, shown, look, field);
@@ -427,25 +451,74 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     mouths[1].y = rift.toY;
   }
 
-  /** The dashed arc between a rift's mouths, bowed a little to one side and marching toward the far mouth. */
-  function drawLink(rift: Readonly<RiftState>, time: number, still: boolean, alpha: number): void {
+  /** A rift's mouths are linked by a dashed arc marching toward the far mouth; a storm's wells by solid ones. */
+  const riftLink: LinkStyle = { bow: RIFT_LINK_BOW, width: RIFT_LINK_WIDTH, color: violet, dash: RIFT_LINK_DASH, march: RIFT_LINK_MARCH };
+  const stormColor = mix(cyan, WHITE, 0.45);
+  const stormLink: LinkStyle = { bow: STORM_LINK_BOW, width: STORM_LINK_WIDTH, color: stormColor, dash: STORM_LINK_SOLID, march: 0 };
+
+  /** The arc from `from` to `to` in `style`, bowed a little to one side, at `alpha`. */
+  function drawLink(from: Readonly<Point>, to: Readonly<Point>, style: LinkStyle, time: number, still: boolean, alpha: number): void {
     if (alpha <= 0) return;
     pen.field();
-    const mx = (rift.x + rift.toX) / 2;
-    const my = (rift.y + rift.toY) / 2;
-    const bow = RIFT_LINK_BOW * Math.hypot(rift.toX - rift.x, rift.toY - rift.y);
-    const nx = -(rift.toY - rift.y);
-    const ny = rift.toX - rift.x;
+    const mx = (from.x + to.x) / 2;
+    const my = (from.y + to.y) / 2;
+    const bow = style.bow * Math.hypot(to.x - from.x, to.y - from.y);
+    const nx = -(to.y - from.y);
+    const ny = to.x - from.x;
     const length = Math.hypot(nx, ny) || 1;
     ctx.beginPath();
-    ctx.moveTo(rift.x, rift.y);
-    ctx.quadraticCurveTo(mx + (nx / length) * bow * 2, my + (ny / length) * bow * 2, rift.toX, rift.toY);
-    marchDash(ctx, RIFT_LINK_DASH, time, RIFT_LINK_MARCH, still);
-    ctx.lineWidth = RIFT_LINK_WIDTH;
-    ctx.strokeStyle = violet;
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(mx + (nx / length) * bow * 2, my + (ny / length) * bow * 2, to.x, to.y);
+    marchDash(ctx, style.dash, time, style.march, still);
+    ctx.lineWidth = style.width;
+    ctx.strokeStyle = style.color;
     ctx.globalAlpha = alpha;
     ctx.stroke();
     solidLines(ctx);
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * A gravity storm's art, under its wells: every pair of them linked, and while they warn one dotted ring round their
+   * middle. A field has at most one storm in play, so every storm well is the same storm's. Walks the list by index, so
+   * a frame allocates nothing; under reduced motion the links and ring hold their alpha still.
+   */
+  function drawStorm(hazards: readonly Readonly<HazardState>[], { time, still }: SceneLook): void {
+    let count = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let warning = false;
+    for (let i = 0; i < hazards.length; i++) {
+      const a = hazards[i];
+      if (a === undefined || !isStormWell(a)) continue;
+      count++;
+      sumX += a.x;
+      sumY += a.y;
+      warning = a.stage === 'warning';
+      const alpha = warning ? (still ? 0.5 : 0.3 + 0.2 * wave(time, OUTLINE_PULSE_HZ)) : 0.8 * presenceOf(a.remaining, wellRule(a).seconds);
+      for (let j = i + 1; j < hazards.length; j++) {
+        const b = hazards[j];
+        if (b !== undefined && isStormWell(b)) drawLink(a, b, stormLink, time, still, alpha);
+      }
+    }
+    if (warning) drawStormRing(hazards, sumX / count, sumY / count, still ? 0.6 : 0.4 + 0.35 * wave(time, OUTLINE_PULSE_HZ));
+  }
+
+  /** The dotted ring round the storm's wells, centred on (cx, cy), their middle, and reaching past the outermost by `STORM_RING_REACH`. */
+  function drawStormRing(hazards: readonly Readonly<HazardState>[], cx: number, cy: number, alpha: number): void {
+    let reach = 0;
+    for (const h of hazards) if (isStormWell(h)) reach = Math.max(reach, Math.hypot(h.x - cx, h.y - cy));
+    pen.field();
+    ctx.setLineDash(STORM_RING_DOTS);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = STORM_RING_WIDTH;
+    ctx.strokeStyle = stormColor;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(cx, cy, reach + STORM_RING_REACH, 0, TAU);
+    ctx.stroke();
+    solidLines(ctx);
+    ctx.lineCap = 'butt';
     ctx.globalAlpha = 1;
   }
 
@@ -484,6 +557,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
 
   return {
     drawHazards(hazards, field, look) {
+      drawStorm(hazards, look);
       for (const hazard of hazards) {
         if (hazard.type === 'dangerZone') {
           if (hazard.stage === 'active') drawZone(hazard, field, look);
