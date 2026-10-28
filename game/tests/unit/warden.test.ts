@@ -23,7 +23,7 @@ import { World } from '../../src/sim/world';
 import { rescale } from '../../src/sim/wrap';
 import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, ofType, rigStepper, runFor, stubArena, timedOfType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
-import { ringGaps, wardenGapBearings, wardenGaps } from '../helpers/ringGaps';
+import { bearingOf, ringGaps, wardenGapBearings, wardenGaps, WIDE_GAP } from '../helpers/ringGaps';
 
 const DEF = BOSSES.warden;
 const MAX_HP = 76;
@@ -31,8 +31,6 @@ const APPROACH = 20;
 const SLOT = TAU / WARDEN_RING.slots;
 /** Room either side of a ship flying a straight line through a gap. */
 const PATH_MARGIN = 10;
-/** Each of the ring's two gaps must stay at least this wide. */
-const WIDE_GAP = 50;
 
 const warden = (seed = 1): BossRig => bossRig(DEF, createWarden, MAX_HP, { seed });
 
@@ -45,7 +43,6 @@ function woundTo(r: BossRunner, hp: number): void {
   if (hp < r.hp) expect(r.hit(r.hp - hp)).toBe('hit');
 }
 
-const bearingOf = (boss: Readonly<BossView>, p: Readonly<{ x: number; y: number }>): number => Math.atan2(p.y - boss.y, p.x - boss.x);
 const ringRadius = (boss: Readonly<BossView>): number => Math.max(...liveParts(boss).map((p) => Math.hypot(p.x - boss.x, p.y - boss.y)));
 
 /** Distance from (px, py) to the segment from (ax, ay) to (bx, by). */

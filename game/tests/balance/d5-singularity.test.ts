@@ -1,9 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { BLACK_HOLE } from '../../src/content/hazards';
-import { PLAYER } from '../../src/sim/config';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { BOT_SEEDS } from '../helpers/botRuns';
+import { CONTACT } from '../helpers/holeEscape';
 import { auditFoeAttacks, auditTelegraphs, hazardsShown, type PlayedRun, playLogged, type TelegraphPair } from '../helpers/telegraphAudit';
 
 /** Singularity's survival galaxies, each played on the ten bot seeds. */
@@ -43,12 +42,11 @@ describe('Singularity, played by the bots', { timeout: TIMEOUT_MS }, () => {
     expect(seen.get('asteroidLeft') ?? 0).toBeGreaterThan(0);
   });
 
-  it('never costs the expert a life to the horizon: no ship is hit within the horizon\'s contact radius', () => {
-    const contact = BLACK_HOLE.horizon + PLAYER.radius;
+  it('never costs the expert a life to the horizon: no ship is hit within the horizon\'s CONTACT radius', () => {
     for (const { id, seed, log, field } of expert) {
       for (const { event } of log) {
         if (event.type !== 'shipHit') continue;
-        expect(Math.hypot(event.x - field.width / 2, event.y - field.height / 2), `${id} seed ${String(seed)}`).toBeGreaterThanOrEqual(contact);
+        expect(Math.hypot(event.x - field.width / 2, event.y - field.height / 2), `${id} seed ${String(seed)}`).toBeGreaterThanOrEqual(CONTACT);
       }
     }
   });

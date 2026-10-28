@@ -19,14 +19,12 @@ import { RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { createRng } from '../../src/sim/rng';
 import { wrappedDistance } from '../../src/sim/wrap';
 import { foeAt } from '../helpers/foeAt';
-import { clearTime, flyOut } from '../helpers/holeEscape';
-import { createShip, type Ship } from '../../src/sim/ship';
+import { clearTime, CONTACT, flyOut, shipAt } from '../helpers/holeEscape';
 
 const FIELD: Field = { width: 1280, height: FIELD_HEIGHT };
 const DT = STEP_SECONDS;
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
 const HORIZON = BLACK_HOLE.horizon;
-const CONTACT = HORIZON + PLAYER.radius;
 const START_AT = 5;
 const LENGTH = 75;
 
@@ -42,13 +40,6 @@ function holeField(elapsed: number, intensity: GalaxyEvent['intensity'] = 1, out
 
 function rockAt(id: number, x: number, y: number, radius = ASTEROID.radii[2] as number): Asteroid {
   return { id, x, y, px: x, py: y, vx: 0, vy: 0, radius, size: 2, rotation: 0, protation: 0, spin: 0, transient: false } as unknown as Asteroid;
-}
-
-function shipAt(x: number, y: number): Ship {
-  const ship = createShip(x, y);
-  ship.invulnerable = false;
-  ship.invulnerableFor = 0;
-  return ship;
 }
 
 /** Bolts in a pool of its own, whose events go to `events`. */

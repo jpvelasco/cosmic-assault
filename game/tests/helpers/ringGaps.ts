@@ -4,7 +4,10 @@ import { WARDEN_RING } from '../../src/sim/boss/warden';
 
 type Ringed = Readonly<Pick<BossView, 'x' | 'y' | 'parts'>>;
 
-const bearingOf = (boss: Ringed, p: Readonly<BossPart>): number => Math.atan2(p.y - boss.y, p.x - boss.x);
+/** The bearing of `p` from the core. */
+export const bearingOf = (boss: Readonly<{ x: number; y: number }>, p: Readonly<{ x: number; y: number }>): number => Math.atan2(p.y - boss.y, p.x - boss.x);
+/** Each of the Warden ring's two gaps must stay at least this wide. */
+export const WIDE_GAP = 50;
 /** The turn from `from` round to `to`, in [0, 2π). */
 const turnTo = (from: number, to: number): number => (((to - from) % TAU) + TAU) % TAU;
 

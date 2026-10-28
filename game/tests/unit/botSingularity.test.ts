@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { createExpert } from '../../src/bot/expert';
 import { createView, readView } from '../../src/bot/view';
-import { BLACK_HOLE } from '../../src/content/hazards';
 import { galaxyById } from '../../src/content/galaxies';
-import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
+import { CONTACT } from '../helpers/holeEscape';
 
 const FIELD = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
 const HOLE_AT = 12;
-const CONTACT = BLACK_HOLE.horizon + PLAYER.radius;
 
 /** A Singularity run of 5-1 with the ship parked at (x, y) and held there, unhurt, until `seconds`. */
 function parked(seconds: number, x: number, y: number): World {
