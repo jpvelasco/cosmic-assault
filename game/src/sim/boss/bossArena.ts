@@ -1,9 +1,8 @@
-import { ASTEROID, PLAYER } from '../config';
 import type { Field } from '../field';
 import type { Moving } from '../math';
+import { clearSpot, RESPAWN_MARGIN } from '../respawn';
 import type { Arena } from '../rules';
 import type { BossView, Point } from './behaviour';
-import { clearSpot } from './bossRules';
 import { BossRunner, type HitResult, type PartHitResult } from './bossRunner';
 
 /**
@@ -102,6 +101,6 @@ export class BossArena {
   respawnPoint(): Readonly<Point> | null {
     const boss = this.current;
     if (boss === null || boss.state === 'down') return null;
-    return clearSpot(boss.view, boss.reach, this.arena.field(), PLAYER.radius + ASTEROID.safeRadius);
+    return clearSpot(boss.view, boss.reach, this.arena.field(), RESPAWN_MARGIN);
   }
 }

@@ -6,7 +6,7 @@ import type { AttackId } from '../../src/content/types';
 import { launchSlot, launchSlotsFor } from '../../src/sim/boss/attacks';
 import { createEclipse, DIVE_SECONDS, ECLIPSE_CAP, ECLIPSE_CORONA, ECLIPSE_REACH, ECLIPSE_VOLLEY, ECLIPSE_WAVES, QUAKE_ROCKS } from '../../src/sim/boss/eclipse';
 import type { BossBehaviour, BossPart, BossPhase, BossSetup, BossView, Point } from '../../src/sim/boss/behaviour';
-import { bossClearance, clearSpot } from '../../src/sim/boss/bossRules';
+import { clearSpot, respawnClearance } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { Bolts } from '../../src/sim/foes/bolts';
@@ -417,7 +417,7 @@ describe('the Eclipse\'s fairness', () => {
     for (let step = 0; step < 30 / STEP_SECONDS; step++) {
       stepper(rig)(STEP_SECONDS, rig.arena);
       const spot = clearSpot(rig.r.view, rig.r.reach, rig.arena.field(), margin);
-      expect(bossClearance(rig.r.view, rig.r.reach, spot.x, spot.y)).toBeGreaterThanOrEqual(margin);
+      expect(respawnClearance(rig.r.view, rig.r.reach, spot.x, spot.y)).toBeGreaterThanOrEqual(margin);
     }
   });
 

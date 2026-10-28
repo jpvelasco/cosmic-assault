@@ -2,85 +2,16 @@ import type { BossDef } from '../../content/bosses';
 import { MIN_WINDUP_SECONDS } from '../../content/pacingRules';
 import type { AttackId } from '../../content/types';
 import type { Field } from '../field';
-import type { AttackSpec, BossBehaviour, BossPart, BossPhase, BossThreat, BossView, Point } from './behaviour';
+import type { AttackSpec, BossBehaviour, BossPhase, BossThreat, BossView, Point } from './behaviour';
 
-// The rules every boss fight keeps, apart from the runner that steps one: where a boss arrives, where a ship respawns
-// clear of it, where a shot does harm, how its HP sets its phase, and what its definition and behaviour must hold.
+// The rules every boss fight keeps, apart from the runner that steps one: where a boss arrives, where a shot does harm,
+// how its HP sets its phase, and what its definition and behaviour must hold. Where a ship respawns clear of it is
+// sim/respawn.ts's.
 
 /** Where a boss arrives, as a share of the field height from the top. */
 const HOME_HEIGHT_SHARE = 0.28;
 /** The most speed a boss's shove leaves the ship with, in units per second; a ship already faster only keeps from gaining. */
 export const MAX_SHOVE_SPEED = 300;
-
-/** How far inside the field's edges a ship respawns clear of a boss. */
-export const RESPAWN_INSET = 60;
-/**
- * The lowest a ship respawns in a boss galaxy, as a share of the field height: above the band the HUD's boss bar sits
- * in along the bottom (render/hud.ts), on every screen.
- */
-export const RESPAWN_LOWEST_SHARE = 0.8;
-
-/**
- * A body a respawn keeps clear of, as its reach is measured: a boss's core and the parts it may have, or a black hole and
- * the foes round it. Only the live parts count.
- */
-export type BossBodies = Readonly<Point> & { readonly parts?: readonly Readonly<Pick<BossPart, 'x' | 'y' | 'radius' | 'hp'>>[] };
-
-/**
- * How far (x, y) lies outside the boss: outside the circle of `reach` about its core, and outside every live part by
- * that part's own radius, whichever is nearer. Negative inside either. A part that trails far beyond the core's reach,
- * a serpent's tail say, counts as much as the core.
- */
-export function bossClearance(boss: BossBodies, reach: number, x: number, y: number): number {
-  let clearance = Math.hypot(x - boss.x, y - boss.y) - reach;
-  for (const part of boss.parts ?? []) if (part.hp > 0) clearance = Math.min(clearance, Math.hypot(x - part.x, y - part.y) - part.radius);
-  return clearance;
-}
-
-/** The grid a respawn searches when none of its five usual spots is clear: columns and rows across the respawn band. */
-const RESPAWN_GRID_COLUMNS = 9;
-const RESPAWN_GRID_ROWS = 6;
-
-/** The respawn band: inside the field's edges by `RESPAWN_INSET`, and no lower than `RESPAWN_LOWEST_SHARE` of the height. */
-export function respawnBand(field: Field): Readonly<{ left: number; right: number; top: number; bottom: number }> {
-  return { left: RESPAWN_INSET, right: field.width - RESPAWN_INSET, top: RESPAWN_INSET, bottom: field.height * RESPAWN_LOWEST_SHARE };
-}
-
-/**
- * Where a ship can respawn at least `margin` outside the boss (`bossClearance`): the first clear spot of `prefer`, by
- * default low in the middle, at `RESPAWN_LOWEST_SHARE` of the height, or, if the boss lies too near it, the corner
- * farthest from the core, as low or as near the top, or, if a part lies on that too, the first other corner that is
- * clear. If none of those is, the first clear point of a grid across the respawn band, row by row from the bottom, as
- * low as the usual spots prefer; else, with nowhere clear, the clearest spot of all, the first found among equals, so a
- * respawn is always the same for the same boss.
- */
-export function clearSpot(boss: BossBodies, reach: number, field: Field, margin = 0, prefer: readonly Point[] = usualSpots(boss, field)): Point {
-  const { left, right, top, bottom } = respawnBand(field);
-  let best: Point = { x: field.width / 2, y: bottom };
-  let bestClearance = -Infinity;
-  /** Whether `spot` is clear by `margin`, noting it if it is the clearest yet. */
-  const clear = (spot: Point): boolean => {
-    const clearance = bossClearance(boss, reach, spot.x, spot.y);
-    if (clearance > bestClearance) [best, bestClearance] = [spot, clearance];
-    return clearance >= margin;
-  };
-  for (const spot of prefer) if (clear(spot)) return spot;
-  for (let row = RESPAWN_GRID_ROWS - 1; row >= 0; row--) {
-    for (let column = 0; column < RESPAWN_GRID_COLUMNS; column++) {
-      const spot = { x: left + ((right - left) * column) / (RESPAWN_GRID_COLUMNS - 1), y: top + ((bottom - top) * row) / (RESPAWN_GRID_ROWS - 1) };
-      if (clear(spot)) return spot;
-    }
-  }
-  return best;
-}
-
-/** The usual respawn spots round a boss: low in the middle, then the corners, the one farthest from its core first. */
-function usualSpots(boss: Readonly<Point>, field: Field): Point[] {
-  const { left, right, top, bottom } = respawnBand(field);
-  const farX = Math.abs(boss.x - left) > Math.abs(boss.x - right) ? left : right;
-  const farY = Math.abs(boss.y - top) > Math.abs(boss.y - bottom) ? top : bottom;
-  return [{ x: field.width / 2, y: bottom }, { x: farX, y: farY }, { x: left + right - farX, y: farY }, { x: farX, y: top + bottom - farY }, { x: left + right - farX, y: top + bottom - farY }];
-}
 
 /** Where a boss arrives in `field`. */
 export function bossHome(field: Field): Readonly<Point> {

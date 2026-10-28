@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
 import type { BossPart } from '../../src/sim/boss/behaviour';
-import { bossClearance, clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE } from '../../src/sim/boss/bossRules';
+import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE, respawnClearance } from '../../src/sim/respawn';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
@@ -54,7 +54,7 @@ describe('clearSpot with its usual spots blocked', () => {
   it('searches a grid across the respawn band for a spot clear of every part, the same one every time', () => {
     const boss = blocker();
     const spot = clearSpot(boss, 10, BOSS_FIELD, MARGIN);
-    expect(bossClearance(boss, 10, spot.x, spot.y)).toBeGreaterThanOrEqual(MARGIN);
+    expect(respawnClearance(boss, 10, spot.x, spot.y)).toBeGreaterThanOrEqual(MARGIN);
     expect(inside(spot, BOSS_FIELD)).toBe(true);
     expect(clearSpot(boss, 10, BOSS_FIELD, MARGIN)).toEqual(spot);
   });

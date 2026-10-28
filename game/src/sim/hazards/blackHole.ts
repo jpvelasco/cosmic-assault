@@ -1,12 +1,11 @@
 import { FOES } from '../../content/foes';
 import { BLACK_HOLE, HAZARD_RULES } from '../../content/hazards';
 import type { Point } from '../boss/behaviour';
-import { clearSpot, respawnBand } from '../boss/bossRules';
-import { ASTEROID, PLAYER } from '../config';
 import type { Foe } from '../foes/foe';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { nudge } from '../math';
+import { clearSpot, respawnBand, RESPAWN_MARGIN } from '../respawn';
 import { HazardSchedule } from './schedule';
 import type { Bodies, Hazard, HazardSetup, HazardState, PointHazardState, Pullable } from './hazard';
 
@@ -134,8 +133,7 @@ export class BlackHole implements Hazard {
   respawnPoint(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null {
     const hole = this.schedule.live[0];
     if (this.field === null || hole === undefined) return null;
-    const margin = PLAYER.radius + ASTEROID.safeRadius;
-    return clearSpot({ x: hole.x, y: hole.y, parts: foes }, BLACK_HOLE.exitReach, this.field, margin, ringSpots(hole, this.field, BLACK_HOLE.exitReach + margin));
+    return clearSpot({ x: hole.x, y: hole.y, parts: foes }, BLACK_HOLE.exitReach, this.field, RESPAWN_MARGIN, ringSpots(hole, this.field, BLACK_HOLE.exitReach + RESPAWN_MARGIN));
   }
 
   resize(old: Field, field: Field): void {

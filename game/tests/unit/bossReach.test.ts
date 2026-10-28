@@ -3,7 +3,7 @@ import { BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart } from '../../src/sim/boss/behaviour';
-import { bossClearance } from '../../src/sim/boss/bossRules';
+import { respawnClearance } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
@@ -65,10 +65,10 @@ describe('part-aware boss reach', () => {
     const runner = new BossRunner(FIXTURE_DEF, behaviour, setupFor(BOSS_FIELD));
     const { view } = runner;
     const segment = view.parts[0] as BossPart;
-    expect(bossClearance(view, runner.reach, segment.x, segment.y + 30)).toBeCloseTo(30 - SEGMENT_RADIUS, 9);
-    expect(bossClearance(view, runner.reach, view.x + 100, view.y)).toBeCloseTo(100 - runner.reach, 9);
+    expect(respawnClearance(view, runner.reach, segment.x, segment.y + 30)).toBeCloseTo(30 - SEGMENT_RADIUS, 9);
+    expect(respawnClearance(view, runner.reach, view.x + 100, view.y)).toBeCloseTo(100 - runner.reach, 9);
     segment.hp = 0;
-    expect(bossClearance(view, runner.reach, segment.x, segment.y)).toBeCloseTo(TRAIL - runner.reach, 9);
+    expect(respawnClearance(view, runner.reach, segment.x, segment.y)).toBeCloseTo(TRAIL - runner.reach, 9);
   });
 
   it.each([
@@ -81,15 +81,15 @@ describe('part-aware boss reach', () => {
       const arena = stubArena(createShip(cx, cy), field);
       const setup = setupFor(field, arena);
       const runner = new BossRunner(BOSSES[id], BOSS_BEHAVIOURS[id](setup), setup);
-      expect(bossClearance(runner.view, runner.reach, cx, cy), `${id} as it arrives`).toBeGreaterThan(PLAYER.radius);
+      expect(respawnClearance(runner.view, runner.reach, cx, cy), `${id} as it arrives`).toBeGreaterThan(PLAYER.radius);
       // Its intro, then the first step of the fight: a boss that moves through its intro must still leave the spot clear.
       runFor((dt, a) => { if (runner.state === 'intro') runner.step(dt, a); }, arena, BOSS_INTRO_SECONDS + STEP_SECONDS);
       expect(runner.state, id).toBe('fighting');
-      expect(bossClearance(runner.view, runner.reach, cx, cy), `${id} as its fight starts`).toBeGreaterThan(PLAYER.radius);
+      expect(respawnClearance(runner.view, runner.reach, cx, cy), `${id} as its fight starts`).toBeGreaterThan(PLAYER.radius);
     }
     // The check sees a segment the core's reach does not: a serpent whose tail lies on the centre fails it.
     const tailOnCentre = new BossRunner(FIXTURE_DEF, serpent(field.height / 2 - field.height * 0.28), setupFor(field));
-    expect(bossClearance(tailOnCentre.view, tailOnCentre.reach, field.width / 2, field.height / 2)).toBeLessThan(PLAYER.radius);
+    expect(respawnClearance(tailOnCentre.view, tailOnCentre.reach, field.width / 2, field.height / 2)).toBeLessThan(PLAYER.radius);
   });
 
   it('drifts the core so its far-trailing segment stays inside the field too', () => {
@@ -166,6 +166,6 @@ describe('part-aware boss reach', () => {
     expect(Math.hypot(BOSS_FIELD.width / 2 - segment.x, BOSS_FIELD.height * 0.8 - segment.y)).toBeLessThan(SEGMENT_RADIUS + ASTEROID.safeRadius);
     const spot = run.respawnPoint();
     if (spot === null) throw new Error('no respawn spot');
-    expect(bossClearance(boss, run.bosses.runner?.reach ?? 0, spot.x, spot.y)).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
+    expect(respawnClearance(boss, run.bosses.runner?.reach ?? 0, spot.x, spot.y)).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
   });
 });
