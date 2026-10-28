@@ -333,17 +333,17 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const height = field.height * k;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (quality.vignette) {
-      // The quarter-resolution gradient stretches nearest-neighbour within one colour level of a full bake;
+      // The quarter-resolution gradients stretch nearest-neighbour within one colour level of a full bake;
       // a smoothed stretch would cost several times a 1:1 blit on CPU-rasterized canvases.
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(vignette, fieldX, fieldY, width, height);
-      ctx.imageSmoothingEnabled = true;
-    }
-    if (timeWarpLeft > 0) {
       // Time Warp's vignette is baked, not filtered: it fades out over the warp's last moments.
-      ctx.globalAlpha = Math.min(1, timeWarpLeft / TIME_WARP_FADE_SECONDS);
-      ctx.drawImage(timeWarp, fieldX, fieldY, width, height);
-      ctx.globalAlpha = 1;
+      if (timeWarpLeft > 0) {
+        ctx.globalAlpha = Math.min(1, timeWarpLeft / TIME_WARP_FADE_SECONDS);
+        ctx.drawImage(timeWarp, fieldX, fieldY, width, height);
+        ctx.globalAlpha = 1;
+      }
+      ctx.imageSmoothingEnabled = true;
     }
     if (effects.flash > 0) {
       ctx.globalAlpha = effects.flash * FLASH_ALPHA;

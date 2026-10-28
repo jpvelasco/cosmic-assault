@@ -23,6 +23,8 @@ import type { Pickup } from '../../src/sim/pickups/pickups';
 import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
+/** Time Warp's tint, as the vignette's gradient stops write it. */
+const TIME_WARP_RGB = '111,156,255';
 
 interface DrawCall {
   readonly image: unknown;
@@ -999,6 +1001,41 @@ describe('createRenderer', () => {
       expect(unsmoothed).toHaveLength(1);
       // The vignette is baked at a quarter of the 1280 px field per axis.
       expect((unsmoothed[0]?.image as FakeCanvas | undefined)?.width).toBe(320);
+    });
+
+    describe('the Time Warp tint', () => {
+      /** The vignettes the last frame drew, by the colour each was baked in, with how they were drawn. */
+      const vignettes = (): { cool: boolean; alpha: number; smoothing: boolean }[] =>
+        canvas.draws
+          .filter((call) => (call.image as FakeCanvas | undefined)?.width === 320)
+          .map((call) => ({ cool: (call.image as FakeCanvas).stops.some((stop) => stop.startsWith(`rgba(${TIME_WARP_RGB},`)), alpha: call.alpha, smoothing: call.smoothing }));
+
+      it('lays the cool vignette over the plain one only while Time Warp runs, stretched unsmoothed like it', () => {
+        renderer.resize(1280, 720, FIELD);
+        const { stub, world } = stubWorld();
+        drawFrame(world, 1);
+        expect(vignettes()).toEqual([{ cool: false, alpha: 1, smoothing: false }]);
+        stub.effects.timeWarp = 6;
+        drawFrame(world, 1);
+        expect(vignettes()).toEqual([{ cool: false, alpha: 1, smoothing: false }, { cool: true, alpha: 1, smoothing: false }]);
+      });
+
+      it('fades the tint out over the warp\'s last half second', () => {
+        renderer.resize(1280, 720, FIELD);
+        const { stub, world } = stubWorld();
+        stub.effects.timeWarp = 0.25;
+        drawFrame(world, 1);
+        expect(vignettes()[1]).toEqual({ cool: true, alpha: 0.5, smoothing: false });
+      });
+
+      it('leaves the tint out with the vignette, where the level drops it', () => {
+        renderer.resize(1280, 720, FIELD);
+        const { stub, world } = stubWorld();
+        stub.effects.timeWarp = 6;
+        renderer.setQuality(low);
+        drawFrame(world, 1);
+        expect(vignettes()).toEqual([]);
+      });
     });
 
     it('draws fewer stars at a lower level', () => {
