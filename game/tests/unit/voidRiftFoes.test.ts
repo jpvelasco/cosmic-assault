@@ -2,67 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { ARMOURED, FOES, PHASER } from '../../src/content/foes';
 import { ASTEROID, PLAYER, PROJECTILE, STEP_SECONDS, VOLLEY } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
-import { Bolts } from '../../src/sim/foes/bolts';
 import type { Foe } from '../../src/sim/foes/foe';
-import { FOE_DEFLECTED, FoeField, type FoeHooks } from '../../src/sim/foes/foeField';
-import { createRng } from '../../src/sim/rng';
+import { FOE_DEFLECTED } from '../../src/sim/foes/foeField';
 import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
-import { createShip } from '../../src/sim/ship';
-import { wrapDelta } from '../../src/sim/wrap';
-import { ofType, stubArena, type StubArena } from '../helpers/bossArena';
+import { wrappedDistance } from '../../src/sim/wrap';
+import { ofType } from '../helpers/bossArena';
+import { foeRig, onlyFoe, runFoes } from '../helpers/foeRig';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
 
-interface Rig {
-  readonly arena: StubArena;
-  readonly foes: FoeField;
-  readonly points: number[];
-  readonly killed: { x: number; y: number }[];
-}
-
-function rig(seed = 1): Rig {
-  const ship = createShip(FIELD.width / 2, FIELD.height / 2);
-  // Past its start-of-run invulnerability: these foes spare an invulnerable ship.
-  ship.invulnerable = false;
-  const arena = stubArena(ship, FIELD);
-  const points: number[] = [];
-  const killed: { x: number; y: number }[] = [];
-  const hooks: FoeHooks = {
-    score: (base) => {
-      points.push(base);
-      return base;
-    },
-    killed: (x, y) => {
-      killed.push({ x, y });
-    },
-  };
-  return { arena, foes: new FoeField(arena, createRng(seed), hooks, new Bolts(arena)), points, killed };
-}
-
-type Logged = { t: number; event: Rig['arena']['events'][number] };
-
-/** Steps the field `seconds` on, clearing each step's events first as a World does; returns each event with its time. */
-function run(r: Rig, seconds: number, each?: (t: number) => void): Logged[] {
-  const log: Logged[] = [];
-  for (let i = 1; i <= Math.round(seconds / DT); i++) {
-    r.arena.events.length = 0;
-    r.foes.step(DT);
-    for (const event of r.arena.events) log.push({ t: i * DT, event: { ...event } });
-    each?.(i * DT);
-    r.foes.sweep();
-  }
-  return log;
-}
-
-const only = (r: Rig): Foe => {
-  const foe = r.foes.list[0];
-  if (foe === undefined) throw new Error('a foe should have arrived');
-  return foe;
-};
-
-const dist = (a: { x: number; y: number }, b: { x: number; y: number }, field: Field): number =>
-  Math.hypot(wrapDelta(a.x - b.x, field.width), wrapDelta(a.y - b.y, field.height));
 
 /** The point `distance` from (x, y) along `bearing`. */
 const along = (x: number, y: number, bearing: number, distance: number): { x: number; y: number } => ({
@@ -72,27 +21,27 @@ const along = (x: number, y: number, bearing: number, distance: number): { x: nu
 
 describe('phaser', () => {
   it('arrives with 2 HP and radius 16, announced, outside the safe radius', () => {
-    const r = rig();
+    const r = foeRig();
     r.foes.spawn('phaser', 1, 1);
-    const foe = only(r);
+    const foe = onlyFoe(r);
     expect(foe).toMatchObject({ kind: 'phaser', hp: 2, radius: FOES.phaser.radius });
     expect(ofType(r.arena.events, 'foeSpawned')).toHaveLength(1);
-    expect(dist(foe, { x: FIELD.width / 2, y: FIELD.height / 2 }, FIELD)).toBeGreaterThanOrEqual(ASTEROID.safeRadius - 1);
+    expect(wrappedDistance(foe, { x: FIELD.width / 2, y: FIELD.height / 2 }, FIELD)).toBeGreaterThanOrEqual(ASTEROID.safeRadius - 1);
   });
 
   it('seeks the ship at its speed', () => {
-    const r = rig();
+    const r = foeRig();
     r.foes.spawn('phaser', 1, 1);
-    const foe = only(r);
-    run(r, 0.5);
+    const foe = onlyFoe(r);
+    runFoes(r, 0.5);
     expect(Math.hypot(foe.vx, foe.vy)).toBeCloseTo(FOES.phaser.speed, 6);
   });
 
   it('warns every 3 ± 0.5 s, so each gap between warnings lies in [2.5, 3.5]', () => {
     for (let seed = 1; seed <= 6; seed++) {
-      const r = rig(seed);
+      const r = foeRig({ seed });
       r.foes.spawn('phaser', 1, 1);
-      const warnings = run(r, 40)
+      const warnings = runFoes(r, 40)
         .filter((l) => l.event.type === 'phaserWarn')
         .map((l) => l.t);
       expect(warnings.length, `seed ${String(seed)}`).toBeGreaterThanOrEqual(10);
@@ -105,11 +54,11 @@ describe('phaser', () => {
   });
 
   it('holds still for its 0.5 s warning, then blinks to the spot it warned of, away at 180 to 300 units', () => {
-    const r = rig(2);
+    const r = foeRig({ seed: 2 });
     r.foes.spawn('phaser', 1, 1);
-    const foe = only(r);
+    const foe = onlyFoe(r);
     const seen: { origin?: { x: number; y: number } } = {};
-    const log = run(r, 6, () => {
+    const log = runFoes(r, 6, () => {
       if (seen.origin === undefined && r.arena.events.some((e) => e.type === 'phaserWarn')) seen.origin = { x: foe.x, y: foe.y };
     });
     const origin = seen.origin;
@@ -128,9 +77,9 @@ describe('phaser', () => {
 
   it('warns of a destination at least the safe radius from the ship and 40 inside the field', () => {
     for (let seed = 1; seed <= 12; seed++) {
-      const r = rig(seed);
+      const r = foeRig({ seed });
       r.foes.spawn('phaser', 1, 1);
-      for (const { event } of run(r, 30)) {
+      for (const { event } of runFoes(r, 30)) {
         if (event.type !== 'phaserWarn') continue;
         expect(Math.hypot(event.toX - r.arena.ship.x, event.toY - r.arena.ship.y), `seed ${String(seed)}`).toBeGreaterThanOrEqual(ASTEROID.safeRadius);
         expect(event.toX).toBeGreaterThanOrEqual(PHASER.inset);
@@ -142,12 +91,12 @@ describe('phaser', () => {
   });
 
   it('has no hitbox at its destination until it blinks: a ship there while it warns is not struck', () => {
-    const r = rig(3);
+    const r = foeRig({ seed: 3 });
     r.foes.spawn('phaser', 1, 1);
     const ship = r.arena.ship;
     const home = { x: ship.x, y: ship.y };
     let checked = false;
-    run(r, 6, (t) => {
+    runFoes(r, 6, (t) => {
       if (checked || !r.arena.events.some((e) => e.type === 'phaserWarn')) return;
       checked = true;
       const warn = r.arena.events.find((e) => e.type === 'phaserWarn');
@@ -165,13 +114,13 @@ describe('phaser', () => {
   });
 
   it('does not blink onto a ship standing where it would arrive: it stays at its origin when due, and warns again then', () => {
-    const r = rig(4);
+    const r = foeRig({ seed: 4 });
     r.foes.spawn('phaser', 1, 1);
-    const foe = only(r);
+    const foe = onlyFoe(r);
     const warning = { at: -1, origin: { x: 0, y: 0 }, parked: false };
     let dueAt = Infinity;
     let dueSeen: { x: number; y: number } | null = null;
-    const log = run(r, 6, (t) => {
+    const log = runFoes(r, 6, (t) => {
       const warn = r.arena.events.find((e) => e.type === 'phaserWarn');
       if (!warning.parked && warn?.type === 'phaserWarn') {
         // Park the ship on the spot it warned of, and hold it there: the blink is due and must be withheld.
@@ -195,11 +144,11 @@ describe('phaser', () => {
   });
 
   it('leaves its pose unstretched on the blink step, and is struck where it lands', () => {
-    const r = rig(5);
+    const r = foeRig({ seed: 5 });
     r.foes.spawn('phaser', 1, 1);
-    const foe = only(r);
+    const foe = onlyFoe(r);
     const landed = { blinks: 0, struck: false, unstretched: false };
-    run(r, 6, () => {
+    runFoes(r, 6, () => {
       if (landed.blinks > 0 || !r.arena.events.some((e) => e.type === 'phaserBlink')) return;
       landed.blinks++;
       landed.unstretched = foe.px === foe.x && foe.py === foe.y;
@@ -218,19 +167,19 @@ describe('armoured rock', () => {
 
   it('arrives with 3 HP and radius 42, spinning at most 0.35 rad/s', () => {
     for (let seed = 1; seed <= 6; seed++) {
-      const r = rig(seed);
+      const r = foeRig({ seed });
       r.foes.spawn('armoured', 1, 1);
-      const foe = only(r);
+      const foe = onlyFoe(r);
       expect(foe).toMatchObject({ kind: 'armoured', hp: 3, radius: FOES.armoured.radius });
       expect(Math.abs(foe.spin)).toBeLessThanOrEqual(ARMOURED.spin);
     }
   });
 
   it('takes a hit on its soft arc like any other: 1 damage and a foeHit', () => {
-    const r = rig(6);
+    const r = foeRig({ seed: 6 });
     r.foes.spawn('armoured', 1, 1);
-    run(r, DT);
-    const foe = only(r);
+    runFoes(r, DT);
+    const foe = onlyFoe(r);
     const at = shotAt(foe, foe.rotation);
     expect(r.foes.hit(at.x, at.y, PROJECTILE.radius)).toBe(foe.id);
     expect(foe.hp).toBe(2);
@@ -238,10 +187,10 @@ describe('armoured rock', () => {
   });
 
   it('deflects a shot that strikes outside its soft arc: spent for no harm, with foeDeflected where it struck', () => {
-    const r = rig(7);
+    const r = foeRig({ seed: 7 });
     r.foes.spawn('armoured', 1, 1);
-    run(r, DT);
-    const foe = only(r);
+    runFoes(r, DT);
+    const foe = onlyFoe(r);
     const at = shotAt(foe, foe.rotation + Math.PI / 2);
     expect(r.foes.hit(at.x, at.y, PROJECTILE.radius)).toBe(FOE_DEFLECTED);
     expect(foe.hp).toBe(3);
@@ -249,10 +198,10 @@ describe('armoured rock', () => {
   });
 
   it('puts the soft arc edge at 50 degrees either side of its facing, both ways round', () => {
-    const r = rig(8);
+    const r = foeRig({ seed: 8 });
     r.foes.spawn('armoured', 1, 1);
-    run(r, DT);
-    const foe = only(r);
+    runFoes(r, DT);
+    const foe = onlyFoe(r);
     expect(ARMOURED.softArc).toBeCloseTo((50 * Math.PI) / 180, 12);
     for (const sign of [1, -1]) {
       const inside = shotAt(foe, foe.rotation + sign * (ARMOURED.softArc - 0.02));
@@ -263,10 +212,10 @@ describe('armoured rock', () => {
   });
 
   it('spends a piercing shot it deflects, and lets a piercing shot through its soft arc pass on', () => {
-    const r = rig(9);
+    const r = foeRig({ seed: 9 });
     r.foes.spawn('armoured', 1, 1);
-    run(r, DT);
-    const foe = only(r);
+    runFoes(r, DT);
+    const foe = onlyFoe(r);
     const targets: ShotTargets = {
       rocks: [],
       foes: () => r.foes.list,
@@ -296,10 +245,10 @@ describe('armoured rock', () => {
   });
 
   it('breaks into two small rocks when a shot destroys it, scoring its points and dropping no pickup', () => {
-    const r = rig(10);
+    const r = foeRig({ seed: 10 });
     r.foes.spawn('armoured', 1, 1);
-    run(r, DT);
-    const foe = only(r);
+    runFoes(r, DT);
+    const foe = onlyFoe(r);
     for (let i = 0; i < FOES.armoured.hp; i++) {
       const at = shotAt(foe, foe.rotation);
       r.foes.hit(at.x, at.y, PROJECTILE.radius);
@@ -311,9 +260,9 @@ describe('armoured rock', () => {
   });
 
   it('is destroyed by a blast that reaches it, with no shards and no deflection', () => {
-    const r = rig(11);
+    const r = foeRig({ seed: 11 });
     r.foes.spawn('armoured', 1, 1);
-    const foe = only(r);
+    const foe = onlyFoe(r);
     r.foes.blast(foe.x, foe.y, 40);
     expect(r.foes.list).toHaveLength(0);
     expect(r.arena.asteroids).toHaveLength(0);
