@@ -542,7 +542,7 @@ export class Pilot {
   /**
    * Scores coasting (null) or thrusting along `heading` over the look-ahead into `least` and `mean`: the clearance
    * between the ship and each threat at each sample, a later sample given a little slack, and a threat that cannot
-   * hurt the ship yet skipped.
+   * hurt the ship yet skipped, a danger zone aside.
    */
   private predict(view: Readonly<BotView>, heading: number | null): void {
     this.predictShip(view, heading);
@@ -566,7 +566,8 @@ export class Pilot {
           who = i;
         }
       }
-      // A zone is judged even while the ship cannot be hurt: one it drifts into then is still there as that ends.
+      // A zone is judged even while the ship cannot be hurt, as a skilled player keeps out of one then too: a zone lasts
+      // longer than the ship's invulnerability, so one it drifts into while it is safe is still there, and lethal, as that ends.
       for (const zone of this.zones) {
         const clearance = zoneClearance(view.field, zone, view.ship.x + (sx[k] ?? 0), view.ship.y + (sy[k] ?? 0)) - PLAYER.radius;
         if (clearance < sample) {
