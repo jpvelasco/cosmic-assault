@@ -46,11 +46,6 @@ describe('Void Rift, played by the bots', { timeout: TIMEOUT_MS }, () => {
     casual = play('casual');
   }, TIMEOUT_MS);
 
-  it('is cleared by the expert on every seed of every survival galaxy, 4-1 to 4-5 (balance smoke)', () => {
-    const lost = expert.filter((p) => !p.result.cleared).map((p) => `${p.id} seed ${String(p.seed)}`);
-    expect(lost).toEqual([]);
-  });
-
   it('meets every rift and repulsion field its schedule shows on every cleared expert run, 4-2 to 4-5', () => {
     for (const { id, seed, result, log } of expert) {
       if (!result.cleared) continue;

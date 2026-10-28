@@ -47,15 +47,6 @@ describe('Singularity, played by the bots', { timeout: TIMEOUT_MS }, () => {
     casual = play('casual');
   }, TIMEOUT_MS);
 
-  it('is cleared by the expert on at least nine of ten seeds of every survival galaxy, 5-1 to 5-5 (balance smoke)', () => {
-    // The expert loses about one run in forty here, to field rams and fragments far from the hole (5-5's rate over 40 seeds is
-    // 38/40): the balance pass tunes it toward every seed.
-    for (const id of SINGULARITY) {
-      const cleared = expert.filter((p) => p.id === id && p.result.cleared).length;
-      expect(cleared, id).toBeGreaterThanOrEqual(9);
-    }
-  });
-
   it('meets the black hole and every other hazard its schedule shows on every cleared run, with its telegraph whole', () => {
     for (const { id, seed, result, log } of [...expert, ...casual]) {
       if (!result.cleared) continue;

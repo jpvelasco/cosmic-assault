@@ -13,6 +13,8 @@ import { foeAt } from '../helpers/foeAt';
 const DODGE_CHANCE = 0.6;
 const TELEGRAPH_DODGE_CHANCE = 0.85;
 const TRIALS = 1000;
+/** A thousand staged trials a pilot, twice over, take seconds on a loaded host. */
+const TIMEOUT_MS = 20_000;
 
 /** What a trial puts on the field: first while the foe winds up (or not), then the threat it brings. */
 interface Trial {
@@ -60,7 +62,7 @@ const aimedShot = (charging: boolean): Trial => ({
 const mine = (id: number, charging: boolean): Foe => foeAt('mine', SCENE_SHIP.x + 100, SCENE_SHIP.y, { id, charging });
 const mineBeside = (charging: boolean): Trial => ({ before: () => undefined, threat: (view, id) => { view.foes = [mine(id, charging)]; } });
 
-describe("the casual's foe telegraphs", () => {
+describe("the casual's foe telegraphs", { timeout: TIMEOUT_MS }, () => {
   it("judges a gunship's bolt on the 85% roll drawn as its windup began, and a bolt with no windup seen on the episode's 60%", () => {
     expect(Math.abs(dodgeRate(createCasualPilot(createRng(21)), aimedShot(true)) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
     expect(Math.abs(dodgeRate(createCasualPilot(createRng(21)), aimedShot(false)) - DODGE_CHANCE)).toBeLessThan(0.05);

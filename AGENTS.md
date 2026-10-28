@@ -185,9 +185,10 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    `test:e2e`; CI runs it as the
    non-required `perf` job. `npm run test:balance` runs the slow many-seed bot
    suites in `game/tests/balance/` (boss kill rates and clear rates against the
-   targets in `targets.ts`), which `npm test` leaves out; run it after any change
+   targets in `targets.ts`, one `d<N>-*.test.ts` set of files per Dimension; pass
+   `-- d3-` to run one Dimension), which `npm test` leaves out; run it after any change
    to level content, difficulty curves, pacing, boss stats or the bots, and
-   before changing a target; CI runs it as the non-required `balance` job. For changes to
+   before changing a target; CI runs it as the non-required `balance` check. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
    `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
@@ -229,9 +230,11 @@ and `tests/test-results/` and are ignored by Git.
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
   `website/`. Job `deploy` runs only on pushes to `main`, and only after both
   `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.
-  Job `perf` builds both bundles and runs `npm run test:perf`, and job `balance`
-  runs `npm run test:balance`; neither is a required check, and neither gates
-  deployment.
+  Job `perf` builds both bundles and runs `npm run test:perf`. Job
+  `balance-dimension` runs `npm run test:balance -- d<N>-` as a matrix over
+  Dimensions 1 to 5, and job `balance` passes only if every shard did, so the
+  ruleset sees one check. Neither `perf` nor `balance` is a required check, and
+  neither gates deployment.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.

@@ -7,10 +7,18 @@ const { run: runGuard, tempRoot } = guardScript('check-workflow.mjs', 'check-wor
 const realWorkflow = join(gameDir, '..', '.github', 'workflows', 'ci.yml');
 const realText = readFileSync(realWorkflow, 'utf8');
 
-/** Lays out <tmp>/.github/workflows/ci.yml and <tmp>/website/, returning the workflow path. */
-function writeFixture(text: string, websiteDirs: string[] = []): string {
+/** Every Dimension's balance targets file, as the balance shards expect them. */
+const TARGET_FILES = [1, 2, 3, 4, 5].map((d) => `d${String(d)}-targets.test.ts`);
+
+/**
+ * Lays out <tmp>/.github/workflows/ci.yml, <tmp>/website/ and <tmp>/game/tests/balance/ with `balanceFiles` in it,
+ * returning the workflow path.
+ */
+function writeFixture(text: string, websiteDirs: string[] = [], balanceFiles: string[] = TARGET_FILES): string {
   const root = tempRoot();
   mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
+  mkdirSync(join(root, 'game', 'tests', 'balance'), { recursive: true });
+  for (const file of balanceFiles) writeFileSync(join(root, 'game', 'tests', 'balance', file), '');
   mkdirSync(join(root, 'website'));
   for (const dir of websiteDirs) mkdirSync(join(root, 'website', dir), { recursive: true });
   const workflowPath = join(root, '.github', 'workflows', 'ci.yml');
@@ -39,12 +47,16 @@ const buildStep = '        run: npm run build\n';
 const noBridgeStep = '        run: npm run check:no-bridge\n';
 const buildE2eStep = '        run: npm run build:e2e\n';
 const legacyRun = '        run: npx playwright test --project=chromium-desktop --reporter=html,list\n';
-const balanceStep = '        run: npm run test:balance\n';
-/** The balance job's own Node setup: the first after the balance job starts. */
-const balanceNode = (t: string) => t.indexOf(nodeVersionLine, t.indexOf('  balance:\n'));
+const balanceStep = '        run: npm run test:balance -- d${{ matrix.dimension }}-\n';
+const matrixLine = '        dimension: [1, 2, 3, 4, 5]\n';
+const rollUpNeeds = '    needs: [balance-dimension]\n';
+const rollUpAlways = '    if: always()\n';
+const rollUpCheck = '        run: test "$SHARDS" = success\n';
+/** The balance shards' own Node setup: the first after the balance-dimension job starts. */
+const balanceNode = (t: string) => t.indexOf(nodeVersionLine, t.indexOf('  balance-dimension:\n'));
 const comment = (line: string) => `    # ${line.trim()}\n`;
 
-const failingCases: [name: string, mutate: (text: string) => string, message: string, websiteDirs?: string[]][] = [
+const failingCases: [name: string, mutate: (text: string) => string, message: string, websiteDirs?: string[], balanceFiles?: string[]][] = [
   ['commented-out needs', (t) => replaceOnce(t, needsLine, comment(needsLine)), 'deploy must declare needs: [game, legacy]'],
   [
     'if moved to step level',
@@ -104,12 +116,23 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
     (t) => t.slice(0, t.indexOf('  balance:\n')) + t.slice(t.indexOf('  legacy:\n')),
     'missing job balance:',
   ],
-  ['deleted balance run', (t) => replaceOnce(t, balanceStep, ''), 'the balance job must run "npm run test:balance"'],
+  ['deleted balance run', (t) => replaceOnce(t, balanceStep, ''), 'the balance-dimension job must run "npm run test:balance -- d${{ matrix.dimension }}-"'],
+  ['balance shards running the whole suite', (t) => replaceOnce(t, balanceStep, '        run: npm run test:balance\n'), 'the balance-dimension job must run'],
   [
     'balance without node-version-file',
     (t) => t.slice(0, balanceNode(t)) + t.slice(balanceNode(t) + nodeVersionLine.length),
-    'balance must set up Node with node-version-file: .nvmrc',
+    'balance-dimension must set up Node with node-version-file: .nvmrc',
   ],
+  ['a Dimension dropped from the matrix', (t) => replaceOnce(t, matrixLine, '        dimension: [1, 2, 3, 4]\n'), 'must run a matrix of dimension: [1, 2, 3, 4, 5]'],
+  [
+    'removed balance shards',
+    (t) => t.slice(0, t.indexOf('  balance-dimension:\n')) + t.slice(t.indexOf('  balance:\n')),
+    'missing job balance-dimension:',
+  ],
+  ['roll-up not waiting for the shards', (t) => replaceOnce(t, rollUpNeeds, ''), 'balance must declare needs: [balance-dimension]'],
+  ['roll-up skipped when a shard fails', (t) => replaceOnce(t, `${rollUpNeeds}${rollUpAlways}`, rollUpNeeds), 'balance must declare if: always()'],
+  ['roll-up passing whatever the shards did', (t) => replaceOnce(t, rollUpCheck, '        run: true\n'), 'balance must pass only when every shard did'],
+  ['a Dimension without its targets file', (t) => t, 'd3-targets.test.ts is missing', [], TARGET_FILES.filter((f) => !f.startsWith('d3-'))],
   ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, balance]\n'), 'never waits for the non-required balance or perf jobs'],
   ['website/assets/next directory', (t) => t, 'website/assets/next is named "next"', ['assets/next']],
 ];
@@ -135,8 +158,8 @@ describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(status).toBe(0);
   });
 
-  it.each(failingCases)('rejects: %s', (_name, mutate, message, websiteDirs) => {
-    const { status, output } = runGuard(writeFixture(mutate(realText), websiteDirs));
+  it.each(failingCases)('rejects: %s', (_name, mutate, message, websiteDirs, balanceFiles) => {
+    const { status, output } = runGuard(writeFixture(mutate(realText), websiteDirs, balanceFiles));
     expect(output).toContain(message);
     expect(status).toBe(1);
   });

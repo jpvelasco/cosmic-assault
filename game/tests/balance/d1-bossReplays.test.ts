@@ -10,8 +10,8 @@ import { BOT_RUN_TIMEOUT_MS } from '../helpers/botRuns';
 const LIMIT_SECONDS = 120;
 const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + LIMIT_SECONDS;
 
-// The Monolith's and the Hive Carrier's kill rates, and their lives taken off an idle ship, are pinned over 40 seeds
-// with the rest of their galaxies' targets (galaxy-1-6.test.ts, galaxy-2-6.test.ts). The Warden's are in warden.test.ts.
+// Every boss's kill rate, and the lives it takes off an idle ship, are pinned over 40 seeds with the rest of its
+// galaxy's targets (d1-targets.test.ts to d5-targets.test.ts); the later bosses' replays are in their own files.
 describe.each<{ id: GalaxyId; boss: string }>([
   { id: '1-6', boss: 'the Monolith' },
   { id: '2-6', boss: 'the Hive Carrier' },

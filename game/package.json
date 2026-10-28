@@ -14,7 +14,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:balance": "vitest run -c vitest.balance.config.ts",
-    "test:digests": "vitest run -c vitest.balance.config.ts tests/balance/d1d2ExpertDigest.test.ts",
+    "test:digests": "vitest run -c vitest.balance.config.ts tests/balance/d1-expertDigests.test.ts",
     "test:e2e": "playwright test --project=chromium-desktop --project=mobile-landscape --project=release-smoke",
     "test:perf": "playwright test --project=perf",
     "check:base": "node scripts/check-base.mjs",

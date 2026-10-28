@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,7 +17,7 @@ function jobBlock(id) {
   return lines.slice(start + 1, end === -1 ? undefined : end);
 }
 
-const jobs = Object.fromEntries(['game', 'legacy', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
+const jobs = Object.fromEntries(['game', 'legacy', 'balance-dimension', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
 const anyLine = (id, test) => jobs[id]?.some((line) => test(line.trim())) ?? false;
 const hasLine = (id, entry) => anyLine(id, (line) => line === entry);
@@ -27,6 +27,10 @@ const inOrder = (id, first, second) => {
   const [a, b] = [lineIndex(id, `run: ${first}`), lineIndex(id, `run: ${second}`)];
   return a === -1 || b === -1 || a < b;
 };
+
+/** The balance suite's shards: one per Dimension, each running its d<N>-*.test.ts files. */
+const DIMENSIONS = [1, 2, 3, 4, 5];
+const BALANCE_SHARD = 'd${{ matrix.dimension }}-';
 
 const problems = Object.entries(jobs)
   .filter(([, block]) => block === undefined)
@@ -59,12 +63,25 @@ const checks = [
     'ci.yml: in the game job, npm run check:no-bridge must come after npm run build; move it below the release build step so it scans the fresh dist/'],
   [anyLine('legacy', (line) => line.startsWith('run: npx playwright test')),
     'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
-  [hasLine('balance', 'run: npm run test:balance'),
-    'ci.yml: the balance job must run "npm run test:balance"; restore the step so the bot kill and clear rates are reported'],
-  [hasLine('balance', 'node-version-file: .nvmrc'),
-    'ci.yml: balance must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
+  [hasLine('balance-dimension', `run: npm run test:balance -- ${BALANCE_SHARD}`),
+    `ci.yml: the balance-dimension job must run "npm run test:balance -- ${BALANCE_SHARD}"; restore the step so each Dimension's bot kill and clear rates are reported`],
+  [hasLine('balance-dimension', `dimension: [${DIMENSIONS.join(', ')}]`),
+    `ci.yml: the balance-dimension job must run a matrix of dimension: [${DIMENSIONS.join(', ')}], one shard per Dimension; restore every Dimension`],
+  [hasLine('balance-dimension', 'node-version-file: .nvmrc'),
+    'ci.yml: balance-dimension must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
+  [hasJobKey('balance', 'needs: [balance-dimension]'),
+    'ci.yml: balance must declare needs: [balance-dimension] (job level), so the one check the ruleset sees waits for every shard'],
+  [hasJobKey('balance', 'if: always()'),
+    'ci.yml: balance must declare if: always() (job level), so a failed shard fails the check rather than skipping it'],
+  [hasLine('balance', 'SHARDS: ${{ needs.balance-dimension.result }}') && hasLine('balance', 'run: test "$SHARDS" = success'),
+    'ci.yml: balance must pass only when every shard did: set SHARDS: ${{ needs.balance-dimension.result }} and run: test "$SHARDS" = success'],
 ];
 problems.push(...checks.filter(([ok]) => !ok).map(([, message]) => message));
+
+const balanceDir = resolve(repoRoot, 'game', 'tests', 'balance');
+const balanceFiles = existsSync(balanceDir) ? readdirSync(balanceDir) : [];
+problems.push(...DIMENSIONS.filter((d) => !balanceFiles.includes(`d${String(d)}-targets.test.ts`)).map((d) =>
+  `game/tests/balance/d${String(d)}-targets.test.ts is missing, so the Dimension ${String(d)} balance shard pins no targets; restore it`));
 
 const nextPaths = readdirSync(resolve(repoRoot, 'website'), { recursive: true })
   .filter((path) => basename(path) === 'next');
