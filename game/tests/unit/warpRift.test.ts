@@ -11,13 +11,13 @@ import type { GalaxyEvent } from '../../src/content/types';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
-import type { Foe } from '../../src/sim/foes/foe';
 import { hazardStreams, HazardField } from '../../src/sim/hazards/hazardField';
 import type { RiftState } from '../../src/sim/hazards/hazard';
 import { createShip } from '../../src/sim/ship';
 import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT } from '../../src/sim/config';
 import { zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
 import type { Asteroid } from '../../src/sim/asteroid';
+import { foeAt } from '../helpers/foeAt';
 import { JUMP_HEADINGS, JUMP_RADII, QUARTER_SECOND_STEPS, rockAt, strobeGaps } from '../helpers/riftStrobe';
 
 const FIELD_43: Field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
@@ -228,7 +228,7 @@ describe('warp rift passage', () => {
     stepTo(r, FIELD_169, 22);
     const [pair] = riftStates(r);
     if (pair === undefined) throw new Error('a rift should be open');
-    const drone = { id: 501, kind: 'drone', x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: 0, vy: 0, radius: FOES.drone.radius } as unknown as Foe;
+    const drone = foeAt('drone', pair.x, pair.y, { id: 501 });
     r.hazards.move(DT, r.ship, [], [drone], []);
     expect(dist(drone, { x: pair.toX, y: pair.toY })).toBeGreaterThanOrEqual(R + FOES.drone.radius);
     expect(r.hazards.strikes(pair.x, pair.y, PLAYER.radius)).toBe(false);
@@ -370,7 +370,7 @@ describe('warp rift exit grace', () => {
     r.ship.vx = 100;
     r.ship.vy = 0;
     // The mine lies 60 past the exit and blasts in 0.2 s; its reach (80) and the ship's radius (10) cover the gap.
-    const mine = { id: 802, kind: 'mine', x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 0.2, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
+    const mine = foeAt('mine', pair.toX + 102, pair.toY, { id: 802, timer: 0.2, charging: true });
     r.hazards.move(DT, r.ship, [], [mine], []);
     expect(r.ship.invulnerable).toBe(true);
     expect(r.ship.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
@@ -382,7 +382,7 @@ describe('warp rift exit grace', () => {
     r.ship.y = pair.y;
     r.ship.vx = 100;
     r.ship.vy = 0;
-    const late = { id: 803, kind: 'mine', x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 1, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
+    const late = foeAt('mine', pair.toX + 102, pair.toY, { id: 803, timer: 1, charging: true });
     const away = { id: 804, x: pair.toX + 102, y: pair.toY, px: pair.toX + 102, py: pair.toY, vx: 230, vy: 0, radius: 5, age: 0, source: 'gunship', owner: 0, fromAttack: false } as unknown as Bolt;
     r.hazards.move(DT, r.ship, [], [late], [], poolOf(away));
     expect(r.ship.invulnerable).toBe(false);
@@ -400,7 +400,7 @@ describe('warp rift exit grace', () => {
     r.ship.x = pair.toX + ux * 104;
     r.ship.y = pair.toY + uy * 104;
     r.ship.vx = r.ship.vy = 0;
-    const mine = { id: 805, kind: 'mine', x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 0.2, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
+    const mine = foeAt('mine', pair.x, pair.y, { id: 805, timer: 0.2, charging: true });
     const out: SimEvent[] = [];
     r.hazards.move(DT, r.ship, [], [mine], out);
     expect(out.filter((e) => e.type === 'riftJump' && !e.ship)).toHaveLength(1);
@@ -416,7 +416,7 @@ describe('warp rift exit grace', () => {
     r.ship.x = pair.toX + (dx / length) * 200;
     r.ship.y = pair.toY + (dy / length) * 200;
     r.ship.vx = r.ship.vy = 0;
-    const mine = { id: 806, kind: 'mine', x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: 0, vy: 0, radius: 12, hp: 1, fromAttack: false, timer: 0.2, charging: true, aimX: 0, aimY: 0, orbit: 1 } as unknown as Foe;
+    const mine = foeAt('mine', pair.x, pair.y, { id: 806, timer: 0.2, charging: true });
     r.hazards.move(DT, r.ship, [], [mine], []);
     expect(r.ship.invulnerable).toBe(false);
   });
