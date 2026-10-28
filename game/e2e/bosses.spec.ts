@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { defaultSave, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
-import { BOSSES } from '../src/content/bosses';
+import { bossHp, BOSSES } from '../src/content/bosses';
 import { SEGMENT_COUNT, SEGMENT_HP } from '../src/sim/boss/leviathan';
 import { ECLIPSE_CORONA } from '../src/sim/boss/eclipse';
 import { EXPOSED_AT } from '../src/sim/boss/monolith';
@@ -121,6 +121,7 @@ test.describe(`the Hive Carrier in ${CARRIER_GALAXY}`, () => {
 
 /** The Warden's galaxy. Its case leans on no seed: five lives carry the idle ship through the approach whatever hits it. */
 const WARDEN_GALAXY = '3-6';
+const WARDEN_HP = bossHp(BOSSES.warden, 3);
 
 test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
   test('arrives inside its ring of 14 turrets with its core open, and its defeat records the clear', async ({ page }) => {
@@ -130,10 +131,10 @@ test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     const warden = await bossOf(page);
-    expect(warden).toMatchObject({ id: 'warden', state: 'fighting', vulnerable: true, liveParts: 14, hp: 76, maxHp: 76 });
+    expect(warden).toMatchObject({ id: 'warden', state: 'fighting', vulnerable: true, liveParts: 14, hp: WARDEN_HP, maxHp: WARDEN_HP });
     // Its core can always be hurt, so a blow lands on the core, not on a turret.
     await damageBoss(page, 1);
-    expect(await bossOf(page)).toMatchObject({ hp: 75, liveParts: 14 });
+    expect(await bossOf(page)).toMatchObject({ hp: WARDEN_HP - 1, liveParts: 14 });
 
     await damageBoss(page, KILL_SHOTS);
     // The killing blow ends the galaxy on the next step.
@@ -190,6 +191,7 @@ test.describe(`the Leviathan in ${LEVIATHAN_GALAXY}`, () => {
  * no seed claim guards that yet.
  */
 const ECLIPSE_GALAXY = '5-6';
+const ECLIPSE_HP = bossHp(BOSSES.eclipse, 5);
 
 test.describe(`the Eclipse in ${ECLIPSE_GALAXY}`, () => {
   test('is shielded by its corona, bare once four shards remain, and falls to shots on its core', async ({ page }) => {
@@ -199,7 +201,7 @@ test.describe(`the Eclipse in ${ECLIPSE_GALAXY}`, () => {
 
     await fastForward(page, TO_BOSS_FIGHT_SECONDS);
     const shielded = await bossOf(page);
-    expect(shielded).toMatchObject({ id: 'eclipse', state: 'fighting', vulnerable: false, liveParts: ECLIPSE_CORONA.counts[0], hp: 134, maxHp: 134 });
+    expect(shielded).toMatchObject({ id: 'eclipse', state: 'fighting', vulnerable: false, liveParts: ECLIPSE_CORONA.counts[0], hp: ECLIPSE_HP, maxHp: ECLIPSE_HP });
     // A shielded core offers a shard as the only place a shot does harm.
     expect(shielded.target).not.toBeNull();
 
@@ -207,11 +209,11 @@ test.describe(`the Eclipse in ${ECLIPSE_GALAXY}`, () => {
     await damageBoss(page, ECLIPSE_CORONA.hp * (shielded.liveParts - ECLIPSE_CORONA.exposedAt));
     await fastForward(page, STEP_SECONDS);
     const bare = await bossOf(page);
-    expect(bare).toMatchObject({ liveParts: ECLIPSE_CORONA.exposedAt, vulnerable: true, hp: 134 });
+    expect(bare).toMatchObject({ liveParts: ECLIPSE_CORONA.exposedAt, vulnerable: true, hp: ECLIPSE_HP });
     expect((await gameState(page)).events).toMatchObject({ bossExposed: 1 });
 
     await damageBoss(page, 1);
-    expect((await bossOf(page)).hp).toBe(133);
+    expect((await bossOf(page)).hp).toBe(ECLIPSE_HP - 1);
 
     await damageBoss(page, KILL_SHOTS);
     // The killing blow ends the galaxy on the next step.
