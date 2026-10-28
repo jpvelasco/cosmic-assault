@@ -16,9 +16,9 @@ import type { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import type { Ship } from '../../src/sim/ship';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock, threatOf } from '../helpers/botScene';
+import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, threatOf } from '../helpers/botScene';
 import { foeAt } from '../helpers/foeAt';
-import { calmGalaxy } from '../helpers/mute';
+import { calmGalaxy, still } from '../helpers/mute';
 
 const WOBBLE_LIMIT = 0.25;
 const WOBBLE_STEPS = Math.round(0.5 / STEP_SECONDS);
@@ -95,7 +95,7 @@ function escapes(windup: number, seed: number): boolean {
 describe("the casual bot's handicaps", () => {
   it('aims off the true lead by a spread of errors within ±0.25 rad, drawn afresh every half second', () => {
     // A lone rock far enough off that neither pilot dodges: both aim at it, and only the wobble tells them apart.
-    const view = sceneView([stillRock(SCENE_SHIP.x + 260, SCENE_SHIP.y)]);
+    const view = sceneView([still(SCENE_SHIP.x + 260, SCENE_SHIP.y, 3)]);
     const casual = createCasualPilot(createRng(11));
     const expert = new Pilot({ rng: createRng(11) });
     const [ci, ei] = [idleIntent(), idleIntent()];

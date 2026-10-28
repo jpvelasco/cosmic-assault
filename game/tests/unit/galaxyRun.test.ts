@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { eventsOfType } from '../../src/content/curves';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
-import type { AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -10,7 +9,7 @@ import type { Field } from '../../src/sim/field';
 import { fieldBudget, SIZE_COST } from '../../src/sim/galaxy/director';
 import { EDGE_BEARINGS, showerCap } from '../../src/sim/galaxy/showers';
 import { World, type WorldOptions } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy, still } from '../helpers/mute';
 import { ofType, type Timed } from '../helpers/bossArena';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -25,11 +24,8 @@ const WARP_SECONDS = 1.5;
  */
 const PINNED_3_5_PEAK = 30;
 
-/** A galaxy whose director never spawns; `events` keeps or drops its showers. */
-function calm(id: GalaxyId, keepShowers = false): GalaxyDef {
-  const g = galaxyById(id);
-  return { ...g, kinds: MUTED_KINDS, events: keepShowers ? g.events : [] };
-}
+/** Galaxy `id` whose director never spawns, keeping its showers. */
+const showering = (id: GalaxyId): GalaxyDef => ({ ...calmGalaxy(id), events: galaxyById(id).events });
 
 type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: 'rank' | 'free' };
 
@@ -38,9 +34,6 @@ function galaxyWorld(galaxy: GalaxyDef, opts: Scenario = {}): World {
   return new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy, mode }, ...rest });
 }
 
-function still(x: number, y: number, size: AsteroidSize) {
-  return { x, y, size, angle: 0, speedMultiplier: 0 };
-}
 
 /** Steps until the run stops or `seconds` pass, logging every event with the elapsed time after its step. */
 function play(w: World, seconds: number, controls: Controls = NO_CONTROLS, onStep?: (events: readonly SimEvent[]) => void): Timed[] {
@@ -67,13 +60,13 @@ describe('a galaxy run', () => {
   });
 
   it('announces the galaxy once, on the first step', () => {
-    const w = galaxyWorld(calm('1-2'));
+    const w = galaxyWorld(calmGalaxy('1-2'));
     expect(ofType(w.step(STEP_SECONDS, NO_CONTROLS), 'galaxyStart')).toEqual([{ type: 'galaxyStart', id: '1-2' }]);
     expect(ofType(eventsOf(play(w, 10)), 'galaxyStart')).toEqual([]);
   });
 
   it('counts the timer down to 0 and walks the pacing phases', () => {
-    const w = galaxyWorld(calm('1-1'));
+    const w = galaxyWorld(calmGalaxy('1-1'));
     expect(w.galaxy?.id).toBe('1-1');
     expect(w.timeLeft).toBe(90);
     expect(w.phase).toBe('opening');
@@ -90,20 +83,20 @@ describe('a galaxy run', () => {
   });
 
   it('takes 1 to 5 start lives in Rank, defaulting to 3', () => {
-    expect(galaxyWorld(calm('1-1'), { mode: 'rank' }).lives).toBe(3);
-    expect(galaxyWorld(calm('1-1'), { mode: 'rank', startLives: 1 }).lives).toBe(1);
-    expect(galaxyWorld(calm('1-1'), { mode: 'rank', startLives: 5 }).lives).toBe(5);
-    expect(() => galaxyWorld(calm('1-1'), { mode: 'rank', startLives: 6 })).toThrow(/startLives must be an integer from 1 to 5/);
+    expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'rank' }).lives).toBe(3);
+    expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'rank', startLives: 1 }).lives).toBe(1);
+    expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'rank', startLives: 5 }).lives).toBe(5);
+    expect(() => galaxyWorld(calmGalaxy('1-1'), { mode: 'rank', startLives: 6 })).toThrow(/startLives must be an integer from 1 to 5/);
   });
 
   it.each([1, 2, 4, 5])('always starts Free play with 3 lives, refusing startLives %i', (startLives) => {
-    expect(galaxyWorld(calm('1-1'), { mode: 'free' }).lives).toBe(3);
-    expect(galaxyWorld(calm('1-1'), { mode: 'free', startLives: 3 }).lives).toBe(3);
-    expect(() => galaxyWorld(calm('1-1'), { mode: 'free', startLives })).toThrow(/Free play always starts with 3 lives.*rank/);
+    expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'free' }).lives).toBe(3);
+    expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'free', startLives: 3 }).lives).toBe(3);
+    expect(() => galaxyWorld(calmGalaxy('1-1'), { mode: 'free', startLives })).toThrow(/Free play always starts with 3 lives.*rank/);
   });
 
   it('refuses rules and practiceLevel together, saying which to keep', () => {
-    expect(() => galaxyWorld(calm('1-1'), { practiceLevel: 2 })).toThrow(/rules.*practiceLevel/);
+    expect(() => galaxyWorld(calmGalaxy('1-1'), { practiceLevel: 2 })).toThrow(/rules.*practiceLevel/);
   });
 
   it('replays the same seed identically, and differs for another', () => {
@@ -140,7 +133,7 @@ describe('practice rules', () => {
 describe('warp-out', () => {
   it('clears every rock for 0 points at the end of the timer and reports the clear on that step; the status clears 1.5 s later', () => {
     const rocks = [still(100, 100, 0), still(1100, 600, 2), still(200, 650, 3)];
-    const w = galaxyWorld(calm('1-1'), { initialAsteroids: rocks });
+    const w = galaxyWorld(calmGalaxy('1-1'), { initialAsteroids: rocks });
     const ids = w.asteroids.map((a) => a.id);
     const log = play(w, 95);
     const warp = log.filter((l) => l.event.type === 'warpOut');
@@ -160,7 +153,7 @@ describe('warp-out', () => {
   });
 
   it('is already scored when the warp starts, and turns cleared 1.5 s later with no second event', () => {
-    const w = galaxyWorld(calm('1-1'));
+    const w = galaxyWorld(calmGalaxy('1-1'));
     const log = play(w, 90.01);
     expect(w.status).toBe('warping');
     expect(ofType(eventsOf(log), 'galaxyCleared')).toEqual([{ type: 'galaxyCleared', score: 750, deaths: 0, stars: 3, bonus: 750 }]);
@@ -173,15 +166,15 @@ describe('warp-out', () => {
 
   it('holds the ship safe from a rock sitting on it as the timer runs out, on the very step its shield drops', () => {
     // The step the ship's opening invulnerability ends on...
-    const probe = galaxyWorld(calm('1-1'));
+    const probe = galaxyWorld(calmGalaxy('1-1'));
     while (probe.ship.invulnerable) probe.step(STEP_SECONDS, NO_CONTROLS);
     const vulnerableAt = probe.elapsed;
     const lurker = [still(CENTRE.x, CENTRE.y, 3)];
     // ...hits a ship the timer has not run out on...
-    const control = galaxyWorld({ ...calm('1-1'), duration: vulnerableAt + 1 }, { initialAsteroids: lurker });
+    const control = galaxyWorld({ ...calmGalaxy('1-1'), duration: vulnerableAt + 1 }, { initialAsteroids: lurker });
     expect(ofType(eventsOf(play(control, 5)), 'shipHit')).toHaveLength(1);
     // ...but not when the galaxy ends on that same step: the warp clears the field before anything collides.
-    const w = galaxyWorld({ ...calm('1-1'), duration: vulnerableAt }, { initialAsteroids: lurker });
+    const w = galaxyWorld({ ...calmGalaxy('1-1'), duration: vulnerableAt }, { initialAsteroids: lurker });
     const log = play(w, 5);
     expect(log.find((l) => l.event.type === 'warpOut')?.at).toBe(vulnerableAt);
     expect(ofType(eventsOf(log), 'shipHit')).toEqual([]);
@@ -202,7 +195,7 @@ describe('warp-out', () => {
   });
 
   it('reports warping, then cleared, after which step is a no-op', () => {
-    const w = galaxyWorld(calm('1-1'));
+    const w = galaxyWorld(calmGalaxy('1-1'));
     play(w, 90.01);
     expect(w.status).toBe('warping');
     play(w, 2);
@@ -215,7 +208,7 @@ describe('warp-out', () => {
 
 describe('galaxyCleared', () => {
   const clear = (opts: Scenario) => {
-    const w = galaxyWorld(calm('2-1'), opts);
+    const w = galaxyWorld(calmGalaxy('2-1'), opts);
     const cleared = ofType(eventsOf(play(w, 110)), 'galaxyCleared');
     return { w, cleared };
   };
@@ -248,7 +241,7 @@ describe('galaxy combos', () => {
   const row = Array.from({ length: 12 }, (_, i) => still(260 + 40 * i, 360, 3));
 
   it('multiplies kill points by the combo and announces each change of multiplier', () => {
-    const w = galaxyWorld(calm('1-1'), { initialShip: { x: 200, y: 360, angle: 0 }, initialAsteroids: row });
+    const w = galaxyWorld(calmGalaxy('1-1'), { initialShip: { x: 200, y: 360, angle: 0 }, initialAsteroids: row });
     const multipliers: number[] = [];
     const log = eventsOf(play(w, 8, FIRE, () => multipliers.push(w.multiplier)));
     const kills = ofType(log, 'asteroidDestroyed');
@@ -266,7 +259,7 @@ describe('galaxy combos', () => {
   it('resets the combo on a death', () => {
     // Overlaps the ship but sits clear of its line of fire, so it hits once the 3 s of invulnerability end.
     const lurker = still(195, 375, 3);
-    const w = galaxyWorld(calm('1-1'), { initialShip: { x: 200, y: 360, angle: 0 }, initialAsteroids: [...row.slice(0, 6), lurker] });
+    const w = galaxyWorld(calmGalaxy('1-1'), { initialShip: { x: 200, y: 360, angle: 0 }, initialAsteroids: [...row.slice(0, 6), lurker] });
     const log = play(w, 3.5, FIRE);
     const hit = log.filter((l) => l.event.type === 'shipHit');
     expect(hit).toHaveLength(1);
@@ -280,7 +273,7 @@ describe('galaxy combos', () => {
 
 describe('meteor showers in a run', () => {
   it('drops every shower rock from the telegraphed edge, heading in', () => {
-    const w = galaxyWorld(calm('1-4', true), { seed: 6, mode: 'rank', startLives: 5 });
+    const w = galaxyWorld(showering('1-4'), { seed: 6, mode: 'rank', startLives: 5 });
     const seen = new Set(w.asteroids.map((a) => a.id));
     let angle: number | null = null;
     let fresh = 0;
@@ -308,7 +301,7 @@ describe('meteor showers in a run', () => {
 
 describe('meteors pass through', () => {
   it('never wraps a meteor, and removes it once it has left the field, for no score', () => {
-    const w = galaxyWorld(calm('1-4', true), { seed: 6, mode: 'rank', startLives: 5 });
+    const w = galaxyWorld(showering('1-4'), { seed: 6, mode: 'rank', startLives: 5 });
     const meteors = new Set<number>();
     let score = 0;
     const log = play(w, 80, NO_CONTROLS, () => {
@@ -400,7 +393,7 @@ describe('mercy after a death', () => {
 
 describe('a boss galaxy', () => {
   it('runs its 20 s approach, then holds in the boss phase until the boss is beaten (see bossFixture.test.ts)', () => {
-    const w = galaxyWorld(calm('1-6'));
+    const w = galaxyWorld(calmGalaxy('1-6'));
     play(w, 19);
     expect(w.phase).toBe('opening');
     play(w, 2);

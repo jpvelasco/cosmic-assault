@@ -5,7 +5,8 @@ import type { BotView } from '../../src/bot/view';
 import type { BossThreat, BossView } from '../../src/sim/boss/behaviour';
 import { createRng } from '../../src/sim/rng';
 import { wrapDelta } from '../../src/sim/wrap';
-import { flyingBolt, SCENE_SHIP, sceneView, stage, stillRock, threatOf, type Staged } from '../helpers/botScene';
+import { flyingBolt, SCENE_SHIP, sceneView, stage, threatOf, type Staged } from '../helpers/botScene';
+import { still } from '../helpers/mute';
 
 /** The pilot's intent on the step `seconds` after its first look at `view`, which it watches throughout. */
 function after(view: BotView, seconds: number): Intent {
@@ -60,7 +61,7 @@ describe('the expert pilot against a boss', () => {
   });
 
   it("sees a pulse's shove coming and gets clear of the rock it would throw the ship onto", () => {
-    const rock = stillRock(SCENE_SHIP.x, SCENE_SHIP.y + 90);
+    const rock = still(SCENE_SHIP.x, SCENE_SHIP.y + 90, 3);
     const late = threatOf('pulse').windup - 0.1;
     expect(after(stage(sceneView([rock]), {}), late).thrust).toBe(false);
     expect(after(stage(sceneView([rock]), { windup: 'pulse' }), late).thrust).toBe(true);

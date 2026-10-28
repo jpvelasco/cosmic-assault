@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
 import { noEffects } from '../../src/content/pickups';
 import type { GalaxyDef, PickupId, WeaponTier } from '../../src/content/types';
-import type { AsteroidSize } from '../../src/sim/asteroid';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { PICKUP, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
@@ -11,7 +10,8 @@ import type { Field } from '../../src/sim/field';
 import { PickupField } from '../../src/sim/pickups/pickups';
 import { createRng, deriveSeed } from '../../src/sim/rng';
 import { World, type WorldOptions } from '../../src/sim/world';
-import { calmGalaxy, MUTED_KINDS } from '../helpers/mute';
+import { ofType } from '../helpers/bossArena';
+import { calmGalaxy, MUTED_KINDS, still } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const FIRE: Controls = { ...NO_CONTROLS, fire: true };
@@ -26,11 +26,6 @@ function galaxyWorld(opts: Scenario = {}): World {
   return new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy, mode }, ...rest });
 }
 
-const still = (x: number, y: number, size: AsteroidSize) => ({ x, y, size, angle: 0, speedMultiplier: 0 });
-
-function ofType<T extends SimEvent['type']>(events: readonly SimEvent[], type: T) {
-  return events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
-}
 
 function play(w: World, seconds: number, controls: Controls = NO_CONTROLS): SimEvent[] {
   const log: SimEvent[] = [];

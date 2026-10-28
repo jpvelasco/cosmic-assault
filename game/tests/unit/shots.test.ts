@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { galaxyById } from '../../src/content/galaxies';
-import type { GalaxyDef, PickupId, WeaponTier } from '../../src/content/types';
-import type { AsteroidSize } from '../../src/sim/asteroid';
+import type { PickupId, WeaponTier } from '../../src/content/types';
 import { HOMING, PLAYER, PROJECTILE, STEP_SECONDS, VOLLEY, WINGMAN } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -11,7 +9,7 @@ import { wingmanShot } from '../../src/sim/pickups/wingman';
 import { createShip, type Shot } from '../../src/sim/ship';
 import { PlayerShots, type ShotRules, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy, still } from '../helpers/mute';
 import { placeFoe } from '../helpers/foeRig';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -230,11 +228,8 @@ describe('a homing shot', () => {
 
 describe('player shots in a galaxy', () => {
   const SHOOTER = { x: 200, y: 360, angle: 0 };
-  const still = (x: number, y: number, size: AsteroidSize) => ({ x, y, size, angle: 0, speedMultiplier: 0 });
-  const calm = (galaxy: GalaxyDef = galaxyById('5-2')): GalaxyDef => ({ ...galaxy, kinds: MUTED_KINDS, events: [] });
-
   function world(kinds: readonly PickupId[], opts: { tier?: WeaponTier; rocks?: ReturnType<typeof still>[] } = {}): World {
-    const w = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'rank' }, startTier: opts.tier ?? 0, initialShip: SHOOTER, initialAsteroids: opts.rocks ?? [] });
+    const w = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('5-2'), mode: 'rank' }, startTier: opts.tier ?? 0, initialShip: SHOOTER, initialAsteroids: opts.rocks ?? [] });
     for (const kind of kinds) w['run']?.loadout.collect(kind);
     return w;
   }

@@ -10,6 +10,7 @@ import { fieldBudget } from '../../src/sim/galaxy/director';
 import { FOE_CAPACITY } from '../../src/sim/foes/foeField';
 import type { Foe } from '../../src/sim/foes/foe';
 import { World } from '../../src/sim/world';
+import { ofType } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -53,9 +54,6 @@ function park(foe: Foe, x: number, y: number): void {
   Object.assign(foe, { x, y, px: x, py: y, vx: 0, vy: 0, spin: 0 });
 }
 
-function ofType<T extends SimEvent['type']>(events: readonly SimEvent[], type: T): Extract<SimEvent, { type: T }>[] {
-  return events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
-}
 
 describe('a splitter in a galaxy run', () => {
   const galaxy = only('1-3', 'splitter');

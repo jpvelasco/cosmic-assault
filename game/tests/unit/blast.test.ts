@@ -1,23 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BlastKind } from '../../src/content/pickups';
-import type { GalaxyDef } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID, BLAST, PICKUP, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import { comboMultiplier } from '../../src/sim/scoring';
 import { World } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { ofType } from '../helpers/bossArena';
+import { calmGalaxy, still } from '../helpers/mute';
 import { placeFoe } from '../helpers/foeRig';
 
 const FIELD = { width: 1280, height: 720 };
 const CENTRE = { x: 640, y: 360, angle: -Math.PI / 2 };
-const calm = (galaxy: GalaxyDef = galaxyById('5-2')): GalaxyDef => ({ ...galaxy, kinds: MUTED_KINDS, events: [] });
-const still = (x: number, y: number, size: AsteroidSize) => ({ x, y, size, angle: 0, speedMultiplier: 0 });
 
 function world(rocks: ReturnType<typeof still>[] = [], ship: { x: number; y: number; angle: number } = CENTRE): World {
-  return new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'free' }, initialShip: ship, initialAsteroids: rocks });
+  return new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('5-2'), mode: 'free' }, initialShip: ship, initialAsteroids: rocks });
 }
 
 function run(w: World) {
@@ -33,8 +30,6 @@ function collectAtShip(w: World, kind: BlastKind): readonly SimEvent[] {
   field.list.push({ id: 99, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: PICKUP.lifespan });
   return w.step(STEP_SECONDS, NO_CONTROLS).map((e) => ({ ...e }));
 }
-
-const ofType = <T extends SimEvent['type']>(events: readonly SimEvent[], type: T) => events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
 
 /** A rock of `size` whose edge sits `gap` units outside (positive) or inside (negative) a blast of `radius` at the centre. */
 const atEdge = (radius: number, size: AsteroidSize, gap: number, side = 1) => still(640 + side * (radius + ASTEROID.radii[size] + gap), 360, size);

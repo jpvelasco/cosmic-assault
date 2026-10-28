@@ -20,9 +20,6 @@ export const flyingBolt = (id: number, x: number, y: number, angle: number, from
   id, x, y, px: x, py: y, vx: Math.cos(angle) * BOLT.speed, vy: Math.sin(angle) * BOLT.speed, radius: BOLT.radius, age: 0, source: 'boss', owner: 0, fromAttack,
 });
 
-/** A tiny rock at rest at (x, y). */
-export const stillRock = (x: number, y: number): AsteroidPlacement => ({ x, y, size: 3, angle: 0, speedMultiplier: 0 });
-
 /**
  * A bot's view of a galaxy whose director spawns nothing: the ship at rest at `SCENE_SHIP`, already vulnerable, and only
  * `rocks` on the field. Its fields can be replaced to stage foes or a boss.
