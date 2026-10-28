@@ -10,12 +10,10 @@ import { TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
 import { rescale, wrapDelta, wrapPosition } from '../wrap';
-import { zoneClearance, zoneKeepOutBoxes, type ZoneBox } from './dangerZone';
+import { clearSpots } from './dangerZone';
 import type { Bodies, Circle, Hazard, HazardSetup, HazardState, RiftState } from './hazard';
 import { HazardSchedule, ScheduledHazard } from './schedule';
 
-/** The grid a mouth is placed on, in field units: fine enough to find a spot on any field the game plays at. */
-const GRID_STEP = 10;
 /** Random first mouths tried for an event before it gives up placing a pair. */
 const TRIES = 16;
 /** How far past its own rim a body lands from a mouth it leaves by, so it is not at once back inside it. */
@@ -59,26 +57,6 @@ interface Mover {
   py: number;
   vx: number;
   vy: number;
-}
-
-/**
- * The spots a mouth may take on a field: on the grid, inside the inset, clear of every keep-out circle (the centre, the
- * ship and the spot a respawn takes with nothing in the way, all `setup.keepOuts`) by the mouth's own radius, and of the
- * HUD and thumb corners by `boxClearance`: the drawn radius, so a swirl stays out from under them, or else the hitbox
- * radius alone.
- */
-function clearSpots(field: Field, circles: readonly Circle[], boxClearance: number): Spot[] {
-  const boxes = zoneKeepOutBoxes(field);
-  const spots: Spot[] = [];
-  const { inset } = WARP_RIFT;
-  for (let y = inset; y <= field.height - inset; y += GRID_STEP) {
-    for (let x = inset; x <= field.width - inset; x += GRID_STEP) {
-      if (circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r + WARP_RIFT.radius)) continue;
-      if (boxes.some((box: ZoneBox) => zoneClearance(field, box, x, y) < boxClearance)) continue;
-      spots.push({ x, y });
-    }
-  }
-  return spots;
 }
 
 /** Whether the body centred at `body`, with reach `reach`, lies within it of (x, y) across the wrap. */
@@ -183,7 +161,10 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
     const rungs: readonly (number | null)[] = hole === null ? [null] : HOLE_RUNGS;
     const layouts = rungs.map((reach) => {
       const keepOut = reach === null || hole === null ? circles : [...circles, { x: hole.x, y: hole.y, r: reach }];
-      return { drawn: clearSpots(field, keepOut, WARP_RIFT.drawn), hitbox: clearSpots(field, keepOut, WARP_RIFT.radius) };
+      // A mouth keeps out of every circle by its own radius, and of the HUD and thumb corners by its drawn radius, so a
+      // swirl stays out from under them, or else by its hitbox radius alone.
+      const spots = (corners: number): Spot[] => clearSpots(field, keepOut, { inset: WARP_RIFT.inset, reach: WARP_RIFT.radius, corners });
+      return { drawn: spots(WARP_RIFT.drawn), hitbox: spots(WARP_RIFT.radius) };
     });
     const count = Math.min(event.intensity, WARP_RIFT.maxPairs);
     for (let i = 0; i < count; i++) {
