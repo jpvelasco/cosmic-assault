@@ -1,8 +1,9 @@
 import type { BossView } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
 import { mix, rgba, WHITE } from '../color';
-import { marchDash, solidLines } from '../sprites';
+import { marchDash, solidLines, strokePath } from '../sprites';
 import type { BossFrame, DrawerKit } from './drawer';
+import { paintReticle } from './reticle';
 
 /** A dive's aim line, as the boss pass draws it. */
 export interface AimLine {
@@ -19,27 +20,12 @@ const RETICLE_RADIUS = 26;
 const RETICLE_CLOSE = 0.6;
 const RETICLE_CLOSE_SECONDS = 0.7;
 
-/** The reticle at radius `r`: a broken ring with four ticks pointing in. */
-function paintReticle(ctx: CanvasRenderingContext2D, r: number, color: string): void {
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = rgba(color, 0.9);
-  ctx.lineWidth = 3;
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * TAU + TAU / 8;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.8, a - 0.5, a + 0.5);
-    ctx.stroke();
-    const t = a - TAU / 8;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(t) * r, Math.sin(t) * r);
-    ctx.lineTo(Math.cos(t) * r * 0.55, Math.sin(t) * r * 0.55);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = rgba(mix(color, WHITE, 0.6), 0.9);
-  ctx.lineWidth = 1.2;
+/** The reticle at radius `r`: a broken ring with four ticks pointing in, round a thin whole ring. */
+function paintAimReticle(ctx: CanvasRenderingContext2D, r: number, color: string): void {
+  paintReticle(ctx, { arc: r * 0.8, tickFrom: r, tickTo: r * 0.55, passes: [[rgba(color, 0.9), 3]] });
   ctx.beginPath();
   ctx.arc(0, 0, r * 0.8, 0, TAU);
-  ctx.stroke();
+  strokePath(ctx, rgba(mix(color, WHITE, 0.6), 0.9), 1.2);
 }
 
 /**
@@ -52,7 +38,7 @@ export function createAimLine({ ctx, pen, baker, palette }: DrawerKit): AimLine 
   const stroke = rgba(color, 0.85);
   const key = `boss|${palette.id}|aim|reticle`;
   const paint = (c: CanvasRenderingContext2D): void => {
-    paintReticle(c, RETICLE_RADIUS, color);
+    paintAimReticle(c, RETICLE_RADIUS, color);
   };
   return {
     draw(boss, frame, clock) {

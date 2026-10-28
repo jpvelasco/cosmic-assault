@@ -5,7 +5,7 @@ import { LOCK_TURRETS, PULSE_RADIUS, WARDEN_RING } from '../../sim/boss/warden';
 import { TAU } from '../../sim/math';
 import { blitTinted, partOffset, RIM_PAD, windupCharge, type BossFrame, type DrawerFactory } from './drawer';
 import { clockHooks, PartClocks } from './partClocks';
-import { BARREL_REACH, paintGhostRing, paintReticle, paintTrack, paintTurret, paintWardenCore, paintWardenEye, WARDEN_ART_REACH } from './wardenArt';
+import { BARREL_REACH, paintGhostRing, paintLockReticle, paintTrack, paintTurret, paintWardenCore, paintWardenEye, WARDEN_ART_REACH } from './wardenArt';
 
 /** How long a regrown turret takes to grow to full size. */
 const GROW_SECONDS = 0.4;
@@ -82,7 +82,7 @@ export const wardenDrawer: DrawerFactory = (kit) => {
     paintGhostRing(c, WARDEN_RING.radius, spinColor);
   };
   const paintReticleAt = (c: CanvasRenderingContext2D): void => {
-    paintReticle(c, RETICLE_RADIUS, hostile);
+    paintLockReticle(c, RETICLE_RADIUS, hostile);
   };
   const clocks = new PartClocks(GROW_SECONDS);
   /** A part's place from the core; one point, reused. */

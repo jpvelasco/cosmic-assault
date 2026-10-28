@@ -137,11 +137,6 @@ function paintZoneActive(ctx: CanvasRenderingContext2D, w: number, h: number, co
   ctx.strokeRect(-w / 2, -h / 2, w, h);
 }
 
-/** How strongly a lethal zone with `remaining` seconds to go is drawn: filling as it starts, fading as it ends. */
-export function zonePresence(remaining: number): number {
-  return Math.min(clamp((ZONE_SECONDS - remaining) / ZONE_FILL_SECONDS, 0, 1), clamp(remaining / ZONE_FADE_SECONDS, 0, 1));
-}
-
 /** A comet arc round the centre at radius `r`, its head at angle 0, sweeping `sweep` of a turn behind it. */
 function paintArc(ctx: CanvasRenderingContext2D, r: number, sweep: number, width: number, color: string): void {
   const head = mix(color, WHITE, 0.55);
@@ -247,11 +242,11 @@ function paintOutline(ctx: CanvasRenderingContext2D, r: number, color: string): 
 }
 
 /**
- * How strongly an active hazard of `seconds` in all, with `remaining` to go, is drawn: building up as it starts, fading
- * as it ends.
+ * How strongly an active hazard of `seconds` in all, with `remaining` to go, is drawn: building up over `fadeIn` as it
+ * starts, fading over `fadeOut` as it ends.
  */
-function presenceOf(remaining: number, seconds: number): number {
-  return Math.min(clamp((seconds - remaining) / FADE_IN_SECONDS, 0, 1), clamp(remaining / FADE_OUT_SECONDS, 0, 1));
+function presenceOf(remaining: number, seconds: number, fadeIn = FADE_IN_SECONDS, fadeOut = FADE_OUT_SECONDS): number {
+  return Math.min(clamp((seconds - remaining) / fadeIn, 0, 1), clamp(remaining / fadeOut, 0, 1));
 }
 
 /** A wave from 0 to 1 and back, `hz` times a second, `time` seconds in. */
@@ -483,7 +478,7 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
     const sprite = warning ? baker.custom(art.warning, zone.w / 2 + ZONE_PAD, art.paintWarning, zone.h / 2 + ZONE_PAD) : baker.custom(art.active, zone.w / 2 + ZONE_PAD, art.paintActive, zone.h / 2 + ZONE_PAD);
     // A warning pulses faster as it comes due; reduced motion holds it steady.
     const due = 1 - clamp(zone.remaining / ZONE_TELEGRAPH_SECONDS, 0, 1);
-    ctx.globalAlpha = warning ? (still ? 0.75 : 0.45 + 0.4 * wave(time, ZONE_PULSE_HZ * (1 + due))) : zonePresence(zone.remaining);
+    ctx.globalAlpha = warning ? (still ? 0.75 : 0.45 + 0.4 * wave(time, ZONE_PULSE_HZ * (1 + due))) : presenceOf(zone.remaining, ZONE_SECONDS, ZONE_FILL_SECONDS, ZONE_FADE_SECONDS);
     stamp(sprite, zone.x, zone.y, 1, 0, Math.max(zone.w, zone.h) / 2, field);
   }
 
