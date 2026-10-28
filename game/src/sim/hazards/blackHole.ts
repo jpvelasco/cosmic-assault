@@ -1,6 +1,7 @@
 import { FOES } from '../../content/foes';
 import { BLACK_HOLE, HAZARD_RULES } from '../../content/hazards';
-import { clearSpot } from '../boss/bossRules';
+import type { Point } from '../boss/behaviour';
+import { clearSpot, respawnBand } from '../boss/bossRules';
 import { ASTEROID, PLAYER } from '../config';
 import type { Foe } from '../foes/foe';
 import type { SimEvent } from '../events';
@@ -20,6 +21,21 @@ export function holeAcceleration(distance: number, intensity: number): number {
  */
 export function holeShare(distance: number, intensity: number, dt = 1): number {
   return distance === 0 ? 0 : (holeAcceleration(distance, intensity) * dt) / distance;
+}
+
+/** A hair past a ring's radius, so a spot placed on it is not judged inside it by rounding. */
+const RING_SLACK = 1;
+
+/**
+ * The spots `distance` from `centre` on the respawn band's bottom row and then its top row, right of it then left, each
+ * kept inside the band.
+ */
+function ringSpots(centre: Readonly<Point>, field: Field, distance: number): Point[] {
+  const { left, right, top, bottom } = respawnBand(field);
+  return [bottom, top].flatMap((y) => {
+    const dx = Math.sqrt(Math.max(0, (distance + RING_SLACK) ** 2 - (y - centre.y) ** 2));
+    return [1, -1].map((side) => ({ x: Math.min(right, Math.max(left, centre.x + side * dx)), y }));
+  });
 }
 
 interface Hole extends PointHazardState {
@@ -109,14 +125,17 @@ export class BlackHole implements Hazard {
   }
 
   /**
-   * While the hole is warning or active, where a respawning ship comes back: the first of the usual respawn spots
-   * (`clearSpot`) a ship's safe radius outside the hole's `exitReach` and every live foe, so it neither falls in during its
-   * invulnerability nor wakes among a swarm that gathered where it died; else null.
+   * While the hole is warning or active, where a respawning ship comes back: a ship's safe radius outside the hole's
+   * `exitReach`, and as far from every live foe, so it neither falls in during its invulnerability nor wakes among a swarm
+   * that gathered where it died; else null. It tries the spots that far from the hole low in the respawn band, then high,
+   * right then left, so a respawn lies as far from the hole on every field; the respawn search (`clearSpot`) takes over
+   * when foes crowd them.
    */
   respawnPoint(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null {
     const hole = this.schedule.live[0];
     if (this.field === null || hole === undefined) return null;
-    return clearSpot({ x: hole.x, y: hole.y, parts: foes }, BLACK_HOLE.exitReach, this.field, PLAYER.radius + ASTEROID.safeRadius);
+    const margin = PLAYER.radius + ASTEROID.safeRadius;
+    return clearSpot({ x: hole.x, y: hole.y, parts: foes }, BLACK_HOLE.exitReach, this.field, margin, ringSpots(hole, this.field, BLACK_HOLE.exitReach + margin));
   }
 
   resize(old: Field, field: Field): void {

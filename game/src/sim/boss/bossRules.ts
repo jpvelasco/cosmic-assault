@@ -41,20 +41,22 @@ export function bossClearance(boss: BossBodies, reach: number, x: number, y: num
 const RESPAWN_GRID_COLUMNS = 9;
 const RESPAWN_GRID_ROWS = 6;
 
+/** The respawn band: inside the field's edges by `RESPAWN_INSET`, and no lower than `RESPAWN_LOWEST_SHARE` of the height. */
+export function respawnBand(field: Field): Readonly<{ left: number; right: number; top: number; bottom: number }> {
+  return { left: RESPAWN_INSET, right: field.width - RESPAWN_INSET, top: RESPAWN_INSET, bottom: field.height * RESPAWN_LOWEST_SHARE };
+}
+
 /**
- * Where a ship can respawn at least `margin` outside the boss (`bossClearance`): low in the middle, at
- * `RESPAWN_LOWEST_SHARE` of the height; or, if the boss lies too near it, the corner farthest from the core, as low or as
- * near the top; or, if a part lies on that too, the first other corner that is clear. If none of those is, the first
- * clear point of a grid across the same band, row by row from the bottom, as low as the usual spots prefer; else, with
- * nowhere clear, the clearest spot of all, the first found among equals, so a respawn is always the same for the same
- * boss.
+ * Where a ship can respawn at least `margin` outside the boss (`bossClearance`): the first clear spot of `prefer`, by
+ * default low in the middle, at `RESPAWN_LOWEST_SHARE` of the height, or, if the boss lies too near it, the corner
+ * farthest from the core, as low or as near the top, or, if a part lies on that too, the first other corner that is
+ * clear. If none of those is, the first clear point of a grid across the respawn band, row by row from the bottom, as
+ * low as the usual spots prefer; else, with nowhere clear, the clearest spot of all, the first found among equals, so a
+ * respawn is always the same for the same boss.
  */
-export function clearSpot(boss: BossBodies, reach: number, field: Field, margin = 0): Point {
-  const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height * RESPAWN_LOWEST_SHARE];
-  const farX = Math.abs(boss.x - left) > Math.abs(boss.x - right) ? left : right;
-  const farY = Math.abs(boss.y - top) > Math.abs(boss.y - bottom) ? top : bottom;
-  const spots: readonly Point[] = [{ x: field.width / 2, y: bottom }, { x: farX, y: farY }, { x: left + right - farX, y: farY }, { x: farX, y: top + bottom - farY }, { x: left + right - farX, y: top + bottom - farY }];
-  let best = spots[1] as Point;
+export function clearSpot(boss: BossBodies, reach: number, field: Field, margin = 0, prefer: readonly Point[] = usualSpots(boss, field)): Point {
+  const { left, right, top, bottom } = respawnBand(field);
+  let best: Point = { x: field.width / 2, y: bottom };
   let bestClearance = -Infinity;
   /** Whether `spot` is clear by `margin`, noting it if it is the clearest yet. */
   const clear = (spot: Point): boolean => {
@@ -62,7 +64,7 @@ export function clearSpot(boss: BossBodies, reach: number, field: Field, margin 
     if (clearance > bestClearance) [best, bestClearance] = [spot, clearance];
     return clearance >= margin;
   };
-  for (const spot of spots) if (clear(spot)) return spot;
+  for (const spot of prefer) if (clear(spot)) return spot;
   for (let row = RESPAWN_GRID_ROWS - 1; row >= 0; row--) {
     for (let column = 0; column < RESPAWN_GRID_COLUMNS; column++) {
       const spot = { x: left + ((right - left) * column) / (RESPAWN_GRID_COLUMNS - 1), y: top + ((bottom - top) * row) / (RESPAWN_GRID_ROWS - 1) };
@@ -70,6 +72,14 @@ export function clearSpot(boss: BossBodies, reach: number, field: Field, margin 
     }
   }
   return best;
+}
+
+/** The usual respawn spots round a boss: low in the middle, then the corners, the one farthest from its core first. */
+function usualSpots(boss: Readonly<Point>, field: Field): Point[] {
+  const { left, right, top, bottom } = respawnBand(field);
+  const farX = Math.abs(boss.x - left) > Math.abs(boss.x - right) ? left : right;
+  const farY = Math.abs(boss.y - top) > Math.abs(boss.y - bottom) ? top : bottom;
+  return [{ x: field.width / 2, y: bottom }, { x: farX, y: farY }, { x: left + right - farX, y: farY }, { x: farX, y: top + bottom - farY }, { x: left + right - farX, y: top + bottom - farY }];
 }
 
 /** Where a boss arrives in `field`. */

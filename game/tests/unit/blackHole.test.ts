@@ -231,14 +231,17 @@ describe('the hole\'s life', () => {
   /** How far a respawn point must lie from the hole: a ship's safe radius outside the reach it survives a reaction from. */
   const SAFE_FROM_HOLE = BLACK_HOLE.exitReach + PLAYER.radius + ASTEROID.safeRadius;
 
-  it.each([MIN_ASPECT, 16 / 9, MAX_ASPECT])('puts the respawn point a safe radius outside its exit reach, inside the field, at aspect %d', (aspect) => {
+  it.each([MIN_ASPECT, 16 / 9, MAX_ASPECT])('puts the respawn point a safe radius outside its exit reach and no farther, inside the field, at aspect %d', (aspect) => {
     const field: Field = { width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT };
     let last = 0;
     const hazards = new HazardField([hole(START_AT, 3)], () => createRng(1), () => ++last);
     hazards.step(START_AT + 1, field, []);
     const spot = hazards.respawnPoint();
     if (spot === null) throw new Error('the hole is active, so it has a respawn point');
-    expect(Math.hypot(spot.x - field.width / 2, spot.y - field.height / 2)).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
+    // As far from the hole on every field shape, so an idle ship falls back in as fast on each.
+    const distance = Math.hypot(spot.x - field.width / 2, spot.y - field.height / 2);
+    expect(distance).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
+    expect(distance).toBeLessThanOrEqual(SAFE_FROM_HOLE + 2);
     expect(spot.x).toBeGreaterThan(0);
     expect(spot.x).toBeLessThan(field.width);
     expect(spot.y).toBeGreaterThan(0);
