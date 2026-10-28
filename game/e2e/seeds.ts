@@ -21,7 +21,7 @@ export const CARRIER_GALAXY: GalaxyId = '2-6';
 export const GAME_OVER_GALAXY: GalaxyId = '5-5';
 
 /** The `?galaxy=` the perf spec plays: the busiest field early on, 15 to 20 rocks by 15 s with the ship firing. */
-export const PERF_GALAXY: GalaxyId = '5-5';
+export const PERF_GALAXY: GalaxyId = '4-5';
 
 /** The `?galaxy=` the Ion Reach spec plays: it has a gravity well from 46 s and the first Dimension with drones. */
 export const ION_REACH_GALAXY: GalaxyId = '2-4';
@@ -44,7 +44,7 @@ const ENTRIES = [
   // The Ion Reach spec: the idle ship lives to the well's warning, with a foe on the field, and on into the pull.
   { seed: 12, claim: 'ion-reach-hazards', galaxy: ION_REACH_GALAXY },
   // The perf spec measures frame time, not an outcome; this seed pins a busy field so every run spawns the same rocks.
-  { seed: 64, claim: 'busy-field', galaxy: PERF_GALAXY },
+  { seed: 1, claim: 'busy-field', galaxy: PERF_GALAXY },
   // The perf spec's boss scene: skipped to the Hive Carrier's fight, a ship firing and turning keeps it fighting.
   { seed: 2, claim: 'carrier-fight', galaxy: CARRIER_GALAXY },
 ] as const satisfies readonly { readonly seed: number; readonly claim: string; readonly galaxy: GalaxyId }[];

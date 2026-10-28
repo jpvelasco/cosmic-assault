@@ -1,5 +1,5 @@
 import { devices } from '@playwright/test';
-import { CLEAR_1_1_SECONDS, E2E_SEEDS, entryFor, FREE_GAME_OVER_SECONDS, HANGAR_OPENS_SECONDS, HULL_FIRE_SECONDS, PERF_FIGHT_HOLD_SECONDS, PERF_FIGHT_LIVES, PERF_SETTLE_SECONDS, THREE_DEATHS_SECONDS, TO_BOSS_FIGHT_SECONDS, WELL_WARNING_SECONDS, type ClaimId, type SeedEntry } from '../../e2e/seeds';
+import { CLEAR_1_1_SECONDS, E2E_SEEDS, entryFor, FREE_GAME_OVER_SECONDS, HANGAR_OPENS_SECONDS, HULL_FIRE_SECONDS, PERF_FIGHT_HOLD_SECONDS, PERF_FIGHT_LIVES, PERF_HOLD_SECONDS, PERF_SETTLE_SECONDS, THREE_DEATHS_SECONDS, TO_BOSS_FIGHT_SECONDS, WELL_WARNING_SECONDS, type ClaimId, type SeedEntry } from '../../e2e/seeds';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { PROJECTILE, STEP_SECONDS } from '../../src/sim/config';
@@ -14,9 +14,7 @@ const GUARD_SECONDS = 2.5;
 export const MAX_DEATH_SECONDS = 8;
 /** The boss specs play a little in real time before they fast-forward to the fight; the ship must outlive that too. */
 export const FIGHT_SLACK_SECONDS = 3;
-/** The perf spec holds fire and a turn for this long; the claimed field is busy by then. */
-const BUSY_SECONDS = 15;
-/** Rocks alive after BUSY_SECONDS for the field to count as busy. */
+/** Rocks alive at the end of the perf hold for the field to count as busy. */
 const BUSY_ROCKS = 14;
 
 interface Lane {
@@ -139,11 +137,14 @@ const CARRIER_FIGHT_SECONDS = PERF_SETTLE_SECONDS + PERF_FIGHT_HOLD_SECONDS + CA
 /** The controls the perf spec holds: fire and a left turn. */
 const PERF_CONTROLS: Controls = { turn: -1, thrust: false, fire: true, stick: null };
 
-/** A ship that holds PERF_CONTROLS is in a field of at least BUSY_ROCKS rocks. */
+/**
+ * A ship that holds PERF_CONTROLS through the whole perf hold is in play at its end, in a field of at least BUSY_ROCKS rocks:
+ * a scene that ends in game over is no busy field to measure.
+ */
 function fieldIsBusy(seed: number, galaxy: GalaxyId): boolean {
   const world = newWorld(seed, DESKTOP_FIELD, galaxy, 'free');
-  run(world, BUSY_SECONDS, () => false, PERF_CONTROLS);
-  return world.asteroids.length >= BUSY_ROCKS;
+  run(world, PERF_HOLD_SECONDS, () => world.status !== 'playing', PERF_CONTROLS);
+  return world.status === 'playing' && world.asteroids.length >= BUSY_ROCKS;
 }
 
 /**
@@ -205,7 +206,7 @@ export const CLAIMS: Readonly<Record<ClaimId, Claim>> = {
     holds: (seed, galaxy) => loses(seed, DESKTOP_FIELD, galaxy, 'free', 3, FREE_GAME_OVER_SECONDS),
   },
   'busy-field': {
-    promise: (galaxy) => `leaves ${String(BUSY_ROCKS)} or more rocks in ${galaxy} after ${String(BUSY_SECONDS)} s with the ship firing and turning`,
+    promise: (galaxy) => `leaves ${String(BUSY_ROCKS)} or more rocks in ${galaxy} after ${String(PERF_HOLD_SECONDS)} s with the ship firing and turning, in play throughout`,
     holds: fieldIsBusy,
   },
   'carrier-fight': {
