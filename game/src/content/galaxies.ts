@@ -118,7 +118,8 @@ const hole = eventsOf('blackHole');
 const HAZARDS: Readonly<Partial<Record<Dimension, Readonly<Partial<Record<GalaxyIndex, readonly GalaxyEvent[]>>>>>> = {
   2: { 2: [well(25, 1)], 3: [well(25, 1)], 4: [well(46, 1)], 5: [well(46, 1)] },
   3: { 2: [zone(30, 1)], 3: [zone(30, 1), zone(70, 1)], 4: [zone(20, 1), zone(50, 2)], 5: [zone(20, 2), zone(50, 2)] },
-  4: { 2: [repulsion(25, 1)], 3: [rift(20, 1), repulsion(80, 1)], 4: [rift(20, 1), repulsion(56, 2)], 5: [rift(15, 2), repulsion(56, 2)] },  // Singularity's black hole opens at 12 s on every survival galaxy, warned from 9 s, and ends at 87, before the lull. Each
+  4: { 2: [repulsion(25, 1)], 3: [rift(20, 1), repulsion(80, 1)], 4: [rift(20, 1), repulsion(56, 2)], 5: [rift(15, 2), repulsion(56, 2)] },
+  // Singularity's black hole opens at 12 s on every survival galaxy, warned from 9 s, and ends at 87, before the lull. Each
   // other event starts 10 s or more after the one before it, and no more than two run at once, showers included: 5-4's
   // repulsion field moves from 30 to 25 so it ends before the shower at 45 warns (from 42), and its zone from 95 to 100,
   // 10 s after the shower at 90. 5-5's rift moves from 20 to 22 for the same 10 s.

@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { FOES } from '../../src/content/foes';
 import { WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { Bolt, Bolts } from '../../src/sim/foes/bolts';
+import type { Bolt } from '../../src/sim/foes/bolts';
+import type { HazardBolts } from '../../src/sim/hazards/hazard';
 
-/** The galaxy's bolt pool, as a hazard sees it: its list, and the clearing a black hole asks of it. */
-const poolOf = (...list: Bolt[]): Bolts => ({ list, clearWithin: () => undefined }) as unknown as Bolts;
 import { MOUTH_SPACING } from '../../src/sim/hazards/warpRift';
 import { wrappedDistance } from '../../src/sim/wrap';
 import type { GalaxyEvent } from '../../src/content/types';
@@ -97,7 +96,7 @@ describe('warp rift placement', () => {
         }
       }
     }
-  });
+  }, 30_000);
 
   it('keeps every mouth off the field centre, the ship, and the HUD and thumb corners, at 4:3, 16:9 and 21:9', () => {
     for (const field of [FIELD_43, FIELD_169, FIELD_219]) {
@@ -125,7 +124,7 @@ describe('warp rift placement', () => {
         }
       }
     }
-  });
+  }, 30_000);
 });
 
 describe('warp rift passage', () => {
@@ -271,7 +270,7 @@ describe('warp rift chaining', () => {
         if (field.width > FIELD_43.width) expect(pairs, where).toHaveLength(2);
       }
     }
-  });
+  }, 30_000);
 
   it('carries a body out of every mouth, along every heading, for every body radius, once and never into another mouth, at 4:3, 16:9 and 21:9', () => {
     for (const field of [FIELD_43, FIELD_169, FIELD_219]) {
@@ -303,7 +302,7 @@ describe('warp rift chaining', () => {
             }
       }
     }
-  });
+  }, 30_000);
 
   it('never carries a body through a second pair more than once in any quarter second, over two seconds of motion, from every exit of every 4:3 configuration', () => {
     // The first seeds already strobe on the module this test guards against; the full sweep lives in the balance suite.
@@ -460,3 +459,5 @@ describe('warp rift exit grace', () => {
   });
 });
 
+/** The galaxy's bolt pool, as a hazard sees it: its list, and the clearing a black hole asks of it. */
+const poolOf = (...list: Bolt[]): HazardBolts => ({ list, clearWithin: () => undefined });

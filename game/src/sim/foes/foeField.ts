@@ -144,6 +144,8 @@ export class FoeField implements FoeWorld, BossFoes {
     const { live } = this.pool;
     for (let i = 0; i < live.length; i++) {
       const foe = live[i] as Foe;
+      // A foe spent this step (a black hole's horizon swallowed it) is swept after the collisions: it does not act.
+      if (foe.hp <= 0) continue;
       foe.px = foe.x;
       foe.py = foe.y;
       foe.protation = foe.rotation;

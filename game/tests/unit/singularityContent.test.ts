@@ -43,7 +43,7 @@ describe('Singularity content', () => {
     expect(holes('5-5')).toEqual([{ at: 12, type: 'blackHole', intensity: 3 }]);
   });
 
-  it('schedules Singularity\'s other hazards exactly as the plan sets them, one hole each galaxy', () => {
+  it('schedules Singularity\'s other hazards as set out above, one hole each galaxy', () => {
     const planned = (id: GalaxyId): [GalaxyEvent['type'], number, number][] => scheduled(id).map((e) => [e.type, e.at, e.intensity]);
     expect(planned('5-1')).toEqual([['blackHole', 12, 1]]);
     expect(planned('5-2')).toEqual([
@@ -73,6 +73,18 @@ describe('Singularity content', () => {
       const hole = scheduled(id).find((e) => e.type === 'blackHole');
       expect(hole, id).toBeDefined();
       expect((hole?.at ?? 0) + eventSeconds(hole as GalaxyEvent), id).toBe(87);
+    }
+  });
+
+  it('starts each black hole with no other pull active: no gravity well or repulsion field is in play at the hole\'s start', () => {
+    for (const id of SINGULARITY) {
+      const hole = scheduled(id).find((e) => e.type === 'blackHole');
+      for (const e of scheduled(id)) {
+        if (e.type !== 'gravityWell' && e.type !== 'repulsionField') continue;
+        const from = e.at;
+        const until = e.at + eventSeconds(e);
+        expect(hole !== undefined && hole.at >= from && hole.at < until, `${id} ${e.type} at ${String(e.at)}`).toBe(false);
+      }
     }
   });
 

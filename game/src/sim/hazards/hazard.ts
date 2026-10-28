@@ -21,6 +21,9 @@ export interface Circle {
   readonly r: number;
 }
 
+/** What a hazard may do to the galaxy's bolts: read them, and clear the ones a black hole's horizon reaches. */
+export type HazardBolts = Pick<Bolts, 'list' | 'clearWithin'>;
+
 /** What a hazard can act on: the ship and the World's own rock list, and the foes. */
 export interface Bodies {
   readonly ship: Ship;
@@ -30,7 +33,7 @@ export interface Bodies {
    * The galaxy's hostile bolts: a rift jump may leave the ship in one's path, which grants it a windup's grace, and a black
    * hole's horizon clears the ones that reach it. Null where the galaxy has none (a bare field, a practice run).
    */
-  readonly bolts: Bolts | null;
+  readonly bolts: HazardBolts | null;
 }
 
 /** What every hazard shows the renderer, the HUD and the bots: where it is, and how long until it changes. */
@@ -103,6 +106,8 @@ export interface HazardSetup {
   readonly rng: Rng;
   /** Hands out an id for each hazard. */
   readonly nextId: () => number;
+  /** The hazards in play as of the last step, so a hazard can place itself clear of another (a rift clear of a black hole). */
+  readonly inPlay: () => readonly Readonly<HazardState>[];
   /** The circles a placed hazard keeps out of, as they stand when it is placed. */
   readonly keepOuts: (field: Field) => readonly Circle[];
 }

@@ -5,7 +5,7 @@ import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import type { Bolts } from '../foes/bolts';
+import type { HazardBolts } from './hazard';
 import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
 import { createRng, deriveSeed, type Rng } from '../rng';
@@ -73,7 +73,7 @@ export class HazardField {
       if (type === 'meteorShower') continue;
       const make = factories[type];
       if (make === undefined) throw new Error(`The schedule names a ${type} but no hazard is made for it: add a ${type} factory to HAZARD_FACTORIES`);
-      this.hazards.push(make({ events: eventsOfType(events, type), rng: stream(type), nextId, keepOuts }));
+      this.hazards.push(make({ events: eventsOfType(events, type), rng: stream(type), nextId, keepOuts, inPlay: () => this.list }));
     }
   }
 
@@ -92,7 +92,7 @@ export class HazardField {
    * the hazards carry bodies. The pull acts on a ship invulnerable after its respawn too, as it did in M5:
    * invulnerability spares the ship collisions, not physics.
    */
-  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: Bolts | null = null): void {
+  move(dt: number, ship: Ship, rocks: Asteroid[], foes: readonly Foe[], out: SimEvent[], bolts: HazardBolts | null = null): void {
     const bodies = (this.bodies ??= { ship, rocks, foes, bolts });
     bodies.ship = ship;
     bodies.rocks = rocks;

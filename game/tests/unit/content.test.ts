@@ -75,11 +75,12 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.duration).toBe(20);
   });
 
-  it('keeps every event inside the window from the opening\'s end, less its warning, to 25 s before the end', () => {
+  it('keeps every event inside the window from the opening\'s end to 25 s before the end, a black hole excepted', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
-        // A warning may begin inside the opening, so a black hole at 12 s warns from 9 s and is felt from 12 s.
-        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS - warning(e));
+        // A black hole starts 12 s in, inside the opening, from a 3 s warning that ends as the opening does.
+        if (e.type === 'blackHole') expect(e.at + warning(e), `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
+        else expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
         expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);
       }
   });

@@ -1,7 +1,5 @@
 import { FOES } from '../../content/foes';
 import { BLACK_HOLE, HAZARD_RULES } from '../../content/hazards';
-import { MIN_WINDUP_SECONDS } from '../../content/pacingRules';
-import { PLAYER } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { nudge } from '../math';
@@ -32,16 +30,13 @@ interface Hole extends PointHazardState {
  * Singularity's black hole: one at the field's centre, warned for its telegraph, then active for its length. Active it pulls
  * the ship (through `shipPullAt`), the rocks and the pulled foes; its horizon swallows the rocks, foes, bolts and player
  * shots that reach it for no points and no drop; touching it costs the ship a life; and a respawning ship comes back at
- * its respawn point. A ship already touching the horizon when it starts is granted the windup's grace, so its start never
- * kills on the spot. It draws from no stream: its place is the field's centre.
+ * its respawn point from its warning on. It draws from no stream: its place is the field's centre.
  */
 export class BlackHole implements Hazard {
   private readonly nextId: () => number;
   private readonly schedule: HazardSchedule<Hole>;
   /** The field as of the last step or resize; null before the first. */
   private field: Field | null = null;
-  /** Set when the hole starts, so the first step it pulls checks the ship's grace; cleared by that check. */
-  private starting = false;
 
   constructor({ events, nextId }: HazardSetup) {
     this.nextId = nextId;
@@ -54,7 +49,6 @@ export class BlackHole implements Hazard {
         into.push({ id, type: 'blackHole', stage: 'warning', x, y, intensity: event.intensity, remaining: event.at - elapsed });
       },
       started: (hole, out) => {
-        this.starting = true;
         out.push({ type: 'holeStart', id: hole.id, x: hole.x, y: hole.y });
       },
       ended: (hole, out) => {
@@ -80,19 +74,10 @@ export class BlackHole implements Hazard {
     for (const foe of foes) if (FOES[foe.kind].pulled) this.pullBody(hole, foe, dt);
   }
 
-  /**
-   * Swallows the rocks and foes the horizon reaches, for no points and no drop, and the bolts it reaches; the ship's
-   * grace is set first, if the hole has just started and the ship touches its horizon.
-   */
+  /** Swallows the rocks, foes and bolts the horizon reaches, for no points and no drop. */
   carry(bodies: Bodies, out: SimEvent[]): void {
     const hole = this.active();
-    const starting = this.starting;
-    this.starting = false;
     if (hole === null) return;
-    if (starting && this.touches(hole, bodies.ship.x, bodies.ship.y, PLAYER.radius)) {
-      bodies.ship.invulnerable = true;
-      bodies.ship.invulnerableFor = Math.max(bodies.ship.invulnerableFor, MIN_WINDUP_SECONDS);
-    }
     const { rocks } = bodies;
     let kept = 0;
     for (const rock of rocks) {
@@ -120,9 +105,9 @@ export class BlackHole implements Hazard {
     return this.strikes(x, y, r);
   }
 
-  /** While the hole is active a respawning ship comes back at its respawn point, a share of the field; else null. */
+  /** While the hole is warning or active a respawning ship comes back at its respawn point, a share of the field; else null. */
   respawnPoint(): Readonly<{ x: number; y: number }> | null {
-    if (this.field === null || this.active() === null) return null;
+    if (this.field === null || this.schedule.live.length === 0) return null;
     return { x: this.field.width * BLACK_HOLE.respawn.x, y: this.field.height * BLACK_HOLE.respawn.y };
   }
 
@@ -133,7 +118,6 @@ export class BlackHole implements Hazard {
 
   stop(): void {
     this.schedule.stop();
-    this.starting = false;
   }
 
   /** The active hole, if there is one: the only one a galaxy holds at once. */

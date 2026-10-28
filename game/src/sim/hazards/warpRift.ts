@@ -1,6 +1,6 @@
 import { clamp } from '../../content/curves';
 import { MIN_WINDUP_SECONDS } from '../../content/pacingRules';
-import { HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
+import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
 import { MINE } from '../../content/foes';
 import type { GalaxyEvent } from '../../content/types';
 import { ASTEROID, PLAYER } from '../config';
@@ -27,6 +27,9 @@ const EXIT_GAP = 2;
  */
 export const MOUTH_SPACING = 2 * WARP_RIFT.radius + 2 * ASTEROID.radii[0] + EXIT_GAP;
 
+/** A spot a mouth may take. */
+type Spot = { x: number; y: number };
+
 /** A pair of mouths, as the schedule holds it: one hazard for both, its mouths at (x, y) and (toX, toY). */
 interface Pair extends RiftState {
   stage: HazardState['stage'];
@@ -36,6 +39,13 @@ interface Pair extends RiftState {
   toY: number;
   remaining: number;
 }
+
+/**
+ * The keep-out rings a mouth tries while a black hole is in play, most preferred first: a body's exit from a mouth lands
+ * `WARP_RIFT.radius + body + EXIT_GAP` out of it, so a mouth whose centre lies `exitReach + PLAYER.radius + EXIT_GAP` from the
+ * hole lets a ship heading straight in leave outside the reach it survives from. The fallback is for a crowded field.
+ */
+const HOLE_RUNGS: readonly number[] = [BLACK_HOLE.exitReach + PLAYER.radius + EXIT_GAP, BLACK_HOLE.exitFallback];
 
 /** The id the ship rests under: rocks and foes take ids from the arena, which start at 1. */
 const SHIP_KEY = 0;
@@ -55,9 +65,9 @@ interface Mover {
  * ship and any respawn point, all `setup.keepOuts`) by the mouth's own radius, and of the HUD and thumb corners by
  * `boxClearance`: the drawn radius, so a swirl stays out from under them, or else the hitbox radius alone.
  */
-function clearSpots(field: Field, circles: readonly Circle[], boxClearance: number): { x: number; y: number }[] {
+function clearSpots(field: Field, circles: readonly Circle[], boxClearance: number): Spot[] {
   const boxes = zoneKeepOutBoxes(field);
-  const spots: { x: number; y: number }[] = [];
+  const spots: Spot[] = [];
   const { inset } = WARP_RIFT;
   for (let y = inset; y <= field.height - inset; y += GRID_STEP) {
     for (let x = inset; x <= field.width - inset; x += GRID_STEP) {
@@ -100,6 +110,7 @@ export class WarpRifts implements Hazard {
   private readonly rng: Rng;
   private readonly nextId: () => number;
   private readonly keepOuts: (field: Field) => readonly Circle[];
+  private readonly inPlay: () => readonly Readonly<HazardState>[];
   /** The schedule, holding the pairs warning or open: none, or up to two. */
   private readonly schedule: HazardSchedule<Pair>;
   /** The field the mouths lie in, as of the last step or resize; null before the first step. */
@@ -109,10 +120,11 @@ export class WarpRifts implements Hazard {
   /** Bodies that have jumped, by id, and the seconds each may jump again at: a body rests `WARP_RIFT.rest` after a jump. */
   private readonly rested = new Map<number, number>();
 
-  constructor({ events, rng, nextId, keepOuts }: HazardSetup) {
+  constructor({ events, rng, nextId, keepOuts, inPlay }: HazardSetup) {
     this.rng = rng;
     this.nextId = nextId;
     this.keepOuts = keepOuts;
+    this.inPlay = inPlay;
     this.schedule = new HazardSchedule<Pair>(events, HAZARD_RULES.warpRift.telegraph, {
       warn: (event, elapsed, field, into, out) => {
         this.warn(event, elapsed, field, into, out);
@@ -173,21 +185,37 @@ export class WarpRifts implements Hazard {
   }
 
   /**
-   * Warns of the next pairs an event shows: `min(intensity, 2)` of them. Each is placed `MOUTH_SPACING` from the mouths
-   * already placed, first on the spots whose corner clearance is the drawn radius, then on those cleared by the hitbox
-   * radius only. A pair that fits neither is dropped: no pair is ever placed closer than `MOUTH_SPACING`.
+   * Warns of the next pairs an event shows: `min(intensity, 2)` of them, each placed clear of the others by `place`. The
+   * spots for each rung of the hole's ladder (or for no rung, with no hole in play) are found once per warning.
    */
   private warn(event: GalaxyEvent, elapsed: number, field: Field, into: Pair[], out: SimEvent[]): void {
     const circles = this.keepOuts(field);
-    const drawnSpots = clearSpots(field, circles, WARP_RIFT.drawn);
-    const hitboxSpots = clearSpots(field, circles, WARP_RIFT.radius);
+    const hole = this.inPlay().find((h) => h.type === 'blackHole') ?? null;
+    const rungs: readonly (number | null)[] = hole === null ? [null] : HOLE_RUNGS;
+    const layouts = rungs.map((reach) => {
+      const keepOut = reach === null || hole === null ? circles : [...circles, { x: hole.x, y: hole.y, r: reach }];
+      return { drawn: clearSpots(field, keepOut, WARP_RIFT.drawn), hitbox: clearSpots(field, keepOut, WARP_RIFT.radius) };
+    });
     const count = Math.min(event.intensity, WARP_RIFT.maxPairs);
     for (let i = 0; i < count; i++) {
-      const pair = this.place(elapsed, event, field, drawnSpots, into) ?? this.place(elapsed, event, field, hitboxSpots, into);
+      const pair = this.placeOnLadder(elapsed, event, field, layouts, into);
       if (pair === null) continue;
       into.push(pair);
       out.push({ type: 'riftWarning', id: pair.id, x: pair.x, y: pair.y, toX: pair.toX, toY: pair.toY });
     }
+  }
+
+  /**
+   * A pair placed on the first rung of `layouts` that fits it, each rung tried first on the spots whose corner clearance is
+   * the drawn radius, then on those cleared by the hitbox radius only. A pair that fits no rung is dropped: no pair is ever
+   * placed closer than `MOUTH_SPACING`.
+   */
+  private placeOnLadder(elapsed: number, event: GalaxyEvent, field: Field, layouts: readonly { drawn: readonly Spot[]; hitbox: readonly Spot[] }[], placed: readonly Pair[]): Pair | null {
+    for (const { drawn, hitbox } of layouts) {
+      const pair = this.place(elapsed, event, field, drawn, placed) ?? this.place(elapsed, event, field, hitbox, placed);
+      if (pair !== null) return pair;
+    }
+    return null;
   }
 
   /**

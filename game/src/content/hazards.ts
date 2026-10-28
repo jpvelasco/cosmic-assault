@@ -58,11 +58,27 @@ export const WARP_RIFT = { maxPairs: 2, radius: 30, drawn: 48, apart: 0.4, inset
  * The black hole at the field's centre. Its pull on the ship, and on the rocks and pulled foes, is
  * `min(maxAccel, strength · intensity / max(r, minRadius))` units/s². Its horizon has radius `horizon`: it swallows rocks,
  * foes, bolts and shots that reach it for no points and no drop, and touching it (within `horizon` plus the ship's radius)
- * costs the ship a life. While it is active a respawning ship comes back at `respawn`, a share of the field. It speeds the
- * rocks and foes it pulls up to `rockSpeedCap`, lower than the ship's cap: at the wells' 300 the fragments it accelerates
- * are too fast to read (a tuning value, set with the Singularity balance).
+ * costs the ship a life. While it is warning or active a respawning ship comes back at `respawn`, a share of the field. It
+ * speeds the rocks and foes it pulls up to `rockSpeedCap`, lower than the ship's cap: at the wells' 300 the fragments it
+ * accelerates are too fast to read (a tuning value, set with the Singularity balance).
+ *
+ * `warnRadius` is the ring its warning is drawn at, and the distance a ship must be from it to escape the pull, from rest, at
+ * the start: the test holds the hole to both. `exitReach` is the least distance from the hole a ship heading straight in at
+ * the top speed survives a reaction from, so a rift mouth whose exit lands inside it can doom the ship, and `exitFallback`
+ * is the lesser keep-out for a field too crowded for it (the test measures both).
  */
-export const BLACK_HOLE = { horizon: 32, strength: 9000, maxAccel: 100, minRadius: 80, rockSpeedCap: 120, respawn: { x: 0.5, y: 0.8 } } as const;
+const HOLE_HORIZON = 32;
+export const BLACK_HOLE = {
+  horizon: HOLE_HORIZON,
+  strength: 9000,
+  maxAccel: 100,
+  minRadius: 80,
+  rockSpeedCap: 120,
+  respawn: { x: 0.5, y: 0.8 },
+  warnRadius: HOLE_HORIZON * 2.4,
+  exitReach: 284,
+  exitFallback: 260,
+} as const;
 
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };

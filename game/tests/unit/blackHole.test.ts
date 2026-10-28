@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BLACK_HOLE, MAX_SHIP_PULL, WELL_SPEED_CAP } from '../../src/content/hazards';
-import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { BLACK_HOLE, HAZARD_RULES, MAX_SHIP_PULL } from '../../src/content/hazards';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyEvent } from '../../src/content/types';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
-import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Asteroid } from '../../src/sim/asteroid';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
@@ -15,28 +13,17 @@ import { BlackHole, holeAcceleration, holeShare } from '../../src/sim/hazards/bl
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
-import { nudge, turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
-import { createShip, stepShip, type Ship } from '../../src/sim/ship';
+import { clearTime, flyOut } from '../helpers/holeEscape';
+import { createShip, type Ship } from '../../src/sim/ship';
 
 const FIELD: Field = { width: 1280, height: FIELD_HEIGHT };
 const DT = STEP_SECONDS;
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
 const HORIZON = BLACK_HOLE.horizon;
 const CONTACT = HORIZON + PLAYER.radius;
-/** The start band of the escape invariant: 40 units outside the horizon's contact (the ship dies inside `CONTACT`). */
-const ESCAPE_BAND = CONTACT + 40;
-const ESCAPE_RADIUS = 240;
-/** The worst start in the band escapes in about 6.1 s; this is the bound the invariant holds to. */
-const ESCAPE_SECONDS = 7;
 const START_AT = 5;
 const LENGTH = 75;
-
-/** `angle` turned toward `target` by at most `maxStep` radians, the short way round. */
-function turnTowards(angle: number, target: number, maxStep: number): number {
-  const diff = turnBetween(angle, target);
-  return angle + Math.sign(diff) * Math.min(Math.abs(diff), maxStep);
-}
 
 const hole = (at = START_AT, intensity: GalaxyEvent['intensity'] = 1): GalaxyEvent => ({ at, type: 'blackHole', intensity });
 
@@ -116,46 +103,51 @@ describe('the black hole\'s pull', () => {
   });
 });
 
-describe('the escape invariant (RF 1)', () => {
-  /** The turn, thrust and pull of a ship at (x, y) over its escape: it starts at rest, facing the hole, the worst way. */
-  function escape(x: number, y: number, intensity: GalaxyEvent['intensity'], field: Field): { contact: boolean; escapedAt: number | null } {
-    const cx = field.width / 2;
-    const cy = field.height / 2;
-    const ship = shipAt(x, y);
-    ship.angle = Math.atan2(cy - y, cx - x);
-    const pull: ShipPull = { x: 0, y: 0 };
-    const states: HazardState[] = [{ id: 1, type: 'blackHole', stage: 'active', x: cx, y: cy, intensity, remaining: 60 }, { id: 2, type: 'repulsionField', stage: 'active', x: 0, y: 0, intensity: 3, remaining: 60 }];
-    for (let step = 0; step < ESCAPE_SECONDS / DT; step++) {
-      const outward = Math.atan2(ship.y - cy, ship.x - cx);
-      ship.angle = turnTowards(ship.angle, outward, PLAYER.turnSpeed * DT);
-      stepShip(ship, { ...NO_CONTROLS, thrust: true }, DT, field);
-      // The strongest other pull that can coexist: a repulsion field 60 units out beyond the ship, pushing it at the hole.
-      states[1] = { id: 2, type: 'repulsionField', stage: 'active', x: ship.x + Math.cos(outward) * 60, y: ship.y + Math.sin(outward) * 60, intensity: 3, remaining: 60 };
-      shipPullAt(states, ship.x, ship.y, DT, pull);
-      nudge(ship, pull.x, pull.y, WELL_SPEED_CAP);
-      const r = Math.hypot(cx - ship.x, cy - ship.y);
-      if (r < CONTACT) return { contact: true, escapedAt: null };
-      if (r >= ESCAPE_RADIUS) return { contact: false, escapedAt: step * DT };
-    }
-    return { contact: false, escapedAt: null };
-  }
+/** A reaction a player takes to a warning, in seconds, after which the ship must already be turning for the way out. */
+const REACTION_SECONDS = 1;
 
-  it('lets a ship at full thrust escape from every spot 40 units outside the horizon, at every intensity, across 4:3 and 21:9 fields, with the strongest pull that can coexist', () => {
-    const fields: Field[] = [MIN_ASPECT, MAX_ASPECT].map((aspect) => ({ width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT }));
+const FIELDS: readonly Field[] = [MIN_ASPECT, MAX_ASPECT].map((aspect) => ({ width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT }));
+
+describe('the black hole\'s escape', () => {
+  it('lets a ship at rest, facing the hole, escape from every spot at or beyond its warning ring, at every intensity, on 4:3 and 21:9 fields', () => {
     const failures: string[] = [];
-    for (const field of fields)
+    for (const field of FIELDS)
       for (const intensity of [1, 2, 3] as const)
         for (let x = 20; x < field.width; x += 40)
           for (let y = 20; y < field.height; y += 40) {
-            if (Math.hypot(x - field.width / 2, y - field.height / 2) < ESCAPE_BAND) continue;
-            const run = escape(x, y, intensity, field);
+            if (Math.hypot(x - field.width / 2, y - field.height / 2) < BLACK_HOLE.warnRadius) continue;
+            const run = flyOut({ x, y }, intensity, field);
             if (run.contact || run.escapedAt === null) failures.push(`${String(field.width)}×${String(field.height)} i${String(intensity)} at ${String(x)},${String(y)}`);
           }
     expect(failures).toEqual([]);
   }, 60_000);
 
-  it('does not hold inside that band: a ship at the contact edge, facing in with the same pull, is lost', () => {
-    const run = escape(CENTRE.x + CONTACT + 2, CENTRE.y, 1, FIELD);
+  it('gives a ship inside its warning ring time to fly out of it, with a reaction to spare, from any spot and any way it faces', () => {
+    const field = FIELDS[0] as Field;
+    let worst = 0;
+    for (const r of [5, 25, 50, 70])
+      for (let h = 0; h < 8; h++) {
+        const angle = (h * Math.PI) / 4;
+        worst = Math.max(worst, clearTime(field.width / 2 + r * Math.cos(angle), field.height / 2 + r * Math.sin(angle), BLACK_HOLE.warnRadius, field));
+      }
+    expect(worst + REACTION_SECONDS).toBeLessThanOrEqual(HAZARD_RULES.blackHole.telegraph);
+  }, 60_000);
+
+  it('still lets a ship escape in the active phase from 40 units beyond the contact, under the strongest other pull that can coexist', () => {
+    const failures: string[] = [];
+    for (const field of FIELDS)
+      for (const intensity of [1, 2, 3] as const)
+        for (let x = 20; x < field.width; x += 40)
+          for (let y = 20; y < field.height; y += 40) {
+            if (Math.hypot(x - field.width / 2, y - field.height / 2) < CONTACT + 40) continue;
+            const run = flyOut({ x, y }, intensity, field, { adversary: true });
+            if (run.contact || run.escapedAt === null) failures.push(`${String(field.width)}×${String(field.height)} i${String(intensity)} at ${String(x)},${String(y)}`);
+          }
+    expect(failures).toEqual([]);
+  }, 60_000);
+
+  it('does hold the contact edge to its pull: a ship at the contact edge, facing in with the same pull, is lost', () => {
+    const run = flyOut({ x: CENTRE.x + CONTACT + 2, y: CENTRE.y }, 1, FIELD);
     expect(run.contact).toBe(true);
   });
 });
@@ -229,27 +221,17 @@ describe('the hole\'s life', () => {
     expect(rock.vx).toBe(0);
   });
 
-  it('returns the respawn point (w/2, 0.8·h) only while it is active', () => {
-    expect(holeField(START_AT - 1).respawnPoint()).toBeNull();
+  it('returns the respawn point (w/2, 0.8·h) from its warning until it ends, and nothing before or after', () => {
+    expect(holeField(START_AT - 1).respawnPoint()).toEqual({ x: FIELD.width / 2, y: 0.8 * FIELD.height });
     expect(holeField(START_AT + 1).respawnPoint()).toEqual({ x: FIELD.width / 2, y: 0.8 * FIELD.height });
-    const after = holeField(START_AT + LENGTH + 1);
-    expect(after.respawnPoint()).toBeNull();
-  });
-
-  it('gives a ship already touching the horizon when it starts the windup\'s grace, and no grace for a ship clear of it', () => {
-    const touching = shipAt(CENTRE.x + CONTACT - 2, CENTRE.y);
-    holeField(START_AT + 0.001).move(DT, touching, [], [], []);
-    expect(touching.invulnerable).toBe(true);
-    expect(touching.invulnerableFor).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
-    const clear = shipAt(CENTRE.x + 200, CENTRE.y);
-    holeField(START_AT + 0.001).move(DT, clear, [], [], []);
-    expect(clear.invulnerable).toBe(false);
+    expect(holeField(START_AT - 4).respawnPoint()).toBeNull();
+    expect(holeField(START_AT + LENGTH + 1).respawnPoint()).toBeNull();
   });
 
   it('is one hazard of its own stream, \'hazards:blackHole\', so the other hazards\' draws do not move', () => {
     expect(hazardStreamName('blackHole')).toBe('hazards:blackHole');
     expect(HAZARD_FACTORIES.blackHole).toBeDefined();
-    expect(new BlackHole({ events: [hole()], rng: createRng(1), nextId: () => 1, keepOuts: () => [] })).toBeInstanceOf(BlackHole);
+    expect(new BlackHole({ events: [hole()], rng: createRng(1), nextId: () => 1, keepOuts: () => [], inPlay: () => [] })).toBeInstanceOf(BlackHole);
   });
 
   it('is scheduled in Singularity only, and never in a boss galaxy', () => {
