@@ -155,9 +155,9 @@ describe('sanitizeSave', () => {
       expect(sanitizeSave({ seenPickups: ['spreadLaser', 'weaponCore', 'shield'] }).seenPickups).toEqual(['weaponCore', 'shield', 'spreadLaser']);
     });
 
-    it('keeps every M6 pickup id, in table order', () => {
-      const m6 = ['timeWarp', 'nova', 'wingman', 'fieldBomb', 'homingMissiles', 'piercingBeam'];
-      expect(sanitizeSave({ seenPickups: [...m6, 'shield'] }).seenPickups).toEqual(['shield', 'piercingBeam', 'homingMissiles', 'fieldBomb', 'wingman', 'nova', 'timeWarp']);
+    it('keeps every Dimension 3–5 pickup id, in table order', () => {
+      const added = ['timeWarp', 'nova', 'wingman', 'fieldBomb', 'homingMissiles', 'piercingBeam'];
+      expect(sanitizeSave({ seenPickups: [...added, 'shield'] }).seenPickups).toEqual(['shield', 'piercingBeam', 'homingMissiles', 'fieldBomb', 'wingman', 'nova', 'timeWarp']);
     });
 
     it.each([undefined, null, 'doubleShot', 5, {}, { doubleShot: true }])('reads %j as none seen', (seenPickups) => {

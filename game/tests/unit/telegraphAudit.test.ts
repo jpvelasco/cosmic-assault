@@ -1,38 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
+import type { BossPart } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
-import type { GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
+import { HAZARD_RULES } from '../../src/content/hazards';
+import type { GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 import type { AttackId } from '../../src/content/types';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { HAZARD_FACTORIES } from '../../src/sim/hazards/hazardField';
 import { playExpert } from '../helpers/eventDigest';
-import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, type AttackPair, type FightStep, type TimedEvent } from '../helpers/telegraphAudit';
+import type { Timed } from '../helpers/bossArena';
+import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, hazardsShown, type AttackPair, type FightStep } from '../helpers/telegraphAudit';
 
 const SEEDS = [1, 2, 3];
-/** The hazards an event shows: one, or for a danger zone one per intensity, at most two. */
-const shown = (e: GalaxyEvent): HazardType[] => (e.type === 'meteorShower' ? [] : Array<HazardType>(e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : 1).fill(e.type));
 /** Every galaxy that schedules a hazard, with the hazards it shows. */
-const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap(shown) })).filter((g) => g.hazards.length > 0);
+const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap(hazardsShown) })).filter((g) => g.hazards.length > 0);
 /** Whole galaxies played by the expert take seconds apiece. */
 const PLAY_TIMEOUT_MS = 60_000;
 
 /** The expert's run of `id`, which clears it and so meets every hazard it schedules, as a timed log. */
-function timedLog(id: GalaxyId, seed: number): TimedEvent[] {
-  const log: TimedEvent[] = [];
+function timedLog(id: GalaxyId, seed: number): Timed[] {
+  const log: Timed[] = [];
   playExpert(id, seed, (world, events) => {
-    for (const event of events) log.push({ elapsed: world.elapsed, event: { ...event } });
+    for (const event of events) log.push({ event: { ...event }, at: world.elapsed });
   });
   return log;
 }
 
-const at = (elapsed: number, event: SimEvent): TimedEvent => ({ elapsed, event });
+const at = (elapsed: number, event: SimEvent): Timed => ({ event, at: elapsed });
 
 describe('auditTelegraphs', () => {
   it('has a telegraph for every hazard that is made: a new hazard cannot slip past the audit', () => {
@@ -40,11 +40,12 @@ describe('auditTelegraphs', () => {
   });
 
   it('audits every galaxy that schedules a hazard, and only hazards it audits are scheduled', () => {
-    expect(HAZARD_GALAXIES.map((g) => g.id)).toEqual(['2-2', '2-3', '2-4', '2-5', '3-2', '3-3', '3-4', '3-5']);
+    expect(HAZARD_GALAXIES.map((g) => g.id)).toEqual(['2-2', '2-3', '2-4', '2-5', '3-2', '3-3', '3-4', '3-5', '4-2', '4-3', '4-4', '4-5', '5-1', '5-2', '5-3', '5-4', '5-5']);
     for (const g of HAZARD_GALAXIES) for (const type of g.hazards) expect(HAZARD_TELEGRAPHS[type], `${g.id} ${type}`).toBeDefined();
   });
 
-  it.each(HAZARD_GALAXIES)('finds every hazard and foe attack of $id warned its full telegraph before it turns hostile, on seeds 1–3', ({ id, hazards }) => {
+  // Singularity's galaxies take seconds apiece, so `tests/balance/d5-singularity.test.ts` audits them over ten seeds.
+  it.each(HAZARD_GALAXIES.filter((g) => !g.id.startsWith('5-')))('finds every hazard and foe attack of $id warned its full telegraph before it turns hostile, on seeds 1–3', ({ id, hazards }) => {
     for (const seed of SEEDS) {
       const log = timedLog(id, seed);
       auditFoeAttacks(log);
@@ -87,8 +88,8 @@ describe('auditTelegraphs', () => {
 });
 
 describe('auditFoeAttacks', () => {
-  const windup = (elapsed: number, id: number): TimedEvent => at(elapsed, { type: 'foeWindup', id, x: 0, y: 0, angle: 0 });
-  const bolt = (elapsed: number, owner: number, id = 100): TimedEvent => at(elapsed, { type: 'boltFired', id, source: 'gunship', owner, x: 0, y: 0, angle: 0 });
+  const windup = (elapsed: number, id: number): Timed => at(elapsed, { type: 'foeWindup', id, x: 0, y: 0, angle: 0 });
+  const bolt = (elapsed: number, owner: number, id = 100): Timed => at(elapsed, { type: 'boltFired', id, source: 'gunship', owner, x: 0, y: 0, angle: 0 });
 
   it('pairs each gunship bolt and mine blast with its own foe\'s warning, by id', () => {
     const pairs = auditFoeAttacks([
@@ -123,7 +124,7 @@ const BOSS_GALAXIES = GALAXIES.filter((g, i) => g.boss !== null && GALAXIES.find
 
 /** Seconds between the blows that walk a boss through its phases, slow enough for each phase to show its attacks. */
 const BLOW_SECONDS = 1;
-const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 150;
+const FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 300;
 
 /**
  * The fight in `id` on `seed`, step by step, audited: an idle ship kept unhurt, so the fight runs its course, and one
@@ -136,7 +137,13 @@ function auditedFight(id: GalaxyId, seed: number): AttackPair[] {
   for (let step = 0; step * STEP_SECONDS < FIGHT_SECONDS && world.status === 'playing'; step++) {
     Object.assign(world['shipState'], { invulnerable: true, invulnerableFor: 1 });
     const target = world.boss === null ? null : bossTarget(world.boss);
-    if (target !== null && step % blowEvery === 0) world['run']?.bosses.hitBoss(target.x, target.y, 1);
+    if (target !== null && step % blowEvery === 0) {
+      // A blow on a part is a blow on that part, as a shot strikes it: a shielded core is only reached through its shards.
+      const run = world['run'];
+      const part = world.boss?.parts.indexOf(target as BossPart) ?? -1;
+      if (part >= 0) run?.bosses.hitPart(part, 1);
+      else run?.bosses.hitBoss(target.x, target.y, 1);
+    }
     recorder.record(world, world.step(STEP_SECONDS, NO_CONTROLS));
   }
   expect(world.status, `${id} seed ${String(seed)}`).not.toBe('playing');
@@ -175,7 +182,7 @@ describe('auditAttacks', () => {
   });
 
   it('fails an attack that goes active, or makes a rock, before the minimum windup, naming it', () => {
-    expect(() => auditAttacks([step(1, { events: [windup('lunge')] }), step(1.2, { active: 'lunge' })])).toThrow(/^lunge .*went active/);
+    expect(() => auditAttacks([step(1, { events: [windup('dive')] }), step(1.2, { active: 'dive' })])).toThrow(/^dive .*went active/);
     expect(() => auditAttacks([step(1, { events: [windup('quake')] }), step(1.1, { made: { rocks: 1, foes: 0, bolts: 0 } })])).toThrow(/^quake .*made rocks/);
   });
 
@@ -183,6 +190,14 @@ describe('auditAttacks', () => {
     const log = [step(1, { events: [windup('quake')], windup: 1.2 }), step(1.5, { windup: 1.2, made: { rocks: 4, foes: 0, bolts: 0 } })];
     expect(() => auditAttacks(log)).toThrow(/^quake .*made rocks.*1\.2 s windup/);
     expect(auditAttacks([log[0] as FightStep, step(2.2, { windup: 1.2, made: { rocks: 4, foes: 0, bolts: 0 } })])[0]?.minimum).toBe(1.2);
+  });
+
+  it('fails a part moved toward or away from the core before the windup ends, naming it, and lets it move once active', () => {
+    expect(() => auditAttacks([step(1, { events: [windup('quake')], parts: [100, 50] }), step(1.2, { parts: [100, 60] })])).toThrow(/^quake .*moved part 1 from 50\.0 to 60\.0/);
+    const moving = [step(1, { events: [windup('pulse')], parts: [100] }), step(1.5, { active: 'pulse', parts: [200] }), step(1.6, { active: 'pulse', parts: [300] })];
+    expect(auditAttacks(moving).map((p) => p.active)).toEqual([1.5]);
+    // A part broken or grown back meanwhile has not moved.
+    expect(() => auditAttacks([step(1, { events: [windup('quake')], parts: [100, Number.NaN] }), step(1.2, { parts: [Number.NaN, 70] })])).not.toThrow();
   });
 
   it('fails attack-made bodies with no attack warned, and harm an attack is not listed for', () => {

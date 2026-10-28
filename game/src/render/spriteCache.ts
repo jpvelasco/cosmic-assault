@@ -15,6 +15,7 @@ interface Entry<V> {
 export class SpriteCache<V> {
   private readonly entries = new Map<string, Entry<V>>();
   private clock = 0;
+  private evicted = 0;
 
   constructor(
     private readonly capacity: number,
@@ -27,6 +28,11 @@ export class SpriteCache<V> {
 
   get size(): number {
     return this.entries.size;
+  }
+
+  /** Entries dropped so far to stay within the capacity; a replace, a delete or a clear is not one. */
+  get evictions(): number {
+    return this.evicted;
   }
 
   get(key: string): V | undefined {
@@ -43,6 +49,7 @@ export class SpriteCache<V> {
       this.onEvict(key, previous.value);
     }
     if (this.entries.size > this.capacity) {
+      this.evicted++;
       this.delete(this.oldestKey());
     }
   }

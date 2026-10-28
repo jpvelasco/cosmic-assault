@@ -3,6 +3,8 @@ import { isWarpClear, type SimEvent } from '../sim/events';
 const SHIP_HIT_SECONDS = 0.11;
 const LARGE_ASTEROID_SECONDS = 0.055;
 const LARGE_ASTEROID_SIZE = 0;
+/** A Nova going off: the whole field's blast, a longer freeze than a large rock's. */
+const NOVA_SECONDS = 0.11;
 /** A boss's core laid bare: the opening the fight turns on. */
 const CORE_EXPOSED_SECONDS = 0.08;
 
@@ -15,6 +17,8 @@ export function hitStopFor(event: SimEvent): number {
       return event.size === LARGE_ASTEROID_SIZE && !isWarpClear(event) ? LARGE_ASTEROID_SECONDS : 0;
     case 'bossExposed':
       return CORE_EXPOSED_SECONDS;
+    case 'blast':
+      return event.kind === 'nova' ? NOVA_SECONDS : 0;
     default:
       return 0;
   }

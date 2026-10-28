@@ -21,16 +21,22 @@ export interface Projectile {
   pierce: number;
   /** Whether it turns toward the nearest target ahead (Homing Missiles). */
   readonly homing: boolean;
-  /** The ids of the rocks and foes it has struck and passed through, so it never strikes one twice. */
-  readonly struck: number[];
+  /**
+   * The ids of the rocks and foes it has struck and passed through, so it never strikes one twice. Every shot starts on
+   * `NONE_STRUCK`; a piercing shot that passes through one gets a new list with its id added.
+   */
+  struck: readonly number[];
 }
+
+/** The one frozen empty list of ids struck: every new shot's, and what a strike skips when it is given none. */
+export const NONE_STRUCK: readonly number[] = Object.freeze([]);
 
 /** Absorbs float residue from summing many dt steps so a full lifespan always expires. */
 const LIFE_EPSILON = 1e-9;
 
-/** A projectile flying from `shot`; by default it neither pierces nor homes, as every shot did before the M6 pickups. */
+/** A projectile flying from `shot`; by default it neither pierces nor homes, as every shot does without a Piercing Beam or Homing Missiles. */
 export function projectileFromShot(shot: Shot, id = 0, pierce = 0, homing = false): Projectile {
-  return { id, x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, px: shot.x, py: shot.y, life: PROJECTILE.lifespan, pierce, homing, struck: [] };
+  return { id, x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, px: shot.x, py: shot.y, life: PROJECTILE.lifespan, pierce, homing, struck: NONE_STRUCK };
 }
 
 /** Moves, ages, then wraps like the live game; returns false once the projectile has expired. */

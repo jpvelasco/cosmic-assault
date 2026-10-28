@@ -15,6 +15,8 @@ export const THREAT_COST: Readonly<Record<ThreatKind, number>> = {
   drone: FOES.drone.cost,
   gunship: FOES.gunship.cost,
   mine: FOES.mine.cost,
+  phaser: FOES.phaser.cost,
+  armoured: FOES.armoured.cost,
 };
 
 /** The rock weights by asteroid size: a tiny fragment weighs half a small rock, so a split never changes the cost. */

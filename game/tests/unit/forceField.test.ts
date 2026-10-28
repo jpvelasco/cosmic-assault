@@ -9,8 +9,9 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { FoePool, type Foe } from '../../src/sim/foes/foe';
-import { ForceField, wellAcceleration } from '../../src/sim/hazards/forceField';
+import { ForceField } from '../../src/sim/hazards/forceField';
 import type { HazardState, Pullable } from '../../src/sim/hazards/hazard';
+import { wellAcceleration } from '../../src/sim/hazards/pull';
 import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
 import { createRng } from '../../src/sim/rng';
 import { rescale } from '../../src/sim/wrap';
@@ -35,14 +36,14 @@ const WELL_SECONDS = HAZARD_RULES.gravityWell.seconds;
 
 function forceField(events: readonly GalaxyEvent[], seed = 1, kind: 'gravityWell' | 'repulsionField' = 'gravityWell'): ForceField {
   let last = 0;
-  return new ForceField(kind, kind === 'gravityWell' ? 1 : -1, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [] });
+  return new ForceField(kind, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [], inPlay: () => [] });
 }
 
 const stateOf = (w: ForceField): HazardState | null => w.states[0] ?? null;
 
 /** Pulls `rocks` and `foes` one step, and returns the field's pull on a ship at `ship`, as the hazard field applies it. */
 function pull(w: ForceField, dt: number, rocks: readonly Pullable[], foes: readonly Foe[] = [], ship: Pullable = body(-1e6, -1e6)): ShipPull {
-  w.pull(dt, { rocks, foes });
+  w.pull(dt, { rocks, foes: { list: foes } });
   return shipPullAt(w.states, ship.x, ship.y, dt, { x: 0, y: 0 });
 }
 

@@ -212,6 +212,27 @@ describe('burstFor', () => {
   });
 });
 
+describe('a Nova', () => {
+  const NOVA: SimEvent = { type: 'blast', kind: 'nova', x: 640, y: 360, radius: 520 };
+
+  it('flashes harder than a Field Bomb and shakes the field', () => {
+    const nova = burstFor(NOVA, ION_REACH);
+    const bomb = burstFor({ type: 'blast', kind: 'fieldBomb', x: 640, y: 360, radius: 220 }, ION_REACH);
+    expect(nova?.flash).toBeGreaterThan(bomb?.flash ?? 0);
+    expect(nova?.shake).toBeGreaterThan(0);
+  });
+
+  it('flashes the field, and under reduced motion does not', () => {
+    const fx = createEffects(new ParticlePool(200), 1);
+    fx.handle([NOVA], makeWorld());
+    expect(fx.flash).toBeGreaterThan(0);
+    const still = createEffects(new ParticlePool(200), 1);
+    still.reducedMotion = true;
+    still.handle([NOVA], makeWorld());
+    expect(still.flash).toBe(0);
+  });
+});
+
 describe('createEffects', () => {
   it('bursts in the new palette once setPalette changes it, keeping its settings', () => {
     const pool = new ParticlePool(200);

@@ -3,6 +3,7 @@ import type { GalaxyEvent } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { TIME_EPSILON } from '../math';
+import { rescale } from '../wrap';
 import type { HazardState } from './hazard';
 
 /** What the schedule keeps up to date on each hazard it runs: its stage and the seconds to its next change. */
@@ -82,5 +83,41 @@ export class HazardSchedule<S extends Scheduled> {
       for (const state of this.live) this.hooks.ended(state, out);
       this.live.length = 0;
     }
+  }
+}
+
+/**
+ * What every hazard type its schedule runs shares: its states are the schedule's live ones, a step notes the field and
+ * advances the schedule, a resize stretches each state's centre to the new field (`rescaleState`), and stopping ends
+ * the schedule.
+ */
+export abstract class ScheduledHazard<S extends Scheduled & HazardState & { x: number; y: number }> {
+  protected abstract readonly schedule: HazardSchedule<S>;
+  /** The field as of the last step or resize; null before the first. */
+  protected field: Field | null = null;
+
+  /** Its warning or active hazards; a live view, mutated by `step`. */
+  get states(): readonly HazardState[] {
+    return this.schedule.live;
+  }
+
+  step(elapsed: number, field: Field, out: SimEvent[]): void {
+    this.field = field;
+    this.schedule.step(elapsed, field, out);
+  }
+
+  resize(old: Field, field: Field): void {
+    this.field = field;
+    for (const state of this.schedule.live) this.rescaleState(state, old, field);
+  }
+
+  stop(): void {
+    this.schedule.stop();
+  }
+
+  /** Stretches `state`'s centre from `old` to `field`; a type with more points, or one held in place, says so here. */
+  protected rescaleState(state: S, old: Field, field: Field): void {
+    state.x = rescale(state.x, old.width, field.width);
+    state.y = rescale(state.y, old.height, field.height);
   }
 }

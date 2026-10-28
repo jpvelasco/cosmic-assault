@@ -1,5 +1,4 @@
-import { galaxyIdOf } from '../content/galaxies';
-import type { GalaxyId } from '../content/types';
+import { galaxyIdOf, type GalaxyId } from '../content/types';
 import { forfeitRankRun, isUnlocked } from '../meta/progress';
 import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
 import type { SimEvent } from '../sim/events';

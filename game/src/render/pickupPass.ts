@@ -4,7 +4,7 @@ import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
 import { TAU } from '../sim/math';
 import type { Pickup } from '../sim/pickups/pickups';
-import { mix, rgba } from './color';
+import { BLACK, mix, rgba, WHITE } from './color';
 import { interpolatePose } from './interp';
 import type { Palette } from './palette';
 import { drawGlyph, expiryAlpha, PICKUP_COLORS, SHIELD_RING_RADIUS } from './pickupArt';
@@ -27,8 +27,6 @@ export interface PickupPass {
   reset(): void;
 }
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** The capsule's half width and half height in field units: a little beyond the pickup's reach of 14, so it reads at a glance. */
 const CAPSULE_HALF_W = 19;
 const CAPSULE_HALF_H = 12.5;

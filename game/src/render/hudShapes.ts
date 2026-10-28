@@ -1,4 +1,4 @@
-import { rgba } from './color';
+import { rgba, WHITE } from './color';
 
 /** A pill's box in CSS px from the viewport's top left. */
 export interface HudRect {
@@ -8,7 +8,6 @@ export interface HudRect {
   height: number;
 }
 
-export const WHITE = '#ffffff';
 /** Room inside a pill either side of its text, in CSS px at scale 1. */
 export const PILL_PAD = 12;
 export const BRIGHT_STROKE = rgba(WHITE, 0.45);

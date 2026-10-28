@@ -1,7 +1,7 @@
 import { showerSeconds } from './curves';
 import { BOSS_APPROACH_SECONDS, lullStart } from './pacingRules';
 import { newIn, poolFor } from './pickups';
-import type { BossId, Dimension, GalaxyDef, GalaxyEvent, GalaxyId, GalaxyIndex, KindRamp, MusicThemeId, PaletteId, ThreatKind } from './types';
+import { galaxyIdOf, type BossId, type Dimension, type GalaxyDef, type GalaxyEvent, type GalaxyId, type GalaxyIndex, type KindRamp, type MusicThemeId, type PaletteId, type ThreatKind } from './types';
 
 export const DIMENSIONS: Readonly<Record<Dimension, string>> = {
   1: 'The Drift',
@@ -33,28 +33,61 @@ const ROCKS: Ramps = {
   drone: ABSENT,
   gunship: ABSENT,
   mine: ABSENT,
+  phaser: ABSENT,
+  armoured: ABSENT,
 };
 const SPLITTERS: Ramps = { ...ROCKS, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.35 } };
 /** Ion Reach trades some of the large rocks, and their fragments, for drones that come more often galaxy by galaxy. */
 const SWARMS: Ramps = { ...SPLITTERS, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, drone: { from: 1, base: 0.15, step: 0.3, max: 0.45 } };
-/** Crimson Nebula keeps Ion Reach's table, and brings in gunships from its first galaxy and mines from its second. */
-const GUNSHIPS: Ramps = { ...SWARMS, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.3 }, mine: { from: 2, base: 0, step: 0.3, max: 0.18 } };
+/**
+ * Crimson Nebula keeps Ion Reach's table, and brings in gunships from its first galaxy and mines from its second, both
+ * climbing gently, so the Dimension's later galaxies are not much more crowded with foes than its first.
+ */
+const GUNSHIPS: Ramps = { ...SWARMS, gunship: { from: 2, base: 0.1, step: 0.1, max: 0.2 }, mine: { from: 2, base: 0, step: 0.15, max: 0.12 } };
+/**
+ * Void Rift keeps Crimson Nebula's foes at the maxima they reach there, and brings in phasers and armoured rocks from its
+ * first galaxy, each at its base there and climbing slowly from it.
+ */
+const VOID: Ramps = {
+  ...GUNSHIPS,
+  gunship: { from: 2, base: 0.1, step: 0.2, max: 0.2 },
+  mine: { from: 2, base: 0, step: 0.3, max: 0.12 },
+  phaser: { from: 3, base: 0.12, step: 0.05, max: 0.3 },
+  armoured: { from: 3, base: 0.1, step: 0.05, max: 0.28 },
+};
+/**
+ * Singularity brings every foe into the mix, each at a maximum of about a fifth to a quarter of the budget, the rocks
+ * and the foes it has in common with Void Rift kept as they are. The director's budget, not these maxima, sets how
+ * crowded the field gets.
+ */
+const SINGULARITY: Ramps = {
+  ...VOID,
+  splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.25 },
+  drone: { from: 1, base: 0.15, step: 0.3, max: 0.25 },
+  gunship: { from: 2, base: 0.1, step: 0.2, max: 0.25 },
+  mine: { from: 2, base: 0, step: 0.3, max: 0.2 },
+  phaser: { from: 3, base: 0.12, step: 0.1, max: 0.25 },
+  armoured: { from: 3, base: 0.1, step: 0.1, max: 0.25 },
+};
 /** A boss galaxy brings no large rocks and no foes but the boss's own, so its fight is not fought among fragments. */
 const BOSS_FIELD: Ramps = { ...ROCKS, large: ABSENT };
 
 /**
- * Splitters join from 1-3, drones from Ion Reach, which keeps the splitters, and gunships and mines from Crimson Nebula,
- * which keeps the rest; a boss galaxy has none. The Dimensions after it keep their rocks until their own foes are made.
+ * Splitters join from 1-3, drones from Ion Reach, which keeps the splitters, gunships and mines from Crimson Nebula,
+ * which keeps the rest, and phasers and armoured rocks from Void Rift, which Singularity keeps and mixes every foe into; a
+ * boss galaxy has none.
  */
 function rampsFor(dimension: Dimension, index: GalaxyIndex): Ramps {
   if (index === 6) return BOSS_FIELD;
   if (dimension === 1) return index >= 3 ? SPLITTERS : ROCKS;
   if (dimension === 2) return SWARMS;
-  return dimension === 3 ? GUNSHIPS : ROCKS;
+  if (dimension === 3) return GUNSHIPS;
+  if (dimension === 4) return VOID;
+  return SINGULARITY;
 }
 
-/** Each Dimension's boss; the M4 Sentinel holds the later ones until they get their own. */
-const BOSS_OF: Readonly<Record<Dimension, BossId>> = { 1: 'monolith', 2: 'hiveCarrier', 3: 'warden', 4: 'sentinel', 5: 'sentinel' };
+/** Each Dimension's boss. */
+const BOSS_OF: Readonly<Record<Dimension, BossId>> = { 1: 'monolith', 2: 'hiveCarrier', 3: 'warden', 4: 'leviathan', 5: 'eclipse' };
 
 /** When, as a share of the duration, a galaxy's showers fall: one, or two with the second at 60%. */
 const SHOWER_SHARES: Readonly<Record<1 | 2, readonly number[]>> = { 1: [0.45], 2: [0.3, 0.6] };
@@ -77,19 +110,26 @@ function showers(dimension: Dimension, index: GalaxyIndex, duration: number): Ga
 const eventsOf = (type: GalaxyEvent['type']) => (at: number, intensity: GalaxyEvent['intensity']): GalaxyEvent => ({ at, type, intensity });
 const well = eventsOf('gravityWell');
 const zone = eventsOf('dangerZone');
+const repulsion = eventsOf('repulsionField');
+const rift = eventsOf('warpRift');
+const hole = eventsOf('blackHole');
 
-/** Each Dimension's hazards by galaxy index: Ion Reach's gravity wells and Crimson Nebula's danger zones. Each ends before the lull. */
+/**
+ * Each Dimension's hazards by galaxy index: Ion Reach's gravity wells, Crimson Nebula's danger zones, Void Rift's
+ * repulsion fields and warp rifts, and Singularity's black hole with the rest. Each ends before the lull.
+ */
 const HAZARDS: Readonly<Partial<Record<Dimension, Readonly<Partial<Record<GalaxyIndex, readonly GalaxyEvent[]>>>>>> = {
   2: { 2: [well(25, 1)], 3: [well(25, 1)], 4: [well(46, 1)], 5: [well(46, 1)] },
   3: { 2: [zone(30, 1)], 3: [zone(30, 1), zone(70, 1)], 4: [zone(20, 1), zone(50, 2)], 5: [zone(20, 2), zone(50, 2)] },
+  4: { 2: [repulsion(25, 1)], 3: [rift(20, 1), repulsion(80, 1)], 4: [rift(20, 1), repulsion(56, 2)], 5: [rift(15, 2), repulsion(56, 2)] },
+  // Singularity's black hole opens at 12 s on every survival galaxy, warned from 9 s, and ends at 87, before the lull. Each
+  // other event starts 10 s or more after the one before it, and no more than two run at once, showers included: 5-4's
+  // repulsion field moves from 30 to 25 so it ends before the shower at 45 warns (from 42), and its zone from 95 to 100,
+  // 10 s after the shower at 90. 5-5's rift moves from 20 to 22 for the same 10 s.
+  5: { 1: [hole(12, 1)], 2: [hole(12, 1), zone(30, 1)], 3: [hole(12, 2), rift(25, 1), zone(100, 1)], 4: [hole(12, 2), repulsion(25, 1), zone(100, 1)], 5: [hole(12, 3), rift(22, 1), zone(60, 1)] },
 };
 
 const hazards = (dimension: Dimension, index: GalaxyIndex): readonly GalaxyEvent[] => HAZARDS[dimension]?.[index] ?? [];
-
-/** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
-export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
-  return `${String(dimension)}-${String(index)}` as GalaxyId;
-}
 
 function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
   const boss = index === 6;
@@ -103,7 +143,7 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     kinds: rampsFor(dimension, index),
     events: boss ? [] : [...showers(dimension, index, duration), ...hazards(dimension, index)].sort((a, b) => a.at - b.at),
     pickups: poolFor(dimension),
-    // A Dimension's breather teaches its new pickups (§6.1); D1 and D2 bring theirs in without one.
+    // A Dimension's breather (its first galaxy) features the pickups new to it; D1 and D2 bring theirs in without one.
     featured: index === 1 && dimension >= FIRST_FEATURING ? newIn(dimension) : [],
     boss: boss ? BOSS_OF[dimension] : null,
     ...LOOKS[dimension],

@@ -83,7 +83,25 @@ export type SimEvent =
   /** Force field `id` of `kind` (a gravity well or a repulsion field) will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
   | { type: 'wellWarning'; id: number; kind: ForceKind; x: number; y: number; at: number }
   | { type: 'wellStart'; id: number; kind: ForceKind }
-  | { type: 'wellEnd'; id: number; kind: ForceKind };
+  | { type: 'wellEnd'; id: number; kind: ForceKind }
+  /** A shot struck armoured foe `id` at (x, y) outside its soft arc: it is spent, with no harm. */
+  | { type: 'foeDeflected'; id: number; x: number; y: number }
+  /** Phaser `id` will blink from (x, y) to (toX, toY) once its warning runs out; nothing is there to strike until `phaserBlink`. */
+  | { type: 'phaserWarn'; id: number; x: number; y: number; toX: number; toY: number }
+  /** Phaser `id` has blinked to (x, y), where it is now. */
+  | { type: 'phaserBlink'; id: number; x: number; y: number }
+  /** Warp rift `id`'s mouths, at (x, y) and (toX, toY), are drawn as a warning from now: harmless until `riftOpen`. */
+  | { type: 'riftWarning'; id: number; x: number; y: number; toX: number; toY: number }
+  /** The black hole `id`, at (x, y), the field's centre, is drawn as a warning from now: harmless until `holeStart`. */
+  | { type: 'holeWarning'; id: number; x: number; y: number; at: number }
+  /** The black hole `id` is active from (x, y): it pulls, swallows what reaches its horizon and strikes the ship that touches it. */
+  | { type: 'holeStart'; id: number; x: number; y: number }
+  | { type: 'holeEnd'; id: number }
+  /** Warp rift `id` is open: a body reaching either mouth leaves by the other. */
+  | { type: 'riftOpen'; id: number; x: number; y: number; toX: number; toY: number }
+  | { type: 'riftClose'; id: number }
+  /** A body entered the mouth at (x, y) and left by the one at (toX, toY); `ship` is true for the ship, else a rock or foe. */
+  | { type: 'riftJump'; id: number; x: number; y: number; toX: number; toY: number; ship: boolean };
 
 /** A rock the warp cleared: destroyed for 0 points, which no kill scores. Its feedback is the warp's, not a kill's. */
 export function isWarpClear(event: SimEvent): boolean {

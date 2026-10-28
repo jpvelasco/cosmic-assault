@@ -1,15 +1,15 @@
 import { createView, type BotView } from '../../src/bot/view';
 import { BOLT } from '../../src/content/foes';
-import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, BossId } from '../../src/content/types';
-import type { AttackSpec, BossThreat, Point } from '../../src/sim/boss/behaviour';
+import type { Point } from '../../src/sim/math';
+import type { AttackSpec, BossThreat } from '../../src/sim/boss/behaviour';
 import { bossThreat } from '../../src/sim/boss/bossRules';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import type { Bolt } from '../../src/sim/foes/bolts';
 import { createRng } from '../../src/sim/rng';
 import { World, type AsteroidPlacement } from '../../src/sim/world';
 import { bossView } from './bossView';
-import { MUTED_KINDS } from './mute';
+import { calmGalaxy } from './mute';
 
 export const SCENE_FIELD = { width: 1280, height: 720 };
 /** Where a scene's ship sits, nose to the right. */
@@ -20,15 +20,12 @@ export const flyingBolt = (id: number, x: number, y: number, angle: number, from
   id, x, y, px: x, py: y, vx: Math.cos(angle) * BOLT.speed, vy: Math.sin(angle) * BOLT.speed, radius: BOLT.radius, age: 0, source: 'boss', owner: 0, fromAttack,
 });
 
-/** A tiny rock at rest at (x, y). */
-export const stillRock = (x: number, y: number): AsteroidPlacement => ({ x, y, size: 3, angle: 0, speedMultiplier: 0 });
-
 /**
  * A bot's view of a galaxy whose director spawns nothing: the ship at rest at `SCENE_SHIP`, already vulnerable, and only
  * `rocks` on the field. Its fields can be replaced to stage foes or a boss.
  */
 export function sceneView(rocks: readonly AsteroidPlacement[] = []): BotView {
-  const galaxy = { ...galaxyById('2-4'), kinds: MUTED_KINDS, events: [] };
+  const galaxy = calmGalaxy('2-4');
   const world = new World({ seed: 1, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialShip: { ...SCENE_SHIP, angle: 0 }, initialAsteroids: rocks });
   const view = createView(world);
   view.ship = { ...view.ship, invulnerable: false, invulnerableFor: 0 };
@@ -59,10 +56,10 @@ export interface Staged {
 
 /**
  * Puts a boss in the fight into `view`, standing still: its weak point at its core unless `target` says otherwise, and
- * winding up `windup`, with the threat its roster boss declares, if given.
+ * winding up `windup`, with the threat its roster boss declares, if given, aimed where the ship is.
  */
 export function stage(view: BotView, { id = 'monolith', at = { x: 640, y: 130 }, radius = 90, target = at, windup = null, threat: shown }: Staged): BotView {
   const threat = shown ?? (windup === null ? null : threatOf(windup, radius));
-  view.boss = bossView({ id, ...at, radius, hp: 60, maxHp: 60, phase: 3, windup, vulnerable: target !== null, target, threat });
+  view.boss = bossView({ id, ...at, radius, hp: 60, maxHp: 60, phase: 3, windup, vulnerable: target !== null, target, threat, aim: { x: view.ship.x, y: view.ship.y } });
   return view;
 }

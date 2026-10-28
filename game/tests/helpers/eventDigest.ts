@@ -17,7 +17,7 @@ const MAX_SECONDS = 240;
 const FIELD = { width: 1280, height: 720 };
 
 /**
- * Fields added to an event since M5 that label it without changing what happens: a well event's hazard `kind`, which
+ * Fields added to an event since the digests were recorded that label it without changing what happens: a well event's hazard `kind`, which
  * is always `'gravityWell'` in Dimensions 1–2, and a well warning's `id`, the id its `wellStart` already carries. The
  * digest leaves them out, so it pins what happens, not how the events are labelled.
  */
@@ -113,8 +113,8 @@ const PLAY_TIMEOUT_MS = 120_000;
 
 /**
  * Pins every D1–D2 run under `input` to the fixture, event for event, and hands the runs to `more` for that input's
- * coverage tests. Recording is a ruling's call, never a fix for a failing digest: run the file with
- * `RECORD_D1D2_DIGESTS='<ruling or commit>'` to rewrite `input`'s digests, leaving the other input's as they are.
+ * coverage tests. Recording is the owner's call, never a fix for a failing digest: run the file with
+ * `RECORD_D1D2_DIGESTS='<approval or commit>'` to rewrite `input`'s digests, leaving the other input's as they are.
  */
 export function describeDigests(input: DigestInput, more: (runs: () => Readonly<Record<string, DigestRun>>) => void = () => undefined): void {
   const fixture = JSON.parse(readFileSync(FIXTURE_URL, 'utf8')) as DigestFixture;
@@ -138,8 +138,8 @@ export function describeDigests(input: DigestInput, more: (runs: () => Readonly<
       expect(Object.keys(runs)).toEqual(keys);
     });
 
-    it.each(Object.keys(recorded))(`plays %s event for event as recorded at the M5 tip`, (key) => {
-      expect(runs[key]?.digest, `${input} ${key} moved: a change has altered D1–D2 play; find it, or get a ruling to re-record the digests`).toBe(recorded[key]);
+    it.each(Object.keys(recorded))(`plays %s event for event as recorded`, (key) => {
+      expect(runs[key]?.digest, `${input} ${key} moved: a change has altered D1–D2 play; find it, or get the owner's approval to re-record the digests`).toBe(recorded[key]);
     });
 
     more(() => runs);

@@ -1,5 +1,5 @@
-import { DIMENSION_NUMBERS, DIMENSIONS, GALAXY_INDEXES, galaxyIdOf } from '../content/galaxies';
-import type { Dimension, GalaxyIndex } from '../content/types';
+import { DIMENSION_NUMBERS, DIMENSIONS, GALAXY_INDEXES } from '../content/galaxies';
+import { galaxyIdOf, type Dimension, type GalaxyIndex } from '../content/types';
 import { dimensionStars, isUnlocked } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import { button, element, lockIcon, menuCard, spokenGalaxy, withTestId, type Act, type MenuCard } from './dom';

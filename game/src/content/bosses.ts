@@ -12,7 +12,7 @@ export interface BossDef {
   /** Seconds it rests between attacks in each phase, shrinking. */
   readonly rest: readonly [number, number, number];
   /**
-   * HP the core loses each time one of its parts breaks, shielded or not (M6-R9): it can move the boss to its next phase,
+   * HP the core loses each time one of its parts breaks, shielded or not: it can move the boss to its next phase,
    * but never kills it, which takes a blow on the core. None if absent.
    */
   readonly partBreakDamage?: number;
@@ -20,7 +20,7 @@ export interface BossDef {
 
 const HP_PER_DIMENSION = 6;
 
-/** The boss roster: the Monolith guards 1-★, the Hive Carrier 2-★ and the Warden 3-★, and M4's Sentinel stands in for the bosses still to come. */
+/** The boss roster: the Monolith guards 1-★, the Hive Carrier 2-★, the Warden 3-★, the Leviathan 4-★ and the Eclipse 5-★. */
 export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   monolith: {
     id: 'monolith',
@@ -42,19 +42,30 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   warden: {
     id: 'warden',
     name: 'Warden',
-    // `bossHp` adds two Dimensions' share in 3-★, the only galaxy it guards: 76.
-    hp: 64,
+    // `bossHp` adds two Dimensions' share in 3-★, the only galaxy it guards: 54.
+    hp: 42,
     radius: 48,
     phases: [['turretVolley', 'lockOn'], ['turretVolley', 'spin', 'lockOn'], ['ringPulse', 'turretVolley', 'spin', 'lockOn']],
     rest: [2.0, 1.5, 1.0],
   },
-  sentinel: {
-    id: 'sentinel',
-    name: 'Sentinel',
-    hp: 20,
+  leviathan: {
+    id: 'leviathan',
+    name: 'Leviathan',
+    // `bossHp` adds three Dimensions' share in 4-★, the only galaxy it guards: 40.
+    hp: 22,
+    radius: 34,
+    phases: [['spit', 'dive'], ['dive', 'spit', 'coil'], ['coil', 'dive', 'spit', 'dive']],
+    rest: [2.5, 1.95, 1.4],
+    partBreakDamage: 3,
+  },
+  eclipse: {
+    id: 'eclipse',
+    name: 'Eclipse',
+    // `bossHp` adds four Dimensions' share in 5-★, the only galaxy it guards: 80, twice the Leviathan's.
+    hp: 56,
     radius: 70,
-    phases: [['shardRing'], ['shardRing', 'lunge'], ['lunge', 'shardRing', 'shardRing']],
-    rest: [2.2, 1.6, 1.1],
+    phases: [['shardVolley', 'quake', 'pulse'], ['launch', 'turretVolley', 'shardVolley'], ['dive', 'turretVolley', 'launch', 'quake', 'pulse']],
+    rest: [1.8, 1.3, 0.9],
   },
 };
 

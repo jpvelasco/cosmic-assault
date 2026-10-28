@@ -51,11 +51,21 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
   showerStart: { type: 'showerStart' },
   warpOut: { type: 'warpOut' },
   combo: { type: 'combo', multiplier: 2 },
-  bossIntro: { type: 'bossIntro', id: 'sentinel' },
-  bossWindup: { type: 'bossWindup', attack: 'shardRing', x: 0, y: 0 },
+  bossIntro: { type: 'bossIntro', id: 'monolith' },
+  bossWindup: { type: 'bossWindup', attack: 'quake', x: 0, y: 0 },
   bossPhase: { type: 'bossPhase', phase: 2 },
-  bossDown: { type: 'bossDown', id: 'sentinel' },
+  bossDown: { type: 'bossDown', id: 'monolith' },
   bossDeflected: { type: 'bossDeflected', x: 0, y: 0 },
+  foeDeflected: { type: 'foeDeflected', id: 1, x: 0, y: 0 },
+  phaserWarn: { type: 'phaserWarn', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  holeWarning: { type: 'holeWarning', id: 1, x: 0, y: 0, at: 12 },
+  holeStart: { type: 'holeStart', id: 1, x: 0, y: 0 },
+  holeEnd: { type: 'holeEnd', id: 1 },
+  phaserBlink: { type: 'phaserBlink', id: 1, x: 0, y: 0 },
+  riftWarning: { type: 'riftWarning', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  riftOpen: { type: 'riftOpen', id: 1, x: 0, y: 0, toX: 1, toY: 1 },
+  riftClose: { type: 'riftClose', id: 1 },
+  riftJump: { type: 'riftJump', id: 1, x: 0, y: 0, toX: 1, toY: 1, ship: true },
   bossPartHit: { type: 'bossPartHit', part: 0, x: 0, y: 0, hp: 1 },
   bossPartBroken: { type: 'bossPartBroken', part: 0, x: 0, y: 0 },
   bossExposed: { type: 'bossExposed', x: 0, y: 0 },
@@ -66,7 +76,7 @@ const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroi
 
 /** The step a boss dies on: it goes down, the galaxy warps out (clearing the field for 0 points) and is cleared. */
 const BOSS_KILL_STEP: readonly SimEvent[] = [
-  { type: 'bossDown', id: 'sentinel' },
+  { type: 'bossDown', id: 'monolith' },
   { type: 'warpOut' },
   destroyed(2, 0),
   { type: 'galaxyCleared', score: 2250, deaths: 0, stars: 3, bonus: 750 },
@@ -103,6 +113,14 @@ describe('sfxFor', () => {
     expect(older).toEqual([]);
   });
 
+  it('gives the black hole a warning, an opening and a close of its own, and a hum while it pulls', () => {
+    expect(nameOf({ type: 'holeWarning', id: 1, x: 0, y: 0, at: 12 })).toBe('holeWarn');
+    expect(nameOf({ type: 'holeStart', id: 1, x: 0, y: 0 })).toBe('holeOpen');
+    expect(nameOf({ type: 'holeEnd', id: 1 })).toBe('holeClose');
+    expect(humFor({ type: 'holeStart', id: 1, x: 0, y: 0 })).toEqual({ hum: 'hole', on: true });
+    expect(humFor({ type: 'holeEnd', id: 1 })).toEqual({ hum: 'hole', on: false });
+  });
+
   it('gives every pickup, foe and well event a synthesized voice of its own, shared with no other event', () => {
     const names = Object.values(CONTENT_EVENTS).map(nameOf);
     for (const name of names) expect(SFX_NAMES).toContain(name);
@@ -126,7 +144,7 @@ describe('sfxFor', () => {
   });
 
   it('caps the swarm buzz, deflections and boss bolts at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2, bossBolt: 1 });
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
@@ -140,10 +158,23 @@ describe('sfxFor', () => {
     expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe('wellClose');
   });
 
-  it('keeps a repulsion field silent until it has sounds of its own: it never borrows the well\'s', () => {
-    expect(sfxFor({ type: 'wellWarning', id: 1, kind: 'repulsionField', x: 0, y: 0, at: 30 })).toBeNull();
-    expect(sfxFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
-    expect(sfxFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
+  it('gives a repulsion field sounds of its own: a warning, an opening and a close, and no hum (the well\'s hum is never borrowed)', () => {
+    expect(nameOf({ type: 'wellWarning', id: 1, kind: 'repulsionField', x: 0, y: 0, at: 30 })).toBe('repulseWarn');
+    expect(nameOf({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBe('repulseOpen');
+    expect(nameOf({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBe('repulseClose');
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
+  });
+
+  it('gives a phaser its warning and blink, a foe\'s deflected shot the deflect tick, and a warp rift its warning, opening, passage and close; a rock or foe through a rift is silent', () => {
+    expect(nameOf({ type: 'phaserWarn', id: 1, x: 0, y: 0, toX: 1, toY: 1 })).toBe('phaserWarn');
+    expect(nameOf({ type: 'phaserBlink', id: 1, x: 0, y: 0 })).toBe('phaserBlink');
+    expect(nameOf({ type: 'foeDeflected', id: 1, x: 0, y: 0 })).toBe('armourDeflect');
+    expect(nameOf({ type: 'riftWarning', id: 1, x: 0, y: 0, toX: 1, toY: 1 })).toBe('riftWarn');
+    expect(nameOf({ type: 'riftOpen', id: 1, x: 0, y: 0, toX: 1, toY: 1 })).toBe('riftOpen');
+    expect(nameOf({ type: 'riftJump', id: 1, x: 0, y: 0, toX: 1, toY: 1, ship: true })).toBe('riftJump');
+    expect(nameOf({ type: 'riftJump', id: 1, x: 0, y: 0, toX: 1, toY: 1, ship: false })).toBeNull();
+    expect(nameOf({ type: 'riftClose', id: 1 })).toBe('riftClose');
   });
 
   it('gives the pickups a drop, a collect, an expiry, an effect running out and the Shield breaking', () => {
@@ -161,8 +192,9 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'combo', multiplier: 1 })).toBeNull();
   });
 
-  it('keeps a blast silent until it has a sound of its own: what it destroys still booms', () => {
-    expect(nameOf({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBeNull();
+  it('gives a blast a sound of its own, a large boom under a crackle, for a Field Bomb and a Nova alike', () => {
+    expect(nameOf({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBe('blast');
+    expect(nameOf({ type: 'blast', kind: 'fieldBomb', x: 0, y: 0, radius: 220 })).toBe('blast');
   });
 
   it('ticks as a gunship winds up, zaps as a foe fires a bolt, chirps as a mine arms, booms as it blasts, and stings as a zone warns', () => {
@@ -176,10 +208,6 @@ describe('sfxFor', () => {
     // A zone's start and end are heard as its hum: see humFor.
     expect(sfxFor({ type: 'zoneStart', id: 1 })).toBeNull();
     expect(sfxFor({ type: 'zoneEnd', id: 1 })).toBeNull();
-  });
-
-  it('caps the bolt zap at two a frame, as gunships fire together', () => {
-    expect(PER_FRAME_CAPS.bolt).toBe(2);
   });
 
   it('gives each source of bolt its own voice: a boss\'s its quieter zap, a foe\'s the zap', () => {
@@ -254,7 +282,7 @@ describe('humFor', () => {
 
   it('leaves it be for every other event', () => {
     for (const event of [...Object.values(GALAXY_EVENTS), ...Object.values(CONTENT_EVENTS)]) {
-      if (['wellStart', 'wellEnd', 'warpOut', 'galaxyStart'].includes(event.type)) continue;
+      if (['wellStart', 'wellEnd', 'holeStart', 'holeEnd', 'warpOut', 'galaxyStart'].includes(event.type)) continue;
       expect(humFor(event), event.type).toBeNull();
     }
   });

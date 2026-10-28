@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
 import { BossRunner, DYING_SECONDS } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart, BossView } from '../../src/sim/boss/behaviour';
-import { SENTINEL } from '../../src/sim/boss/sentinel';
 import { BLAST, STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { TAU } from '../../src/sim/math';
@@ -16,21 +15,14 @@ import { comboMultiplier } from '../../src/sim/scoring';
 import { createShip } from '../../src/sim/ship';
 import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { BOSS_FIELD, breakPart, FIXTURE, FIXTURE_DEF, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType, bossStepper, bossSetup, throughIntro } from '../helpers/bossArena';
+import { calmGalaxy } from '../helpers/mute';
 
-const DEF: BossDef = BOSSES.sentinel;
-const INTRO = 2;
+const DEF: BossDef = FIXTURE_DEF;
 const PARTS = 4;
 /** How far the probe's parts sit from the core's centre. */
 const PART_REACH = 100;
 const PART_RADIUS = 12;
-
-const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
-  r.step(dt, arena);
-};
-
-const livePartsOf = (boss: Readonly<BossView>): number => boss.parts.filter((p) => p.hp > 0).length;
 
 interface Probe extends BossBehaviour {
   /** Every dt the step hook saw, with the boss's state at the time. */
@@ -54,7 +46,7 @@ function probe(shove = 0): Probe {
   return {
     driftSpeed: 0,
     // Every attack any boss names, so the probe can stand in for any of them.
-    attacks: { shardRing: spec, lunge: spec, shardVolley: spec, quake: spec, pulse: spec },
+    attacks: { quake: spec, dive: spec, shardVolley: spec, pulse: spec },
     parts,
     reach: PART_REACH + PART_RADIUS,
     step: (ctx) => {
@@ -64,25 +56,19 @@ function probe(shove = 0): Probe {
         part.y = ctx.boss.y + Math.sin((i / PARTS) * TAU) * PART_REACH;
       });
     },
-    vulnerable: (boss) => livePartsOf(boss) <= 1,
+    vulnerable: (boss) => liveParts(boss).length <= 1,
     seen,
   };
 }
 
 function runnerOf(behaviour: BossBehaviour, maxHp = 30): BossRunner {
-  return new BossRunner(DEF, behaviour, { maxHp, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD });
+  return new BossRunner(DEF, behaviour, bossSetup(maxHp));
 }
 
 function fighting(behaviour: BossBehaviour = probe(), arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
   const r = runnerOf(behaviour);
-  runFor(stepper(r), arena, INTRO + 0.05);
-  expect(r.state).toBe('fighting');
+  throughIntro(r, arena);
   return { r, arena };
-}
-
-/** Breaks part `index` with as many 1-damage hits as it takes. */
-function breakPart(r: BossRunner, index: number): void {
-  while ((r.view.parts[index]?.hp ?? 0) > 0) r.hitPart(index, 1);
 }
 
 describe('a boss with parts', () => {
@@ -91,16 +77,16 @@ describe('a boss with parts', () => {
     const r = runnerOf(behaviour);
     expect(r.view.parts).toBe(behaviour.parts);
     const arena = stubArena();
-    runFor(stepper(r), arena, 0.5);
+    runFor(bossStepper(r), arena, 0.5);
     const part = r.view.parts[0] as BossPart;
     part.x += 7;
-    runFor(stepper(r), arena, STEP_SECONDS);
+    runFor(bossStepper(r), arena, STEP_SECONDS);
     // The step remembers where the part was (moved by 7), then the behaviour puts it back.
     expect(part.px).toBeCloseTo(part.x + 7, 9);
   });
 
   it('has none for a boss whose behaviour has none', () => {
-    expect(runnerOf(SENTINEL).view.parts).toEqual([]);
+    expect(runnerOf(FIXTURE).view.parts).toEqual([]);
   });
 
   it('finds the live part a circle overlaps, and none once it breaks', () => {
@@ -118,7 +104,7 @@ describe('a boss with parts', () => {
 
   it('cannot have its parts hurt in its intro or dying', () => {
     const r = runnerOf(probe());
-    runFor(stepper(r), stubArena(), 0.5);
+    runFor(bossStepper(r), stubArena(), 0.5);
     expect(r.hitPart(0, 1)).toBe('blocked');
     expect(r.view.parts[0]?.hp).toBe(2);
   });
@@ -135,15 +121,16 @@ describe('a boss with parts', () => {
     const behaviour = probe();
     const r = runnerOf(behaviour, 1);
     const arena = stubArena();
-    runFor(stepper(r), arena, INTRO + 0.05);
+    throughIntro(r, arena);
+    const introSteps = behaviour.seen.length;
     for (let i = 0; i < PARTS - 1; i++) breakPart(r, i);
     expect(r.hit(1)).toBe('killed');
-    runFor(stepper(r), arena, 3);
+    runFor(bossStepper(r), arena, 3);
     const states = new Set(behaviour.seen.map(([, state]) => state));
     expect(states).toEqual(new Set(['intro', 'fighting', 'dying']));
     for (const [dt] of behaviour.seen) expect(dt).toBe(STEP_SECONDS);
     // The step it goes down on runs none.
-    expect(behaviour.seen.length).toBe(Math.round((INTRO + 0.05 + DYING_SECONDS) / STEP_SECONDS) - 1);
+    expect(behaviour.seen.length).toBe(introSteps + Math.round(DYING_SECONDS / STEP_SECONDS) - 1);
   });
 
   it('stretches its parts to a resized field', () => {
@@ -160,7 +147,7 @@ describe('a boss with parts', () => {
     const drifting: BossBehaviour = { ...probe(), driftSpeed: 400 };
     const { r, arena } = fighting(drifting);
     const reach = PART_REACH + PART_RADIUS;
-    runFor(stepper(r), arena, 20, () => {
+    runFor(bossStepper(r), arena, 20, () => {
       expect(r.view.x).toBeGreaterThanOrEqual(reach - 1e-6);
       expect(r.view.x).toBeLessThanOrEqual(BOSS_FIELD.width - reach + 1e-6);
       expect(r.view.y).toBeGreaterThanOrEqual(reach - 1e-6);
@@ -189,17 +176,17 @@ describe('a boss whose core is only sometimes vulnerable', () => {
     const behaviour = probe();
     const { r, arena } = fighting(behaviour);
     for (let i = 0; i < PARTS - 1; i++) breakPart(r, i);
-    const exposed = runFor(stepper(r), arena, 0.5);
+    const exposed = runFor(bossStepper(r), arena, 0.5);
     expect(timedOfType(exposed, 'bossExposed').map((l) => l.event)).toEqual([{ type: 'bossExposed', x: r.view.x, y: r.view.y }]);
     (behaviour.parts?.[0] as BossPart).hp = 2;
-    const shielded = runFor(stepper(r), arena, 0.5);
+    const shielded = runFor(bossStepper(r), arena, 0.5);
     expect(timedOfType(shielded, 'bossShielded')).toHaveLength(1);
     expect(timedOfType(shielded, 'bossExposed')).toHaveLength(0);
   });
 
   it('says nothing of a boss that is always vulnerable', () => {
-    const r = runnerOf(SENTINEL);
-    const log = runFor(stepper(r), stubArena(), 12);
+    const r = runnerOf(FIXTURE);
+    const log = runFor(bossStepper(r), stubArena(), 12);
     expect(r.view.vulnerable).toBe(true);
     expect(log.filter((l) => l.event.type === 'bossExposed' || l.event.type === 'bossShielded')).toEqual([]);
   });
@@ -207,9 +194,9 @@ describe('a boss whose core is only sometimes vulnerable', () => {
   it('points a shot at the core when it can be hurt, else at a live part, and nowhere outside the fight', () => {
     const r = runnerOf(probe());
     const arena = stubArena();
-    runFor(stepper(r), arena, 0.5);
+    runFor(bossStepper(r), arena, 0.5);
     expect(bossTarget(r.view)).toBeNull();
-    runFor(stepper(r), arena, INTRO);
+    runFor(bossStepper(r), arena, BOSS_INTRO_SECONDS);
     expect(bossTarget(r.view)).toBe(r.view.parts[0]);
     breakPart(r, 0);
     expect(bossTarget(r.view)).toBe(r.view.parts[1]);
@@ -223,18 +210,18 @@ describe('a boss attack under way', () => {
   it('is on the view while it runs, and only then', () => {
     const { r, arena } = fighting();
     const seen: (string | null)[] = [];
-    runFor(stepper(r), arena, 8, () => {
+    runFor(bossStepper(r), arena, 8, () => {
       seen.push(r.view.active);
       if (r.view.active !== null) expect(r.view.windup).toBeNull();
     });
-    expect(new Set(seen)).toEqual(new Set([null, 'shardRing']));
+    expect(new Set(seen)).toEqual(new Set([null, 'quake']));
   });
 
   it('shoves the ship on the next hazard path after the attack asks, never past the speed cap', () => {
     const { r, arena } = fighting(probe(5000));
     const ship = createShip(BOSS_FIELD.width / 2, 600);
     let shoved = 0;
-    runFor(stepper(r), arena, 6, () => {
+    runFor(bossStepper(r), arena, 6, () => {
       const before = ship.vx;
       r.shove(ship);
       if (ship.vx !== before) shoved++;
@@ -245,8 +232,8 @@ describe('a boss attack under way', () => {
   });
 
   it('refuses a behaviour that lacks an attack its definition names, saying which', () => {
-    const lacking: BossBehaviour = { driftSpeed: 0, attacks: { shardRing: SENTINEL.attacks.shardRing } };
-    expect(() => runnerOf(lacking)).toThrow(/lunge/);
+    const lacking: BossBehaviour = { driftSpeed: 0, attacks: { quake: FIXTURE.attacks.quake } };
+    expect(() => runnerOf(lacking)).toThrow(/dive/);
   });
 });
 
@@ -256,7 +243,7 @@ describe('GalaxyRun with a boss that has parts', () => {
 
   function probeRun(shove = 0): { arena: StubArena; run: GalaxyRun } {
     const arena = stubArena();
-    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
+    const galaxy = calmGalaxy('1-6');
     const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, probes(shove));
     return { arena, run };
   }
@@ -423,7 +410,7 @@ describe('GalaxyRun with a boss that has parts', () => {
 
 describe('a World with the Monolith', () => {
   it('breaks a 1 HP shard once when two shots reach it in the same step, the second going on', () => {
-    const world = new World({ seed: 4, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] }, mode: 'free' } });
+    const world = new World({ seed: 4, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('1-6'), mode: 'free' } });
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
     const boss = world.boss;
     const run = (world as unknown as { run: GalaxyRun }).run;

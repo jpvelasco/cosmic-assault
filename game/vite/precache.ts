@@ -17,6 +17,12 @@ export interface PublicFile {
   readonly source: string | Uint8Array;
 }
 
+/**
+ * Built files the worker leaves to the network: the 512 px icons, which the browser fetches once itself when it installs
+ * the app, so every visit's cache need not carry their bytes. The version still hashes them.
+ */
+export const NOT_PRECACHED: readonly string[] = ['icons/icon-512.png', 'icons/icon-maskable-512.png'];
+
 function contentHash(files: readonly PublicFile[]): string {
   const hash = createHash('sha256');
   for (const { fileName, source } of files) hash.update(fileName).update('\0').update(source).update('\0');
@@ -24,8 +30,9 @@ function contentHash(files: readonly PublicFile[]): string {
 }
 
 /**
- * Writes the precache list and version into the bundled worker: the list is every other built file plus `./` and
- * `index.html`, relative to the worker; the version is `sha` (the commit) or else a hash of those files' contents.
+ * Writes the precache list and version into the bundled worker: the list is every other built file but `NOT_PRECACHED`,
+ * plus `./` and `index.html`, relative to the worker; the version is `sha` (the commit) or else a hash of every built
+ * file's contents.
  */
 export function injectPrecache(
   bundle: Record<string, BundleEntry>,
@@ -44,7 +51,7 @@ export function injectPrecache(
   ]
     .map((file) => ({ ...file, fileName: file.fileName.replaceAll('\\', '/') }))
     .sort((a, b) => a.fileName.localeCompare(b.fileName));
-  const list = [...new Set(['./', 'index.html', ...files.map((file) => file.fileName)])].sort();
+  const list = [...new Set(['./', 'index.html', ...files.map((file) => file.fileName).filter((name) => !NOT_PRECACHED.includes(name))])].sort();
   const version = sha || contentHash(files);
   const literals = { __PRECACHE__: JSON.stringify(list), __VERSION__: JSON.stringify(version) };
   for (const [placeholder, literal] of Object.entries(literals)) {

@@ -1,6 +1,6 @@
 import { clamp } from '../content/curves';
-import { rgba } from './color';
-import { fillBar, PILL_PAD, WHITE, type HudRect } from './hudShapes';
+import { rgba, WHITE } from './color';
+import { fillBar, PILL_PAD, type HudRect } from './hudShapes';
 
 /** The boss bar's share of the viewport width, within its least and most width (CSS px at scale 1). */
 const BOSS_SHARE = 0.36;

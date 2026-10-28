@@ -2,7 +2,9 @@ import type { GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
+import type { Bolts } from '../foes/bolts';
 import type { Foe } from '../foes/foe';
+import type { FoeField } from '../foes/foeField';
 import type { Moving } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
@@ -20,11 +22,22 @@ export interface Circle {
   readonly r: number;
 }
 
+/** What a hazard may do to the galaxy's bolts: read them, and clear the ones a black hole's horizon reaches. */
+export type HazardBolts = Pick<Bolts, 'list' | 'clearWithin'>;
+
+/** What a hazard may do to the foes: read them, and destroy the ones a black hole's horizon swallows. */
+export type HazardFoes = Pick<FoeField, 'list' | 'swallow'>;
+
 /** What a hazard can act on: the ship and the World's own rock list, and the foes. */
 export interface Bodies {
   readonly ship: Ship;
   readonly rocks: Asteroid[];
-  readonly foes: readonly Foe[];
+  readonly foes: HazardFoes;
+  /**
+   * The galaxy's hostile bolts: a rift jump may leave the ship in one's path, which grants it a windup's grace, and a black
+   * hole's horizon clears the ones that reach it. Null where the galaxy has none (a bare field, a practice run).
+   */
+  readonly bolts: HazardBolts | null;
 }
 
 /** What every hazard shows the renderer, the HUD and the bots: where it is, and how long until it changes. */
@@ -41,7 +54,7 @@ interface HazardBase {
 
 /** A hazard round a point: a force field, a rift or a hole. */
 export interface PointHazardState extends HazardBase {
-  readonly type: Exclude<HazardType, 'dangerZone'>;
+  readonly type: Exclude<HazardType, 'dangerZone' | 'warpRift'>;
 }
 
 /** A danger zone: the `w` by `h` rectangle centred on (x, y), lethal to touch once active. */
@@ -51,7 +64,14 @@ export interface ZoneState extends HazardBase {
   readonly h: number;
 }
 
-export type HazardState = PointHazardState | ZoneState;
+/** A warp rift: a pair of mouths, the one at (x, y) and the one at (toX, toY), which bodies pass between once open. */
+export interface RiftState extends HazardBase {
+  readonly type: 'warpRift';
+  readonly toX: number;
+  readonly toY: number;
+}
+
+export type HazardState = PointHazardState | ZoneState | RiftState;
 
 /**
  * One type of hazard, running every event of that type in a galaxy. It is harmless while it warns. The optional
@@ -70,10 +90,14 @@ export interface Hazard {
   pull?(dt: number, bodies: Bodies): void;
   /** True when a ship of radius `r` at (x, y) touches a lethal part of it. */
   strikes?(x: number, y: number, r: number): boolean;
-  /** Moves or removes bodies once the pulls are applied. */
-  carry?(bodies: Bodies): void;
-  /** Where a respawning ship must come back while it is active, or null for the default. */
-  respawnPoint?(): Readonly<{ x: number; y: number }> | null;
+  /** True when a player shot of radius `r` at (x, y) is taken by the hazard (a black hole's horizon), and spent with nothing struck. */
+  swallows?(x: number, y: number, r: number): boolean;
+  /** Moves or removes bodies once the pulls are applied, pushing what it did into `out`. */
+  carry?(bodies: Bodies, out: SimEvent[]): void;
+  /** Where a respawning ship must come back while it is active, clear of it, of `foes` and of the other hazards, or null for the default. */
+  respawnPoint?(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null;
+  /** Where `respawnPoint` comes back in `field` with nothing in the way, whatever the foes, for placed hazards to keep out of; null when it has none. */
+  respawnSpot?(field: Field): Readonly<{ x: number; y: number }> | null;
   /** Stretches its places to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void;
   /** Ends every warning and hazard at once, without an event: the galaxy is over. */
@@ -88,6 +112,11 @@ export interface HazardSetup {
   readonly rng: Rng;
   /** Hands out an id for each hazard. */
   readonly nextId: () => number;
+  /**
+   * The hazards in play as of the last step, so a hazard can place itself clear of another (a rift clear of a black hole),
+   * or keep a respawn clear of them.
+   */
+  readonly inPlay: () => readonly Readonly<HazardState>[];
   /** The circles a placed hazard keeps out of, as they stand when it is placed. */
   readonly keepOuts: (field: Field) => readonly Circle[];
 }

@@ -1,11 +1,11 @@
 import { clamp } from '../content/curves';
-import type { Point } from './boss/behaviour';
 import { HOMING, PROJECTILE } from './config';
 import type { SimEvent } from './events';
 import type { Field } from './field';
 import { removeFlagged, resetFlags } from './flagged';
-import { turnBetween } from './math';
+import { type Point, turnBetween } from './math';
 import { wingmanShot } from './pickups/wingman';
+import { FOE_DEFLECTED } from './foes/foeField';
 import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
 import type { Ship, Shot } from './ship';
 import { wrapDelta } from './wrap';
@@ -26,9 +26,11 @@ export interface ShotTargets {
   foes(): readonly Readonly<Point & { readonly id: number; readonly hp: number }>[];
   /** Where a shot harms the boss now (`bossTarget`), or null. */
   aim(): Readonly<Point> | null;
+  /** True when a shot of `radius` at (x, y) is taken by the galaxy before it strikes anything: a black hole's horizon. */
+  swallows?(x: number, y: number, radius: number): boolean;
   /** A shot at (x, y) has reached the boss, core or part, if true: it is spent, however much it pierces. */
   hitBoss(x: number, y: number, radius: number): boolean;
-  /** The id of the foe a shot at (x, y) struck, never one in `struck`, or -1. */
+  /** The id of the foe a shot at (x, y) struck, never one in `struck`; -1 for none, or `FOE_DEFLECTED` when a foe's armour spent it. */
   hitFoe(x: number, y: number, radius: number, struck: readonly number[]): number;
   /** The id of the rock a shot at (x, y) broke, or -1. */
   hitRock(x: number, y: number, radius: number): number;
@@ -90,16 +92,21 @@ export class PlayerShots {
     const r = PROJECTILE.radius;
     for (let i = list.length - 1; i >= 0; i--) {
       const p = list[i] as Projectile;
-      if (targets.hitBoss(p.x, p.y, r)) {
+      // A shot the horizon swallows is spent before it strikes anything.
+      if (targets.swallows?.(p.x, p.y, r) === true || targets.hitBoss(p.x, p.y, r)) {
         spent[i] = true;
         continue;
       }
       let id = targets.hitFoe(p.x, p.y, r, p.struck);
+      if (id === FOE_DEFLECTED) {
+        spent[i] = true;
+        continue;
+      }
       if (id < 0) id = targets.hitRock(p.x, p.y, r);
       if (id < 0) continue;
       if (p.pierce > 0) {
         p.pierce--;
-        p.struck.push(id);
+        p.struck = [...p.struck, id];
       } else {
         spent[i] = true;
       }

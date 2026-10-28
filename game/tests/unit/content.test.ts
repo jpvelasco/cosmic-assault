@@ -1,18 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
-import { DIMENSIONS, GALAXIES, galaxyById, galaxyIdOf, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
+import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, INSTANT_PICKUPS, isTimed, PICKUP_IDS, PICKUPS, TIMED_PICKUPS } from '../../src/content/pickups';
 import { FOES, GUNSHIP, MINE } from '../../src/content/foes';
 import { DANGER_ZONE, HAZARD_RULES } from '../../src/content/hazards';
-import type { GalaxyDef, GalaxyId, HazardType, PickupId, ThreatKind } from '../../src/content/types';
+import { galaxyIdOf, type GalaxyDef, type GalaxyEvent, type GalaxyId, type HazardType, type PickupId, type ThreatKind } from '../../src/content/types';
 import { eventSeconds, kindProbability, showerSeconds } from '../../src/content/curves';
 import { lullStart, OPENING_SECONDS } from '../../src/content/pacingRules';
 import { STEP_SECONDS } from '../../src/sim/config';
-import { GalaxyDirector, REFERENCE_AREA } from '../../src/sim/galaxy/director';
+import { fieldBudget, GalaxyDirector, REFERENCE_AREA, THREAT_COST } from '../../src/sim/galaxy/director';
 import { createRng } from '../../src/sim/rng';
 import { phaseAt } from '../../src/sim/galaxy/pacing';
 import { SHOWER_WARNING_SECONDS } from '../../src/sim/galaxy/showers';
-import type { GalaxyEvent } from '../../src/content/types';
 
 /** Seconds `e` is warned before it starts. */
 const warning = (e: GalaxyEvent): number => (e.type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[e.type].telegraph);
@@ -75,10 +74,12 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(g.duration).toBe(20);
   });
 
-  it('keeps every event inside the window from 20 s in to 25 s before the end', () => {
+  it('keeps every event inside the window from the opening\'s end to 25 s before the end, a black hole excepted', () => {
     for (const g of GALAXIES)
       for (const e of g.events) {
-        expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(20);
+        // A black hole may start up to its warning's length before the opening ends (Singularity's starts at 12 s, warned from 9 s).
+        if (e.type === 'blackHole') expect(e.at + warning(e), `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
+        else expect(e.at, `${g.id} at ${String(e.at)}`).toBeGreaterThanOrEqual(OPENING_SECONDS);
         expect(e.at, `${g.id} at ${String(e.at)}`).toBeLessThanOrEqual(g.duration - 25);
       }
   });
@@ -125,7 +126,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('never overlaps two events of one type: each is warned only once the last has ended (Ruling R10), in all 30 galaxies', () => {
+  it('never overlaps two events of one type: each is warned only once the last has ended, in all 30 galaxies', () => {
     expect(GALAXIES).toHaveLength(30);
     for (const g of GALAXIES) expect(sameTypeOverlaps(g.events), g.id).toEqual([]);
   });
@@ -179,7 +180,7 @@ describe('the galaxy table', () => {
     for (const g of GALAXIES) expect(g.pickups, g.id).toEqual(pools[g.dimension]);
   });
 
-  it('enters the M6 pickups at their Dimensions with their weights', () => {
+  it('enters the Dimension 3–5 pickups at their Dimensions with their weights', () => {
     const rows = (['piercingBeam', 'homingMissiles', 'fieldBomb', 'wingman', 'nova', 'timeWarp'] as const).map((id) => [id, PICKUPS[id].from, PICKUPS[id].weight]);
     expect(rows).toEqual([
       ['piercingBeam', 3, 2],
@@ -243,7 +244,7 @@ describe('the galaxy table', () => {
       else expect(g.boss).toBeNull();
       if (g.boss !== null) expect(Object.keys(BOSSES)).toContain(g.boss);
     }
-    expect(BOSSES.sentinel.name).toBe('Sentinel');
+    expect(BOSSES.eclipse.name).toBe('Eclipse');
   });
 
   it('keeps every ramp a probability: 0 <= base <= max <= 1', () => {
@@ -258,7 +259,7 @@ describe('the galaxy table', () => {
       }
   });
 
-  it('shares five ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, and a boss\'s field', () => {
+  it('shares seven ramp tables instead of repeating one per galaxy: rocks, rocks and splitters, Ion Reach\'s swarms, Crimson Nebula\'s gunships and mines, Void Rift\'s phasers and armour, Singularity\'s every foe, and a boss\'s field', () => {
     const rocks = {
       large: { from: 0, base: 0.6, step: 0, max: 0.6 },
       medium: { from: 0, base: 0.3, step: 0.05, max: 0.5 },
@@ -267,36 +268,49 @@ describe('the galaxy table', () => {
     const none = { from: 0, base: 0, step: 0, max: 0 };
     const splitter = { from: 0.4, base: 0.15, step: 0.08, max: 0.35 };
     const drone = { from: 1, base: 0.15, step: 0.3, max: 0.45 };
-    const foesNone = { splitter: none, drone: none, gunship: none, mine: none };
-    const swarms = { ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone, gunship: none, mine: none };
+    const foesNone = { splitter: none, drone: none, gunship: none, mine: none, phaser: none, armoured: none };
+    const swarms = { ...rocks, large: { from: 0, base: 0.45, step: 0, max: 0.45 }, splitter, drone, gunship: none, mine: none, phaser: none, armoured: none };
     expect(galaxyById('1-1').kinds).toEqual({ ...rocks, ...foesNone });
     expect(galaxyById('1-3').kinds).toEqual({ ...rocks, ...foesNone, splitter });
     expect(galaxyById('2-1').kinds).toEqual(swarms);
-    expect(galaxyById('3-1').kinds).toEqual({ ...swarms, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.3 }, mine: { from: 2, base: 0, step: 0.3, max: 0.18 } });
+    expect(galaxyById('3-1').kinds).toEqual({ ...swarms, gunship: { from: 2, base: 0.1, step: 0.1, max: 0.2 }, mine: { from: 2, base: 0, step: 0.15, max: 0.12 } });
+    expect(galaxyById('4-1').kinds).toEqual({
+      ...swarms,
+      gunship: { from: 2, base: 0.1, step: 0.2, max: 0.2 },
+      mine: { from: 2, base: 0, step: 0.3, max: 0.12 },
+      phaser: { from: 3, base: 0.12, step: 0.05, max: 0.3 },
+      armoured: { from: 3, base: 0.1, step: 0.05, max: 0.28 },
+    });
     for (const id of ['1-6', '2-6', '3-6', '5-6'] as const) expect(galaxyById(id).kinds, id).toEqual({ ...rocks, large: none, ...foesNone });
-    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(5);
+    expect(galaxyById('5-1').kinds).toEqual({ ...swarms, splitter: { from: 0.4, base: 0.15, step: 0.08, max: 0.25 }, drone: { from: 1, base: 0.15, step: 0.3, max: 0.25 }, gunship: { from: 2, base: 0.1, step: 0.2, max: 0.25 }, mine: { from: 2, base: 0, step: 0.3, max: 0.2 }, phaser: { from: 3, base: 0.12, step: 0.1, max: 0.25 }, armoured: { from: 3, base: 0.1, step: 0.1, max: 0.25 } });
+    expect(new Set(GALAXIES.map((g) => g.kinds)).size).toBe(7);
   });
 
-  it('brings in splitters from 1-3, drones from Ion Reach and gunships and mines in Crimson Nebula, which keeps Ion Reach\'s table; none before that, and none in a boss galaxy', () => {
+  it('leaves room in every boss galaxy\'s approach for a medium rock at least, so no boss fights on a bare field', () => {
+    for (const g of GALAXIES.filter((x) => x.kind === 'boss')) expect(fieldBudget(g, 1, 1, REFERENCE_AREA), g.id).toBeGreaterThanOrEqual(THREAT_COST.medium);
+  });
+
+  it('brings in splitters from 1-3, drones from Ion Reach, gunships and mines in Crimson Nebula and phasers and armour in Void Rift, each keeping the table before it, and every foe in Singularity; none before that, and none in a boss galaxy', () => {
     for (const g of GALAXIES) {
       const survival = g.kind === 'survival';
       const has = (kind: ThreatKind): boolean => g.kinds[kind].max > 0;
-      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || g.dimension === 2 || g.dimension === 3));
-      expect(has('drone'), g.id).toBe(survival && (g.dimension === 2 || g.dimension === 3));
-      expect(has('gunship'), g.id).toBe(survival && g.dimension === 3);
-      expect(has('mine'), g.id).toBe(survival && g.dimension === 3);
+      expect(has('splitter'), g.id).toBe(survival && ((g.dimension === 1 && g.index >= 3) || (g.dimension >= 2 && g.dimension <= 5)));
+      expect(has('drone'), g.id).toBe(survival && g.dimension >= 2 && g.dimension <= 5);
+      expect(has('gunship'), g.id).toBe(survival && g.dimension >= 3 && g.dimension <= 5);
+      expect(has('mine'), g.id).toBe(survival && g.dimension >= 3 && g.dimension <= 5);
+      expect(has('phaser'), g.id).toBe(survival && g.dimension >= 4);
+      expect(has('armoured'), g.id).toBe(survival && g.dimension >= 4);
     }
   });
 
-  it('weighs gunships in at about 0.1 at 3-1, rising to 0.3 by 3-★, and mines in at about 0.06 at 3-2, none at 3-1, rising to 0.18', () => {
+  it('weighs gunships in at about 0.1 at 3-1, rising gently to 0.18 by 3-5, and mines in at about 0.03 at 3-2, none at 3-1, rising to 0.12', () => {
     const weight = (id: GalaxyId, kind: ThreatKind): number => kindProbability(galaxyById(id).kinds[kind], tierOf(galaxyById(id)));
     expect(weight('3-1', 'gunship')).toBeCloseTo(0.1, 10);
-    expect(kindProbability(galaxyById('3-5').kinds.gunship, tierOf(galaxyById('3-6')))).toBeCloseTo(0.3, 10);
+    expect(weight('3-5', 'gunship')).toBeCloseTo(0.18, 10);
     for (const [from, to] of [['3-1', '3-2'], ['3-2', '3-3'], ['3-3', '3-4'], ['3-4', '3-5']] as const) expect(weight(to, 'gunship')).toBeGreaterThan(weight(from, 'gunship'));
     expect(weight('3-1', 'mine')).toBe(0);
-    expect(weight('3-2', 'mine')).toBeCloseTo(0.06, 10);
-    expect(weight('3-4', 'mine')).toBeCloseTo(0.18, 10);
-    expect(weight('3-5', 'mine')).toBeCloseTo(0.18, 10);
+    expect(weight('3-2', 'mine')).toBeCloseTo(0.03, 10);
+    expect(weight('3-5', 'mine')).toBeCloseTo(0.12, 10);
     // Neither is offered in a galaxy's opening: both ramps start past tier 0.
     expect(openingOffers(galaxyById('3-3'))).toEqual(new Set(['large', 'medium']));
   });
@@ -331,14 +345,19 @@ describe('the galaxy table', () => {
     expect(MINE).toMatchObject({ armRadius: 110, fuse: 0.6, blastRadius: 80 });
   });
 
-  it('schedules Crimson Nebula\'s danger zones as the brief lays out, and no zone anywhere else', () => {
+  it('schedules Crimson Nebula\'s danger zones as the brief lays out, and Singularity\'s, and no zone anywhere else', () => {
     const zones = (id: GalaxyId): [number, number][] => galaxyById(id).events.filter((e) => e.type === 'dangerZone').map((e) => [e.at, e.intensity]);
     expect(zones('3-1')).toEqual([]);
     expect(zones('3-2')).toEqual([[30, 1]]);
     expect(zones('3-3')).toEqual([[30, 1], [70, 1]]);
     expect(zones('3-4')).toEqual([[20, 1], [50, 2]]);
     expect(zones('3-5')).toEqual([[20, 2], [50, 2]]);
-    for (const g of GALAXIES.filter((x) => x.dimension !== 3)) expect(zones(g.id), g.id).toEqual([]);
+    expect(zones('5-1')).toEqual([]);
+    expect(zones('5-2')).toEqual([[30, 1]]);
+    expect(zones('5-3')).toEqual([[100, 1]]);
+    expect(zones('5-4')).toEqual([[100, 1]]);
+    expect(zones('5-5')).toEqual([[60, 1]]);
+    for (const g of GALAXIES.filter((x) => x.dimension !== 3 && x.dimension !== 5)) expect(zones(g.id), g.id).toEqual([]);
     // An event shows one zone per intensity, at most two, each 120 to 220 units a side.
     for (const g of GALAXIES) for (const e of g.events) if (e.type === 'dangerZone') expect(e.intensity, g.id).toBeLessThanOrEqual(DANGER_ZONE.maxZones);
     expect(DANGER_ZONE).toMatchObject({ maxZones: 2, side: [120, 220] });

@@ -213,6 +213,22 @@ describe('createSpriteBaker', () => {
     expect(baker.ship(DRIFT)).not.toBe(ship);
   });
 
+  it('reports how many sprites it holds and how many it has evicted to stay within its capacity', () => {
+    const baker = createSpriteBaker(2);
+    expect(baker.cacheUse).toEqual({ size: 0, evictions: 0 });
+    baker.ship(DRIFT);
+    baker.shot(DRIFT);
+    expect(baker.cacheUse).toEqual({ size: 2, evictions: 0 });
+    baker.glow('#5b8cff', 24);
+    expect(baker.cacheUse).toEqual({ size: 2, evictions: 1 });
+  });
+
+  it('holds at least 256 sprites by default', () => {
+    const baker = createSpriteBaker();
+    for (let id = 1; id <= 256; id++) baker.asteroid(rock(id), DRIFT);
+    expect(baker.cacheUse).toEqual({ size: 256, evictions: 0 });
+  });
+
   it('returns the cached sprite for the same key, including snapped glow and flame sizes', () => {
     const baker = createSpriteBaker();
     expect(baker.ship(DRIFT)).toBe(baker.ship(DRIFT));

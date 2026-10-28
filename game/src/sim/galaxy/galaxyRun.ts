@@ -170,7 +170,7 @@ export class GalaxyRun implements Spawner {
    * and the bolts move, at the enemies' time scale.
    */
   moveOwn(dt: number, ship: Ship): void {
-    this.hazards.move(dt, ship, this.arena.asteroids, this.foes.list);
+    this.hazards.move(dt, ship, this.arena.asteroids, this.foes, this.arena.events, this.bolts);
     this.bosses.shove(ship);
     const enemyDt = dt * this.enemyTimeScale();
     this.foes.step(enemyDt);
@@ -181,7 +181,7 @@ export class GalaxyRun implements Spawner {
     return this.loadout.shotRules;
   }
 
-  /** Half while Time Warp runs (M6-R4): the rocks, the foes and the fighting boss run at it; the clock, the hazards, the pickups and the ship never do. */
+  /** Half while Time Warp runs: the rocks, the foes and the fighting boss run at it; the clock, the hazards, the pickups and the ship never do. */
   enemyTimeScale(): number {
     return this.loadout.timeScale;
   }
@@ -248,6 +248,11 @@ export class GalaxyRun implements Spawner {
   /** While a boss is on the field, a respawning ship comes back clear of its reach, not at the centre, where the boss may be; else where a hazard sends it, if one does. */
   respawnPoint(): Readonly<{ x: number; y: number }> | null {
     return this.bosses.respawnPoint() ?? this.hazards.respawnPoint();
+  }
+
+  /** True when a player shot at (x, y) reaches a hazard that takes it, such as a black hole's horizon: it is spent, and strikes nothing. */
+  swallows(x: number, y: number, radius: number): boolean {
+    return this.hazards.swallows(x, y, radius);
   }
 
   /** The Shield takes a hit meant for the ship, if it has one; true means the hit is absorbed: no life is lost. */

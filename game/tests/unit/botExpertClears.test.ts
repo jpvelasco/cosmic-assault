@@ -5,5 +5,5 @@ import { BOT_RUN_TIMEOUT_MS, BOT_SEEDS, botRuns, clears } from '../helpers/botRu
 describe('the expert bot', { timeout: BOT_RUN_TIMEOUT_MS }, () => {
   it('clears 1-1 on every seed', () => {
     expect(clears(botRuns('1-1', 'expert'))).toBe(BOT_SEEDS.length);
-  });
+  }, BOT_RUN_TIMEOUT_MS);
 });

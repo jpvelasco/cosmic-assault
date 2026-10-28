@@ -20,6 +20,12 @@ export const outAndBack = (t: number): number => (t < 0.5 ? smoothstep(t * 2) : 
 /** Absorbs float residue from summing dt steps, so a time boundary fires on the step it is reached. */
 export const TIME_EPSILON = 1e-9;
 
+/** A place in the field. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
 /** Anything with a velocity. */
 export interface Moving {
   vx: number;

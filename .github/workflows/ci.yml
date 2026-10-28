@@ -92,10 +92,10 @@ jobs:
           path: game/dist/
           if-no-files-found: error
 
-  # Report only: a frame-time reading under a 4x CPU slowdown. It is not a required check and
-  # deploy does not need it.
+  # Frame times under a 4x CPU slowdown, held to the ceilings in game/e2e/perfThresholds.ts. Deploy needs it, so a
+  # frame-time regression cannot ship, but it is not a required check: a pull request may merge before it passes.
   perf:
-    name: Performance report (non-blocking)
+    name: Performance (gates deploy)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -129,7 +129,7 @@ jobs:
       - name: Build for end-to-end tests
         run: npm run build:e2e
 
-      - name: Performance report
+      - name: Performance
         run: npm run test:perf
         env:
           CI: true
@@ -143,14 +143,18 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # Report only: the bots' many-seed boss kill rates and clear rates (game/tests/balance). It is
-  # not a required check and deploy does not need it.
-  balance:
-    name: Bot balance (non-blocking)
+  # Report only: the bots' many-seed boss kill rates and clear rates (game/tests/balance), one Dimension a job, each
+  # running its own d<N>-*.test.ts files. They are not required checks and deploy does not need them.
+  balance-dimension:
+    name: Bot balance, Dimension ${{ matrix.dimension }} (non-blocking)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        dimension: [1, 2, 3, 4, 5]
     defaults:
       run:
         working-directory: game
@@ -171,7 +175,22 @@ jobs:
         run: npm ci
 
       - name: Bot balance
-        run: npm run test:balance
+        run: npm run test:balance -- d${{ matrix.dimension }}-
+
+  # The one balance check the ruleset sees, however many shards there are: it passes only if every Dimension's did.
+  balance:
+    name: Bot balance (non-blocking)
+    needs: [balance-dimension]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Every Dimension passed
+        env:
+          SHARDS: ${{ needs.balance-dimension.result }}
+        run: test "$SHARDS" = success
 
   legacy:
     name: Legacy Playwright tests
@@ -222,7 +241,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    needs: [game, legacy]
+    needs: [game, legacy, perf]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10

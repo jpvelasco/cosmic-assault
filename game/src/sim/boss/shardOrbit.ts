@@ -1,5 +1,7 @@
-import { outAndBack, TAU } from '../math';
-import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView, Point } from './behaviour';
+import { clamp } from '../../content/curves';
+import { outAndBack, type Point, TAU } from '../math';
+import type { AttackContext, AttackSpec, BossPart, BossSetup, BossView } from './behaviour';
+import { clearSlot } from './attacks';
 import { bossHome } from './bossRules';
 
 /** A ring of shards orbiting a boss's core, as a boss's definition of it sets it up. */
@@ -20,6 +22,10 @@ export interface ShardOrbitOptions {
   readonly regrowCap: number;
   /** How its shard volley flies; the Monolith's if absent. */
   readonly volley?: VolleyShape;
+  /** Whether a shard's turning point is held inside the field, so a shard thrown past a wall stays where the ship can strike it. */
+  readonly keepInField?: boolean;
+  /** How far from the ship a regrowing shard's slot must lie, so a shard never grows in on it; any slot if absent. */
+  readonly growClearance?: number;
 }
 
 /** How a shard volley flies. */
@@ -61,6 +67,8 @@ export class ShardOrbit {
   private readonly lanes: number[];
   /** The shards the volley under way throws, left to right. */
   private readonly thrown: number[] = [];
+  /** Where a regrowing shard's slot is; one point, reused. */
+  private readonly slot: Point = { x: 0, y: 0 };
 
   /** How its volley flies. */
   private readonly shape: VolleyShape;
@@ -91,7 +99,9 @@ export class ShardOrbit {
 
   /** The shard volley, telegraphed for `windup` s: lanes as wide as the spread plus a shard either side of its line. */
   volley(windup: number): AttackSpec {
-    return { windup, active: this.shape.seconds, run: (ctx) => { this.throwVolley(ctx); }, threat: { kind: 'lane', reach: this.shape.spread + this.options.radius } };
+    // The outermost lane sits half the lanes' span from the aim, a shard's radius beyond it.
+    const outer = ((this.shape.shards - 1) / 2) * this.shape.spread + this.options.radius;
+    return { windup, active: this.shape.seconds, run: (ctx) => { this.throwVolley(ctx); }, threat: { kind: 'lane', reach: outer } };
   }
 
   /** Turns the orbit, grows a shard back on a bare core, and puts every shard where it is: on its orbit or in flight. */
@@ -99,7 +109,7 @@ export class ShardOrbit {
     const { boss, dt } = ctx;
     this.spin = (this.spin + this.options.speed * dt) % TAU;
     if (boss.active !== 'shardVolley') this.lanes.fill(Number.NaN);
-    this.regrow(boss, dt);
+    this.regrow(ctx);
     this.placeAll(boss.x, boss.y);
     for (let i = 0; i < this.parts.length; i++) {
       const lane = this.lanes[i] ?? Number.NaN;
@@ -116,29 +126,51 @@ export class ShardOrbit {
   /** Puts every shard on its orbit around (x, y). */
   private placeAll(x: number, y: number): void {
     const { parts } = this;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i] as BossPart;
-      const bearing = this.spin + (i / parts.length) * TAU;
-      part.x = x + Math.cos(bearing) * this.options.orbit;
-      part.y = y + Math.sin(bearing) * this.options.orbit;
-    }
+    for (let i = 0; i < parts.length; i++) this.slotOf(i, x, y, parts[i] as BossPart);
   }
 
-  /** While the core is bare, a broken shard grows back on its orbit every `regrowSeconds`; the wait starts afresh each time it is laid bare. */
-  private regrow(boss: Readonly<BossView>, dt: number): void {
+  /**
+   * While the core is bare, a broken shard grows back on its orbit every `regrowSeconds`; the wait starts afresh each time
+   * it is laid bare. The shard grows in on the first broken slot clear of the ship (`growClearance`), and while every
+   * broken slot lies too near it, the regrowth waits.
+   */
+  private regrow(ctx: AttackContext): void {
+    const { boss, dt } = ctx;
     if (boss.state !== 'fighting' || !boss.vulnerable) {
       this.regrowClock = 0;
       return;
     }
     this.regrowClock += dt;
     if (this.regrowClock < this.options.regrowSeconds || this.live() >= this.options.regrowCap) return;
+    const i = this.growable(ctx);
+    if (i < 0) return;
     this.regrowClock = 0;
-    const i = this.parts.findIndex((part) => part.hp <= 0);
-    const part = this.parts[i];
-    if (part === undefined) return;
+    const part = this.parts[i] as BossPart;
     part.hp = part.maxHp;
     // A shard broken in flight grows back on its orbit, out of the volley that threw it.
     this.lanes[i] = Number.NaN;
+  }
+
+  /** The first broken shard whose slot on the orbit is clear of the ship, or -1 with none. */
+  private growable(ctx: AttackContext): number {
+    const { boss, arena } = ctx;
+    const clearance = this.options.growClearance;
+    const field = arena.field();
+    for (let i = 0; i < this.parts.length; i++) {
+      if ((this.parts[i] as BossPart).hp > 0) continue;
+      if (clearance === undefined) return i;
+      this.slotOf(i, boss.x, boss.y, this.slot);
+      if (clearSlot(this.slot, field, arena.ship, clearance)) return i;
+    }
+    return -1;
+  }
+
+  /** Writes into `out` where shard `i`'s slot on the orbit about (x, y) is, and returns it. */
+  private slotOf(i: number, x: number, y: number, out: Point): Point {
+    const bearing = this.spin + (i / this.parts.length) * TAU;
+    out.x = x + Math.cos(bearing) * this.options.orbit;
+    out.y = y + Math.sin(bearing) * this.options.orbit;
+    return out;
   }
 
   /** Throws up to its volley's count of shards out past where the ship was and back, each in its own lane. */
@@ -151,7 +183,7 @@ export class ShardOrbit {
   private pickVolley(ctx: AttackContext): void {
     const { boss } = ctx;
     const { parts, thrown } = this;
-    const aim = Math.atan2(ctx.aimY - boss.y, ctx.aimX - boss.x);
+    const aim = Math.atan2(ctx.boss.aim.y - boss.y, ctx.boss.aim.x - boss.x);
     thrown.length = 0;
     for (let n = 0; n < this.shape.shards; n++) {
       let best = -1;
@@ -169,14 +201,19 @@ export class ShardOrbit {
 
   /** Moves a shard in flight from its orbit out to its lane's turning point and back, easing at both ends. */
   private fly(ctx: AttackContext, lane: number, part: BossPart): void {
-    const dx = ctx.aimX - ctx.fromX;
-    const dy = ctx.aimY - ctx.fromY;
+    const dx = ctx.boss.aim.x - ctx.fromX;
+    const dy = ctx.boss.aim.y - ctx.fromY;
     const length = Math.hypot(dx, dy);
     const ux = length > 0 ? dx / length : 0;
     const uy = length > 0 ? dy / length : 1;
     const { overshoot, spread } = this.shape;
-    const tx = ctx.aimX + ux * overshoot - uy * lane * spread;
-    const ty = ctx.aimY + uy * overshoot + ux * lane * spread;
+    let tx = ctx.boss.aim.x + ux * overshoot - uy * lane * spread;
+    let ty = ctx.boss.aim.y + uy * overshoot + ux * lane * spread;
+    if (this.options.keepInField === true) {
+      const field = ctx.arena.field();
+      tx = clamp(tx, part.radius, field.width - part.radius);
+      ty = clamp(ty, part.radius, field.height - part.radius);
+    }
     // Out to the turning point over the first half, then back to its orbit, wherever that has turned to.
     const s = outAndBack(this.progress);
     part.x += (tx - part.x) * s;

@@ -80,9 +80,25 @@ describe.each(ALL)('palette $id', (palette) => {
     expect(palette.shotCore).toBe('#ffffff');
   });
 
-  it.each(['shot', 'foe (accent[0])', 'hostile', 'rock lit side'])('keeps the %s at 3:1 or better against every sky stop', (name) => {
-    const color = { shot: palette.shot, 'foe (accent[0])': palette.accent[0], hostile: palette.hostile, 'rock lit side': palette.rock[0] }[name] as string;
+  it.each(['shot', 'foe (accent[0])', 'foe (accent[2])', 'hostile', 'rock lit side'])('keeps the %s at 3:1 or better against every sky stop', (name) => {
+    const color = { shot: palette.shot, 'foe (accent[0])': palette.accent[0], 'foe (accent[2])': palette.accent[2], hostile: palette.hostile, 'rock lit side': palette.rock[0] }[name] as string;
     for (const stop of palette.skyStops) expect(contrast(color, stop), `${name} on ${stop}`).toBeGreaterThanOrEqual(3);
+  });
+
+  // accent[1] paints the bodies of armoured rocks and mines, and the bursts of rifts and black holes. Ion Reach brings none
+  // of them (the next test holds it to that), so there it only tints the Hive Carrier's glow and the HUD's combo bar,
+  // which sit on their own backing, and its violet may fade into the cyan sky.
+  it.skipIf(palette.id === 'ionReach')('keeps the foe colour accent[1] at 3:1 or better against every sky stop', () => {
+    for (const stop of palette.skyStops) expect(contrast(palette.accent[1], stop), `accent[1] on ${stop}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('Ion Reach\'s accent[1]', () => {
+  it('paints no body on its sky: no Ion Reach galaxy brings armoured rocks, mines, warp rifts or a black hole', () => {
+    for (const g of GALAXIES.filter((x) => x.palette === 'ionReach')) {
+      expect([g.kinds.armoured.max, g.kinds.mine.max], g.id).toEqual([0, 0]);
+      expect(g.events.filter((e) => e.type === 'warpRift' || e.type === 'blackHole'), g.id).toEqual([]);
+    }
   });
 });
 

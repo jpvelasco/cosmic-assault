@@ -27,6 +27,22 @@ describe('SpriteCache', () => {
     expect(cache.size).toBe(2);
   });
 
+  it('counts the entries it evicts to stay within capacity, and only those: replacing, deleting and clearing are not evictions', () => {
+    const { cache } = makeCache(2);
+    expect(cache.evictions).toBe(0);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    cache.set('a', 3);
+    cache.delete('b');
+    cache.set('b', 4);
+    expect(cache.evictions).toBe(0);
+    cache.set('c', 5);
+    cache.set('d', 6);
+    expect(cache.evictions).toBe(2);
+    cache.clear();
+    expect(cache.evictions).toBe(2);
+  });
+
   it('get refreshes recency', () => {
     const { cache, evicted } = makeCache(2);
     cache.set('a', 1);

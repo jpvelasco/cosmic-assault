@@ -31,7 +31,7 @@ export interface AudioEngine {
   beginFrame(): void;
   /**
    * Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss), and
-   * starts or stops the hazards' hums (a gravity well's, a danger zone's), each on its own events. The hums play only in
+   * starts or stops the hazards' hums (a gravity well's, a danger zone's, a black hole's), each on its own events. The hums play only in
    * play: pause silences them until play resumes, and any other screen, a mute or dispose stops them. A galaxy's start
    * picks its theme, and a boss's intro its boss variant.
    */
@@ -115,9 +115,9 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   /** How many times each capped sound has started this frame. */
   const startedThisFrame: Partial<Record<SfxName, number>> = {};
   /** Which hums the hazards ask for, as the events last told; and whether the screen is play, where they are heard. */
-  const humWanted: Record<HumName, boolean> = { well: false, zone: false };
+  const humWanted: Record<HumName, boolean> = { well: false, zone: false, hole: false };
   let inPlay = false;
-  const hums: Record<HumName, Loop | null> = { well: null, zone: null };
+  const hums: Record<HumName, Loop | null> = { well: null, zone: null, hole: null };
   /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
   let screenBus: GainNode | null = null;
   /** The theme of the last galaxy started, and whether its boss has appeared; together they choose the music. */
@@ -390,7 +390,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     setMusicLevel,
     setScreen(screen) {
       inPlay = screen === 'playing';
-      // Pause keeps the well and the boss fight in mind for the resume; any other screen leaves the run, and both with it
+      // Pause keeps the hums and the boss fight in mind for the resume; any other screen leaves the run, and both with it
       // (the menus play the plain theme of the last Dimension).
       if (!inPlay && screen !== 'paused') {
         silenceHums();

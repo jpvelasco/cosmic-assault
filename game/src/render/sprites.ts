@@ -1,7 +1,7 @@
 import type { Asteroid } from '../sim/asteroid';
 import { TAU } from '../sim/math';
 import { FNV_OFFSET_BASIS, fnv1aStep, mulberry32 } from '../sim/rng';
-import { mix, rgba } from './color';
+import { mix, rgba, WHITE } from './color';
 import { get2dContext } from './context';
 import type { Palette } from './palette';
 import { SpriteCache } from './spriteCache';
@@ -61,6 +61,8 @@ export interface SpriteBaker {
    * anything that outlives a frame holds a key and looks it up each time it draws.
    */
   cached(key: string): Sprite | undefined;
+  /** The sprites cached now, and how many have been evicted to stay within the capacity since it was made. */
+  readonly cacheUse: Readonly<{ size: number; evictions: number }>;
   /** Frees every baked sprite, for example when a new run starts. */
   clear(): void;
 }
@@ -81,8 +83,11 @@ export interface Point {
   readonly y: number;
 }
 
-const WHITE = '#ffffff';
-const DEFAULT_CAPACITY = 256;
+/**
+ * The sprites the cache holds by default: max(256, 1.5 × the most the e2e sprite-cache spec has seen in use at once in
+ * the scenes it plays), so steady play evicts nothing it will draw again soon.
+ */
+export const SPRITE_CACHE_CAPACITY = 256;
 /** Device pixels of transparent margin around every bake, so antialiased edges never clip. */
 const EDGE_PAD_PX = 2;
 
@@ -195,6 +200,20 @@ export function tracePath(ctx: CanvasRenderingContext2D, points: readonly Point[
   ctx.beginPath();
   for (const p of points) ctx.lineTo(p.x, p.y);
   ctx.closePath();
+}
+
+const SOLID: readonly number[] = [];
+
+/** Dashes the lines `ctx` strokes with `dash`, marching along them at `speed` units a second `time` seconds in; still under reduced motion. */
+export function marchDash(ctx: CanvasRenderingContext2D, dash: readonly number[], time: number, speed: number, still: boolean): void {
+  ctx.setLineDash(dash);
+  ctx.lineDashOffset = still ? 0 : -time * speed;
+}
+
+/** Strokes solid lines again after `marchDash`. */
+export function solidLines(ctx: CanvasRenderingContext2D): void {
+  ctx.setLineDash(SOLID);
+  ctx.lineDashOffset = 0;
 }
 
 /** Strokes the current path in `color` at `width`. */
@@ -339,7 +358,8 @@ function flameGlowRadius(length: number): number {
   return Math.max(FLAME_HALF_WIDTH * 1.6, length * 0.55);
 }
 
-function maxDistance(points: readonly Point[]): number {
+/** How far the farthest of `points` lies from the origin. */
+export function maxDistance(points: readonly Point[]): number {
   return Math.max(...points.map((p) => Math.hypot(p.x, p.y)));
 }
 
@@ -364,7 +384,7 @@ interface RockKey {
  * Keys are `kind|palette or colour|size(|asteroid id|shape)`. They omit the scale and visual scale because
  * `setScale` clears the cache, so every live entry was baked at the current ones.
  */
-export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
+export function createSpriteBaker(capacity = SPRITE_CACHE_CAPACITY): SpriteBaker {
   /** Cache keys per asteroid id, so `forget` finds every entry; eviction keeps it in step. */
   const asteroidKeys = new Map<number, Set<string>>();
   const cache = new SpriteCache<CacheEntry>(capacity, (key, { sprite, asteroidId }) => {
@@ -558,6 +578,9 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
       return key === undefined ? undefined : bakeWhiteUnder(key, `white|${key}`);
     },
     cached: cachedSprite,
+    get cacheUse() {
+      return { size: cache.size, evictions: cache.evictions };
+    },
     clear() {
       cache.clear();
     },

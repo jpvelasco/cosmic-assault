@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, gameState, openGame, test } from './fixtures';
+import { expect, gameState, openGame, test, waitForBridge } from './fixtures';
 
 /** The title card's backdrop filter and the alpha of its fill colour. */
 function titleCardGlass(page: Page): Promise<{ blur: string; alpha: number }> {
@@ -39,7 +39,7 @@ test('a bad ?quality= warns and adapts instead', async ({ page }) => {
     if (message.type() === 'warning') warnings.push(message.text());
   });
   await page.goto('/?quality=ultra');
-  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+  await waitForBridge(page);
 
   expect((await gameState(page)).quality.index).toBe(0);
   expect(warnings.join('\n')).toContain('?quality=ultra');

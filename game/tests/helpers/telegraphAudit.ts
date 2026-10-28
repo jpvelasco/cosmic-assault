@@ -1,14 +1,48 @@
-import { GUNSHIP, MINE } from '../../src/content/foes';
-import { HAZARD_RULES } from '../../src/content/hazards';
+import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
+import { GUNSHIP, MINE, PHASER } from '../../src/content/foes';
+import { galaxyById } from '../../src/content/galaxies';
+import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { AttackId, FoeKind, HazardType } from '../../src/content/types';
+import type { AttackId, FoeKind, GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
+import type { Field } from '../../src/sim/field';
 import type { BossView } from '../../src/sim/boss/behaviour';
+import type { Timed } from './bossArena';
 
-/** An event, with the galaxy seconds of the step that made it. */
-export interface TimedEvent {
-  readonly elapsed: number;
-  readonly event: SimEvent;
+/** The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two; none for a shower. */
+export const hazardsShown = (e: GalaxyEvent): HazardType[] => {
+  if (e.type === 'meteorShower') return [];
+  const count = e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : e.type === 'warpRift' ? Math.min(e.intensity, WARP_RIFT.maxPairs) : 1;
+  return Array<HazardType>(count).fill(e.type);
+};
+
+/** A bot's run of a galaxy, every event timed, and the field it played on. */
+export interface PlayedRun {
+  readonly id: GalaxyId;
+  readonly seed: number;
+  readonly result: RunResult;
+  readonly log: readonly Timed[];
+  readonly field: Field;
+}
+
+/** Each of `ids` played by `profile` on each of `seeds`, every event logged with the galaxy seconds of its step. */
+export function playLogged(ids: readonly GalaxyId[], profile: BotProfile, seeds: readonly number[]): PlayedRun[] {
+  return ids.flatMap((id) =>
+    seeds.map((seed) => {
+      const log: Timed[] = [];
+      let field: Field = { width: 0, height: 0 };
+      const result = runGalaxy({
+        galaxy: galaxyById(id),
+        seed,
+        profile,
+        onStep: (world, _controls, events) => {
+          field = world.field;
+          for (const event of events) log.push({ event: { ...event }, at: world.elapsed });
+        },
+      });
+      return { id, seed, result, log, field };
+    }),
+  );
 }
 
 /** A hostile activation and the warning it was paired with by id. */
@@ -39,6 +73,8 @@ export const HAZARD_TELEGRAPHS: Readonly<Partial<Record<HazardType, HazardTelegr
   gravityWell: { warning: 'wellWarning', start: 'wellStart' },
   repulsionField: { warning: 'wellWarning', start: 'wellStart' },
   dangerZone: { warning: 'zoneWarning', start: 'zoneStart' },
+  warpRift: { warning: 'riftWarning', start: 'riftOpen' },
+  blackHole: { warning: 'holeWarning', start: 'holeStart' },
 };
 
 const AUDITED = Object.entries(HAZARD_TELEGRAPHS) as [HazardType, HazardTelegraph][];
@@ -63,10 +99,10 @@ const seconds = (value: number): string => `${String(Number(value.toFixed(3)))} 
  * minimum before it. Returns the pairs, in the order the activations came; throws, naming the hazard, when an
  * activation was never warned or was warned too late.
  */
-export function auditTelegraphs(log: readonly TimedEvent[]): TelegraphPair[] {
+export function auditTelegraphs(log: readonly Timed[]): TelegraphPair[] {
   const warned = new Map<string, number>();
   const pairs: TelegraphPair[] = [];
-  for (const { elapsed, event } of log) {
+  for (const { at: elapsed, event } of log) {
     const id = idOf(event);
     if (id !== null) warned.set(key(event.type, id), elapsed);
     const hostile = activation(event);
@@ -94,8 +130,6 @@ export type AttackHarm = 'rocks' | 'foes' | 'bolts' | 'active';
  * `MIN_WINDUP_SECONDS` after it. The record is total over `AttackId`, so a new attack cannot slip past the audit.
  */
 export const ATTACK_TELEGRAPHS: Readonly<Record<AttackId, AttackHarm>> = {
-  shardRing: 'rocks',
-  lunge: 'active',
   shardVolley: 'active',
   quake: 'rocks',
   pulse: 'active',
@@ -106,6 +140,9 @@ export const ATTACK_TELEGRAPHS: Readonly<Record<AttackId, AttackHarm>> = {
   lockOn: 'bolts',
   spin: 'active',
   ringPulse: 'active',
+  dive: 'active',
+  spit: 'bolts',
+  coil: 'active',
 };
 
 /**
@@ -118,6 +155,8 @@ export interface FightStep {
   readonly active: AttackId | null;
   readonly windup?: number | null;
   readonly made: Readonly<Record<Exclude<AttackHarm, 'active'>, number>>;
+  /** How far each of the boss's parts lies from its core after the step, NaN for a broken one; none if absent. */
+  readonly parts?: readonly number[];
 }
 
 /** What the recorder reads of a fight after each step: a World, or a runner on a stub arena. */
@@ -137,6 +176,8 @@ export interface AttackPair {
   readonly minimum: number;
   active: number | null;
   readonly harm: Set<AttackHarm>;
+  /** How far each part lay from the core as the windup began. */
+  readonly parts: readonly number[];
 }
 
 /** Records each step of a boss fight for `auditAttacks`: call it after every step. */
@@ -162,26 +203,38 @@ export function fightRecorder(): { readonly steps: FightStep[]; record(fight: Fi
         active: boss?.active ?? null,
         windup: boss?.threat?.windup ?? null,
         made: { rocks: fresh(fight.asteroids), foes: fresh(fight.foes), bolts: fresh(fight.bolts) },
+        parts: boss?.parts.map((part) => (part.hp > 0 ? Math.hypot(part.x - boss.x, part.y - boss.y) : Number.NaN)) ?? [],
       });
     },
   };
 }
 
+/** Throws, naming the part, if one of `parts` lies at a different distance from the core than it did as `pair` was warned. */
+function holdParts(pair: AttackPair, elapsed: number, parts: readonly number[]): void {
+  parts.forEach((distance, i) => {
+    const from = pair.parts[i] ?? Number.NaN;
+    if (Number.isNaN(distance) || Number.isNaN(from) || Math.abs(distance - from) <= SLACK) return;
+    throw new Error(`${pair.attack} warned at ${seconds(pair.warned)} moved part ${String(i)} from ${from.toFixed(1)} to ${distance.toFixed(1)} from the core at ${seconds(elapsed)}, before its windup ended: hold the parts still until the attack goes active`);
+  });
+}
+
 /**
  * Pairs each boss attack with its `bossWindup`, and checks it went active, and that every rock, foe and bolt it made
  * appeared, no sooner than its own declared windup after the warning (and never under `MIN_WINDUP_SECONDS`), and that
- * it made only the harm `harms` names for it. Returns the attacks in the order they were warned; throws, naming the
- * attack, at the first that breaks the rule.
+ * it made only the harm `harms` names for it, and that no live part moved toward or away from the core before it went
+ * active. Returns the attacks in the order they were warned; throws, naming the attack, at the first that breaks the
+ * rule.
  */
 export function auditAttacks(steps: readonly FightStep[], harms: Readonly<Record<AttackId, AttackHarm>> = ATTACK_TELEGRAPHS): AttackPair[] {
   const pairs: AttackPair[] = [];
   let current: AttackPair | null = null;
   const early = (pair: AttackPair, elapsed: number, what: string): Error =>
     new Error(`${pair.attack} warned at ${seconds(pair.warned)} ${what} at ${seconds(elapsed)}, under its ${seconds(pair.minimum)} windup: lengthen its windup, or make nothing before it ends`);
-  for (const { elapsed, events, active, windup, made } of steps) {
+  for (const { elapsed, events, active, windup, made, parts = [] } of steps) {
+    if (current !== null && current.active === null && active !== current.attack) holdParts(current, elapsed, parts);
     for (const event of events) {
       if (event.type !== 'bossWindup') continue;
-      current = { attack: event.attack, warned: elapsed, minimum: Math.max(MIN_WINDUP_SECONDS, windup ?? 0), active: null, harm: new Set() };
+      current = { attack: event.attack, warned: elapsed, minimum: Math.max(MIN_WINDUP_SECONDS, windup ?? 0), active: null, harm: new Set(), parts };
       pairs.push(current);
     }
     if (current !== null && active === current.attack && current.active === null) {
@@ -217,6 +270,8 @@ export const FOE_TELEGRAPHS: Readonly<Record<FoeKind, FoeTelegraph | null>> = {
   drone: null,
   gunship: { warning: 'foeWindup', harm: 'boltFired', minimum: Math.max(MIN_WINDUP_SECONDS, GUNSHIP.windup) },
   mine: { warning: 'mineArmed', harm: 'mineBlast', minimum: Math.max(MIN_WINDUP_SECONDS, MINE.fuse) },
+  phaser: { warning: 'phaserWarn', harm: 'phaserBlink', minimum: Math.max(MIN_WINDUP_SECONDS, PHASER.warn) },
+  armoured: null,
 };
 
 /** A foe's harm and the warning it was paired with by the foe's id. */
@@ -232,6 +287,7 @@ export interface FoeAttackPair {
 function foeHarm(event: SimEvent): { readonly kind: FoeKind; readonly foe: number } | null {
   if (event.type === 'boltFired') return event.source === 'boss' ? null : { kind: event.source, foe: event.owner };
   if (event.type === 'mineBlast') return { kind: 'mine', foe: event.id };
+  if (event.type === 'phaserBlink') return { kind: 'phaser', foe: event.id };
   return null;
 }
 
@@ -240,10 +296,10 @@ function foeHarm(event: SimEvent): { readonly kind: FoeKind; readonly foe: numbe
  * the warning ran at least the attack's minimum before it. Returns the pairs in the order the harms came; throws,
  * naming the foe, at a harm never warned, warned too late, or by a kind `FOE_TELEGRAPHS` gives none.
  */
-export function auditFoeAttacks(log: readonly TimedEvent[]): FoeAttackPair[] {
+export function auditFoeAttacks(log: readonly Timed[]): FoeAttackPair[] {
   const warned = new Map<string, number>();
   const pairs: FoeAttackPair[] = [];
-  for (const { elapsed, event } of log) {
+  for (const { at: elapsed, event } of log) {
     for (const [kind, telegraph] of Object.entries(FOE_TELEGRAPHS) as [FoeKind, FoeTelegraph | null][]) {
       if (telegraph?.warning === event.type && 'id' in event) warned.set(`${kind}#${String(event.id)}`, elapsed);
     }

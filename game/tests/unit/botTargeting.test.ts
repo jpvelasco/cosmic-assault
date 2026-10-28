@@ -4,14 +4,16 @@ import { chooseTarget, leadHeading, type Target } from '../../src/bot/targeting'
 import { createView, readView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { FoeKind } from '../../src/content/types';
-import type { BossPart, BossView, Point } from '../../src/sim/boss/behaviour';
+import type { Point } from '../../src/sim/math';
+import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Foe } from '../../src/sim/foes/foe';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { bossView } from '../helpers/bossView';
-import { SCENE_FIELD, sceneView, stillRock } from '../helpers/botScene';
+import { SCENE_FIELD, sceneView } from '../helpers/botScene';
 import { foeAt } from '../helpers/foeAt';
+import { still } from '../helpers/mute';
 
 const foe = (kind: FoeKind, x: number, y: number): Foe => foeAt(kind, x, y, { radius: 12, hp: 1 });
 
@@ -37,7 +39,7 @@ describe('bot targeting', () => {
   });
 
   it('shoots a drone before a nearer rock, and a near rock before a far splitter', () => {
-    const view = sceneView([stillRock(740, 360)]);
+    const view = sceneView([still(740, 360, 3)]);
     view.foes = [foe('drone', 640, 660)];
     expect(chosen(view)).toMatchObject({ x: 640, y: 660 });
     view.foes = [foe('splitter', 1100, 360)];
@@ -139,7 +141,7 @@ describe('the casual bot', () => {
   it('acts 0.3 s late: its first decisions send nothing', () => {
     const galaxy = galaxyById('1-1');
     // A rock in reach gives it something to shoot from the first step.
-    const world = new World({ seed: 2, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialAsteroids: [stillRock(900, 360)] });
+    const world = new World({ seed: 2, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialAsteroids: [still(900, 360, 3)] });
     const bot = createCasual(createRng(1));
     const view = createView(world);
     const delay = Math.round(REACTION_SECONDS / STEP_SECONDS);

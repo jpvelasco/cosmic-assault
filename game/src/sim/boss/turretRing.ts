@@ -1,8 +1,8 @@
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU } from '../math';
+import { type Point, TAU } from '../math';
 import { clearSlot } from './attacks';
-import type { AttackContext, BossPart, BossPhase, BossSetup, BossView, Point } from './behaviour';
+import type { AttackContext, BossPart, BossPhase, BossSetup, BossView } from './behaviour';
 import { bossHome } from './bossRules';
 
 /** A ring of turrets about a boss's core, as a boss's definition of it sets it up. */
@@ -31,7 +31,10 @@ export function nearestParts(parts: readonly Readonly<BossPart>[], x: number, y:
       const part = parts[i] as Readonly<BossPart>;
       if (part.hp <= 0 || out.includes(i)) continue;
       const distance = Math.hypot(part.x - x, part.y - y);
-      if (distance < bestDistance) [best, bestDistance] = [i, distance];
+      if (distance < bestDistance) {
+        best = i;
+        bestDistance = distance;
+      }
     }
     if (best < 0) break;
     out.push(best);
@@ -69,12 +72,12 @@ export class TurretRing {
   /** Where a regrowing turret would form; one point, reused. */
   private readonly spot: Point = { x: 0, y: 0 };
 
-  /** Draws the ring's bearing from `setup`'s stream, and puts its turrets in their slots about `home`. */
+  /** Draws the ring's bearing from `setup`'s stream, and puts its turrets in their slots about the boss's home. */
   constructor(
     private readonly options: TurretRingOptions,
     setup: BossSetup,
-    home: Readonly<Point> = bossHome(setup.field),
   ) {
+    const home = bossHome(setup.field);
     this.spin = setup.rng.range(0, TAU);
     this.radius = options.radius;
     this.slotOf = Array.from({ length: options.slots }, (_, slot) => slot).filter((slot) => !options.gaps.includes(slot));

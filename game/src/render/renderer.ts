@@ -15,10 +15,11 @@ import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
 import { createHud, type HudBounds, type HudRect } from './hud';
 import { interpolatePose, wrapCopies } from './interp';
 import { createBossPass } from './bossPass';
-import { createBackdrop, devicePixelRatio, layoutFor, type Layout } from './layout';
+import { createBackdrop, devicePixelRatio, layoutFor, type Bakes, type Layout } from './layout';
 import { DRIFT, paletteFor, type Palette } from './palette';
 import { createParticlePass } from './particlePass';
 import { createPickupPass } from './pickupPass';
+import { createWingmanPass } from './wingmanPass';
 import type { SceneLook } from './scene';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
@@ -65,6 +66,8 @@ export interface Renderer {
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
+  /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
+  readonly spriteCache: Readonly<{ size: number; evictions: number }>;
   /** How much larger than their field size sprites are drawn at the current layout; 1 across the board before the first `resize`. */
   readonly visualScale: VisualScale;
   /** Cancels a pending re-bake and frees every sprite and particle. */
@@ -99,10 +102,17 @@ const SHIP_GLOW_ALPHA = 0.3;
 const FLAME_MIN_LENGTH = 12;
 const FLAME_FLICKER = 6;
 const FLASH_ALPHA = 0.22;
+/** Time Warp's vignette fades over this many seconds as the warp runs out. */
+const TIME_WARP_FADE_SECONDS = 0.5;
 
 /** True while an invulnerable ship is in the hidden half of its BLINK_HZ blink. */
 export function blinkHidden(elapsed: number): boolean {
   return Math.floor(elapsed * BLINK_HZ * 2) % 2 === 1;
+}
+
+/** True while the ship is drawn hidden: invulnerable and in the hidden half of its blink. The ship and its Wingman share this. */
+export function shipHidden(world: Pick<World, 'ship' | 'elapsed'>): boolean {
+  return world.ship.invulnerable && blinkHidden(world.elapsed);
 }
 
 export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts = {}): Renderer {
@@ -183,8 +193,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     boss: createBossPass(ctx, pen, baker, p),
     bolt: createBoltPass(ctx, stamp, baker, p),
     foe: createFoePass(ctx, pen, stamp, baker, p),
-    hazard: createHazardPass(ctx, stamp, baker, p),
+    hazard: createHazardPass(ctx, pen, stamp, baker, p),
     pickup: createPickupPass(ctx, stamp, baker, p),
+    wingman: createWingmanPass(ctx, stamp, baker, p),
   });
   let passes = passesFor(palette);
 
@@ -249,7 +260,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     const { x, y } = pose;
     // The Shield's ring (and its crack, as the hit that broke it starts the blink) shows through the blink.
     passes.pickup.drawShield(world.effects.shield, x, y, field, scene);
-    if (ship.invulnerable && blinkHidden(world.elapsed)) return;
+    if (shipHidden(world)) return;
     // The squash scales the hull and its flame, not the glow: the pen's turn (cos, sin) carries a scale too.
     const squash = effects.reducedMotion ? 1 : hitFlash.shipScale;
     const cos = Math.cos(pose.angle) * squash;
@@ -311,19 +322,27 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
+    // The Wingman flies with the ship, so it blinks hidden with it while the ship is invulnerable and in its hidden half.
+    if (!shipHidden(world)) passes.wingman.draw(world, alpha, field, scene);
     particlePass.drawBursts(visual.effect);
   }
 
-  /** Steps 9–10, in device pixels: the vignette, then the flash. */
-  function drawOverlays({ field, k, fieldX, fieldY }: Layout, vignette: HTMLCanvasElement): void {
+  /** Steps 9–11, in device pixels: the vignette, Time Warp's cool one while it runs, then the flash. */
+  function drawOverlays({ field, k, fieldX, fieldY }: Layout, { vignette, timeWarp }: Bakes, timeWarpLeft: number): void {
     const width = field.width * k;
     const height = field.height * k;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (quality.vignette) {
-      // The quarter-resolution gradient stretches nearest-neighbour within one colour level of a full bake;
+      // The quarter-resolution gradients stretch nearest-neighbour within one colour level of a full bake;
       // a smoothed stretch would cost several times a 1:1 blit on CPU-rasterized canvases.
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(vignette, fieldX, fieldY, width, height);
+      // Time Warp's vignette is baked, not filtered: it fades out over the warp's last moments.
+      if (timeWarpLeft > 0) {
+        ctx.globalAlpha = Math.min(1, timeWarpLeft / TIME_WARP_FADE_SECONDS);
+        ctx.drawImage(timeWarp, fieldX, fieldY, width, height);
+        ctx.globalAlpha = 1;
+      }
       ctx.imageSmoothingEnabled = true;
     }
     if (effects.flash > 0) {
@@ -347,7 +366,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.save();
     drawBackdrop(world, current, bakes.sky);
     drawScene(world, a, current);
-    drawOverlays(current, bakes.vignette);
+    drawOverlays(current, bakes, world.effects.timeWarp);
     ctx.restore();
     ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
     hud.draw(ctx, world, score, effects.reducedMotion);
@@ -409,6 +428,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     get drawCount() {
       return drawCount;
+    },
+    get spriteCache() {
+      return baker.cacheUse;
     },
     get visualScale() {
       return layout?.visual ?? UNIT_VISUAL;

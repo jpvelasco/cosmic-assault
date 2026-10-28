@@ -3,8 +3,8 @@ import { BOLT, FOES } from '../../content/foes';
 import { createAsteroid, type AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { TAU, TIME_EPSILON } from '../math';
-import type { AttackContext, AttackSpec, BossFoes, BossPart, BossView, Point } from './behaviour';
+import { type Point, TAU, TIME_EPSILON, turnBetween } from '../math';
+import type { AttackContext, AttackSpec, BossFoes, BossPart, BossPhase, BossView } from './behaviour';
 
 // The moves bosses share: each boss's attacks call them with its own numbers, so a later boss remixes an earlier one's
 // moves instead of copying them.
@@ -52,6 +52,15 @@ export function radialShove(boss: Readonly<Pick<BossView, 'x' | 'y' | 'radius'>>
   return out;
 }
 
+/**
+ * Turns `boss` toward `target`, as seen from `from` (its core by default), by at most `rate` radians per second over `dt`:
+ * how a boss that faces the ship keeps its facing.
+ */
+export function turnToward(boss: BossView, target: Readonly<Point>, rate: number, dt: number, from: Readonly<Point> = boss): void {
+  const limit = rate * dt;
+  boss.facing += clamp(turnBetween(boss.facing, Math.atan2(target.y - from.y, target.x - from.x)), -limit, limit);
+}
+
 /** The shove a pulse asks for; one point, reused. */
 const shove: Point = { x: 0, y: 0 };
 
@@ -72,24 +81,29 @@ export const pulseAttack = (windup: number, active: number, speed: number, reach
   threat: { kind: 'shove', speed, reach },
 });
 
-/**
- * Dashes the core in a straight line, over `seconds`, to where the ship was as the windup began, stopping short of the
- * field's edge.
- */
+/** Dashes the core in a straight line, over `seconds`, to the windup's aim. */
 export function dash(ctx: AttackContext, seconds: number): void {
   const { boss } = ctx;
-  const { width, height } = ctx.arena.field();
   const progress = Math.min(1, (ctx.age + ctx.dt) / seconds);
-  const toX = clamp(ctx.aimX, boss.radius, width - boss.radius);
-  const toY = clamp(ctx.aimY, boss.radius, height - boss.radius);
-  boss.x = ctx.fromX + (toX - ctx.fromX) * progress;
-  boss.y = ctx.fromY + (toY - ctx.fromY) * progress;
+  boss.x = ctx.fromX + (boss.aim.x - ctx.fromX) * progress;
+  boss.y = ctx.fromY + (boss.aim.y - ctx.fromY) * progress;
 }
 
-/** A dash telegraphed for `windup` s and lasting `seconds`, declaring the core's lane to the aim as its threat. */
-export const dashAttack = (windup: number, seconds: number): AttackSpec => ({
+/** Writes into `out`, and returns, where a core of `radius` dashing at `at` stops: there, kept `radius` inside the field. */
+export function dashAim(at: Readonly<Point>, field: Field, radius: number, out: Point): Point {
+  out.x = clamp(at.x, radius, field.width - radius);
+  out.y = clamp(at.y, radius, field.height - radius);
+  return out;
+}
+
+/**
+ * A dash, by a core of `radius`, telegraphed for `windup` s and lasting `seconds`: aimed where the ship is as the windup
+ * begins, short of the field's edge (`dashAim`), and declaring the core's lane to that aim as its threat.
+ */
+export const dashAttack = (windup: number, seconds: number, radius: number): AttackSpec => ({
   windup,
   active: seconds,
+  aim: (ship, field, out) => { dashAim(ship, field, radius, out); },
   run: (ctx) => { dash(ctx, seconds); },
   threat: { kind: 'lane', reach: 'core' },
 });
@@ -144,22 +158,39 @@ export function launchSlot(boss: Readonly<BossView>, slot: number, count: number
 
 /** Where the next drone forms; one point, reused. */
 const slotSpot: Point = { x: 0, y: 0 };
+/** The mouth slots the drones of a launch form in; reused. */
+const formed: number[] = [];
 
 /**
- * Sends out a wave of up to `wave` drones, as many as `cap` of the boss's own alive at once leaves room for. A slot
- * outside the field or within the safe radius of the ship stays empty, and its drone leaves from the next clear slot
- * instead: the wave's other mouth slots, then the sides, so a ship parked in front of the mouth still meets a full wave.
+ * Writes into `out`, and returns, the slots `count` drones of a launch form in: the first `count` slots, laid out for
+ * `layout` drones (`launchSlot`), that lie clear of the ship. A slot outside the field or within the safe radius of the
+ * ship stays empty, and its drone forms in the next clear slot instead: the wave's other mouth slots, then the sides, so a
+ * ship parked in front of the mouth still meets a full wave. The drawer marks this same list, so a drone never forms on
+ * a slot it does not show.
  */
-export function launchDrones(ctx: AttackContext, foes: BossFoes, wave: number, cap: number): void {
+export function launchSlotsFor(boss: Readonly<BossView>, field: Field, ship: Readonly<Point>, count: number, layout: number, out: number[]): number[] {
+  out.length = 0;
+  const slots = layout + 2 * Math.max(layout, END_SLOTS_A_SIDE);
+  for (let slot = 0; out.length < count && slot < slots; slot++) {
+    launchSlot(boss, slot, layout, slotSpot);
+    if (clearSlot(slotSpot, field, ship, ASTEROID.safeRadius)) out.push(slot);
+  }
+  return out;
+}
+
+/**
+ * Sends out a wave of up to `wave` drones, as many as `cap` of the boss's own alive at once leaves room for, from the
+ * slots `launchSlotsFor` gives. The mouth is laid out for the drones sent, unless `layout` says a wave's mouth, so that a
+ * launch cut short by the cap still leaves from the slots the wave's mouth shows.
+ */
+export function launchDrones(ctx: AttackContext, foes: BossFoes, wave: number, cap: number, layout?: number): void {
   const { boss, arena } = ctx;
   const count = Math.min(wave, cap - foes.launched);
-  let launched = 0;
-  const slots = count + 2 * Math.max(count, END_SLOTS_A_SIDE);
-  for (let slot = 0; launched < count && slot < slots; slot++) {
-    const heading = launchSlot(boss, slot, count, slotSpot);
-    if (!clearSlot(slotSpot, arena.field(), arena.ship, ASTEROID.safeRadius)) continue;
+  if (count <= 0) return;
+  const laid = layout ?? count;
+  for (const slot of launchSlotsFor(boss, arena.field(), arena.ship, count, laid, formed)) {
+    const heading = launchSlot(boss, slot, laid, slotSpot);
     if (!foes.launch('drone', slotSpot.x, slotSpot.y, heading)) return;
-    launched++;
   }
 }
 
@@ -174,7 +205,7 @@ export function radialBolts(ctx: AttackContext, parts: readonly Readonly<BossPar
  * was as the windup began; one bolt flies straight at it.
  */
 export function aimedBolts(ctx: AttackContext, from: Readonly<Point>, count: number, spread: number, speed: number = BOLT.speed): void {
-  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, fanBearing(from, ctx.aimX, ctx.aimY, i, count, spread), speed);
+  for (let i = 0; i < count; i++) fireBolt(ctx, from.x, from.y, fanBearing(from, ctx.boss.aim.x, ctx.boss.aim.y, i, count, spread), speed);
 }
 
 /**
@@ -190,16 +221,21 @@ export const fanBearing = (from: Readonly<Point>, aimX: number, aimY: number, i:
  */
 export const crosses = (ctx: Readonly<Pick<AttackContext, 'age' | 'dt'>>, t: number): boolean => ctx.age - TIME_EPSILON <= t && t < ctx.age + ctx.dt - TIME_EPSILON;
 
-/** An attack telegraphed for `windup` s that fires `radialBolts` from `parts` (the behaviour's own, the same objects all fight) as it ends. */
-export const radialBoltsAttack = (windup: number, parts: readonly Readonly<BossPart>[], speed: number = BOLT.speed): AttackSpec => ({
+/**
+ * A turret volley, telegraphed for `windup` s and running `active` s: every live part of `parts` fires one bolt outward
+ * as it goes active, and once more `repeat.at` s later if the boss is in `repeat.phase`.
+ */
+export const turretVolleyAttack = (windup: number, active: number, parts: readonly Readonly<BossPart>[], repeat?: Readonly<{ at: number; phase: BossPhase }>): AttackSpec => ({
   windup,
-  active: 0,
-  run: (ctx) => { radialBolts(ctx, parts, speed); },
+  active,
+  run: (ctx) => {
+    if (crosses(ctx, 0) || (repeat !== undefined && ctx.boss.phase === repeat.phase && crosses(ctx, repeat.at))) radialBolts(ctx, parts);
+  },
 });
 
-/** An attack telegraphed for `windup` s that fires `aimedBolts` from the core as it ends. */
-export const aimedBoltsAttack = (windup: number, count: number, spread: number, speed: number = BOLT.speed): AttackSpec => ({
+/** A quake, telegraphed for `windup` s: a ring of `counts[phase]` pass-through rocks of `size` from the core's rim, at `speed`, as it goes active. */
+export const rockRingAttack = (windup: number, counts: Readonly<Record<BossPhase, number>>, size: AsteroidSize, speed: number): AttackSpec => ({
   windup,
   active: 0,
-  run: (ctx) => { aimedBolts(ctx, ctx.boss, count, spread, speed); },
+  run: (ctx) => { rockRing(ctx, counts[ctx.boss.phase], size, speed); },
 });

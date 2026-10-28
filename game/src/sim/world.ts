@@ -89,13 +89,11 @@ export class World {
   private readonly targets: ShotTargets = {
     rocks: this.asteroidList,
     foes: () => this.run?.foeList ?? NONE,
-    aim: () => {
-      const boss = this.run?.boss ?? null;
-      return boss === null ? null : bossTarget(boss);
-    },
+    aim: () => bossTarget(this.run?.boss ?? null),
     hitBoss: (x, y, radius) => this.run?.bosses.hitBoss(x, y, radius) === true,
     hitFoe: (x, y, radius, struck) => this.run?.hitFoe(x, y, radius, struck) ?? -1,
     hitRock: (x, y, radius) => this.breakRock(x, y, radius),
+    swallows: (x, y, radius) => this.run?.swallows(x, y, radius) ?? false,
   };
   private readonly hash = new SpatialHash(HASH_CELL_SIZE);
   /** Asteroid indices broken this step, in the order they broke. */
@@ -419,7 +417,7 @@ export class World {
     return true;
   }
 
-  /** A shot at (x, y) breaks the last-indexed unbroken rock it overlaps, scoring it; returns the rock's id, or -1 (each shot strikes once a step: CA-021). */
+  /** A shot at (x, y) breaks the last-indexed unbroken rock it overlaps, scoring it; returns the rock's id, or -1 (each shot strikes once a step). */
   private breakRock(x: number, y: number, radius: number): number {
     const index = this.lastOverlap(x, y, radius);
     if (index < 0) return -1;

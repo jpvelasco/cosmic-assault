@@ -54,10 +54,17 @@ interface CosmicAssaultTestState {
   readonly projectileCount: number;
   /** The pickups on the field, with the seconds each has before it expires (it blinks under 2); empty outside a run. */
   readonly pickups: readonly { readonly id: number; readonly kind: import('./content/types').PickupId; readonly x: number; readonly y: number; readonly expiresIn: number }[];
-  /** The foes on the field; empty outside a galaxy run. */
-  readonly foes: readonly { readonly id: number; readonly kind: import('./content/types').FoeKind; readonly x: number; readonly y: number }[];
-  /** The hazards being telegraphed or active (a gravity well ...), with the seconds until each turns hostile or ends; empty when there are none. */
-  readonly hazards: readonly { readonly id: number; readonly type: import('./content/types').HazardType; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number }[];
+  /** The field the run plays in, in field units; null while no run exists. Bolts leave it rather than wrap. */
+  readonly field: { readonly width: number; readonly height: number } | null;
+  /** The foes on the field, each `charging` while its telegraphed attack winds up (a gunship aiming, a mine armed); empty outside a galaxy run. */
+  readonly foes: readonly { readonly id: number; readonly kind: import('./content/types').FoeKind; readonly x: number; readonly y: number; readonly charging: boolean }[];
+  /** The hostile bolts on the field, each with what fired it and, for a foe's, that foe's id (0 for a boss's); empty when there are none. */
+  readonly bolts: readonly { readonly id: number; readonly source: import('./sim/foes/bolts').BoltSource; readonly owner: number; readonly x: number; readonly y: number; readonly radius: number }[];
+  /**
+   * The hazards being telegraphed or active (a gravity well ...), with the seconds until each turns hostile or ends; a
+   * danger zone adds its size (`w` by `h`, centred on x, y), a warp rift its second mouth (`toX`, `toY`); empty when there are none.
+   */
+  readonly hazards: readonly { readonly id: number; readonly type: import('./content/types').HazardType; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number; readonly w?: number; readonly h?: number; readonly toX?: number; readonly toY?: number }[];
   /** The boss once its approach is over; null before then and outside a boss galaxy. */
   readonly boss: CosmicAssaultTestBoss | null;
   /** How many sim events of each type the run in play has produced (a shot fired, a boss shot deflected, a hangar opened ...), from its first step. */
@@ -94,10 +101,12 @@ interface CosmicAssaultTestState {
   readonly logSize: number;
   /** Whether the page is in full screen (`document.fullscreenElement` is set). */
   readonly fullscreen: boolean;
+  /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
+  readonly spriteCache: { readonly size: number; readonly evictions: number } | null;
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 3;
+  readonly version: 4;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event

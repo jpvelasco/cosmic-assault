@@ -1,5 +1,5 @@
 import type { AsteroidSize } from '../asteroid';
-import { pulseAttack, rockRing } from './attacks';
+import { pulseAttack, rockRingAttack } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup } from './behaviour';
 import { ShardOrbit, type ShardOrbitOptions } from './shardOrbit';
 
@@ -55,6 +55,7 @@ const WINDUPS: Readonly<Record<MonolithAttack, number>> = { shardVolley: 1.2, qu
  */
 class Monolith implements BossBehaviour {
   readonly driftSpeed = DRIFT_SPEED;
+  readonly rigidParts = true;
   readonly reach: number;
   readonly parts: readonly BossPart[];
   readonly attacks: Readonly<Record<MonolithAttack, AttackSpec>>;
@@ -67,7 +68,7 @@ class Monolith implements BossBehaviour {
     this.reach = shards.reach;
     this.attacks = {
       shardVolley: shards.volley(WINDUPS.shardVolley),
-      quake: { windup: WINDUPS.quake, active: 0, run: quake },
+      quake: rockRingAttack(WINDUPS.quake, QUAKE_ROCKS, QUAKE_SIZE, QUAKE_SPEED),
       pulse: pulseAttack(WINDUPS.pulse, PULSE_SECONDS, PULSE_SPEED, PULSE_REACH),
     };
   }
@@ -79,11 +80,6 @@ class Monolith implements BossBehaviour {
   step(ctx: AttackContext): void {
     this.shards.step(ctx);
   }
-}
-
-/** Sends a ring of small pass-through rocks out of the core, more in phase 3. */
-function quake(ctx: AttackContext): void {
-  rockRing(ctx, QUAKE_ROCKS[ctx.boss.phase], QUAKE_SIZE, QUAKE_SPEED);
 }
 
 /** The Monolith's behaviour, with its attacks spelled out. */

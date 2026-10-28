@@ -30,6 +30,8 @@ export interface E2eHooks {
   e2eEventCounts?: EventCounts | undefined;
   /** Set by `installE2eHooks`: restarts the run's frame stats, warm-up included, so a measure can skip a settling stretch. */
   e2eRestartFrameStats?: (() => void) | undefined;
+  /** Set by `installE2eHooks`: the sprite cache's use, the sprites it holds now and how many it has evicted. */
+  e2eSpriteCache?: (() => Readonly<{ size: number; evictions: number }>) | undefined;
 }
 
 export interface E2eHookDeps {
@@ -41,10 +43,12 @@ export interface E2eHookDeps {
   redraw(): void;
   /** Forgets the frame times measured so far, warm-up included. */
   restartFrameStats(): void;
+  /** The sprite cache's use now. */
+  spriteCache(): Readonly<{ size: number; evictions: number }>;
 }
 
 /**
- * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally, frame-stats restart), in an e2e build only:
+ * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally, frame-stats restart, sprite-cache use), in an e2e build only:
  * a release build compiles this to nothing, which `check:no-bridge` proves by finding no hook name in `dist/`.
  */
 export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): void {
@@ -61,8 +65,7 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
    */
   const strikeBoss = (): boolean => {
     const { world } = run;
-    const boss = world?.boss ?? null;
-    const target = boss === null ? null : bossTarget(boss);
+    const target = bossTarget(world?.boss ?? null);
     if (world === null || target === null) return false;
     return world['run']?.bosses.hitBoss(target.x, target.y, 1) === true;
   };
@@ -90,6 +93,7 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
   e2e.e2eRestartFrameStats = () => {
     deps.restartFrameStats();
   };
+  e2e.e2eSpriteCache = () => deps.spriteCache();
   let counted: World | null = null;
   e2e.e2eEvents = (events, world) => {
     if (world !== counted) {

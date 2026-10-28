@@ -6,6 +6,8 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { isGalaxyStartLives, isPracticeLevel, isStartLives, isWorldSeed, World, type WorldOptions } from '../../src/sim/world';
+import { ofType } from '../helpers/bossArena';
+import { still } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
@@ -20,11 +22,6 @@ type Scenario = Omit<WorldOptions, 'field' | 'seed'> & { readonly seed?: number 
 
 function world(opts: Scenario = {}): World {
   return new World({ seed: 1, field: FIELD, ...opts });
-}
-
-/** A motionless asteroid, so a scenario stays where the test put it. */
-function still(x: number, y: number, size: AsteroidSize) {
-  return { x, y, size, angle: 0, speedMultiplier: 0 };
 }
 
 /** Mixed turning, thrust and fire that changes every half second. */
@@ -69,10 +66,6 @@ function tagsAt(w: World, points: Readonly<Record<string, { x: number; y: number
       .filter(([, p]) => p.x === a.x && p.y === a.y)
       .map(([tag]) => tag),
   );
-}
-
-function ofType<T extends SimEvent['type']>(events: readonly SimEvent[], type: T) {
-  return events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
 }
 
 function snapshot(w: World) {
@@ -363,7 +356,7 @@ describe('World splitting and removal', () => {
     expect(w.asteroids.filter((a) => a.x === 260 && a.y === 360)).toHaveLength(0);
   });
 
-  it('consumes a projectile once even when it overlaps two asteroids (CA-021)', () => {
+  it('consumes a projectile once even when it overlaps two asteroids', () => {
     const w = world({ initialShip: SHOOTER, initialAsteroids: [still(400, 360, 2), still(400, 360, 2)] });
     const [lower, upper] = w.asteroids;
     let older: unknown;

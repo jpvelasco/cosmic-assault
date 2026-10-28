@@ -25,11 +25,11 @@ export interface Foe {
   hp: number;
   /** True for a foe a boss's attack launched, marked as it is made: the bots judge it on that attack's telegraph. */
   fromAttack: boolean;
-  /** Seconds until its next move: a gunship's next windup or shot, an armed mine's blast; unused by the others. */
+  /** Seconds until its next move: a gunship's next windup or shot, an armed mine's blast, a phaser's next warning or blink; unused by the others. */
   timer: number;
-  /** True while its telegraphed attack winds up: a gunship aiming, or a mine armed and counting down. */
+  /** True while its telegraphed attack winds up: a gunship aiming, a mine armed and counting down, or a phaser warning of its blink. */
   charging: boolean;
-  /** Where a winding-up gunship will fire: where the ship was as its windup began. */
+  /** Where a winding-up gunship will fire (where the ship was as its windup began), or where a phaser will blink to. */
   aimX: number;
   aimY: number;
   /** Which way round the ship a gunship circles: 1 or -1. */
@@ -61,6 +61,8 @@ export interface FoeBehaviour {
   step(foe: Foe, dt: number, field: Field, world: FoeWorld): void;
   /** The foe was destroyed in play (not cleared by the warp): leave anything behind. */
   destroyed?(foe: Readonly<Foe>, world: FoeWorld): void;
+  /** Whether a shot at (x, y) is turned aside by the foe rather than striking it: its armour. Judged before any harm is done. */
+  deflects?(foe: Readonly<Foe>, x: number, y: number): boolean;
 }
 
 /** Foes made once and reused, so a galaxy of spawns and kills allocates none. */

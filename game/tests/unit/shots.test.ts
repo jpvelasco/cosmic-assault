@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { galaxyById } from '../../src/content/galaxies';
-import type { GalaxyDef, PickupId, WeaponTier } from '../../src/content/types';
-import type { AsteroidSize } from '../../src/sim/asteroid';
+import type { PickupId, WeaponTier } from '../../src/content/types';
 import { HOMING, PLAYER, PROJECTILE, STEP_SECONDS, VOLLEY, WINGMAN } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -11,7 +9,8 @@ import { wingmanShot } from '../../src/sim/pickups/wingman';
 import { createShip, type Shot } from '../../src/sim/ship';
 import { PlayerShots, type ShotRules, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy, still } from '../helpers/mute';
+import { placeFoe } from '../helpers/foeRig';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
@@ -94,6 +93,25 @@ describe('the Wingman', () => {
 });
 
 describe('PlayerShots collisions', () => {
+  it('spends a shot the horizon swallows before it strikes anything, and strikes nothing with it', () => {
+    const { shots: s } = shots();
+    s.fire([shot()], SHIP, null);
+    const hits: string[] = [];
+    s.collide(targets({ swallows: () => true, hitRock: () => (hits.push('rock'), 7) }));
+    expect(s.list).toEqual([]);
+    expect(hits).toEqual([]);
+  });
+
+  it('lets a shot the horizon does not reach strike as before', () => {
+    const { shots: s } = shots();
+    s.fire([shot()], SHIP, null);
+    s.collide(targets({ swallows: () => false, hitRock: () => 7 }));
+    expect(s.list).toEqual([]);
+    s.fire([shot()], SHIP, null);
+    s.collide(targets({ swallows: () => false, hitRock: () => -1 }));
+    expect(s.list).toHaveLength(1);
+  });
+
   it('spends a plain shot on the first rock or foe it reaches', () => {
     const { shots: s } = shots();
     s.fire([shot()], SHIP, null);
@@ -194,7 +212,7 @@ describe('a homing shot', () => {
     s.fire([shot(), shot(), shot(100, 100)], SHIP, { ...HOMING_RULES, pierce: 3 });
     const p = s.list[2];
     if (p === undefined) throw new Error('no homing shot');
-    p.struck.push(8);
+    p.struck = [8];
     const struckFoe = { id: 8, x: 250, y: 30, hp: 5, radius: 30 } as Foe;
     s.move(DT, FIELD, targets({ foes: () => [struckFoe] }));
     expect(p.vy).toBe(0);
@@ -210,11 +228,8 @@ describe('a homing shot', () => {
 
 describe('player shots in a galaxy', () => {
   const SHOOTER = { x: 200, y: 360, angle: 0 };
-  const still = (x: number, y: number, size: AsteroidSize) => ({ x, y, size, angle: 0, speedMultiplier: 0 });
-  const calm = (galaxy: GalaxyDef = galaxyById('5-2')): GalaxyDef => ({ ...galaxy, kinds: MUTED_KINDS, events: [] });
-
   function world(kinds: readonly PickupId[], opts: { tier?: WeaponTier; rocks?: ReturnType<typeof still>[] } = {}): World {
-    const w = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'rank' }, startTier: opts.tier ?? 0, initialShip: SHOOTER, initialAsteroids: opts.rocks ?? [] });
+    const w = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('5-2'), mode: 'rank' }, startTier: opts.tier ?? 0, initialShip: SHOOTER, initialAsteroids: opts.rocks ?? [] });
     for (const kind of kinds) w['run']?.loadout.collect(kind);
     return w;
   }
@@ -248,12 +263,7 @@ describe('player shots in a galaxy', () => {
     const w = world(['piercingBeam']);
     const foes = w['run']?.['foes'];
     if (foes === undefined) throw new Error('no foes');
-    for (const x of [400, 412]) {
-      const foe = foes.acquire('splitter');
-      if (foe === null) throw new Error('foe pool full');
-      Object.assign(foe, { x, y: 360, hp: 5 });
-      foes.commit(foe);
-    }
+    for (const x of [400, 412]) placeFoe(foes, 'splitter', x, 360, { hp: 5 });
     const log = fireOnce(w, 0.6);
     const hits = log.filter((e): e is Extract<SimEvent, { type: 'foeHit' }> => e.type === 'foeHit');
     expect(hits.map((e) => e.hp)).toEqual([4, 4]);

@@ -1,10 +1,9 @@
 import { TAU } from '../../sim/math';
-import { mix, rgba } from '../color';
+import { BLACK, mix, rgba, WHITE } from '../color';
 import type { Palette } from '../palette';
 import { addStops, paintGlow, strokePath } from '../sprites';
+import { paintReticle } from './reticle';
 
-const WHITE = '#ffffff';
-const BLACK = '#000000';
 /** Burnished steel, lit to shadowed. */
 const STEEL_LIT = '#d8dcea';
 const STEEL = '#4a5070';
@@ -167,18 +166,6 @@ export function paintGhostRing(ctx: CanvasRenderingContext2D, radius: number, co
 }
 
 /** A target reticle of radius `r` in `color`: a ring broken by four ticks pointing in, for the ship a lock-on aims at. */
-export function paintReticle(ctx: CanvasRenderingContext2D, r: number, color: string): void {
-  ctx.lineCap = 'round';
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * TAU + TAU / 8;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, a - 0.5, a + 0.5);
-    strokePath(ctx, rgba(BLACK, 0.6), 5);
-    strokePath(ctx, color, 2.5);
-    const t = a - TAU / 8;
-    ctx.beginPath();
-    ctx.moveTo(Math.cos(t) * r * 1.25, Math.sin(t) * r * 1.25);
-    ctx.lineTo(Math.cos(t) * r * 0.7, Math.sin(t) * r * 0.7);
-    strokePath(ctx, color, 2.5);
-  }
+export function paintLockReticle(ctx: CanvasRenderingContext2D, r: number, color: string): void {
+  paintReticle(ctx, { arc: r, tickFrom: r * 1.25, tickTo: r * 0.7, passes: [[rgba(BLACK, 0.6), 5], [color, 2.5]] });
 }

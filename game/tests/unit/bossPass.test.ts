@@ -7,6 +7,7 @@ import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { BOSSES } from '../../src/content/bosses';
 import type { BossId } from '../../src/content/types';
 import { WARDEN_RING } from '../../src/sim/boss/warden';
+import { COIL_OPENING } from '../../src/sim/boss/leviathan';
 import { bossView } from '../helpers/bossView';
 
 interface Draw {
@@ -20,9 +21,14 @@ interface Draw {
   readonly alpha: number;
 }
 
-/** A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force, to `sink`. */
-function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[] } {
+/**
+ * A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force, to `sink`,
+ * and the name of every other call, to `calls`.
+ */
+function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[]; calls: string[]; arcStarts: number[] } {
   const draws: Draw[] = [];
+  const calls: string[] = [];
+  const arcStarts: number[] = [];
   const log = sink ?? ((draw: Draw) => draws.push(draw));
   let a = 1;
   let b = 0;
@@ -49,8 +55,15 @@ function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
+          case 'arc':
+            return (_x: number, _y: number, _r: number, start: number) => {
+              calls.push('arc');
+              arcStarts.push(start);
+            };
           default:
-            return () => undefined;
+            return () => {
+              calls.push(String(name));
+            };
         }
       },
       set: (_target, name, value) => {
@@ -60,7 +73,7 @@ function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext
       },
     },
   ) as CanvasRenderingContext2D;
-  return { ctx, draws };
+  return { ctx, draws, calls, arcStarts };
 }
 
 /** Draws onto offscreen canvases (bakes, and the Hive Carrier's turned hull), each with the canvas it lands on. */
@@ -83,11 +96,15 @@ function wardenRing(turn = 0, radius = WARDEN_RING.radius, cy = 200): BossPart[]
     return { x, y, px: x, py: y, radius: 16, hp: 3, maxHp: 3 };
   });
 }
+/** The sprite keys a spy on the baker was called with, in order. */
+const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
 const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600, field: { width: 1280, height: 720 } };
 
 describe('createBossPass', () => {
   let baker: SpriteBaker;
   let draws: Draw[];
+  let calls: string[];
+  let arcStarts: number[];
   let pass: BossPass;
 
   beforeEach(() => {
@@ -96,6 +113,8 @@ describe('createBossPass', () => {
     baker = createSpriteBaker();
     const fake = fakeContext();
     draws = fake.draws;
+    calls = fake.calls;
+    arcStarts = fake.arcStarts;
     const pen = createFieldPen(fake.ctx);
     pen.aim(1, 0, 0);
     pass = createBossPass(fake.ctx, pen, baker, DRIFT);
@@ -111,7 +130,7 @@ describe('createBossPass', () => {
     const custom = vi.spyOn(baker, 'custom');
     pass.draw(boss(), 0.5, LOOK);
     expect(draws.length).toBeGreaterThan(0);
-    expect(custom.mock.calls.map(([key]) => key)).toContain('boss|drift|core|70');
+    expect(custom.mock.calls.map(([key]) => key)).toContain('boss|drift|monolith|core|70');
     // Halfway from x 600 to 640.
     expect(draws.some(({ e, f }) => e === 620 && f === 200)).toBe(true);
   });
@@ -120,8 +139,8 @@ describe('createBossPass', () => {
     const custom = vi.spyOn(baker, 'custom');
     pass.draw(boss(), 1, LOOK);
     expect(custom.mock.calls.some(([key]) => key.startsWith('boss|drift|ring|'))).toBe(false);
-    pass.draw(boss({ windup: 'shardRing' }), 1, LOOK);
-    pass.draw(boss({ windup: 'lunge' }), 1, LOOK);
+    pass.draw(boss({ windup: 'quake' }), 1, LOOK);
+    pass.draw(boss({ windup: 'dive' }), 1, LOOK);
     const rings = custom.mock.calls.map(([key]) => key).filter((key) => key.startsWith('boss|drift|ring|'));
     expect(new Set(rings).size).toBe(2);
   });
@@ -135,7 +154,7 @@ describe('createBossPass', () => {
       custom.mockClear();
       const drawing = createBossPass(fake.ctx, pen, baker, palette);
       for (const id of Object.keys(BOSSES) as BossId[]) {
-        drawing.draw(boss({ id, windup: 'lunge', parts: id === 'warden' ? wardenRing() : [] }), 1, LOOK);
+        drawing.draw(boss({ id, windup: 'dive', parts: id === 'warden' ? wardenRing() : [] }), 1, LOOK);
       }
       return [...new Set(custom.mock.calls.map(([key]) => key))];
     };
@@ -159,8 +178,8 @@ describe('createBossPass', () => {
 
   it('draws the core as its white silhouette for the first 60 ms after a hit, then in colour again', () => {
     pass.draw(boss(), 1, LOOK);
-    const core = baker.custom('boss|drift|core|70', 0, () => undefined).canvas;
-    const white = baker.white('boss|drift|core|70')?.canvas;
+    const core = baker.custom('boss|drift|monolith|core|70', 0, () => undefined).canvas;
+    const white = baker.white('boss|drift|monolith|core|70')?.canvas;
     expect(white).toBeDefined();
     draws.length = 0;
     pass.handle([{ type: 'bossHit', x: 640, y: 200, hp: 19 }]);
@@ -194,16 +213,16 @@ describe('createBossPass', () => {
 
   it('closes the windup ring in on the core as the attack nears, so its size tells when it lands', () => {
     const custom = vi.spyOn(baker, 'custom');
-    const winding = boss({ windup: 'shardRing' });
+    const winding = boss({ windup: 'quake' });
     pass.advance(0.01, winding);
     pass.draw(winding, 1, LOOK);
-    const early = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
+    const early = drawOf('boss|drift|ring|quake|70', custom)?.a ?? 0;
     pass.advance(0.3, winding);
     pass.draw(winding, 1, LOOK);
-    const later = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
+    const later = drawOf('boss|drift|ring|quake|70', custom)?.a ?? 0;
     pass.advance(0.4, winding);
     pass.draw(winding, 1, LOOK);
-    const closed = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
+    const closed = drawOf('boss|drift|ring|quake|70', custom)?.a ?? 0;
     expect(early).toBeGreaterThan(later);
     expect(later).toBeGreaterThan(closed);
     expect(closed).toBeCloseTo(1);
@@ -212,13 +231,13 @@ describe('createBossPass', () => {
   it('holds the ring steady and at one size under reduced motion', () => {
     const custom = vi.spyOn(baker, 'custom');
     const still = { ...LOOK, still: true };
-    const winding = boss({ windup: 'lunge' });
+    const winding = boss({ windup: 'dive' });
     const sizes: number[] = [];
     const alphas: number[] = [];
     for (const dt of [0.01, 0.1, 0.2]) {
       pass.advance(dt, winding);
       pass.draw(winding, 1, still);
-      const ring = drawOf('boss|drift|ring|lunge|70', custom);
+      const ring = drawOf('boss|drift|ring|dive|70', custom);
       sizes.push(ring?.a ?? 0);
       alphas.push(ring?.alpha ?? 0);
     }
@@ -232,11 +251,11 @@ describe('createBossPass', () => {
     pass.advance(0.01, dying);
     pass.advance(0.5, dying);
     pass.draw(dying, 1, LOOK);
-    const early = drawOf('boss|drift|core|70', custom);
+    const early = drawOf('boss|drift|monolith|core|70', custom);
     const earlyWhite = draws.filter((d) => d.alpha > 0 && d.image !== early?.image).length;
     pass.advance(1, dying);
     pass.draw(dying, 1, LOOK);
-    const late = drawOf('boss|drift|core|70', custom);
+    const late = drawOf('boss|drift|monolith|core|70', custom);
     expect(late?.alpha).toBeLessThan(early?.alpha ?? 0);
     expect(late?.a).toBeGreaterThan(early?.a ?? Infinity);
     expect(earlyWhite).toBeGreaterThan(0);
@@ -246,8 +265,6 @@ describe('createBossPass', () => {
     const shard = (x: number, hp = 2): BossPart => ({ x, y: 330, px: x, py: 330, radius: 15, hp, maxHp: 2 });
     const monolith = (over: Partial<BossView> = {}): BossView =>
       boss({ id: 'monolith', radius: 90, hp: 60, maxHp: 60, vulnerable: false, parts: [shard(600), shard(640, 1), shard(680, 0)], ...over });
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
-
     it('draws a rock core with fissures, and a shard for each live part, cracked once hurt, with no eye', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(monolith(), 1, LOOK);
@@ -342,7 +359,6 @@ describe('createBossPass', () => {
   describe('the Hive Carrier', () => {
     const DOWN = Math.PI / 2;
     const carrier = (over: Partial<BossView> = {}): BossView => boss({ id: 'hiveCarrier', radius: 100, hp: 70, maxHp: 70, vulnerable: false, facing: DOWN, ...over });
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
     /** The bearing a draw is turned to, from its transform, as |cos|: 0 straight down the field. */
     const turn = (d: Draw | undefined): number => Math.abs((d?.a ?? Number.NaN) / (d?.scale ?? Number.NaN));
 
@@ -472,7 +488,6 @@ describe('createBossPass', () => {
 
   describe('the Warden', () => {
     const warden = (over: Partial<BossView> = {}): BossView => boss({ id: 'warden', radius: 48, hp: 76, maxHp: 76, px: 640, parts: wardenRing(), ...over });
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
     const TRACK = 'boss|drift|warden|track|120';
     const TURRETS = ['boss|drift|warden|turret|0|16', 'boss|drift|warden|turret|1|16', 'boss|drift|warden|turret|2|16'] as const;
     /** The canvases of the sprites `spy` returned. */
@@ -592,6 +607,158 @@ describe('createBossPass', () => {
       const custom = vi.spyOn(baker, 'custom');
       for (const windup of ['turretVolley', 'lockOn', 'spin', 'ringPulse'] as const) pass.draw(warden({ windup }), 1, LOOK);
       expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|turretVolley|48', 'boss|drift|ring|lockOn|48', 'boss|drift|ring|spin|48', 'boss|drift|ring|ringPulse|48']));
+    });
+  });
+
+  describe('the Leviathan', () => {
+    const segment = (x: number, hp = 4): BossPart => ({ x, y: 200, px: x, py: 200, radius: 24, hp, maxHp: 4 });
+    /** A head at (640, 200) facing +x, its tail at x 520 and two segments ahead of it, the tail hurt unless `hp` says. */
+    const leviathan = (over: Partial<BossView> = {}, tailHp = 3): BossView =>
+      boss({ id: 'leviathan', x: 640, px: 640, radius: 34, hp: 88, maxHp: 88, vulnerable: false, facing: 0, parts: [segment(480, 0), segment(520, tailHp), segment(560), segment(600)], ...over });
+    const KEY = 'boss|drift|leviathan';
+    it('draws each live segment, tail first, the open tail cracked once hurt and the rest armoured, then the shut head', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(leviathan(), 1, LOOK);
+      const body = keysOf(custom).filter((key) => String(key).startsWith(`${KEY}|`));
+      expect(body).toEqual([`${KEY}|segment|cracked|24`, `${KEY}|segment|armoured|24`, `${KEY}|segment|armoured|24`, `${KEY}|head|34`]);
+      // Where it is, give or take the half pixel an upright sprite snaps by.
+      const offBy = (key: string, x: number, y: number): number => {
+        const draw = drawOf(key, custom);
+        return Math.max(Math.abs((draw?.e ?? Infinity) - x), Math.abs((draw?.f ?? Infinity) - y));
+      };
+      expect(offBy(`${KEY}|segment|cracked|24`, 520, 200)).toBeLessThanOrEqual(0.5);
+      expect(offBy(`${KEY}|head|34`, 640, 200)).toBeLessThanOrEqual(0.5);
+      custom.mockClear();
+      pass.draw(leviathan({}, 4), 1, LOOK);
+      expect(keysOf(custom)).toContain(`${KEY}|segment|open|24`);
+    });
+
+    it('opens the head on a glowing maw once it is bare', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(leviathan({ vulnerable: true, parts: [] }), 1, LOOK);
+      expect(keysOf(custom)).toContain(`${KEY}|headBare|34`);
+      expect(keysOf(custom)).not.toContain(`${KEY}|head|34`);
+    });
+
+    it('flashes a segment white when it is hit, for a moment', () => {
+      const white = vi.spyOn(baker, 'white');
+      pass.draw(leviathan(), 1, LOOK);
+      white.mockClear();
+      pass.handle([{ type: 'bossPartHit', part: 1, x: 520, y: 200, hp: 2 }]);
+      pass.draw(leviathan(), 1, LOOK);
+      expect(keysOf(white)).toContain(`${KEY}|segment|cracked|24`);
+      white.mockClear();
+      pass.advance(0.2, leviathan());
+      pass.draw(leviathan(), 1, LOOK);
+      expect(keysOf(white)).not.toContain(`${KEY}|segment|cracked|24`);
+    });
+
+    it('draws a dive\'s aim line and reticle at the windup\'s aim, wherever the ship has gone, and only through a dive\'s windup', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(leviathan(), 1, LOOK);
+      expect(calls).not.toContain('setLineDash');
+      calls.length = 0;
+      pass.draw(leviathan({ windup: 'dive', aim: { x: 300, y: 500 } }), 1, { ...LOOK, aimX: 100, aimY: 100 });
+      expect(calls).toEqual(expect.arrayContaining(['setLineDash', 'moveTo', 'lineTo', 'stroke']));
+      expect(drawOf('boss|drift|aim|reticle', custom)).toMatchObject({ e: 300, f: 500 });
+    });
+
+    it('draws a coil\'s ring round the windup\'s aim through its windup and while it runs, and not after', () => {
+      pass.draw(leviathan(), 1, LOOK);
+      expect(calls).not.toContain('arc');
+      calls.length = 0;
+      const threat = { attack: 'coil', windup: 0.9, kind: 'ring', reach: 34, speed: 0, ring: { radius: 220, around: 'aim' } } as const;
+      pass.draw(leviathan({ windup: 'coil', threat }), 1, LOOK);
+      expect(calls.filter((c) => c === 'arc')).toHaveLength(3);
+      calls.length = 0;
+      pass.draw(leviathan({ active: 'coil', threat }), 1, LOOK);
+      expect(calls).toContain('arc');
+      calls.length = 0;
+      pass.draw(leviathan(), 1, LOOK);
+      expect(calls).not.toContain('arc');
+    });
+
+    it('leaves the ring open where the view says the coil planned it, wherever the head is drawn', () => {
+      const threat = { attack: 'coil', windup: 0.9, kind: 'ring', reach: 34, speed: 0, ring: { radius: 220, around: 'aim' } } as const;
+      for (const opening of [0.4, -2]) {
+        arcStarts.length = 0;
+        pass.draw(leviathan({ windup: 'coil', threat, opening }), 1, LOOK);
+        expect(arcStarts[0]).toBeCloseTo(opening + COIL_OPENING / 2, 9);
+      }
+    });
+  });
+
+  describe('the Eclipse', () => {
+    const SHARD_RADIUS = 14;
+    /** Ten shards on their orbit of 112 about (640, 200), still. */
+    const corona = (over: Partial<BossPart>[] = []): BossPart[] => Array.from({ length: 10 }, (_, i) => {
+      const a = (i * 2 * Math.PI) / 10;
+      const [x, y] = [640 + Math.cos(a) * 112, 200 + Math.sin(a) * 112];
+      return { x, y, px: x, py: y, radius: SHARD_RADIUS, hp: 2, maxHp: 2, ...over[i] };
+    });
+    const eclipse = (over: Partial<BossView> = {}): BossView => boss({ id: 'eclipse', radius: 70, hp: 134, maxHp: 134, px: 640, parts: corona(), ...over });
+    const KEY = 'boss|drift|eclipse';
+    it('draws a dark disc with a bright limb, and a lit shard for each live part, cracked once hurt', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(eclipse({ parts: corona([{ hp: 1 }]) }), 1, LOOK);
+      expect(keysOf(custom)).toEqual(expect.arrayContaining([`${KEY}|core|70`, `${KEY}|shardCracked|${String(SHARD_RADIUS)}`]));
+      expect(keysOf(custom).filter((key) => key === `${KEY}|shard|${String(SHARD_RADIUS)}`)).toHaveLength(9);
+    });
+
+    it('brightens its corona\'s halo once the core is bare', () => {
+      const glow = vi.spyOn(baker, 'glow');
+      /** The alpha the halo, the widest glow in the corona's hue, is drawn at. */
+      const haloAlpha = (vulnerable: boolean): number => {
+        glow.mockClear();
+        draws.length = 0;
+        pass.draw(eclipse({ vulnerable }), 1, LOOK);
+        const corona = glow.mock.calls.map(([color, diameter], i) => ({ color, diameter, i })).filter(({ color }) => color === DRIFT.spark);
+        const widest = corona.reduce((a, b) => (b.diameter > a.diameter ? b : a));
+        const sprite = glow.mock.results[widest.i]?.value as { canvas: unknown } | undefined;
+        return draws.find((d) => d.image === sprite?.canvas)?.alpha ?? 0;
+      };
+      const shielded = haloAlpha(false);
+      expect(shielded).toBeGreaterThan(0);
+      expect(haloAlpha(true)).toBeGreaterThan(shielded);
+    });
+
+    it('flashes a shard white when a shot cracks it, and grows one back in', () => {
+      const white = vi.spyOn(baker, 'white');
+      pass.draw(eclipse(), 1, LOOK);
+      white.mockClear();
+      pass.handle([{ type: 'bossPartHit', part: 2, x: 0, y: 0, hp: 1 }]);
+      pass.draw(eclipse(), 1, LOOK);
+      expect(keysOf(white)).toContain(`${KEY}|shard|${String(SHARD_RADIUS)}`);
+      white.mockClear();
+      pass.advance(0.5, eclipse());
+      pass.draw(eclipse(), 1, LOOK);
+      expect(keysOf(white)).not.toContain(`${KEY}|shard|${String(SHARD_RADIUS)}`);
+    });
+
+    it('rings every live shard in the hostile colour as a shard volley winds up, brighter as it nears', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(eclipse({ windup: 'shardVolley', threat: { attack: 'shardVolley', windup: 1.2, kind: 'lane', reach: 54, speed: 0 } }), 1, LOOK);
+      expect(keysOf(custom).filter((key) => key === `${KEY}|warnRing|${String(SHARD_RADIUS)}`)).toHaveLength(10);
+    });
+
+    it('puts a spoke out from each live shard as a turret volley winds up, and none from a broken one', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const parts = corona();
+      Object.assign(parts[0] as BossPart, { hp: 0 });
+      pass.draw(eclipse({ windup: 'turretVolley', parts, threat: { attack: 'turretVolley', windup: 0.6, kind: 'ring', reach: 14, speed: 0, ring: { radius: 112, around: 'core' } } }), 1, LOOK);
+      expect(keysOf(custom).filter((key) => key === `${KEY}|warnSpoke|${String(SHARD_RADIUS)}`)).toHaveLength(9);
+    });
+
+    it('rings each drone\'s mouth in gold as a launch winds up, one for each drone of its wave by phase', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(eclipse({ phase: 3, windup: 'launch', threat: { attack: 'launch', windup: 0.7, kind: 'none', reach: 0, speed: 0 } }), 1, LOOK);
+      expect(keysOf(custom).filter((key) => key === `${KEY}|warnMouth|18`)).toHaveLength(3);
+    });
+
+    it('rings each of its windups with a ring keyed by its attack', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      for (const windup of ['shardVolley', 'quake', 'pulse', 'launch', 'turretVolley', 'dive'] as const) pass.draw(eclipse({ windup }), 1, LOOK);
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|shardVolley|70', 'boss|drift|ring|quake|70', 'boss|drift|ring|pulse|70', 'boss|drift|ring|launch|70', 'boss|drift|ring|turretVolley|70', 'boss|drift|ring|dive|70']));
     });
   });
 

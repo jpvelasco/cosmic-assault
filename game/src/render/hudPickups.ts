@@ -1,8 +1,8 @@
 import { clamp } from '../content/curves';
 import { EFFECT_SECONDS, type TimedPickupId } from '../content/pickups';
 import { TAU } from '../sim/math';
-import { rgba } from './color';
-import { WHITE, type HudRect } from './hudShapes';
+import { rgba, WHITE } from './color';
+import type { HudRect } from './hudShapes';
 import { drawGlyph, expiryAlpha, PICKUP_COLORS } from './pickupArt';
 import { strokePath } from './sprites';
 

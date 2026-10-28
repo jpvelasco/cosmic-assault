@@ -2,16 +2,12 @@ import type { AttackId, BossId, FoeKind } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import type { Bolts } from '../foes/bolts';
+import type { Point } from '../math';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 
 export type BossState = 'intro' | 'fighting' | 'dying' | 'down';
 export type BossPhase = 1 | 2 | 3;
-
-export interface Point {
-  x: number;
-  y: number;
-}
 
 /**
  * A piece of a boss apart from its core, an orbiting shard say, with HP of its own. Parts are pooled: one at 0 HP is
@@ -57,8 +53,16 @@ export interface BossView {
   target: Readonly<Point> | null;
   /** The attack winding up or running, as the bots read it, else null; the same object each time that attack comes round. */
   threat: Readonly<BossThreat> | null;
-  /** Where the ship was as the latest windup began, which an attack aimed at it fires at; one point, moved in place. */
+  /**
+   * Where the latest windup aims, set as it begins: where the ship was then, or where the attack's own `aim` moves that
+   * to. An attack aimed at the ship fires, dashes or coils at it, and the bots read it; one point, moved in place.
+   */
   readonly aim: Point;
+  /**
+   * For a ring threat round the aim that leaves a way in, the bearing from the aim of the middle of its opening, set as
+   * its windup begins by the behaviour that plans it and back to 0 once the attack is over; 0 for any other.
+   */
+  opening: number;
 }
 
 /** What an attack sees and may change. Refilled in place every step. */
@@ -74,10 +78,11 @@ export interface AttackContext {
   dt: number;
   /** Seconds since the attack went active, before this step. */
   age: number;
-  /** Where the ship was when the windup began. */
-  aimX: number;
-  aimY: number;
-  /** Where the core was when the attack went active. */
+  /**
+   * Where the core was when the attack went active, as the runner read it after its drift. A behaviour that owns its
+   * core's pose, and so overrides that drift, may set it again from its own step on the attack's first active step,
+   * before the attack's run first reads it.
+   */
   fromX: number;
   fromY: number;
   /**
@@ -95,19 +100,19 @@ export interface AttackContext {
  */
 export type AttackThreat =
   /**
-   * It sends the core, or its parts, down the lane from the core to where the ship was as its windup began, or fires
-   * bolts that converge on that point, reaching `reach` either side of that line; 'core' reaches the core's radius.
+   * It sends the core, or its parts, down the lane from the core to the windup's aim (`BossView.aim`), or fires bolts
+   * that converge on that point, reaching `reach` either side of that line; 'core' reaches the core's radius.
    */
   | { readonly kind: 'lane'; readonly reach: number | 'core' }
   /** As it goes active it shoves the ship straight away from the core, `speed` at the core's rim and fading to none `reach` beyond it: `radialShove`. */
   | { readonly kind: 'shove'; readonly speed: number; readonly reach: number }
   /**
-   * It sweeps a ring of `radius` about the core, or about where the ship was as its windup began ('aim'), reaching
-   * `reach` either side of the ring: a ring of parts easing out, a body coiling round the ship.
+   * It sweeps a ring of `radius` about the core, or about the windup's aim (`BossView.aim`), reaching `reach` either
+   * side of the ring: a ring of parts easing out, a body coiling round the ship.
    */
   | { readonly kind: 'ring'; readonly radius: number; readonly reach: number; readonly around: RingCentre };
 
-/** What a ring threat is centred on: the core, or where the ship was as the windup began. */
+/** What a ring threat is centred on: the core, or the windup's aim. */
 export type RingCentre = 'core' | 'aim';
 
 /** An attack as the bots read it: its windup, in the boss's time, and its threat resolved for the boss that makes it. */
@@ -129,6 +134,11 @@ export interface AttackSpec {
   readonly windup: number;
   /** Seconds the attack runs for; 0 runs it once. */
   readonly active: number;
+  /**
+   * Writes into `out` where the attack aims for a ship at `ship` as its windup begins, in `field`; where the ship is, if
+   * absent. Pure and drawing nothing: a dash keeps its aim where the core fits, a coil moves its ring onto the field.
+   */
+  aim?(ship: Readonly<Point>, field: Field, out: Point): void;
   /** Called every step of the active time. */
   run(ctx: AttackContext): void;
   /** How it threatens the ship beyond what it sends out; nothing more, if absent. */
@@ -150,10 +160,16 @@ export interface BossBehaviour {
   /** Its parts, which the runner shows on the view, steps the previous poses of, rescales and strikes. None if absent. */
   readonly parts?: readonly BossPart[];
   /**
-   * How far the core keeps from the walls as it drifts, and from a respawning ship; the core radius if absent. A live
-   * part that trails beyond it, a serpent's tail say, is kept inside the field and clear of the ship by its own radius.
+   * How far the core keeps from the walls as it drifts, and from a respawning ship; the core radius if absent. A
+   * respawning ship also keeps clear of every live part by the part's own radius, wherever it is.
    */
   readonly reach?: number;
+  /**
+   * True for parts that move rigidly with the core, an orbit or a ring say: the drift then keeps every live part inside
+   * the field too, beyond `reach`. False if absent: a boss whose parts trail behind it, a serpent's body say, keeps
+   * them inside the field itself, since moving the core does not move them with it.
+   */
+  readonly rigidParts?: boolean;
   /** Where in `field` it arrives; `bossHome` if absent. */
   home?(field: Field): Readonly<Point>;
   /** The events announcing its core exposed and shielded again; `bossExposed` and `bossShielded` if absent. */

@@ -126,7 +126,7 @@ describe('stepShip', () => {
     expect(ship.vy).toBeLessThan(0);
   });
 
-  it('caps speed at 350 even when started far above it (ruling R8)', () => {
+  it('caps speed at 350 even when started far above it', () => {
     const ship = idleShip();
     ship.vx = 400;
     ship.vy = 300;

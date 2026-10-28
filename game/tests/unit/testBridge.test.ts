@@ -38,9 +38,9 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 }
 
 describe('the test bridge look and music', () => {
-  it('reports the palette and the music theme in force, beside the version-3 fields', () => {
+  it('reports the palette and the music theme in force, beside the version-4 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(3);
+    expect(api.version).toBe(4);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
   });

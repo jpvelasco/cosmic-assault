@@ -1,9 +1,9 @@
 import type { PaletteId } from '../../content/types';
 import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { TAU } from '../../sim/math';
-import { blitCore, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
+import { blitTinted, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
 import { MONOLITH_ART_REACH, paintFissures, paintMonolithCore, paintShard } from './monolithArt';
-import { PartClocks } from './partClocks';
+import { clockHooks, PartClocks } from './partClocks';
 
 /** The fissures, dim behind the shield and blazing once the core is bare, pulsing at this rate unless held still. */
 const FISSURE_SHIELDED = 0.3;
@@ -53,35 +53,26 @@ export const monolithDrawer: DrawerFactory = (kit) => {
   };
   const paintWholeShard = shardPainter(false);
   const paintCrackedShard = shardPainter(true);
-  /** Real seconds of the fight so far, for the fissures' pulse and the shards' tumble. */
-  let time = 0;
   const clocks = new PartClocks(GROW_SECONDS);
   /** A shard's place from the core; one point, reused. */
   const offset = { x: 0, y: 0 };
 
-  function reset(): void {
-    time = 0;
-    clocks.reset();
-  }
-
   /** A live shard, interpolated, placed about the core at its scale, turned outward and tumbling. */
-  function drawShard(part: Readonly<BossPart>, i: number, frame: Readonly<BossFrame>, cx: number, cy: number): void {
+  function drawShard(part: Readonly<BossPart>, i: number, frame: Readonly<BossFrame>): void {
     if (part.hp <= 0) return;
     if (part.radius !== shardRadius) {
       shardRadius = part.radius;
       shards = shardKeys(shardRadius, palette.id);
     }
     const { size } = frame;
-    const at = partOffset(part, frame, cx, cy, offset);
+    const at = partOffset(part, frame, offset);
     const x = frame.x + at.x * size;
     const y = frame.y + at.y * size;
-    const turn = Math.atan2(y - frame.y, x - frame.x) + (frame.look.still ? 0 : time * SHARD_TUMBLE);
+    const turn = Math.atan2(y - frame.y, x - frame.x) + (frame.look.still ? 0 : clocks.time * SHARD_TUMBLE);
     const scale = size * clocks.grown(i);
     pen.place(x, y, Math.cos(turn) * scale, Math.sin(turn) * scale);
     const cracked = part.hp < part.maxHp;
-    const key = cracked ? shards.cracked : shards.whole;
-    const sprite = baker.custom(key, shardRadius + RIM_PAD, cracked ? paintCrackedShard : paintWholeShard);
-    pen.blit(clocks.flashing(i) ? (baker.white(key) ?? sprite) : sprite);
+    blitTinted(kit, cracked ? shards.cracked : shards.whole, shardRadius + RIM_PAD, cracked ? paintCrackedShard : paintWholeShard, clocks.flashing(i));
   }
 
   const bare = (boss: Readonly<BossView>): boolean => boss.vulnerable && boss.state === 'fighting';
@@ -102,8 +93,8 @@ export const monolithDrawer: DrawerFactory = (kit) => {
         keys = coreKeys(r, palette.id);
       }
       pen.place(x, y, size, 0);
-      blitCore(kit, keys.core, r * MONOLITH_ART_REACH + RIM_PAD, paintCoreAt, frame.tinted);
-      const pulse = look.still ? 1 : 0.8 + 0.2 * Math.sin(time * TAU * FISSURE_PULSE_HZ);
+      blitTinted(kit, keys.core, r * MONOLITH_ART_REACH + RIM_PAD, paintCoreAt, frame.tinted);
+      const pulse = look.still ? 1 : 0.8 + 0.2 * Math.sin(clocks.time * TAU * FISSURE_PULSE_HZ);
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = shown * (boss.vulnerable ? FISSURE_EXPOSED * pulse : FISSURE_SHIELDED);
       pen.blit(baker.custom(keys.fissures, r + RIM_PAD, paintFissuresAt));
@@ -113,20 +104,9 @@ export const monolithDrawer: DrawerFactory = (kit) => {
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = shown;
-      // Parts are placed about the core's own interpolated centre, so they keep their orbit as it scales.
-      const cx = boss.px + (boss.x - boss.px) * frame.alpha;
-      const cy = boss.py + (boss.y - boss.py) * frame.alpha;
       const { parts } = boss;
-      for (let i = 0; i < parts.length; i++) drawShard(parts[i] as BossPart, i, frame, cx, cy);
+      for (let i = 0; i < parts.length; i++) drawShard(parts[i] as BossPart, i, frame);
     },
-    advance(dt, boss) {
-      time += dt;
-      clocks.advance(dt, boss.parts);
-    },
-    handle(event) {
-      clocks.handle(event);
-      if (event.type === 'bossIntro') time = 0;
-    },
-    reset,
+    ...clockHooks(clocks),
   };
 };

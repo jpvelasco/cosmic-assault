@@ -64,14 +64,23 @@ export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, s
  * The darkened corners drawn over the scene, baked like the sky so a frame costs one blit. It bakes at
  * a quarter of `pixelsPerUnit` per axis, so draw it stretched over the field.
  */
-export function bakeVignette(field: Field, pixelsPerUnit: number): HTMLCanvasElement {
+export function bakeVignette(field: Field, pixelsPerUnit: number, colour = '#000000', alpha = VIGNETTE_ALPHA): HTMLCanvasElement {
   const { canvas, ctx } = fieldCanvas(field, pixelsPerUnit * VIGNETTE_RESOLUTION);
   const cx = field.width / 2;
   const cy = field.height / 2;
   const shade = ctx.createRadialGradient(cx, cy, field.height * VIGNETTE_INNER, cx, cy, field.width * VIGNETTE_OUTER);
-  shade.addColorStop(0, rgba('#000000', 0));
-  shade.addColorStop(1, rgba('#000000', VIGNETTE_ALPHA));
+  shade.addColorStop(0, rgba(colour, 0));
+  shade.addColorStop(1, rgba(colour, alpha));
   ctx.fillStyle = shade;
   ctx.fillRect(0, 0, field.width, field.height);
   return canvas;
+}
+
+/** Time Warp's cool vignette: the same shading as the sky's, in a cool blue that reads as slowed time. */
+export const TIME_WARP_TINT = '#6f9cff';
+const TIME_WARP_ALPHA = 0.6;
+
+/** A baked Time Warp vignette for `field`, drawn over the field while the warp runs and never as a filter. */
+export function bakeTimeWarp(field: Field, pixelsPerUnit: number): HTMLCanvasElement {
+  return bakeVignette(field, pixelsPerUnit, TIME_WARP_TINT, TIME_WARP_ALPHA);
 }

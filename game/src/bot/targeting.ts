@@ -1,7 +1,9 @@
-import type { BossPart, BossView, Point } from '../sim/boss/behaviour';
+import type { BossPart, BossView } from '../sim/boss/behaviour';
 import { bossTarget } from '../sim/boss/bossRules';
 import { PLAYER, PROJECTILE, STEP_SECONDS } from '../sim/config';
+import { type Point, turnBetween } from '../sim/math';
 import { wrapDelta } from '../sim/wrap';
+import type { Foe } from '../sim/foes/foe';
 import type { BotView } from './view';
 
 /** A point to shoot at, how it moves, and whether a shot may reach it across the wrap. */
@@ -39,9 +41,22 @@ const LINE_HOLD = 4;
 
 /**
  * Extra effective distance, by kind, when choosing what to shoot: drones, gunships, mines (shot from range, before the
- * ship comes near their arm rings) and the boss first, then splitters, then rocks.
+ * ship comes near their arm rings), phasers, and the boss first, then splitters and armoured rocks, then rocks.
  */
-const PRIORITY = { drone: 0, gunship: 0, mine: 0, boss: 0, splitter: 150, rock: 350 } as const;
+const PRIORITY = { drone: 0, gunship: 0, mine: 0, phaser: 0, boss: 0, splitter: 150, armoured: 150, rock: 350 } as const;
+/**
+ * How near its nose an armoured rock's soft arc must face the ship for the pilot to shoot it, within 30 of the 50 the arc
+ * spans: a shot that strikes outside the arc is spent for nothing.
+ */
+const ARMOUR_AIM = Math.PI / 6;
+
+/** Whether `foe` is worth a shot now: any foe but an armoured rock, and an armoured rock whose soft arc faces the ship within `ARMOUR_AIM`. */
+function shootable(foe: Readonly<Foe>, view: Readonly<BotView>): boolean {
+  if (foe.kind !== 'armoured') return true;
+  const { ship, field } = view;
+  const toShip = Math.atan2(wrapDelta(ship.y - foe.y, field.height), wrapDelta(ship.x - foe.x, field.width));
+  return Math.abs(turnBetween(foe.rotation, toShip)) <= ARMOUR_AIM;
+}
 
 /** An offset `delta` along a side `size` long: across the wrap if that is shorter and `wraps`, else across the field. */
 const across = (delta: number, size: number, wraps: boolean): number => (wraps ? wrapDelta(delta, size) : delta);
@@ -131,7 +146,7 @@ function offerBoss(view: Readonly<BotView>, out: Target, best: number, boss: Rea
 export function chooseTarget(view: Readonly<BotView>, out: Target): boolean {
   const held = out.weakPoint;
   let best = Infinity;
-  for (const foe of view.foes) if (foe.hp > 0) best = offer(view, out, best, foe, foe.vx, foe.vy, PRIORITY[foe.kind], true);
+  for (const foe of view.foes) if (foe.hp > 0 && shootable(foe, view)) best = offer(view, out, best, foe, foe.vx, foe.vy, PRIORITY[foe.kind], true);
   if (view.boss !== null) best = offerBoss(view, out, best, view.boss, held);
   for (const rock of view.asteroids) best = offer(view, out, best, rock, rock.vx, rock.vy, PRIORITY.rock, true);
   return best < Infinity;

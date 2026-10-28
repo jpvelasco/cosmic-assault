@@ -1,8 +1,8 @@
 import { clamp } from '../content/curves';
 import type { ShowerState } from '../sim/galaxy/showers';
 import { TAU } from '../sim/math';
-import { rgba } from './color';
-import { fillBar, WHITE, type HudRect } from './hudShapes';
+import { rgba, WHITE } from './color';
+import { fillBar, type HudRect } from './hudShapes';
 
 const TRACK = rgba(WHITE, 0.14);
 // Shower arrows: three chevrons pointing in from the edge, pulsing in turn.

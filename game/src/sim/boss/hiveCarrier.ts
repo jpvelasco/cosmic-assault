@@ -2,9 +2,9 @@ import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
-import { smoothstep, TIME_EPSILON, turnBetween } from '../math';
-import { clearSlot, hullPoint, lane, launchDrones, transientRock } from './attacks';
-import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure, Point } from './behaviour';
+import { type Point, smoothstep, TIME_EPSILON, turnBetween } from '../math';
+import { clearSlot, hullPoint, lane, launchDrones, transientRock, turnToward } from './attacks';
+import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure } from './behaviour';
 
 /** Seconds the hangar stays open after each launch. */
 export const HANGAR_OPEN_SECONDS = 4;
@@ -61,8 +61,8 @@ class HiveCarrier implements BossBehaviour {
     retreat: { windup: WINDUPS.retreat, active: RETREAT_SECONDS, run: retreat },
   };
 
-  /** The sim time the hangar closes at. */
-  private closesAt = Number.NEGATIVE_INFINITY;
+  /** Seconds of the fight's own clock until the hangar closes, as of the last step; 0 or less while it is shut. */
+  private openFor = 0;
   private open = false;
   /** Which way it cruises: 1 to the right, -1 to the left. */
   private direction: 1 | -1;
@@ -96,11 +96,10 @@ class HiveCarrier implements BossBehaviour {
   /** While it fights: turns toward the ship, cruises unless retreating, and opens or shuts the hangar on time. */
   step(ctx: AttackContext): void {
     const { boss, arena, dt } = ctx;
-    this.open = boss.state === 'fighting' && arena.elapsed() + TIME_EPSILON < this.closesAt;
+    this.open = boss.state === 'fighting' && this.openFor > TIME_EPSILON;
+    this.openFor -= dt;
     if (boss.state !== 'fighting') return;
-    const { ship } = arena;
-    const limit = TURN_RATE * dt;
-    boss.facing += clamp(turnBetween(boss.facing, Math.atan2(ship.y - boss.y, ship.x - boss.x)), -limit, limit);
+    turnToward(boss, arena.ship, TURN_RATE, dt);
     if (boss.active !== 'retreat') this.cruise(boss, dt, arena.field());
   }
 
@@ -115,7 +114,7 @@ class HiveCarrier implements BossBehaviour {
 
   /** Opens the hangar, and sends out the phase's wave of drones through it, as many as the cap leaves room for (`launchDrones`). */
   private launch(ctx: AttackContext): void {
-    this.closesAt = ctx.arena.elapsed() + HANGAR_OPEN_SECONDS;
+    this.openFor = HANGAR_OPEN_SECONDS;
     launchDrones(ctx, this.foes, LAUNCH_WAVES[ctx.boss.phase], DRONE_CAP);
   }
 }

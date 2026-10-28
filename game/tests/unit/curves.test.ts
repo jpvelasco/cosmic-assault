@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dropChance, kindProbability, rockSpeedMultiplier, sawtooth, spawnInterval, threatBudget } from '../../src/content/curves';
+import { tierOf } from '../../src/content/galaxies';
 
 describe('spawnInterval', () => {
   it('shrinks from 2.4 s by 0.82 per tier', () => {
@@ -60,16 +61,39 @@ describe('kindProbability', () => {
 });
 
 describe('sawtooth', () => {
-  it('eases the first galaxy of every Dimension, the first included, to 0.85', () => {
+  const indexes = [1, 2, 3, 4, 5, 6] as const;
+  const dimensions = [1, 2, 3, 4, 5] as const;
+
+  it('eases the first galaxy of every Dimension, the first included, to 0.85 or less', () => {
     expect(sawtooth({ index: 1, dimension: 1 })).toBe(0.85);
     expect(sawtooth({ index: 1, dimension: 2 })).toBe(0.85);
-    expect(sawtooth({ index: 1, dimension: 5 })).toBe(0.85);
+    for (const dimension of dimensions) expect(sawtooth({ index: 1, dimension })).toBeLessThanOrEqual(0.85);
   });
 
-  it('leaves everything else at 1', () => {
-    expect(sawtooth({ index: 2, dimension: 1 })).toBe(1);
-    expect(sawtooth({ index: 2, dimension: 2 })).toBe(1);
-    expect(sawtooth({ index: 6, dimension: 5 })).toBe(1);
+  it('leaves the first two Dimensions\' other galaxies their whole budget', () => {
+    for (const dimension of [1, 2] as const) for (const index of indexes.slice(1)) expect(sawtooth({ index, dimension })).toBe(1);
+  });
+
+  it('fields a share of the budget from Crimson Nebula on, a token one in a boss galaxy', () => {
+    for (const dimension of [3, 4, 5] as const) {
+      for (const index of indexes.slice(0, 5)) {
+        expect(sawtooth({ index, dimension })).toBeGreaterThan(0.4);
+        expect(sawtooth({ index, dimension })).toBeLessThan(1);
+      }
+      expect(sawtooth({ index: 6, dimension })).toBeLessThanOrEqual(0.25);
+    }
+  });
+
+  it('holds every later survival galaxy\'s rock budget within Ion Reach\'s: no more than its largest, and no less than 0.85 of its smallest', () => {
+    const survival = [1, 2, 3, 4, 5] as const;
+    const budget = (dimension: 2 | 3 | 4 | 5, index: (typeof survival)[number]): number => threatBudget(tierOf({ dimension, index })) * sawtooth({ dimension, index });
+    const ionReach = survival.map((index) => budget(2, index));
+    for (const dimension of [3, 4, 5] as const) {
+      for (const index of survival) {
+        expect(budget(dimension, index)).toBeLessThanOrEqual(Math.max(...ionReach));
+        expect(budget(dimension, index)).toBeGreaterThanOrEqual(0.85 * Math.min(...ionReach));
+      }
+    }
   });
 });
 

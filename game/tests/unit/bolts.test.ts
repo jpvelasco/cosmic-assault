@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { BOLT } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
-import type { GalaxyDef } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, ofType, stubArena } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const DT = STEP_SECONDS;
 
@@ -96,11 +95,10 @@ describe('hostile bolts', () => {
 });
 
 describe('bolts in a galaxy run', () => {
-  const calm = (): GalaxyDef => ({ ...galaxyById('2-4'), kinds: MUTED_KINDS, events: [] });
 
   /** A calm galaxy with one bolt fired at (x, y) along +x, its ship at rest at the centre. */
   function withBolt(x: number, y: number, warp = false) {
-    const world = new World({ seed: 3, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'free' } });
+    const world = new World({ seed: 3, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('2-4'), mode: 'free' } });
     const run = world['run'];
     if (run === null) throw new Error('not a galaxy');
     if (warp) run.loadout.collect('timeWarp');

@@ -1,5 +1,7 @@
+import { galaxyById } from '../src/content/galaxies';
+import { HAZARD_RULES } from '../src/content/hazards';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../src/content/pacingRules';
-import type { GalaxyId } from '../src/content/types';
+import type { GalaxyId, HazardType } from '../src/content/types';
 
 /** One seed and the claim it makes about its idle ship in `galaxy`. */
 export interface SeedEntry {
@@ -20,11 +22,31 @@ export const CARRIER_GALAXY: GalaxyId = '2-6';
 /** The `?galaxy=` the game-over specs play with `?lives=1`, which makes it a one-life Rank run: a late galaxy, whose busier field ends an idle run within a few seconds, where 1-1 takes ten or more. */
 export const GAME_OVER_GALAXY: GalaxyId = '5-5';
 
-/** The `?galaxy=` the perf spec plays: the busiest field early on, 15 to 20 rocks by 15 s with the ship firing. */
-export const PERF_GALAXY: GalaxyId = '5-5';
+/** The `?galaxy=` the perf spec plays: a busy field early on, among Void Rift's foes and hazards, with the ship firing. */
+export const PERF_GALAXY: GalaxyId = '4-5';
 
 /** The `?galaxy=` the Ion Reach spec plays: it has a gravity well from 46 s and the first Dimension with drones. */
 export const ION_REACH_GALAXY: GalaxyId = '2-4';
+
+/** The Crimson Nebula galaxy the hazard spec plays: mines among its foes, and a danger zone from 20 s. */
+export const CRIMSON_GALAXY: GalaxyId = '3-4';
+
+/** The galaxy the gunship spec plays: the first with gunships among every other foe from its start. */
+export const GUNSHIP_GALAXY: GalaxyId = '5-1';
+
+/** The Void Rift galaxy the hazard spec plays: a warp rift from 20 s. */
+export const VOID_RIFT_GALAXY: GalaxyId = '4-4';
+
+/** The Singularity galaxy the hazard spec plays: a black hole from 12 s at the field's centre, where the ship starts. */
+export const SINGULARITY_GALAXY: GalaxyId = '5-2';
+
+/** The boss galaxies of the last three Dimensions. */
+export const WARDEN_GALAXY: GalaxyId = '3-6';
+export const LEVIATHAN_GALAXY: GalaxyId = '4-6';
+export const ECLIPSE_GALAXY: GalaxyId = '5-6';
+
+/** The galaxy whose field the sprite-cache spec plays, the last survival galaxy, with every foe and its black hole. */
+export const CACHE_GALAXY: GalaxyId = '5-5';
 
 const ENTRIES = [
   // The default `?seed=`: its first 2.5 s in 1-1 keep rocks out of the lanes the fire assertions shoot through.
@@ -44,9 +66,32 @@ const ENTRIES = [
   // The Ion Reach spec: the idle ship lives to the well's warning, with a foe on the field, and on into the pull.
   { seed: 12, claim: 'ion-reach-hazards', galaxy: ION_REACH_GALAXY },
   // The perf spec measures frame time, not an outcome; this seed pins a busy field so every run spawns the same rocks.
-  { seed: 3, claim: 'busy-field', galaxy: PERF_GALAXY },
+  { seed: 234, claim: 'busy-field', galaxy: PERF_GALAXY },
   // The perf spec's boss scene: skipped to the Hive Carrier's fight, a ship firing and turning keeps it fighting.
   { seed: 2, claim: 'carrier-fight', galaxy: CARRIER_GALAXY },
+  // The Crimson Nebula spec: the idle ship is in play at the zone's warning, on into the zone, and on until it sees the first
+  // mine to arm be the first to blast, on both e2e fields. Mines seldom drift close enough to a still ship to arm: about one
+  // seed in 300.
+  { seed: 176, claim: 'crimson-hazards', galaxy: CRIMSON_GALAXY },
+  // The gunship spec: the idle ship sees a gunship wind up and fire, and a bolt leave across the field's edge, on both e2e
+  // fields. Crimson Nebula's own galaxies bring gunships too seldom early on for a still ship to see that on both fields
+  // in 300 seeds; Singularity mixes them in from its first galaxy.
+  { seed: 2, claim: 'gunship-bolt', galaxy: GUNSHIP_GALAXY },
+  // The Void Rift spec: the idle ship lives to the rift's warning and on while it is open.
+  { seed: 1, claim: 'void-rift', galaxy: VOID_RIFT_GALAXY },
+  // The Singularity spec: the idle ship lives to the hole's warning, and its first death comes back at the moved respawn.
+  { seed: 1, claim: 'singularity-hole', galaxy: SINGULARITY_GALAXY },
+  // The boss specs of the last three Dimensions: the idle ship lives through the approach and intro to the fight.
+  { seed: 1, claim: 'warden-fight', galaxy: WARDEN_GALAXY },
+  { seed: 1, claim: 'leviathan-fight', galaxy: LEVIATHAN_GALAXY },
+  // A Rank run's last galaxy, which a clear ends on Rank complete.
+  { seed: 1, claim: 'eclipse-rank', galaxy: ECLIPSE_GALAXY },
+  // The sprite-cache spec: a ship firing and turning with five lives stays in play through the hold.
+  { seed: 1, claim: 'cache-field', galaxy: CACHE_GALAXY },
+  // The sprite-cache spec's boss fights: skipped to the fight, a ship firing and turning keeps it fighting.
+  { seed: 4, claim: 'warden-cache', galaxy: WARDEN_GALAXY },
+  { seed: 1, claim: 'leviathan-cache', galaxy: LEVIATHAN_GALAXY },
+  { seed: 2, claim: 'eclipse-cache', galaxy: ECLIPSE_GALAXY },
 ] as const satisfies readonly { readonly seed: number; readonly claim: string; readonly galaxy: GalaxyId }[];
 
 /** A claim a seed in the table makes. */
@@ -114,3 +159,28 @@ export const WELL_WARNING_SECONDS = 44.5;
 
 /** Sim seconds after `WELL_WARNING_SECONDS` by which that well is pulling (it starts at 46 s). */
 export const WELL_PULL_SECONDS = 2;
+
+/** Sim seconds into `galaxy` half a second after its first `type` hazard starts its warning. */
+export function warnedSeconds(galaxy: GalaxyId, type: HazardType): number {
+  const event = galaxyById(galaxy).events.find((e) => e.type === type);
+  if (event === undefined) throw new RangeError(`${galaxy} schedules no ${type}; pick a galaxy that does`);
+  return event.at - HAZARD_RULES[type].telegraph + 0.5;
+}
+
+/** Sim seconds by which the 'crimson-hazards' idle ship has seen a mine arm and blast. */
+export const CRIMSON_WATCH_SECONDS = 60;
+
+/** Sim seconds by which the 'gunship-bolt' idle ship has seen a gunship fire and a bolt leave across the edge. */
+export const GUNSHIP_WATCH_SECONDS = 90;
+
+/** The `?lives=` the foe and hazard specs play with: an idle ship is hit now and then, and a mine arms only near a ship that can be hit. */
+export const WATCH_LIVES = 5;
+
+/** Sim seconds within which the 'singularity-hole' idle ship loses its first life to the hole. */
+export const HOLE_DEATH_SECONDS = 20;
+
+/** Seconds the sprite-cache spec plays each scene, holding fire and a left turn. */
+export const CACHE_HOLD_SECONDS = 20;
+
+/** The `?lives=` the sprite-cache spec plays with, the most a run allows, so its ship outlasts the hold. */
+export const CACHE_LIVES = 5;

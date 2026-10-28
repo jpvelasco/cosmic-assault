@@ -1,22 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BlastKind } from '../../src/content/pickups';
-import type { GalaxyDef } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID, BLAST, PICKUP, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import { comboMultiplier } from '../../src/sim/scoring';
 import { World } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { ofType } from '../helpers/bossArena';
+import { calmGalaxy, still } from '../helpers/mute';
+import { placeFoe } from '../helpers/foeRig';
 
 const FIELD = { width: 1280, height: 720 };
 const CENTRE = { x: 640, y: 360, angle: -Math.PI / 2 };
-const calm = (galaxy: GalaxyDef = galaxyById('5-2')): GalaxyDef => ({ ...galaxy, kinds: MUTED_KINDS, events: [] });
-const still = (x: number, y: number, size: AsteroidSize) => ({ x, y, size, angle: 0, speedMultiplier: 0 });
 
 function world(rocks: ReturnType<typeof still>[] = [], ship: { x: number; y: number; angle: number } = CENTRE): World {
-  return new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'free' }, initialShip: ship, initialAsteroids: rocks });
+  return new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('5-2'), mode: 'free' }, initialShip: ship, initialAsteroids: rocks });
 }
 
 function run(w: World) {
@@ -32,8 +30,6 @@ function collectAtShip(w: World, kind: BlastKind): readonly SimEvent[] {
   field.list.push({ id: 99, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: PICKUP.lifespan });
   return w.step(STEP_SECONDS, NO_CONTROLS).map((e) => ({ ...e }));
 }
-
-const ofType = <T extends SimEvent['type']>(events: readonly SimEvent[], type: T) => events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
 
 /** A rock of `size` whose edge sits `gap` units outside (positive) or inside (negative) a blast of `radius` at the centre. */
 const atEdge = (radius: number, size: AsteroidSize, gap: number, side = 1) => still(640 + side * (radius + ASTEROID.radii[size] + gap), 360, size);
@@ -83,12 +79,7 @@ describe('a Field Bomb', () => {
     const w = world();
     const foes = run(w)['foes'];
     const roll = vi.spyOn(run(w)['pickupField'], 'roll');
-    for (const x of [700, 640 + 220 + 30 - 1, 640 + 220 + 30 + 1]) {
-      const foe = foes.acquire('splitter');
-      if (foe === null) throw new Error('foe pool full');
-      Object.assign(foe, { x, y: 360 });
-      foes.commit(foe);
-    }
+    for (const x of [700, 640 + 220 + 30 - 1, 640 + 220 + 30 + 1]) placeFoe(foes, 'splitter', x, 360);
     const events = collectAtShip(w, 'fieldBomb');
     const destroyed = ofType(events, 'foeDestroyed');
     expect(destroyed.map((e) => e.x)).toEqual([700, 640 + 220 + 30 - 1]);
@@ -104,10 +95,7 @@ describe('a blast across the wrap', () => {
     // The ship sits 20 in from the right edge; the rock 40 past the left edge is 80 away across the wrap band.
     const w = world([still(-40, 360, 3), still(640, 360, 3)], { x: 1260, y: 360, angle: 0 });
     const foes = run(w)['foes'];
-    const foe = foes.acquire('drone');
-    if (foe === null) throw new Error('foe pool full');
-    Object.assign(foe, { x: 1260, y: -30 });
-    foes.commit(foe);
+    placeFoe(foes, 'drone', 1260, -30);
     const events = collectAtShip(w, 'fieldBomb');
     expect(ofType(events, 'asteroidDestroyed').map((e) => e.x)).toEqual([-40]);
     expect(w.asteroids.map((a) => a.x)).toEqual([640]);

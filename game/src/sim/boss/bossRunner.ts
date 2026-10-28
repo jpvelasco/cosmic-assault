@@ -23,6 +23,9 @@ const REACH_SLACK = 1e-6;
 /** `extent`, if it lies beyond `reach` by more than float residue, else `reach`. */
 const beyond = (reach: number, extent: number): number => (extent > reach + REACH_SLACK ? extent : reach);
 
+/** The parts a boss whose parts trail behind it widens its drift's clamp by: none. */
+const NO_PARTS: readonly BossPart[] = [];
+
 /** How a boss announces its core opening and closing, unless its behaviour says otherwise. */
 const CORE_EXPOSURE: Exposure = { opened: 'bossExposed', closed: 'bossShielded' };
 /** Where a boss faces until its behaviour turns it: down the field, toward the ship's side. */
@@ -53,6 +56,8 @@ export class BossRunner {
   private shownVulnerable: boolean;
   /** Each attack's threat, resolved once, so showing one on the view allocates nothing. */
   private readonly threats: ReadonlyMap<AttackId, BossThreat>;
+  /** How far the boss extends each way from its core, as the drift keeps it inside the field; refilled by `measure`. */
+  private readonly extent = { left: 0, right: 0, up: 0, down: 0 };
 
   constructor(
     private readonly def: BossDef,
@@ -81,7 +86,9 @@ export class BossRunner {
       target: null,
       threat: null,
       aim: { x: home.x, y: home.y },
+      opening: 0,
     };
+    this.assertFits(setup.field);
     const heading = setup.rng.range(0, TAU);
     this.dx = Math.cos(heading) * behaviour.driftSpeed;
     this.dy = Math.sin(heading) * behaviour.driftSpeed;
@@ -100,7 +107,7 @@ export class BossRunner {
     return this.view.state;
   }
 
-  /** How far the core keeps from the walls, and from a respawning ship: its behaviour's reach, else its radius. Live parts beyond it count too. */
+  /** How far the core keeps from the walls, and from a respawning ship: its behaviour's reach, else its radius. A respawning ship keeps clear of every live part too. */
   get reach(): number {
     return this.behaviour.reach ?? this.view.radius;
   }
@@ -113,8 +120,6 @@ export class BossRunner {
     view.aim.x = rescale(view.aim.x, old.width, field.width);
     view.aim.y = rescale(view.aim.y, old.height, field.height);
     if (context === null) return;
-    context.aimX = view.aim.x;
-    context.aimY = view.aim.y;
     context.fromX = rescale(context.fromX, old.width, field.width);
     context.fromY = rescale(context.fromY, old.height, field.height);
   }
@@ -317,7 +322,7 @@ export class BossRunner {
     }
   }
 
-  /** Picks the phase's next attack and starts telegraphing it, noting where the ship is. */
+  /** Picks the phase's next attack and starts telegraphing it, noting where it aims. */
   private beginWindup(arena: Arena): void {
     const view = this.view;
     const list = this.def.phases[view.phase - 1] ?? [];
@@ -329,10 +334,19 @@ export class BossRunner {
     this.clock = 0;
     view.windup = attack;
     view.threat = this.threats.get(attack) ?? null;
-    const ctx = this.contextFor(arena);
-    ctx.aimX = view.aim.x = arena.ship.x;
-    ctx.aimY = view.aim.y = arena.ship.y;
+    this.aimAt(this.spec(attack), arena);
     arena.events.push({ type: 'bossWindup', attack, x: view.x, y: view.y });
+  }
+
+  /** Sets the view's aim for `spec`'s windup: where the ship is, or where the attack's own `aim` puts it. */
+  private aimAt(spec: AttackSpec, arena: Arena): void {
+    const { aim } = this.view;
+    if (spec.aim !== undefined) {
+      spec.aim(arena.ship, arena.field(), aim);
+      return;
+    }
+    aim.x = arena.ship.x;
+    aim.y = arena.ship.y;
   }
 
   private beginActive(arena: Arena): void {
@@ -356,23 +370,45 @@ export class BossRunner {
   }
 
   private contextFor(arena: Arena): AttackContext {
-    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, bolts: this.setup.bolts ?? null, boss: this.view, dt: 0, age: 0, aimX: 0, aimY: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
+    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, bolts: this.setup.bolts ?? null, boss: this.view, dt: 0, age: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
     this.context.arena = arena;
     return this.context;
   }
 
-  /** Moves the core along its heading, bouncing it off the walls so the whole boss, parts and all, stays inside the field. */
-  private drift(dt: number, field: Field): void {
-    const { view, reach } = this;
-    // How far the boss extends each way from its core: its reach, or further where a live part trails beyond it.
-    let [left, right, up, down] = [reach, reach, reach, reach];
-    for (const part of view.parts) {
+  /**
+   * Measures into `extent` how far the boss extends each way from its core, as the drift keeps it inside the field: its
+   * reach, or further where a live part of a boss whose parts move rigidly with its core lies beyond it.
+   */
+  private measure(): Readonly<BossRunner['extent']> {
+    const { view, reach, extent } = this;
+    extent.left = extent.right = extent.up = extent.down = reach;
+    const parts = this.behaviour.rigidParts === true ? view.parts : NO_PARTS;
+    for (const part of parts) {
       if (part.hp <= 0) continue;
-      left = beyond(left, view.x - part.x + part.radius);
-      right = beyond(right, part.x - view.x + part.radius);
-      up = beyond(up, view.y - part.y + part.radius);
-      down = beyond(down, part.y - view.y + part.radius);
+      extent.left = beyond(extent.left, view.x - part.x + part.radius);
+      extent.right = beyond(extent.right, part.x - view.x + part.radius);
+      extent.up = beyond(extent.up, view.y - part.y + part.radius);
+      extent.down = beyond(extent.down, part.y - view.y + part.radius);
     }
+    return extent;
+  }
+
+  /** Throws, naming the boss, if the extent its drift keeps inside the field, as it arrives, is wider or taller than `field`. */
+  private assertFits(field: Field): void {
+    const { left, right, up, down } = this.measure();
+    if (left + right <= field.width && up + down <= field.height) return;
+    throw new RangeError(
+      `${this.def.id} reaches ${String(Math.round(left + right))} across and ${String(Math.round(up + down))} down from its core, more than its ${String(field.width)}×${String(field.height)} field holds: shrink its reach, its orbit or its parts' radius`,
+    );
+  }
+
+  /**
+   * Moves the core along its heading, bouncing it off the walls so its reach stays inside the field, and with it every
+   * live part of a boss whose parts move rigidly with its core.
+   */
+  private drift(dt: number, field: Field): void {
+    const { view } = this;
+    const { left, right, up, down } = this.measure();
     const [maxX, maxY] = [field.width - right, field.height - down];
     view.x = clamp(view.x + this.dx * dt, left, maxX);
     view.y = clamp(view.y + this.dy * dt, up, maxY);

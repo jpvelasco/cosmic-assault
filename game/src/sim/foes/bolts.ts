@@ -38,11 +38,8 @@ export class Bolts {
   private readonly live: Bolt[] = [];
   private readonly spare: Bolt[];
 
-  constructor(
-    private readonly arena: Pick<Arena, 'events' | 'field' | 'nextId'>,
-    capacity: number = BOLT.capacity,
-  ) {
-    this.spare = Array.from({ length: capacity }, () => ({ id: 0, x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0, radius: BOLT.radius, age: 0, source: 'boss', owner: 0, fromAttack: false }));
+  constructor(private readonly arena: Pick<Arena, 'events' | 'field' | 'nextId'>) {
+    this.spare = Array.from({ length: BOLT.capacity }, () => ({ id: 0, x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0, radius: BOLT.radius, age: 0, source: 'boss', owner: 0, fromAttack: false }));
   }
 
   /** The bolts on the field, in the order they were fired; live, and mutated in place. */

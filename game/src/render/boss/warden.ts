@@ -3,16 +3,14 @@ import type { BossPart, BossView } from '../../sim/boss/behaviour';
 import { nearestParts, stretchRoom } from '../../sim/boss/turretRing';
 import { LOCK_TURRETS, PULSE_RADIUS, WARDEN_RING } from '../../sim/boss/warden';
 import { TAU } from '../../sim/math';
-import { blitCore, partOffset, RIM_PAD, type BossFrame, type DrawerFactory } from './drawer';
-import { PartClocks } from './partClocks';
-import { BARREL_REACH, paintGhostRing, paintReticle, paintTrack, paintTurret, paintWardenCore, paintWardenEye, WARDEN_ART_REACH } from './wardenArt';
+import { blitTinted, partOffset, RIM_PAD, windupCharge, type BossFrame, type DrawerFactory } from './drawer';
+import { clockHooks, PartClocks } from './partClocks';
+import { BARREL_REACH, paintGhostRing, paintLockReticle, paintTrack, paintTurret, paintWardenCore, paintWardenEye, WARDEN_ART_REACH } from './wardenArt';
 
 /** How long a regrown turret takes to grow to full size. */
 const GROW_SECONDS = 0.4;
 /** Turret sprites by damage, whole to one blow from breaking. */
 const DAMAGE_STATES = 3;
-/** Warnings pulse at this rate unless held still. */
-const WARN_PULSE_HZ = 5;
 /** A muzzle charging for a volley or a lock-on: its glow's diameter in turret radii, and how bright it ends. */
 const MUZZLE_GLOW_SCALE = 3.2;
 const MUZZLE_GLOW_ALPHA = 0.95;
@@ -84,24 +82,17 @@ export const wardenDrawer: DrawerFactory = (kit) => {
     paintGhostRing(c, WARDEN_RING.radius, spinColor);
   };
   const paintReticleAt = (c: CanvasRenderingContext2D): void => {
-    paintReticle(c, RETICLE_RADIUS, hostile);
+    paintLockReticle(c, RETICLE_RADIUS, hostile);
   };
   const clocks = new PartClocks(GROW_SECONDS);
   /** A part's place from the core; one point, reused. */
   const offset = { x: 0, y: 0 };
   /** The turrets a lock-on winding up will fire from; reused. */
   const locking: number[] = [];
-  let time = 0;
-  /** The attack winding up and for how long, in real seconds. */
-
-  /** How far the windup under way has come, 0 to 1, over its declared length. */
-  const charge = (boss: Readonly<BossView>, frame: Readonly<BossFrame>): number => Math.min(1, frame.windupAge / (boss.threat?.windup ?? 1));
-  /** A warning's flicker, steady under reduced motion. */
-  const flicker = (still: boolean): number => (still ? 1 : 0.75 + 0.25 * Math.sin(time * TAU * WARN_PULSE_HZ));
 
   /** Places the pen on the ring about the core's interpolated centre, turned with the ring (`first`, its turret 0) and scaled by `scale`. */
-  function placeRing(first: Readonly<BossPart>, frame: Readonly<BossFrame>, cx: number, cy: number, scale: number): void {
-    const { x, y } = partOffset(first, frame, cx, cy, offset);
+  function placeRing(first: Readonly<BossPart>, frame: Readonly<BossFrame>, scale: number): void {
+    const { x, y } = partOffset(first, frame, offset);
     // Turret 0 sits one slot on from slot 0, the first gap, which the track's art lays along +x.
     const turn = Math.atan2(y, x) - SLOT;
     const s = scale * frame.size;
@@ -109,42 +100,40 @@ export const wardenDrawer: DrawerFactory = (kit) => {
   }
 
   /** The track at the ring's radius in force, and the hot band of a spin over it while one winds up or runs. */
-  function drawTrack(boss: Readonly<BossView>, first: Readonly<BossPart>, frame: Readonly<BossFrame>, cx: number, cy: number): void {
-    placeRing(first, frame, cx, cy, Math.hypot(first.x - boss.x, first.y - boss.y) / WARDEN_RING.radius);
+  function drawTrack(boss: Readonly<BossView>, first: Readonly<BossPart>, frame: Readonly<BossFrame>): void {
+    placeRing(first, frame, Math.hypot(first.x - boss.x, first.y - boss.y) / WARDEN_RING.radius);
     pen.blit(baker.custom(rings.track, WARDEN_RING.radius + TRACK_PAD, paintTrackAt));
     const spinning = boss.windup === 'spin' || boss.active === 'spin';
     if (!spinning) return;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = frame.shown * (boss.active === 'spin' ? 1 : charge(boss, frame)) * flicker(frame.look.still);
+    ctx.globalAlpha = frame.shown * (boss.active === 'spin' ? 1 : windupCharge(boss, frame)) * clocks.flicker(frame.look.still);
     pen.blit(baker.custom(rings.spin, WARDEN_RING.radius + GHOST_PAD, paintSpinAt));
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = frame.shown;
   }
 
   /** A live turret, interpolated, about the core at its scale, its barrel outward, cracked by its damage, white when hit. */
-  function drawTurret(part: Readonly<BossPart>, i: number, frame: Readonly<BossFrame>, cx: number, cy: number): void {
+  function drawTurret(part: Readonly<BossPart>, i: number, frame: Readonly<BossFrame>): void {
     if (part.radius !== turretRadius) {
       turretRadius = part.radius;
       turrets = turretKeys(turretRadius, palette.id);
     }
-    const at = partOffset(part, frame, cx, cy, offset);
+    const at = partOffset(part, frame, offset);
     const x = frame.x + at.x * frame.size;
     const y = frame.y + at.y * frame.size;
     const turn = Math.atan2(at.y, at.x);
     const scale = frame.size * clocks.grown(i);
     pen.place(x, y, Math.cos(turn) * scale, Math.sin(turn) * scale);
     const damage = damageOf(part);
-    const key = turrets[damage] as string;
-    const sprite = baker.custom(key, turretRadius * BARREL_REACH + RIM_PAD, turretPainters[damage] as (c: CanvasRenderingContext2D) => void);
-    pen.blit(clocks.flashing(i) ? (baker.white(key) ?? sprite) : sprite);
+    blitTinted(kit, turrets[damage] as string, turretRadius * BARREL_REACH + RIM_PAD, turretPainters[damage] as (c: CanvasRenderingContext2D) => void, clocks.flashing(i));
   }
 
   /**
    * A charging glow of `color`, `diameter` across, `reach` out past turret `part`'s centre along its barrel, at `strength`
    * of full.
    */
-  function drawCharging(part: Readonly<BossPart>, frame: Readonly<BossFrame>, cx: number, cy: number, reach: number, color: string, diameter: number, strength: number): void {
-    const { x: dx, y: dy } = partOffset(part, frame, cx, cy, offset);
+  function drawCharging(part: Readonly<BossPart>, frame: Readonly<BossFrame>, reach: number, color: string, diameter: number, strength: number): void {
+    const { x: dx, y: dy } = partOffset(part, frame, offset);
     const out = (Math.hypot(dx, dy) + reach) / Math.max(1, Math.hypot(dx, dy));
     ctx.globalAlpha = frame.shown * strength * frame.look.glow;
     pen.place(frame.x + dx * out * frame.size, frame.y + dy * out * frame.size, frame.size, 0);
@@ -152,23 +141,23 @@ export const wardenDrawer: DrawerFactory = (kit) => {
   }
 
   /** The warnings over the ring: every muzzle charging for a volley, or the lock-on's turrets and the reticle on the ship. */
-  function drawCharge(boss: Readonly<BossView>, first: Readonly<BossPart>, frame: Readonly<BossFrame>, cx: number, cy: number): void {
+  function drawCharge(boss: Readonly<BossView>, first: Readonly<BossPart>, frame: Readonly<BossFrame>): void {
     const { parts } = boss;
     const still = frame.look.still;
     // Every warning shows from the windup's first frame, and brightens to full as it nears.
-    const strength = (CHARGE_FLOOR + (1 - CHARGE_FLOOR) * charge(boss, frame)) * flicker(still);
+    const strength = (CHARGE_FLOOR + (1 - CHARGE_FLOOR) * windupCharge(boss, frame)) * clocks.flicker(still);
     ctx.globalCompositeOperation = 'lighter';
     if (boss.windup === 'turretVolley') {
-      for (const part of parts) if (part.hp > 0) drawCharging(part, frame, cx, cy, part.radius * BARREL_REACH, hostile, part.radius * MUZZLE_GLOW_SCALE, strength * MUZZLE_GLOW_ALPHA);
+      for (const part of parts) if (part.hp > 0) drawCharging(part, frame, part.radius * BARREL_REACH, hostile, part.radius * MUZZLE_GLOW_SCALE, strength * MUZZLE_GLOW_ALPHA);
     } else if (boss.windup === 'lockOn') {
       for (const i of nearestParts(parts, frame.look.aimX, frame.look.aimY, LOCK_TURRETS, locking)) {
         const part = parts[i] as BossPart;
-        drawCharging(part, frame, cx, cy, 0, lockColor, part.radius * LOCK_GLOW_SCALE, strength);
-        drawCharging(part, frame, cx, cy, part.radius * BARREL_REACH, hostile, part.radius * MUZZLE_GLOW_SCALE, strength * MUZZLE_GLOW_ALPHA);
+        drawCharging(part, frame, 0, lockColor, part.radius * LOCK_GLOW_SCALE, strength);
+        drawCharging(part, frame, part.radius * BARREL_REACH, hostile, part.radius * MUZZLE_GLOW_SCALE, strength * MUZZLE_GLOW_ALPHA);
       }
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = frame.shown * strength;
-      const spin = still ? 0 : time * 2;
+      const spin = still ? 0 : clocks.time * 2;
       // On the spot the bolts will fly to: where the ship was as the windup began, not where it is now.
       pen.place(boss.aim.x, boss.aim.y, Math.cos(spin), Math.sin(spin));
       pen.blit(baker.custom(rings.reticle, RETICLE_RADIUS * 1.3 + RIM_PAD, paintReticleAt));
@@ -176,7 +165,7 @@ export const wardenDrawer: DrawerFactory = (kit) => {
       ctx.globalAlpha = frame.shown * strength;
       // As far out as the pulse will reach: its full radius, or short of a wall it would cross.
       const reach = Math.min(PULSE_RADIUS, stretchRoom(boss, frame.look.field, WARDEN_RING.radius, WARDEN_RING.turretRadius));
-      placeRing(first, frame, cx, cy, reach / PULSE_RADIUS);
+      placeRing(first, frame, reach / PULSE_RADIUS);
       pen.blit(baker.custom(rings.ghost, PULSE_RADIUS + GHOST_PAD, paintGhostAt));
     }
     ctx.globalCompositeOperation = 'source-over';
@@ -192,35 +181,22 @@ export const wardenDrawer: DrawerFactory = (kit) => {
         radius = r;
         keys = coreKeys(r, palette.id);
       }
-      // Parts are placed about the core's own interpolated centre, so they keep their ring as it scales.
-      const cx = boss.px + (boss.x - boss.px) * frame.alpha;
-      const cy = boss.py + (boss.y - boss.py) * frame.alpha;
       const first = boss.parts[0];
-      if (first !== undefined) drawTrack(boss, first, frame, cx, cy);
+      if (first !== undefined) drawTrack(boss, first, frame);
       pen.place(x, y, size, 0);
-      blitCore(kit, keys.core, r * WARDEN_ART_REACH + RIM_PAD, paintCoreAt, frame.tinted);
+      blitTinted(kit, keys.core, r * WARDEN_ART_REACH + RIM_PAD, paintCoreAt, frame.tinted);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = shown * look.glow * (boss.windup === null ? EYE_IDLE : EYE_WINDUP * flicker(look.still));
+      ctx.globalAlpha = shown * look.glow * (boss.windup === null ? EYE_IDLE : EYE_WINDUP * clocks.flicker(look.still));
       pen.blit(baker.custom(keys.eye, r + RIM_PAD, paintEyeAt));
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = shown;
       const { parts } = boss;
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i] as BossPart;
-        if (part.hp > 0) drawTurret(part, i, frame, cx, cy);
+        if (part.hp > 0) drawTurret(part, i, frame);
       }
-      if (first !== undefined && boss.state === 'fighting') drawCharge(boss, first, frame, cx, cy);
+      if (first !== undefined && boss.state === 'fighting') drawCharge(boss, first, frame);
     },
-    advance(dt, boss) {
-      time += dt;
-      clocks.advance(dt, boss.parts);
-    },
-    handle(event) {
-      clocks.handle(event);
-    },
-    reset() {
-      time = 0;
-      clocks.reset();
-    },
+    ...clockHooks(clocks),
   };
 };

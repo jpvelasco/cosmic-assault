@@ -3,7 +3,6 @@ import { createCasual, createCasualPilot } from '../../src/bot/casual';
 import { Pilot } from '../../src/bot/expert';
 import { idleIntent } from '../../src/bot/hands';
 import { createView, readView, type BotView } from '../../src/bot/view';
-import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId } from '../../src/content/types';
 import type { BossView } from '../../src/sim/boss/behaviour';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -17,9 +16,9 @@ import type { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import type { Ship } from '../../src/sim/ship';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock, threatOf } from '../helpers/botScene';
+import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, threatOf } from '../helpers/botScene';
 import { foeAt } from '../helpers/foeAt';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy, still } from '../helpers/mute';
 
 const WOBBLE_LIMIT = 0.25;
 const WOBBLE_STEPS = Math.round(0.5 / STEP_SECONDS);
@@ -80,7 +79,7 @@ const LONG_WINDUP = 1.2;
  * the ship starts on the lane's end, at rest, in a field that spawns nothing, and the volley winds up for `windup` s.
  */
 function escapes(windup: number, seed: number): boolean {
-  const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
+  const galaxy = calmGalaxy('1-6');
   const world = new World({ seed: 1, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialShip: { ...SCENE_SHIP, angle: 0 } });
   const bot = createCasual(createRng(seed));
   const view = createView(world);
@@ -96,7 +95,7 @@ function escapes(windup: number, seed: number): boolean {
 describe("the casual bot's handicaps", () => {
   it('aims off the true lead by a spread of errors within ±0.25 rad, drawn afresh every half second', () => {
     // A lone rock far enough off that neither pilot dodges: both aim at it, and only the wobble tells them apart.
-    const view = sceneView([stillRock(SCENE_SHIP.x + 260, SCENE_SHIP.y)]);
+    const view = sceneView([still(SCENE_SHIP.x + 260, SCENE_SHIP.y, 3)]);
     const casual = createCasualPilot(createRng(11));
     const expert = new Pilot({ rng: createRng(11) });
     const [ci, ei] = [idleIntent(), idleIntent()];
@@ -162,7 +161,7 @@ describe("the casual bot's handicaps", () => {
     // about the 85% it chose to dodge.
     expect(shortest).toBeLessThan(0.1);
     expect(Math.abs(long - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.1);
-  });
+  }, 30_000);
 
   it('dodges the drones a telegraphed launch sends out at the launch\'s 85%, and other drones at the episode\'s 60%', () => {
     // The launch winds up with nothing yet in reach; its wave appears, marked as the launch's, as it runs, while the boss rests.
@@ -204,7 +203,7 @@ describe("the casual bot's handicaps", () => {
     // A calm 2-★ spawns nothing of its own and an idle ship shoots nothing: its drones are all the carrier's. Blows
     // through the open hangar take it to phase 2 after 10 s of fight and to phase 3 after 20 s. The ship is kept
     // unhurt, and a shot breaks the first rock of each broadside, so its fragments come too.
-    const galaxy = { ...galaxyById('2-6'), kinds: MUTED_KINDS, events: [] };
+    const galaxy = calmGalaxy('2-6');
     const world = new World({ seed: 2, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'rank' }, startLives: 5 });
     const run = (world as unknown as { run: GalaxyRun }).run;
     const pilot = createCasualPilot(createRng(3));

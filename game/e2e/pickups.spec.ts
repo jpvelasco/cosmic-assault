@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { PICKUPS } from '../src/content/pickups';
+import { newIn, PICKUPS } from '../src/content/pickups';
 import type { PickupId } from '../src/content/types';
 import { STEP_SECONDS } from '../src/sim/config';
 import { expect, expectMode, fastForward, gameState, grantPickup, nextFrames, openFreshGame, openGame, pinClockSeed, playFreeGalaxy, shotsPerVolley, storedSave, test, toastOf, waitForBridge } from './fixtures';
@@ -98,4 +98,32 @@ test('the first drop of a kind says what it does once, is remembered in the save
   await collect(page, 'spreadLaser');
   await expect(toastOf(page)).toHaveText(PICKUPS.spreadLaser.callout);
   await expect.poll(async () => (await storedSave(page)).seenPickups).toEqual(['doubleShot', 'shield', 'spreadLaser']);
+});
+
+/** The pickups the last three Dimensions bring in, each first seen there. */
+const LATE_KINDS: readonly PickupId[] = [...newIn(3), ...newIn(4), ...newIn(5)];
+
+test('each pickup the last three Dimensions bring in is called out on its first drop only, across a reload', async ({ page }) => {
+  expect(LATE_KINDS).toEqual(['piercingBeam', 'homingMissiles', 'fieldBomb', 'wingman', 'nova', 'timeWarp']);
+  await pinClockSeed(page, seedFor('lanes-clear'));
+  await openFreshGame(page);
+  await playFreeGalaxy(page, '1-1');
+
+  const seen: PickupId[] = [];
+  for (const kind of LATE_KINDS) {
+    await collect(page, kind);
+    await expect(toastOf(page)).toHaveText(PICKUPS[kind].callout);
+    seen.push(kind);
+    await expect.poll(async () => (await storedSave(page)).seenPickups).toEqual(seen);
+  }
+
+  await page.reload();
+  await waitForBridge(page);
+  await playFreeGalaxy(page, '1-1');
+  for (const kind of LATE_KINDS) {
+    await collect(page, kind);
+    expect((await gameState(page)).events.pickupCollected, kind).toBeGreaterThan(0);
+    await expect(toastOf(page), kind).not.toContainText('New:');
+  }
+  expect((await storedSave(page)).seenPickups).toEqual(seen);
 });

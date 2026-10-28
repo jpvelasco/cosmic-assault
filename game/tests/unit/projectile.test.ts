@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PROJECTILE, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
-import { projectileFromShot, stepProjectile, type Projectile } from '../../src/sim/projectile';
+import { NONE_STRUCK, projectileFromShot, stepProjectile, type Projectile } from '../../src/sim/projectile';
 
 const FIELD: Field = { width: 1280, height: 720 };
 
@@ -18,6 +18,14 @@ describe('projectileFromShot', () => {
     const p = projectileFromShot({ x: 1, y: 2, vx: 3, vy: 4 });
     expect(p).toEqual({ id: 0, x: 1, y: 2, vx: 3, vy: 4, px: 1, py: 2, life: PROJECTILE.lifespan, pierce: 0, homing: false, struck: [] });
     expect(p.life).toBe(1.2);
+  });
+
+  it('starts every shot, piercing or not, on the one frozen empty struck list', () => {
+    for (const p of [projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }), projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 3)]) {
+      expect(p.struck).toBe(NONE_STRUCK);
+    }
+    expect(Object.isFrozen(NONE_STRUCK)).toBe(true);
+    expect(NONE_STRUCK).toEqual([]);
   });
 });
 

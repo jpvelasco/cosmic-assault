@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById } from '../../src/content/galaxies';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { GalaxyDef, GalaxyId } from '../../src/content/types';
+import type { GalaxyDef } from '../../src/content/types';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { PICKUP, STEP_SECONDS, TIME_WARP_SCALE } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 import { practiceScript } from '../helpers/practiceLog';
+import { placeFoe } from '../helpers/foeRig';
 
 const FIELD = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
@@ -15,8 +16,6 @@ const DT = STEP_SECONDS;
 function world(galaxy: GalaxyDef, opts: { readonly rocks?: readonly { x: number; y: number; size: 0 | 1 | 2 | 3; angle: number; speedMultiplier: number }[] } = {}): World {
   return new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, ...(opts.rocks === undefined ? {} : { initialAsteroids: opts.rocks }) });
 }
-
-const calm = (id: GalaxyId): GalaxyDef => ({ ...galaxyById(id), kinds: MUTED_KINDS, events: [] });
 
 /** Keeps Time Warp running (collecting it again refreshes its clock) and, if `untouchable`, the ship out of every collision. */
 function hold(w: World, warp: boolean, untouchable = false): void {
@@ -26,7 +25,7 @@ function hold(w: World, warp: boolean, untouchable = false): void {
 
 describe('Time Warp', () => {
   it('scales the enemies\' time by 0.5 while it runs, and by 1 again once its 8 s are up', () => {
-    const w = world(calm('5-2'));
+    const w = world(calmGalaxy('5-2'));
     const run = w['run'];
     expect(run?.enemyTimeScale()).toBe(1);
     run?.loadout.collect('timeWarp');
@@ -38,13 +37,10 @@ describe('Time Warp', () => {
 
   it('moves rocks and foes half as far, and the pickups, the clock and the ship\'s shots as far as ever', () => {
     const moved = (warp: boolean) => {
-      const w = world(calm('5-2'), { rocks: [{ x: 300, y: 200, size: 1, angle: 0.4, speedMultiplier: 1 }] });
+      const w = world(calmGalaxy('5-2'), { rocks: [{ x: 300, y: 200, size: 1, angle: 0.4, speedMultiplier: 1 }] });
       const run = w['run'];
       if (run === null) throw new Error('not a galaxy');
-      const foe = run['foes'].acquire('splitter');
-      if (foe === null) throw new Error('foe pool full');
-      Object.assign(foe, { x: 900, y: 500, vx: 60, vy: -30 });
-      run['foes'].commit(foe);
+      const foe = placeFoe(run['foes'], 'splitter', 900, 500, { vx: 60, vy: -30 });
       run['pickupField'].list.push({ id: 1, kind: 'shield', x: 100, y: 600, px: 100, py: 600, vx: 20, vy: 0, expiresIn: PICKUP.lifespan });
       if (warp) run.loadout.collect('timeWarp');
       const rock = w.asteroids[0];

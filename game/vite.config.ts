@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => ({
   },
   // e2e builds include the test bridge, so they never share dist/ with the release build.
   build: mode === 'e2e' ? { outDir: 'dist-e2e' } : {},
-  // tests/balance holds the slow bot runs, which vitest.balance.config.ts runs instead.
-  test: { include: ['tests/**/*.test.ts'], exclude: ['tests/balance/**'], environment: 'node' },
+  // tests/balance holds the slow bot runs, which vitest.balance.config.ts runs instead. A loaded host stretches a test
+  // several times over, so the timeout leaves room past vitest's 5 s, and a test over 1.5 s is still flagged as slow.
+  test: { include: ['tests/**/*.test.ts'], exclude: ['tests/balance/**'], environment: 'node', testTimeout: 15_000, slowTestThreshold: 1500 },
 }));

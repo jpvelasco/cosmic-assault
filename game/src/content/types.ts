@@ -3,6 +3,11 @@ export type GalaxyIndex = 1 | 2 | 3 | 4 | 5 | 6;
 /** `'3-4'`: Dimension 3, galaxy 4. Galaxy 6 is the Dimension's boss. */
 export type GalaxyId = `${Dimension}-${GalaxyIndex}`;
 
+/** The id of galaxy `index` of Dimension `dimension`: `galaxyIdOf(3, 4)` is `'3-4'`. */
+export function galaxyIdOf(dimension: Dimension, index: GalaxyIndex): GalaxyId {
+  return `${String(dimension)}-${String(index)}` as GalaxyId;
+}
+
 /** The colour looks a galaxy can wear: one per Dimension. */
 export type PaletteId = 'drift' | 'ionReach' | 'crimsonNebula' | 'voidRift' | 'singularity';
 
@@ -29,17 +34,20 @@ export type WeaponTier = 0 | 1 | 2 | 3;
 /** The rocks a galaxy spawns. */
 export type RockKind = 'large' | 'medium' | 'small';
 
-/** The foes a galaxy spawns: a rock that breaks into fast fragments, a seeking swarm, a gunship that circles and fires, and a mine. */
-export type FoeKind = 'splitter' | 'drone' | 'gunship' | 'mine';
+/**
+ * The foes a galaxy spawns: a rock that breaks into fast fragments, a seeking swarm, a gunship that circles and fires, a
+ * mine, a phaser that blinks about and an armoured rock that deflects shots from its plates.
+ */
+export type FoeKind = 'splitter' | 'drone' | 'gunship' | 'mine' | 'phaser' | 'armoured';
 
 /** Everything the director can spawn from its threat budget. */
 export type ThreatKind = RockKind | FoeKind;
 
-/** The bosses so far: the Monolith guards Dimension 1, the Hive Carrier Dimension 2 and the Warden Dimension 3; the M4 placeholder Sentinel stands in for the rest. */
-export type BossId = 'sentinel' | 'monolith' | 'hiveCarrier' | 'warden';
+/** The bosses: the Monolith guards Dimension 1, the Hive Carrier Dimension 2, the Warden Dimension 3, the Leviathan Dimension 4 and the Eclipse Dimension 5. */
+export type BossId = 'monolith' | 'hiveCarrier' | 'warden' | 'leviathan' | 'eclipse';
 
-/** The moves a boss draws on: the Sentinel's, then the Monolith's, the Hive Carrier's and the Warden's. */
-export type AttackId = 'shardRing' | 'lunge' | 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat' | 'turretVolley' | 'lockOn' | 'spin' | 'ringPulse';
+/** The moves a boss draws on: the Monolith's, the Hive Carrier's, the Warden's and the Leviathan's, then the Eclipse, which remixes them. */
+export type AttackId = 'shardVolley' | 'quake' | 'pulse' | 'launch' | 'broadside' | 'retreat' | 'turretVolley' | 'lockOn' | 'spin' | 'ringPulse' | 'dive' | 'spit' | 'coil';
 
 /**
  * How likely a kind is to be picked at tier `t`: `base` while `t` is at or below `from`, then `base + (t - from) * step`

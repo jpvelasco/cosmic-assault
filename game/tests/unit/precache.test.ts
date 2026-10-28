@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 import { build, type Plugin } from 'vite';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { injectPrecache, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
+import { injectPrecache, NOT_PRECACHED, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
 
 const WORKER_CODE = 'const a=__PRECACHE__,b=__VERSION__;self.addEventListener("install",()=>caches.open(b).then(c=>c.addAll(a)));';
 
@@ -31,6 +31,13 @@ describe('injectPrecache', () => {
   it('lists every other emitted and public file, plus ./ and index.html, without sw.js', () => {
     const { list } = injectPrecache(fakeBundle(), PUBLIC, 'sha1');
     expect(list).toEqual(['./', 'assets/index-a1b2.js', 'assets/testBridge-c3d4.js', 'icons/icon-192.png', 'index.html']);
+  });
+
+  it('leaves the two 512 px icons to the network: the browser fetches them once, when it installs the app', () => {
+    const icons = ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'].map((name) => ({ fileName: `icons/${name}`, source: name }));
+    const { list } = injectPrecache(fakeBundle(), icons, 'sha1');
+    expect(list.filter((entry) => entry.startsWith('icons/'))).toEqual(['icons/apple-touch-icon.png', 'icons/icon-192.png']);
+    expect(NOT_PRECACHED).toEqual(['icons/icon-512.png', 'icons/icon-maskable-512.png']);
   });
 
   it('keeps every entry relative to the worker', () => {
@@ -116,13 +123,13 @@ describe('the release build', () => {
     expect(version).not.toBe('');
 
     expect(list).toContain('index.html');
-    // The installed app opens offline only if its manifest and icons (copied from public/) are cached too.
-    expect(list).toEqual(
-      expect.arrayContaining(['manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png']),
-    );
+    // The installed app opens offline only if its manifest and small icons (copied from public/) are cached too; the
+    // browser fetches the 512 px ones itself when it installs the app.
+    expect(list).toEqual(expect.arrayContaining(['manifest.webmanifest', 'icons/icon-192.png', 'icons/apple-touch-icon.png']));
+    for (const icon of NOT_PRECACHED) expect(list).not.toContain(icon);
     expect(list.some((entry) => /^assets\/.+\.js$/.test(entry))).toBe(true);
     expect(list).not.toContain(SW_FILE_NAME);
-    for (const entry of list.filter((name) => name !== './')) expect(existsSync(join(outDir, entry)), entry).toBe(true);
+    for (const entry of [...list.filter((name) => name !== './'), ...NOT_PRECACHED]) expect(existsSync(join(outDir, entry)), entry).toBe(true);
   });
 
   it('versions by every emitted file, index.html included, so a change to the page alone changes the version', { timeout: 60000 }, async () => {

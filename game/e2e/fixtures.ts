@@ -3,6 +3,7 @@ import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
 import type { GalaxyId, PickupId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
+import { BRIDGE_VERSION } from '../src/testBridge';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /**
@@ -70,7 +71,7 @@ export async function openFreshGame(page: Page): Promise<void> {
 
 /** Waits for the test bridge, which loads after an `import()`; call it again after a reload. */
 export async function waitForBridge(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+  await page.waitForFunction((version) => window.__COSMIC_ASSAULT_TEST_API__?.version === version, BRIDGE_VERSION);
 }
 
 /** Steps the run in play by `seconds` of sim time at once, stopping early if it leaves play. */
@@ -214,6 +215,13 @@ export async function expectMode(page: Page, mode: CosmicAssaultTestState['mode'
   await expect.poll(async () => (await gameState(page)).mode, timeout === undefined ? {} : { timeout }).toBe(mode);
 }
 
+/** Starts the run the title shows: a tap on a phone, Space at a desk. */
+export async function startRun(page: Page, isMobile: boolean): Promise<void> {
+  if (isMobile) await page.getByRole('heading', { name: 'Cosmic Assault' }).tap();
+  else await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+}
+
 export function speed({ vx, vy }: CosmicAssaultTestShip): number {
   return Math.hypot(vx, vy);
 }
@@ -225,10 +233,12 @@ export function openGameOverRun(page: Page): Promise<void> {
 
 /**
  * Shots `damageBoss` lands to beat any boss: each goes where it does harm, so this must cover the shots that break a
- * shielded boss's parts as well as its HP (the Monolith's: up to `SHARD_COUNTS[1] - EXPOSED_AT` shards of `SHARD_HP`
- * before its core is bare, then its `bossHp`).
+ * shielded boss's parts as well as its HP. The Monolith's are up to `SHARD_COUNTS[1] - EXPOSED_AT` shards of `SHARD_HP`
+ * before its core is bare, then its `bossHp`; the Leviathan's, its 8 segments of 3 HP, then the 16 HP their breaks
+ * (`partBreakDamage` each) leave of its 40; the Eclipse's, its 10 shards of 2 HP, then its 80. A boss that falls first
+ * ends the strikes early.
  */
-export const KILL_SHOTS = 100;
+export const KILL_SHOTS = 200;
 
 /** Opens BOSS_GALAXY in Free play with the 'boss-fight' seed, whose idle ship lives to the boss fight. */
 export function openBossGame(page: Page): Promise<void> {

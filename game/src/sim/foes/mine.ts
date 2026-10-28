@@ -4,7 +4,8 @@ import type { Field } from '../field';
 import { TAU, TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
-import { wrappedDistance, wrapPosition } from '../wrap';
+import { wrappedDistance } from '../wrap';
+import { drift, driftSpeed } from './drift';
 import type { Foe, FoeBehaviour } from './foe';
 
 /** How near the ship a mine may arrive: its arm ring stays clear of the safe radius. */
@@ -55,8 +56,7 @@ export const MINE_BEHAVIOUR: FoeBehaviour = {
       if (foe === null) return;
       place(foe, rng, field, arena.ship);
       const heading = rng.range(0, TAU);
-      const [low, high] = ASTEROID.speedJitter;
-      const speed = FOES.mine.speed * speedMultiplier * rng.range(low, high);
+      const speed = driftSpeed('mine', speedMultiplier, rng);
       foe.vx = Math.cos(heading) * speed;
       foe.vy = Math.sin(heading) * speed;
       foe.rotation = rng.range(0, TAU);
@@ -66,10 +66,7 @@ export const MINE_BEHAVIOUR: FoeBehaviour = {
   },
 
   step(foe, dt, field, world) {
-    foe.x += foe.vx * dt;
-    foe.y += foe.vy * dt;
-    foe.rotation += foe.spin * dt;
-    wrapPosition(foe, field);
+    drift(foe, dt, field);
     const { ship, events } = world.arena;
     if (!foe.charging) {
       if (ship.invulnerable || wrappedDistance(ship, foe, field) >= ARM_REACH) return;
