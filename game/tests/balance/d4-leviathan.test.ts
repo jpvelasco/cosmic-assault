@@ -1,25 +1,3 @@
-import { describe, expect, it } from 'vitest';
-import { runGalaxy } from '../../src/bot/run';
-import { galaxyById } from '../../src/content/galaxies';
-import { recordRun, replayControls } from '../helpers/botReplay';
-import { fightSeconds } from './targets';
+import { describeBossReplays } from './bossReplays';
 
-// The Leviathan's kill rates and the lives it takes off an idle ship are pinned with the rest of 4-★'s targets
-// (d4-targets.test.ts).
-const GALAXY = galaxyById('4-6');
-/** The longest the expert may take to beat it: its approach, its arrival and its bar. */
-const FIGHT_SECONDS = fightSeconds('leviathan');
-/** One whole fight, twice over, on a loaded host. */
-const TIMEOUT_MS = 120_000;
-
-describe('the Leviathan on 4-★', () => {
-  it('replays a fight exactly, from the same seed and from its own controls', () => {
-    const options = { galaxy: GALAXY, seed: 1, profile: 'expert', maxSeconds: FIGHT_SECONDS } as const;
-    const { result, controls, events } = recordRun(options);
-    expect(events.some((e) => e.type === 'bossWindup')).toBe(true);
-    expect(runGalaxy(options)).toEqual(result);
-    const replayed = replayControls(GALAXY, 1, controls);
-    expect(replayed.events).toEqual(events);
-    expect(replayed.score).toBe(result.score);
-  }, TIMEOUT_MS);
-});
+describeBossReplays([{ id: '4-6', boss: 'the Leviathan' }]);
