@@ -21,8 +21,8 @@ describe('ceilingFor', () => {
     expect(() => ceilingFor(readings(7))).toThrow(/at least 8 readings \(got 7\); record more runs/);
   });
 
-  // One window of runner time once gave 20-21.75 ms where the same build later read 29.5 ms, so a ceiling needs readings
-  // from several windows; eight is the fewest that has held so far.
+  // The same commit has read 21.75 ms and, an hour later, 29.5 ms, so a ceiling needs readings from several windows of
+  // runner time; eight, over hours, is the rule.
   it('needs eight readings, enough to span more than one window of runner speed', () => {
     expect(MIN_READINGS).toBe(8);
   });

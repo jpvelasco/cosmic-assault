@@ -16,8 +16,8 @@ export const P95_HEADROOM = 1.25;
 export const LONG_FRAME_HEADROOM = 2;
 /**
  * Readings a ceiling needs before it means anything. A scene's p95 sits near the display's frame step, so a runner a
- * little slower tips it past the step: one window of runner time can read 30% under another for the same build, and
- * fewer readings than this, from fewer windows, would let one fast window set a ceiling the next slow one fails.
+ * little slower tips it past the step: the same commit has read about 25% slower an hour later, and fewer readings than
+ * this, from fewer windows, would let one fast window set a ceiling the next slow one fails.
  */
 export const MIN_READINGS = 8;
 
@@ -32,8 +32,9 @@ export function ceilingFor(readings: readonly FrameReading[]): FrameCeiling {
 
 /**
  * The readings each scene's ceiling comes from, under the perf project's 4x CPU slowdown: eight runs of the CI `perf`
- * job on GitHub's `ubuntu-24.04` runners, of one build, spread over several hours. Recalibrate the same way (eight runs,
- * over hours, not minutes) when a scene's content or the renderer changes.
+ * job on GitHub's `ubuntu-24.04` runners over five hours, across three commits of one feature branch. The first three
+ * predate a renderer change; the other five, which hold every maximum, are of today's renderer. Recalibrate the same way
+ * (eight runs, over hours, not minutes) when a scene's content or the renderer changes.
  */
 export const PERF_READINGS: Readonly<Record<PerfScene, readonly FrameReading[]>> = {
   field: [
@@ -42,7 +43,7 @@ export const PERF_READINGS: Readonly<Record<PerfScene, readonly FrameReading[]>>
     { p95Ms: 20, longFrames: 0 },
     { p95Ms: 21.75, longFrames: 0 },
     { p95Ms: 25.75, longFrames: 0 },
-    { p95Ms: 28, longFrames: 0 },
+    { p95Ms: 28, longFrames: 1 },
     { p95Ms: 29.5, longFrames: 0 },
     { p95Ms: 21, longFrames: 0 },
   ],
