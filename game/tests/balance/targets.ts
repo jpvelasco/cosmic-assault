@@ -44,12 +44,13 @@ const LEVIATHAN_PACE = { seconds: 150, seeds: 38 } as const;
 const EXPERT_THREE_STAR_SHARE = 0.7;
 const LAST_THREE_STAR_DIMENSION: Dimension = 3;
 /**
- * Singularity's idle-ship survival is reported, not held to fall galaxy by galaxy. Its black hole opens on the spot the
- * ship starts on at 12 s of every survival galaxy, and pulls a respawned idle ship back in, so what kills an idle ship
- * there, and when, is the hole on every seed, not the field: the survival of one galaxy and the next differ by
- * fractions of a second, either way.
+ * The galaxies an idle ship may outlast the one before in. 5-4: in Singularity what kills an idle ship is the black hole,
+ * which pulls it back in from the same distance after every respawn, and the hazards beside the hole move that by a second
+ * or two either way, so 5-4 measures a little longer than 5-3. 5-★: its field holds no hole, so an idle ship lasts there
+ * until the boss, far longer than in 5-5 under the hole. Every other galaxy, boss galaxies included, lasts an idle ship no
+ * longer than the one before it, the opener of each Dimension aside.
  */
-const STATUE_CHAIN_REPORTED: Dimension = 5;
+const STATUE_CHAIN_EXEMPT: readonly GalaxyId[] = ['5-4', '5-6'];
 /**
  * The galaxies an idle ship must last about as long in at 4:3 as at 21:9 (§9.4): one late galaxy a Dimension from
  * Crimson Nebula on. The field's budget scales with its area, so neither shape should be the easier.
@@ -282,8 +283,7 @@ function pinTargets(id: GalaxyId): void {
       });
     }
 
-    // A boss galaxy is held to its own idle-ship check below instead: the boss, not the field, is what it measures.
-    if (before !== null && !afterBoss && galaxy.kind === 'survival' && galaxy.dimension !== STATUE_CHAIN_REPORTED) {
+    if (before !== null && !afterBoss && !STATUE_CHAIN_EXEMPT.includes(id)) {
       it(`keeps an idle ship alive no longer than in ${galaxyLabel(before)}`, () => {
         const earlier = rateOf(before, 'statue');
         expect(row.statue, `${galaxyLabel(before)} lasted ${fixed(earlier)} s${shown}`).toBeLessThanOrEqual(earlier);
