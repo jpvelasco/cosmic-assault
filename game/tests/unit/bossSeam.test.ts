@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { BOSSES } from '../../src/content/bosses';
 import { FOES } from '../../src/content/foes';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
@@ -12,7 +11,7 @@ import { FOE_CAPACITY, FoeField } from '../../src/sim/foes/foeField';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
 import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const DEF = FIXTURE_DEF;
 /** The probe's weak point: the half of its rim facing right, and only while it says its door is open. */
@@ -141,7 +140,7 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
   /** A 1-6 run whose boss is `make`'s, on a stub arena, stepped until the boss is fighting. */
   function fight(make: (setup: BossSetup) => BossBehaviour): { arena: StubArena; run: GalaxyRun; boss: BossView } {
     const arena = stubArena();
-    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [], boss: 'monolith' as const };
+    const galaxy = { ...calmGalaxy('1-6'), boss: 'monolith' as const };
     const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, standIns(make));
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.events.length = 0;

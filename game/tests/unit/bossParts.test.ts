@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
 import { BossRunner, DYING_SECONDS } from '../../src/sim/boss/bossRunner';
@@ -17,7 +16,7 @@ import { createShip } from '../../src/sim/ship';
 import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, breakPart, FIXTURE, FIXTURE_DEF, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const DEF: BossDef = FIXTURE_DEF;
 const PARTS = 4;
@@ -249,7 +248,7 @@ describe('GalaxyRun with a boss that has parts', () => {
 
   function probeRun(shove = 0): { arena: StubArena; run: GalaxyRun } {
     const arena = stubArena();
-    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
+    const galaxy = calmGalaxy('1-6');
     const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, probes(shove));
     return { arena, run };
   }
@@ -416,7 +415,7 @@ describe('GalaxyRun with a boss that has parts', () => {
 
 describe('a World with the Monolith', () => {
   it('breaks a 1 HP shard once when two shots reach it in the same step, the second going on', () => {
-    const world = new World({ seed: 4, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] }, mode: 'free' } });
+    const world = new World({ seed: 4, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('1-6'), mode: 'free' } });
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
     const boss = world.boss;
     const run = (world as unknown as { run: GalaxyRun }).run;

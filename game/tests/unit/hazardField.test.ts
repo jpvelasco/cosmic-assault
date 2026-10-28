@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { galaxyById } from '../../src/content/galaxies';
 import { HAZARD_RULES, MAX_SHIP_PULL, WELL_SPEED_CAP } from '../../src/content/hazards';
 import type { GalaxyEvent, HazardType } from '../../src/content/types';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -19,7 +18,7 @@ import type { SimEvent } from '../../src/sim/events';
 import type { Foe } from '../../src/sim/foes/foe';
 import { World } from '../../src/sim/world';
 import { foeAt } from '../helpers/foeAt';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
@@ -263,7 +262,7 @@ describe('the respawn hook', () => {
 
   /** An idle ship in a galaxy where only a rock at its start pose can hit it. */
   function hitWorld(): World {
-    const galaxy = { ...galaxyById('2-1'), kinds: MUTED_KINDS, events: [] };
+    const galaxy = calmGalaxy('2-1');
     return new World({ seed: 2, field: FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialAsteroids: [{ x: 640, y: 360, size: 0, angle: 0, speedMultiplier: 0 }] });
   }
 

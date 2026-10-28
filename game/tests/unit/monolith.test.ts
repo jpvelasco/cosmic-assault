@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
-import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
+import type { AttackId } from '../../src/content/types';
 import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
@@ -14,7 +14,7 @@ import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const DEF = BOSSES.monolith;
 const MAX_HP = 60;
@@ -383,13 +383,9 @@ describe('Monolith determinism', () => {
 });
 
 describe('the Monolith in 1-★', () => {
-  function calm(id: GalaxyId): GalaxyDef {
-    return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
-  }
-
   it('takes a life off a ship that never moves or fires, in a 120 s fight', () => {
     for (const seed of [1, 2, 3]) {
-      const world = new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('1-6'), mode: 'free' } });
+      const world = new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('1-6'), mode: 'free' } });
       const hitsAt: string[] = [];
       for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 120) / STEP_SECONDS) && world.status === 'playing'; i++) {
         for (const e of world.step(STEP_SECONDS, NO_CONTROLS)) if (e.type === 'shipHit') hitsAt.push(world.boss?.state ?? 'none');

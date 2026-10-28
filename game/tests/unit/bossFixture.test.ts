@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { bossHp, BOSSES } from '../../src/content/bosses';
-import { galaxyById } from '../../src/content/galaxies';
-import type { Dimension, GalaxyDef, GalaxyId } from '../../src/content/types';
+import type { Dimension, GalaxyId } from '../../src/content/types';
 import { createAsteroid, type Asteroid } from '../../src/sim/asteroid';
 import { bossHome } from '../../src/sim/boss/bossRules';
 import { BossRunner, DYING_SECONDS } from '../../src/sim/boss/bossRunner';
@@ -18,7 +17,7 @@ import type { Ship } from '../../src/sim/ship';
 import { rescale } from '../../src/sim/wrap';
 import { World, type WorldOptions } from '../../src/sim/world';
 import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, ofType, runFor, stubArena, type StubArena } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const DEF = FIXTURE_DEF;
 const STEPS_PER_SECOND = Math.round(1 / STEP_SECONDS);
@@ -181,16 +180,11 @@ type GalaxyWorld = { world: World; log: SimEvent[]; times: number[] };
 
 const HOME = bossHome(BOSS_FIELD);
 
-/** A galaxy whose director never spawns, guarded by its own boss. */
-function calm(id: GalaxyId): GalaxyDef {
-  return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
-}
-
 function bossWorld(id: GalaxyId, opts: Partial<WorldOptions> = {}, mode: GalaxyMode = 'rank'): GalaxyWorld {
   const world = new World({
     seed: 3,
     field: BOSS_FIELD,
-    rules: { kind: 'galaxy', galaxy: calm(id), mode },
+    rules: { kind: 'galaxy', galaxy: calmGalaxy(id), mode },
     startLives: PLAYER.startLives,
     initialShip: { x: BOSS_FIELD.width / 2, y: 640, angle: -Math.PI / 2 },
     ...opts,
@@ -479,7 +473,7 @@ describe('BossArena.hitBoss', () => {
   /** Runs a 3-6 galaxy on a stub arena for `to` seconds; the arena's events are left empty. */
   function approach(to: number) {
     const arena = stubArena();
-    const run = new GalaxyRun(calm(CORE_BOSS_GALAXY), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena);
+    const run = new GalaxyRun(calmGalaxy(CORE_BOSS_GALAXY), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena);
     for (let i = 0; i < Math.round(to / STEP_SECONDS); i++) {
       arena.events.length = 0;
       arena.tick();

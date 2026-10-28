@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
 import { noEffects } from '../../src/content/pickups';
-import type { GalaxyDef, GalaxyId, PickupId, WeaponTier } from '../../src/content/types';
+import type { GalaxyDef, PickupId, WeaponTier } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { PICKUP, PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -11,7 +11,7 @@ import type { Field } from '../../src/sim/field';
 import { PickupField } from '../../src/sim/pickups/pickups';
 import { createRng, deriveSeed } from '../../src/sim/rng';
 import { World, type WorldOptions } from '../../src/sim/world';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy, MUTED_KINDS } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const FIRE: Controls = { ...NO_CONTROLS, fire: true };
@@ -19,15 +19,10 @@ const STEPS = Math.round(1 / STEP_SECONDS);
 /** Faces +x along y = 360, so its shots run through the rocks a scenario puts there. */
 const SHOOTER = { x: 200, y: 360, angle: 0 };
 
-/** A galaxy whose director never spawns, so only the scenario's rocks exist. */
-function calm(id: GalaxyId): GalaxyDef {
-  return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
-}
-
 type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: 'rank' | 'free'; readonly galaxy?: GalaxyDef };
 
 function galaxyWorld(opts: Scenario = {}): World {
-  const { mode = 'free', seed = 1, galaxy = calm('2-1'), ...rest } = opts;
+  const { mode = 'free', seed = 1, galaxy = calmGalaxy('2-1'), ...rest } = opts;
   return new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy, mode }, ...rest });
 }
 
@@ -145,7 +140,7 @@ describe('a kill drops a pickup', () => {
   });
 
   it('does not drop for a beaten boss', () => {
-    const w = galaxyWorld({ seed: seedDropping('shield'), galaxy: calm('1-6') });
+    const w = galaxyWorld({ seed: seedDropping('shield'), galaxy: calmGalaxy('1-6') });
     const log = play(w, 23);
     const target = () => (w.boss === null ? null : bossTarget(w.boss));
     for (let t = target(); t !== null; t = target()) w['run']?.bosses.hitBoss(t.x, t.y, 1);
@@ -156,7 +151,7 @@ describe('a kill drops a pickup', () => {
   });
 
   it('holds at most 2 pickups on the field at a time', () => {
-    const w = galaxyWorld({ seed: 7, galaxy: { ...calm('1-1'), kinds: { ...MUTED_KINDS, small: { from: 0, base: 1, step: 0, max: 1 } } }, mode: 'rank', startLives: 5 });
+    const w = galaxyWorld({ seed: 7, galaxy: { ...calmGalaxy('1-1'), kinds: { ...MUTED_KINDS, small: { from: 0, base: 1, step: 0, max: 1 } } }, mode: 'rank', startLives: 5 });
     let most = 0;
     for (let i = 0; i < 60 * STEPS; i++) {
       w.step(STEP_SECONDS, FIRE);
@@ -279,7 +274,7 @@ describe('pickups and the warp', () => {
   }
 
   it('expires every pickup on the field as the warp starts, reporting each', () => {
-    const w = galaxyWorld({ galaxy: { ...calm('2-1'), duration: 2 }, initialShip: SHOOTER });
+    const w = galaxyWorld({ galaxy: { ...calmGalaxy('2-1'), duration: 2 }, initialShip: SHOOTER });
     play(w, 1);
     const ids = [place(w, 'weaponCore', 900, 100), place(w, 'shield', 1000, 600)];
     const warp = stepUntil(w, NO_CONTROLS, (events) => events.some((e) => e.type === 'warpOut'));
@@ -288,7 +283,7 @@ describe('pickups and the warp', () => {
   });
 
   it('collects nothing once the warp has started, so the tier the clear reported is the one carried', () => {
-    const w = galaxyWorld({ galaxy: { ...calm('2-1'), duration: 2 }, mode: 'rank', initialShip: SHOOTER });
+    const w = galaxyWorld({ galaxy: { ...calmGalaxy('2-1'), duration: 2 }, mode: 'rank', initialShip: SHOOTER });
     const cleared = ofType(stepUntil(w, NO_CONTROLS, (events) => events.some((e) => e.type === 'galaxyCleared')), 'galaxyCleared');
     expect(cleared).toHaveLength(1);
     place(w, 'weaponCore', w.ship.x, w.ship.y);
@@ -465,9 +460,9 @@ describe('the starting weapon tier', () => {
 
 describe('a Dimension\'s opening galaxy', () => {
   it('hands its featured pickups to its drops, and a later galaxy features none', () => {
-    const opening = galaxyWorld({ galaxy: calm('3-1') });
+    const opening = galaxyWorld({ galaxy: calmGalaxy('3-1') });
     expect(opening['run']?.['pickupField']['featured']).toEqual(['piercingBeam', 'homingMissiles']);
-    expect(galaxyWorld({ galaxy: calm('3-2') })['run']?.['pickupField']['featured']).toEqual([]);
+    expect(galaxyWorld({ galaxy: calmGalaxy('3-2') })['run']?.['pickupField']['featured']).toEqual([]);
   });
 });
 

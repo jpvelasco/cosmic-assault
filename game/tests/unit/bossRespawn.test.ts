@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { galaxyById } from '../../src/content/galaxies';
-import type { GalaxyDef, GalaxyId } from '../../src/content/types';
 import type { BossPart } from '../../src/sim/boss/behaviour';
 import { WARP_RIFT } from '../../src/content/hazards';
 import { clearSpot, RESPAWN_INSET, RESPAWN_LOWEST_SHARE, RESPAWN_MARGIN, respawnClearance } from '../../src/sim/respawn';
@@ -12,7 +10,7 @@ import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { wrapDelta } from '../../src/sim/wrap';
 import { BOSS_FIELD, stubArena } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const NARROW: Field = { width: 960, height: 720 };
 /** The Monolith's reach (orbit 118 + shard 15), plus the ship and the safe margin. */
@@ -22,7 +20,6 @@ function inside(spot: { x: number; y: number }, field: Field): boolean {
   return spot.x >= RESPAWN_INSET && spot.x <= field.width - RESPAWN_INSET && spot.y >= RESPAWN_INSET && spot.y <= field.height * RESPAWN_LOWEST_SHARE;
 }
 
-const calm = (id: GalaxyId): GalaxyDef => ({ ...galaxyById(id), kinds: MUTED_KINDS, events: [] });
 
 describe('clearSpot', () => {
   it.each([
@@ -79,7 +76,7 @@ describe('clearSpot with its usual spots blocked', () => {
 describe('respawning in a boss galaxy', () => {
   function fightingRun() {
     const arena = stubArena();
-    const run = new GalaxyRun(calm('1-6'), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena);
+    const run = new GalaxyRun(calmGalaxy('1-6'), 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena);
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.tick();
       run.beginStep();
@@ -104,7 +101,7 @@ describe('respawning in a boss galaxy', () => {
   });
 
   it('respawns an idle ship hit by the Monolith clear of it, and a survival galaxy\'s at the centre', () => {
-    const world = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('1-6'), mode: 'free' } });
+    const world = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('1-6'), mode: 'free' } });
     let respawns = 0;
     for (let i = 0; i < Math.round(80 / STEP_SECONDS) && world.status === 'playing'; i++) {
       if (!world.step(STEP_SECONDS, NO_CONTROLS).some((e) => e.type === 'shipHit') || world.lives === 0) continue;
@@ -115,7 +112,7 @@ describe('respawning in a boss galaxy', () => {
     }
     expect(respawns).toBeGreaterThanOrEqual(1);
 
-    const survival = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('1-5'), mode: 'free' }, initialAsteroids: [{ x: 640, y: 360, size: 0, angle: 0, speedMultiplier: 0 }] });
+    const survival = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('1-5'), mode: 'free' }, initialAsteroids: [{ x: 640, y: 360, size: 0, angle: 0, speedMultiplier: 0 }] });
     survival.step(STEP_SECONDS, NO_CONTROLS);
     for (let i = 0; i < Math.round(4 / STEP_SECONDS) && survival.lives === 3; i++) survival.step(STEP_SECONDS, NO_CONTROLS);
     expect(survival.lives).toBe(2);

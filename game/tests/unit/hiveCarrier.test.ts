@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { DRONE_SEPARATION } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
-import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
+import type { AttackId } from '../../src/content/types';
 import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
@@ -19,7 +19,7 @@ import { turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, type Timed } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const DEF = BOSSES.hiveCarrier;
 /** The rigs' HP: enough to space out the phase thresholds the tests wound it to. */
@@ -521,12 +521,8 @@ describe('the Hive Carrier replays', () => {
 });
 
 describe('the Hive Carrier in 2-★', () => {
-  function calm(id: GalaxyId): GalaxyDef {
-    return { ...galaxyById(id), kinds: MUTED_KINDS, events: [] };
-  }
-
   it('spends a shot that strikes its hull with a spark, leaving the drone and the rock behind it whole', () => {
-    const world = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('2-6'), mode: 'free' } });
+    const world = new World({ seed: 1, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('2-6'), mode: 'free' } });
     for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 0.5) / STEP_SECONDS); i++) world.step(STEP_SECONDS, NO_CONTROLS);
     const boss = world.boss;
     if (boss?.state !== 'fighting') throw new Error('the Hive Carrier should be fighting 22.5 s into 2-6');
@@ -548,7 +544,7 @@ describe('the Hive Carrier in 2-★', () => {
 
   it('takes a life off a ship that never moves or fires, in a 120 s fight, by what it sends out and not on arrival', () => {
     for (const seed of [1, 2, 3]) {
-      const world = new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm('2-6'), mode: 'free' } });
+      const world = new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('2-6'), mode: 'free' } });
       const hitsAt: string[] = [];
       let firstLaunch = Number.NaN;
       let firstHit = Number.NaN;

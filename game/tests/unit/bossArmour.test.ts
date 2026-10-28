@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
@@ -9,7 +8,7 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
 import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const PARTS = 4;
 const PART_RADIUS = 12;
@@ -123,7 +122,7 @@ describe('a galaxy run whose boss has armoured parts', () => {
 
   function galaxyRun() {
     const arena = stubArena();
-    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
+    const galaxy = calmGalaxy('1-6');
     const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, segments());
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.events.length = 0;

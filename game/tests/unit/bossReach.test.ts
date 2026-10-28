@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
-import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart } from '../../src/sim/boss/behaviour';
 import { respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
@@ -15,7 +14,7 @@ import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { BOSS_FIELD, runFor, stubArena, FIXTURE_DEF } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 
 const SEGMENT_RADIUS = 24;
 /** How far below its core the fake serpent's one segment trails. */
@@ -151,7 +150,7 @@ describe('part-aware boss reach', () => {
 
   it('respawns a ship clear of a segment that lies across the usual spot, not only clear of the core', () => {
     const arena = stubArena();
-    const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
+    const galaxy = calmGalaxy('1-6');
     const serpents = Object.fromEntries(Object.keys(BOSSES).map((id) => [id, () => serpent(TRAIL, 0)])) as unknown as Record<BossId, BossFactory>;
     const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, serpents);
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {

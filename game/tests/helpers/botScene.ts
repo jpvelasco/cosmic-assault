@@ -1,6 +1,5 @@
 import { createView, type BotView } from '../../src/bot/view';
 import { BOLT } from '../../src/content/foes';
-import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, BossId } from '../../src/content/types';
 import type { Point } from '../../src/sim/math';
 import type { AttackSpec, BossThreat } from '../../src/sim/boss/behaviour';
@@ -10,7 +9,7 @@ import type { Bolt } from '../../src/sim/foes/bolts';
 import { createRng } from '../../src/sim/rng';
 import { World, type AsteroidPlacement } from '../../src/sim/world';
 import { bossView } from './bossView';
-import { MUTED_KINDS } from './mute';
+import { calmGalaxy } from './mute';
 
 export const SCENE_FIELD = { width: 1280, height: 720 };
 /** Where a scene's ship sits, nose to the right. */
@@ -29,7 +28,7 @@ export const stillRock = (x: number, y: number): AsteroidPlacement => ({ x, y, s
  * `rocks` on the field. Its fields can be replaced to stage foes or a boss.
  */
 export function sceneView(rocks: readonly AsteroidPlacement[] = []): BotView {
-  const galaxy = { ...galaxyById('2-4'), kinds: MUTED_KINDS, events: [] };
+  const galaxy = calmGalaxy('2-4');
   const world = new World({ seed: 1, field: SCENE_FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, initialShip: { ...SCENE_SHIP, angle: 0 }, initialAsteroids: rocks });
   const view = createView(world);
   view.ship = { ...view.ship, invulnerable: false, invulnerableFor: 0 };

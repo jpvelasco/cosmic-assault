@@ -37,7 +37,7 @@ import { createRng, type Rng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
 import { BOSS_FIELD, breakPart, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 import { auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
 const DEF = BOSSES.leviathan;
@@ -625,7 +625,7 @@ describe('Leviathan determinism', () => {
 });
 
 describe('the Leviathan in 4-★', () => {
-  const calm: GalaxyDef = { ...galaxyById('4-6'), kinds: MUTED_KINDS, events: [] };
+  const calm: GalaxyDef = calmGalaxy('4-6');
   const world = (seed: number): World => new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm, mode: 'free' } });
   const toFight = (w: World): BossView => {
     for (let i = 0; i < Math.round((APPROACH + BOSS_INTRO_SECONDS + 0.5) / STEP_SECONDS); i++) w.step(STEP_SECONDS, NO_CONTROLS);

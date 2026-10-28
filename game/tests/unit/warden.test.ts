@@ -3,7 +3,7 @@ import { bossHp, BOSSES } from '../../src/content/bosses';
 import { BOLT } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { AttackId, GalaxyDef } from '../../src/content/types';
+import type { AttackId } from '../../src/content/types';
 import { chooseTarget, type Target } from '../../src/bot/targeting';
 import { createView } from '../../src/bot/view';
 import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
@@ -22,7 +22,7 @@ import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { World } from '../../src/sim/world';
 import { rescale } from '../../src/sim/wrap';
 import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, ofType, rigStepper, runFor, stubArena, timedOfType } from '../helpers/bossArena';
-import { MUTED_KINDS } from '../helpers/mute';
+import { calmGalaxy } from '../helpers/mute';
 import { bearingOf, ringGaps, wardenGapBearings, wardenGaps, WIDE_GAP } from '../helpers/ringGaps';
 
 const DEF = BOSSES.warden;
@@ -500,8 +500,7 @@ describe('the Warden as the expert bot sees it', () => {
 });
 
 describe('the Warden in 3-★', () => {
-  const calm = (): GalaxyDef => ({ ...galaxyById('3-6'), kinds: MUTED_KINDS, events: [] });
-  const world = (seed: number) => new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calm(), mode: 'free' } });
+  const world = (seed: number) => new World({ seed, field: BOSS_FIELD, rules: { kind: 'galaxy', galaxy: calmGalaxy('3-6'), mode: 'free' } });
 
   afterEach(() => {
     vi.restoreAllMocks();
