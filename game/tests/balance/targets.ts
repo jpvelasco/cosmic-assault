@@ -55,7 +55,7 @@ const LAST_THREE_STAR_DIMENSION: Dimension = 3;
  */
 const STATUE_CHAIN_EXEMPT: readonly GalaxyId[] = ['5-4', '5-6'];
 /**
- * The galaxies an idle ship must last about as long in at 4:3 as at 21:9 (§9.4): one late galaxy a Dimension from
+ * The galaxies an idle ship must last about as long in at 4:3 as at 21:9: one late galaxy a Dimension from
  * Crimson Nebula on. The field's budget scales with its area, so neither shape should be the easier.
  */
 const ASPECT_GALAXIES: readonly GalaxyId[] = ['3-3', '4-4', '5-5'];
@@ -154,7 +154,7 @@ export function formatClearTimes(rows: readonly Row[]): string {
     const own = rows.filter((r) => galaxyById(r.id).dimension === dimension);
     return own.length === 6 ? [`Dimension ${String(dimension)}: ${fixed(own.reduce((sum, r) => sum + r.expertSeconds, 0) / 60)} min`] : [];
   });
-  return lines.length === 0 ? '' : `The expert's summed clear time (report only, §6.4 asks 10-15 min):\n${lines.join('\n')}`;
+  return lines.length === 0 ? '' : `The expert's summed clear time (report only; the aim is 10-15 min):\n${lines.join('\n')}`;
 }
 
 /** Keeps the last run's rows as the previous run's, and starts this run's afresh. */

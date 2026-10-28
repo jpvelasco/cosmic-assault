@@ -148,7 +148,7 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
     kinds: rampsFor(dimension, index),
     events: boss ? [] : [...showers(dimension, index, duration), ...hazards(dimension, index)].sort((a, b) => a.at - b.at),
     pickups: poolFor(dimension),
-    // A Dimension's breather teaches its new pickups (§6.1); D1 and D2 bring theirs in without one.
+    // A Dimension's breather (its first galaxy) features the pickups new to it; D1 and D2 bring theirs in without one.
     featured: index === 1 && dimension >= FIRST_FEATURING ? newIn(dimension) : [],
     boss: boss ? BOSS_OF[dimension] : null,
     ...LOOKS[dimension],
