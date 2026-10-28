@@ -26,7 +26,7 @@
   table entry plus a claim check in `game/tests/helpers/seedClaims.ts`). Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
-  tally, frame-stats restart) reaches `dist/`. Each hook lives in
+  tally, frame-stats restart, sprite-cache use) reaches `dist/`. Each hook lives in
   `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
   and a case in `tests/unit/checkNoBridge.test.ts`; a new hook needs all three.
@@ -76,16 +76,36 @@
     stats and schedules as typed data; `sim/foes/` has one behaviour per foe
     kind over a pooled `Foe` (never hold one across steps), and `FoeField` owns
     the pool, spawning, hits and rams. The director spends foes from the same
-    threat budget as rocks, by cost. Foe motion draws from the `'foes'` stream
-    and hazards from `'hazards'`. A gravity well (`sim/hazards/`) is scheduled
-    by a level event, telegraphed, then pulling; each foe kind says whether a
-    well pulls it. Foes and wells are drawn by `render/foePass.ts` and
-    `render/hazardPass.ts`; a well holds still under reduced motion.
+    threat budget as rocks, by cost. Foe motion draws from the `'foes'` stream.
+    `HAZARD_RULES` in `content/hazards.ts` is the hazard table: each type's
+    telegraph, length and first set (gravity wells, repulsion fields, danger
+    zones, warp rifts and the black hole). A level event schedules a hazard; it
+    shows as a harmless warning for its telegraph, then turns hostile.
+    `HazardField` (`sim/hazards/`) runs one `Hazard` per type a level names,
+    made by `HAZARD_FACTORIES`, each from its own stream (`hazardStreamName`:
+    gravity wells keep `'hazards'`, every other type draws from
+    `'hazards:<type>'`). It sums every hazard's pull on the ship and caps it at
+    `MAX_SHIP_PULL`, so a thrusting ship always beats it. A hazard's optional
+    parts strike the ship, swallow shots, carry bodies, or move the respawn,
+    which `sim/respawn.ts` keeps clear of the boss, the hole, foes, zones and
+    rift mouths. Each foe kind says whether a pull moves it. Foes and hazards
+    are drawn by `render/foePass.ts` and `render/hazardPass.ts`; a well holds
+    still under reduced motion.
+  - Hostile bolts (`sim/foes/bolts.ts`) come from one pool per level, fired by
+    gunships and boss attacks after a telegraphed windup: a bolt flies straight,
+    leaves the field rather than wrapping, and lasts `BOLT.life` seconds of the
+    enemies' time. The player's shots go through `sim/shots.ts`: `ShotRules` say
+    what the running effects add (piercing, homing, the Wingman's shot), and
+    each shot strikes through `ShotTargets` (a black hole's horizon, the boss,
+    the foes, the rocks), never the same target twice.
   - A boss is three pieces, and a new one needs all of them. Its definition in
     `content/bosses.ts` gives hit points, radius, the attacks of each phase and
     the rests between them. Its behaviour in `sim/boss/` implements
     `BossBehaviour` (`behaviour.ts`): an `AttackSpec` for every attack its phases
-    name, each with a telegraph of at least `MIN_WINDUP_SECONDS`; and optionally
+    name, each with a telegraph of at least `MIN_WINDUP_SECONDS` (build them
+    from the shared attack library in `sim/boss/attacks.ts`: pulses, dashes,
+    rock rings, bolts, drone launches and the rest, each declaring the threat
+    the bots read, before writing one of its own); and optionally
     its drift, parts, `vulnerable`, `hurtsAt` and `target` (where a shot does
     harm), its exposure events and a per-step hook. A factory builds it afresh
     for each fight, drawing only from the fight's `'boss'` stream, and
@@ -119,7 +139,10 @@
   - Draw sizes scale up on small screens (`render/visualScale.ts`) while the
     720-unit field and every hitbox stay identical on all devices.
   - `render/` draws from interpolated sim poses. Sprites are baked once into a
-    bounded LRU cache (`spriteCache.ts`, `sprites.ts`); glows are baked or
+    bounded LRU cache (`spriteCache.ts`, `sprites.ts`), whose
+    `SPRITE_CACHE_CAPACITY` is at least 1.5 times the most sprites
+    `e2e/spriteCache.spec.ts` sees in use in the last survival level and the
+    last three boss fights, and which may evict next to nothing there; glows are baked or
     additive sprites. Never set `shadowBlur` (ESLint bans it) or a canvas
     `filter` per frame. `fieldPen.ts` lands an upright sprite drawn at its baked
     size on whole device pixels, which a CPU-rasterized canvas copies several
@@ -180,13 +203,19 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    from `game/`; install Chromium first with `npx playwright install chromium`.
    Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
    4318 (release), clear of Vite's default preview port. `npm run test:perf`
-   (the report-only `perf` project: 4x CPU slowdown, a busy field and a boss
-   fight, both written to `game/test-results/perf.json`) is not part of
-   `test:e2e`; CI runs it as the
-   non-required `perf` job. `npm run test:balance` runs the slow many-seed bot
-   suites in `game/tests/balance/` (boss kill rates and clear rates against the
-   targets in `targets.ts`, one `d<N>-*.test.ts` set of files per Dimension; pass
-   `-- d3-` to run one Dimension), which `npm test` leaves out; run it after any change
+   (the `perf` project: 4x CPU slowdown, a busy field and a boss fight, each
+   held to the frame-time ceilings in `game/e2e/perfThresholds.ts`, which are
+   worked out from recorded runs of the CI job, and both written to
+   `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
+   `perf` job, which gates deployment. `npm run test:balance` runs the slow many-seed bot
+   suites in `game/tests/balance/`, which `npm test` leaves out. `targets.ts`
+   is the balance matrix: for every level, how long an idle ship lasts (at
+   least 20 s in the first, and no longer than in the level before, bar the
+   ruled exceptions), the casual's
+   clear rate against a trend band (a few levels hold a ruled floor instead),
+   the expert's clears and stars, and each boss's kill bar. Each Dimension has
+   its `d<N>-targets.test.ts`, and every balance file carries a `d<N>-` prefix,
+   which `check:workflow` guards; pass `-- d3-` to run one Dimension. Run it after any change
    to level content, difficulty curves, pacing, boss stats or the bots, and
    before changing a target; CI runs it as the non-required `balance` check. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
@@ -228,13 +257,15 @@ and `tests/test-results/` and are ignored by Git.
   `mobile-landscape` projects against `dist-e2e/`, plus the `release-smoke`
   project against `dist/`);
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
-  `website/`. Job `deploy` runs only on pushes to `main`, and only after both
-  `game` and `legacy` pass. `npm run check:workflow` in `game/` guards that gate.
-  Job `perf` builds both bundles and runs `npm run test:perf`. Job
+  `website/`. Job `perf` builds both bundles and runs `npm run test:perf`.
+  Job `deploy` runs only on pushes to `main`, and only after `game`, `legacy`
+  and `perf` pass, so a frame-time regression cannot ship; `npm run
+  check:workflow` in `game/` guards that gate. `perf` is not a required check,
+  so a pull request may merge before it passes. Job
   `balance-dimension` runs `npm run test:balance -- d<N>-` as a matrix over
   Dimensions 1 to 5, and job `balance` passes only if every shard did, so the
-  ruleset sees one check. Neither `perf` nor `balance` is a required check, and
-  neither gates deployment.
+  ruleset sees one check. `balance` is a report: not a required check, and it
+  does not gate deployment.
 - Resolve review threads only after implementing the requested change or posting
   a justified reply. Merge only when required checks pass and no actionable
   threads remain, then remove the merged branch and prune stale references.
@@ -255,7 +286,9 @@ at `next/`. The job fails if the published root differs from `website/`.
 There are no other hosting paths.
 
 The `game/` build is an installable, offline-capable web app. `vite/precache.ts`
-emits `src/sw/worker.ts` as `sw.js` with the list of every built file. The worker
+emits `src/sw/worker.ts` as `sw.js` with the list of every built file but the two
+512 px icons (`NOT_PRECACHED`), which the browser fetches itself when it installs
+the app; `tests/unit/icons.test.ts` caps the precached icons' bytes. The worker
 registers from `./sw.js` with its default scope, so it controls only `/next/`
 and never the legacy root; it is never registered by the Vite dev server. Each
 deploy gets a new cache version, and older `cosmic-assault-next-*` caches are
