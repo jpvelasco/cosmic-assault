@@ -69,8 +69,9 @@ const ENTRIES = [
   { seed: 234, claim: 'busy-field', galaxy: PERF_GALAXY },
   // The perf spec's boss scene: skipped to the Hive Carrier's fight, a ship firing and turning keeps it fighting.
   { seed: 2, claim: 'carrier-fight', galaxy: CARRIER_GALAXY },
-  // The Crimson Nebula spec: the idle ship is in play at the zone's warning, on into the zone, and on until it sees a mine
-  // arm and blast, on both e2e fields. Mines seldom drift close enough to a still ship to arm: about one seed in 300.
+  // The Crimson Nebula spec: the idle ship is in play at the zone's warning, on into the zone, and on until it sees the first
+  // mine to arm be the first to blast, on both e2e fields. Mines seldom drift close enough to a still ship to arm: about one
+  // seed in 300.
   { seed: 176, claim: 'crimson-hazards', galaxy: CRIMSON_GALAXY },
   // The gunship spec: the idle ship sees a gunship wind up and fire, and a bolt leave across the field's edge, on both e2e
   // fields. Crimson Nebula's own galaxies bring gunships too seldom early on for a still ship to see that on both fields

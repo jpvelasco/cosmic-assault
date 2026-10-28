@@ -267,7 +267,7 @@ const acrossEdge = ({ x, y, radius }: Readonly<{ x: number; y: number; radius: n
 interface Sightings {
   /** A gunship wound up, then fired a bolt. */
   aimedBolt: boolean;
-  /** A mine armed, then blasted. */
+  /** The first mine seen arming blasted, and no other mine blasted before it. */
   blast: boolean;
   /** A bolt lay across the field's edge, on its way out. */
   edge: boolean;
@@ -277,13 +277,17 @@ interface Sightings {
 function watchSightings(idle: IdleRun): { seen: Sightings; afterStep: () => void } {
   const { world, field } = idle;
   const woundUp = new Set<number>();
-  const armed = new Set<number>();
+  let firstArmed: number | null = null;
+  let blasted = false;
   const seen: Sightings = { aimedBolt: false, blast: false, edge: false };
   idle.onEvent((event) => {
     if (event.type === 'foeWindup' && world.foes.some((foe) => foe.id === event.id && foe.kind === 'gunship')) woundUp.add(event.id);
     else if (event.type === 'boltFired' && event.source === 'gunship' && woundUp.has(event.owner)) seen.aimedBolt = true;
-    else if (event.type === 'mineArmed') armed.add(event.id);
-    else if (event.type === 'mineBlast' && armed.has(event.id)) seen.blast = true;
+    else if (event.type === 'mineArmed') firstArmed ??= event.id;
+    else if (event.type === 'mineBlast' && firstArmed !== null && !blasted) {
+      blasted = true;
+      seen.blast = event.id === firstArmed;
+    }
   });
   return {
     seen,
@@ -300,8 +304,8 @@ function sees(idle: IdleRun, seconds: number, wanted: () => boolean, afterStep: 
 
 /**
  * An idle ship in a Rank run of `galaxy` on `field` with WATCH_LIVES lives: in play at its danger zone's warning, and
- * FIGHT_SLACK_SECONDS on with the zone active; then, by CRIMSON_WATCH_SECONDS and still in play, it has seen a mine arm
- * and then blast.
+ * FIGHT_SLACK_SECONDS on with the zone active; then, by CRIMSON_WATCH_SECONDS and still in play, it has seen the first mine
+ * to arm be the first to blast.
  */
 function seesZoneAndMine(seed: number, galaxy: GalaxyId, field: Field): boolean {
   const idle = new IdleRun(seed, galaxy, field, WATCH_LIVES);
@@ -400,7 +404,7 @@ export const CLAIMS: Readonly<Record<ClaimId, Claim>> = {
     holds: (seed, galaxy) => fightHeld(seed, galaxy, PERF_FIGHT_LIVES, CARRIER_FIGHT_SECONDS) > 0,
   },
   'crimson-hazards': {
-    promise: (galaxy) => `keeps an idle ship in a Rank run of ${galaxy} with ${String(WATCH_LIVES)} lives in play to its danger zone's warning, on into the zone, and on until it sees a mine arm then blast within ${String(CRIMSON_WATCH_SECONDS)} s, on both e2e fields`,
+    promise: (galaxy) => `keeps an idle ship in a Rank run of ${galaxy} with ${String(WATCH_LIVES)} lives in play to its danger zone's warning, on into the zone, and on until it sees the first mine to arm be the first to blast within ${String(CRIMSON_WATCH_SECONDS)} s, on both e2e fields`,
     holds: (seed, galaxy) => FIELDS.every((field) => seesZoneAndMine(seed, galaxy, field)),
   },
   'gunship-bolt': {
