@@ -16,7 +16,7 @@ import type { GalaxyMode } from '../../src/sim/scoring';
 import type { Ship } from '../../src/sim/ship';
 import { rescale } from '../../src/sim/wrap';
 import { World, type WorldOptions } from '../../src/sim/world';
-import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, ofType, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, ofType, runFor, stubArena, type StubArena, throughIntro } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = FIXTURE_DEF;
@@ -36,7 +36,7 @@ const step = (r: BossRunner) => (dt: number, arena: StubArena) => {
 function fightingAt(hp: number, field: Field = BOSS_FIELD): { r: BossRunner; arena: StubArena } {
   const r = runnerFor(30);
   const arena = stubArena(undefined, field);
-  runFor(step(r), arena, BOSS_INTRO_SECONDS + 0.05);
+  throughIntro(r, arena);
   if (hp < 30) r.hit(30 - hp);
   return { r, arena };
 }
@@ -98,7 +98,7 @@ describe('the fixture\'s ring', () => {
     const ring = (seed: number): number[] => {
       const r = new BossRunner(DEF, FIXTURE, { maxHp: 30, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD });
       const arena = stubArena();
-      runFor(step(r), arena, BOSS_INTRO_SECONDS + 0.05);
+      throughIntro(r, arena);
       arena.asteroids.length = 0;
       runFor(step(r), arena, 4);
       return arena.asteroids.map((a) => Math.atan2(a.vy, a.vx));

@@ -7,7 +7,7 @@ import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, ofType, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, ofType, runFor, throughIntro, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const PARTS = 4;
@@ -44,8 +44,7 @@ function segmented(): BossBehaviour {
 
 function fighting(def: BossDef = DEF, maxHp = 30, arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
   const r = new BossRunner(def, segmented(), { maxHp, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD });
-  runFor((dt, a) => { r.step(dt, a); }, arena, 2.05);
-  expect(r.state).toBe('fighting');
+  throughIntro(r, arena);
   return { r, arena };
 }
 

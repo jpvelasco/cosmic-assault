@@ -7,10 +7,9 @@ import type { AttackContext, BossThreat } from '../../src/sim/boss/behaviour';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { STEP_SECONDS } from '../../src/sim/config';
-import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, runFor, stubArena, type StubArena } from '../helpers/bossArena';
+import { bossSetup, FIXTURE, FIXTURE_DEF, runFor, stubArena, throughIntro, type StubArena } from '../helpers/bossArena';
 import { ATTACK_TELEGRAPHS } from '../helpers/telegraphAudit';
 
 const BOT_DIR = new URL('../../src/bot/', import.meta.url);
@@ -19,10 +18,9 @@ const GENERIC_BOSS_MODULES = ['attacks', 'behaviour', 'bossRules'];
 
 /** A fight of boss `id`, or of the test fixture, with the galaxy's foes to launch into, its intro over. */
 function fight(id: BossId | 'fixture', arena: StubArena = stubArena()): { runner: BossRunner; arena: StubArena } {
-  const foes = new FoeField(arena, createRng(2), { score: (base) => base, killed: () => undefined });
-  const setup = { maxHp: 60, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, foes, bolts: new Bolts(arena) };
+  const setup = bossSetup(60, { arena, foesSeed: 2 });
   const runner = id === 'fixture' ? new BossRunner(FIXTURE_DEF, FIXTURE, setup) : new BossRunner(BOSSES[id], BOSS_BEHAVIOURS[id](setup), setup);
-  runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
+  throughIntro(runner, arena);
   return { runner, arena };
 }
 

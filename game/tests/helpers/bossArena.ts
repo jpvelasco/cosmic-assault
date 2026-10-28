@@ -8,7 +8,7 @@ import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
-import { createRng } from '../../src/sim/rng';
+import { createRng, type Rng } from '../../src/sim/rng';
 import type { Arena } from '../../src/sim/rules';
 import { createShip, type Ship } from '../../src/sim/ship';
 
@@ -115,19 +115,26 @@ export interface BossRig {
   readonly foes: FoeField;
 }
 
-/** What a rig is made with: the fight's seed, its arena, and the seed of its foes' stream. */
+/** What a rig is made with: the fight's seed, or its own stream in place of one drawn from it; its arena; and the seed of its foes' stream. */
 export interface RigOptions {
   readonly seed?: number;
+  readonly rng?: Rng | undefined;
   readonly arena?: StubArena | undefined;
   readonly foesSeed?: number;
 }
 
-/** Boss `def`, made by `make` with `maxHp`, on `arena` (a fresh stub's by default), its fight drawn from `seed`. */
-export function bossRig(def: BossDef, make: BossFactory, maxHp: number, { seed = 1, arena = stubArena(), foesSeed = 99 }: RigOptions = {}): BossRig {
+/** A fight's setup with `maxHp` on `arena` (a fresh stub's by default), drawing from `rng`, else `seed`, with bolts and foes of its own. */
+export function bossSetup(maxHp: number, { seed = 1, rng = createRng(seed), arena = stubArena(), foesSeed = 99 }: RigOptions = {}): BossSetup & { readonly bolts: Bolts; readonly foes: FoeField } {
   const bolts = new Bolts(arena);
   const foes = new FoeField(arena, createRng(foesSeed), { score: (base) => base, killed: () => undefined });
-  const setup: BossSetup = { maxHp, rng: createRng(seed), rockSpeed: 1, field: arena.field(), bolts, foes };
-  return { r: new BossRunner(def, make(setup), setup), arena, bolts, foes };
+  return { maxHp, rng, rockSpeed: 1, field: arena.field(), bolts, foes };
+}
+
+/** Boss `def`, made by `make` with `maxHp`, on `arena` (a fresh stub's by default), its fight drawn from `seed`. */
+export function bossRig(def: BossDef, make: BossFactory, maxHp: number, options: RigOptions = {}): BossRig {
+  const arena = options.arena ?? stubArena();
+  const setup = bossSetup(maxHp, { ...options, arena });
+  return { r: new BossRunner(def, make(setup), setup), arena, bolts: setup.bolts, foes: setup.foes };
 }
 
 /** Steps a rig's bolts, its foes, then its boss, as a galaxy does. */
@@ -137,10 +144,15 @@ export const rigStepper = (rig: BossRig): Stepper => (dt, arena) => {
   rig.r.step(dt, arena);
 };
 
+/** Steps `step` (the boss alone, by default) through the intro of the fight `r` runs and into the fight; fails if it has not begun. */
+export function throughIntro(r: BossRunner, arena: StubArena, step: Stepper = (dt, a) => { r.step(dt, a); }): void {
+  runFor(step, arena, BOSS_INTRO_SECONDS + 0.05);
+  if (r.state !== 'fighting') throw new Error(`${r.view.id} is ${r.state} after its intro, not fighting: check its intro length`);
+}
+
 /** `bossRig`, stepped through the boss's intro into its fight; fails if the fight has not begun. */
 export function fightingRig(def: BossDef, make: BossFactory, maxHp: number, options: RigOptions = {}): BossRig {
   const rig = bossRig(def, make, maxHp, options);
-  runFor(rigStepper(rig), rig.arena, BOSS_INTRO_SECONDS + 0.05);
-  if (rig.r.state !== 'fighting') throw new Error(`${def.id} is ${rig.r.state} after its intro, not fighting: check its intro length`);
+  throughIntro(rig.r, rig.arena, rigStepper(rig));
   return rig;
 }

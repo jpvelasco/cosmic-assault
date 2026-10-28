@@ -3,7 +3,7 @@ import type { AttackSpec, BossBehaviour, BossSetup } from '../../src/sim/boss/be
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { ShardOrbit, type ShardOrbitOptions } from '../../src/sim/boss/shardOrbit';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, runFor, type StubArena, stubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, runFor, throughIntro, type StubArena, stubArena } from '../helpers/bossArena';
 
 /** Six shards of radius 10 on an orbit of 80, held still so each slot stays where it is. */
 const STILL: ShardOrbitOptions = { counts: [6, 6], hp: 2, radius: 10, orbit: 80, speed: 0, exposedAt: 3, regrowSeconds: 1, regrowCap: 4 };
@@ -22,7 +22,7 @@ function bareOrbit(options: ShardOrbitOptions): Orbit {
   const orbit = new ShardOrbit(options, setup, { x: BOSS_FIELD.width / 2, y: BOSS_FIELD.height / 2 });
   const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { quake: SPEC, dive: SPEC }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
   const runner = new BossRunner({ ...FIXTURE_DEF, phases: [['quake'], ['quake'], ['quake']] }, behaviour, setup);
-  runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
+  throughIntro(runner, arena);
   for (let i = 0; i < orbit.parts.length && !runner.view.vulnerable; i++) breakPart(runner, i);
   return { orbit, runner, arena };
 }

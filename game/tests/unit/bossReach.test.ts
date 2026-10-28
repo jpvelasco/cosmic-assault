@@ -8,12 +8,10 @@ import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
-import { Bolts } from '../../src/sim/foes/bolts';
-import { FoeField } from '../../src/sim/foes/foeField';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
-import { BOSS_FIELD, runFor, stubArena, FIXTURE_DEF } from '../helpers/bossArena';
+import { BOSS_FIELD, bossSetup, runFor, stubArena, FIXTURE_DEF } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const SEGMENT_RADIUS = 24;
@@ -49,14 +47,7 @@ function serpent(trail = TRAIL, driftSpeed = 60): BossBehaviour {
   };
 }
 
-const setupFor = (field: Field, arena = stubArena(undefined, field)) => ({
-  maxHp: 30,
-  rng: createRng(3),
-  rockSpeed: 1,
-  field,
-  foes: new FoeField(arena, createRng(2), { score: (b: number) => b, killed: () => undefined }),
-  bolts: new Bolts(arena),
-});
+const setupFor = (field: Field, arena = stubArena(undefined, field)) => bossSetup(30, { seed: 3, arena, foesSeed: 2 });
 
 describe('part-aware boss reach', () => {
   it('measures clearance from the core\'s reach and from every live part by its own radius', () => {

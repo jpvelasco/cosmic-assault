@@ -13,7 +13,7 @@ import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
+import { BOSS_FIELD, liveParts, runFor, type StubArena, stubArena, timedOfType, throughIntro } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = BOSSES.monolith;
@@ -36,12 +36,10 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
   r.step(dt, arena);
 };
 
-
 /** A Monolith whose intro is over. */
 function fighting(seed = 1, arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
   const r = monolith(seed);
-  runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
-  expect(r.state).toBe('fighting');
+  throughIntro(r, arena);
   return { r, arena };
 }
 

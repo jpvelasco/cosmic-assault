@@ -2,29 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { BossId } from '../../src/content/types';
 import { aimedBolts, dash, dashAttack, fireBolt, pulseAttack, radialBolts } from '../../src/sim/boss/attacks';
-import type { AttackSpec, BossBehaviour, BossPart, BossSetup } from '../../src/sim/boss/behaviour';
+import type { AttackSpec, BossBehaviour, BossPart } from '../../src/sim/boss/behaviour';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { createMonolith, MONOLITH_SHARDS } from '../../src/sim/boss/monolith';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { ShardOrbit } from '../../src/sim/boss/shardOrbit';
-import type { Field } from '../../src/sim/field';
-import { Bolts } from '../../src/sim/foes/bolts';
-import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, breakPart, FIXTURE, FIXTURE_DEF, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
+import { BOSS_FIELD, bossSetup, breakPart, FIXTURE, FIXTURE_DEF, liveParts, runFor, throughIntro, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
 import { ATTACK_TELEGRAPHS, auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
 const BOSS_IDS = Object.keys(BOSS_BEHAVIOURS) as BossId[];
 
-function setupFor(field: Field, arena: StubArena = stubArena(undefined, field)): BossSetup {
-  const foes = new FoeField(arena, createRng(2), { score: (base) => base, killed: () => undefined });
-  return { maxHp: 60, rng: createRng(1), rockSpeed: 1, field, foes, bolts: new Bolts(arena) };
-}
+/** The setup these fights share, on `arena`. */
+const setupOn = (arena?: StubArena) => bossSetup(60, { arena, foesSeed: 2 });
 
 describe('the boss roster', () => {
   it('gives every attack of every boss a telegraph of at least the minimum windup', () => {
     for (const id of BOSS_IDS) {
-      for (const [attack, spec] of Object.entries(BOSS_BEHAVIOURS[id](setupFor(BOSS_FIELD)).attacks)) expect(spec.windup, `${id} ${attack}`).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
+      for (const [attack, spec] of Object.entries(BOSS_BEHAVIOURS[id](setupOn()).attacks)) expect(spec.windup, `${id} ${attack}`).toBeGreaterThanOrEqual(MIN_WINDUP_SECONDS);
     }
   });
 });
@@ -51,8 +46,8 @@ describe('the shared attack library', () => {
       }
     }, arena, 20);
     expect(poses[1]).toEqual(poses[0]);
-    const shards = new ShardOrbit(MONOLITH_SHARDS, setupFor(BOSS_FIELD)).parts;
-    expect(createMonolith(setupFor(BOSS_FIELD)).parts).toEqual(shards);
+    const shards = new ShardOrbit(MONOLITH_SHARDS, setupOn()).parts;
+    expect(createMonolith(setupOn()).parts).toEqual(shards);
   });
 
   /** The fixture fights stand their bolt attacks in for the fixture's two. */
@@ -65,8 +60,8 @@ describe('the shared attack library', () => {
   /** A fight whose every attack is `spec`, on a stub arena with bolts, its fight steps recorded for the audit. */
   function boltFight(spec: AttackSpec, parts: readonly BossPart[] = []) {
     const arena = stubArena();
-    const setup = setupFor(BOSS_FIELD, arena);
-    const bolts = setup.bolts as Bolts;
+    const setup = setupOn(arena);
+    const { bolts } = setup;
     const runner = new BossRunner(FIXTURE_DEF, { driftSpeed: 0, parts, attacks: { quake: spec, dive: spec } }, setup);
     const recorder = fightRecorder();
     const source = { get elapsed() { return arena.elapsed(); }, boss: runner.view, asteroids: arena.asteroids, foes: [], bolts: bolts.list };
@@ -102,13 +97,13 @@ describe('the shared attack library', () => {
 
   it('refuses attack output from a behaviour\'s step, which no windup telegraphs, saying where it belongs', () => {
     const arena = stubArena();
-    const setup = setupFor(BOSS_FIELD, arena);
+    const setup = setupOn(arena);
     const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
     const sly: BossBehaviour = { driftSpeed: 0, attacks: { quake: spec, dive: spec }, step: (ctx) => { if (ctx.boss.windup !== null) fireBolt(ctx, ctx.boss.x, ctx.boss.y, 0); } };
     const runner = new BossRunner(FIXTURE_DEF, sly, setup);
     expect(() => runFor((dt, a) => { runner.step(dt, a); }, arena, 6)).toThrow(/step .*attack's run/);
     const shover: BossBehaviour = { driftSpeed: 0, attacks: { quake: spec, dive: spec }, step: (ctx) => { ctx.shoveX = 50; } };
-    const pushy = new BossRunner(FIXTURE_DEF, shover, setupFor(BOSS_FIELD, arena));
+    const pushy = new BossRunner(FIXTURE_DEF, shover, setupOn(arena));
     expect(() => runFor((dt, a) => { pushy.step(dt, a); }, arena, 1)).toThrow(/step .*attack's run/);
   });
 
@@ -125,12 +120,12 @@ describe('a ShardOrbit', () => {
 
   function orbiting(): { orbit: ShardOrbit; runner: BossRunner; arena: StubArena } {
     const arena = stubArena();
-    const setup = setupFor(BOSS_FIELD, arena);
+    const setup = setupOn(arena);
     const orbit = new ShardOrbit(OPTIONS, setup);
     const spec: AttackSpec = { windup: 0.5, active: 0, run: () => undefined };
     const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { quake: spec, dive: spec }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
     const runner = new BossRunner(FIXTURE_DEF, behaviour, setup);
-    runFor((dt, a) => { runner.step(dt, a); }, arena, 2.05);
+    throughIntro(runner, arena);
     return { orbit, runner, arena };
   }
 
@@ -166,7 +161,7 @@ describe('a ShardOrbit', () => {
   });
 
   it('takes a volley of its own and a home of its own, for a boss that is not the Monolith', () => {
-    const setup = setupFor(BOSS_FIELD);
+    const setup = setupOn();
     const orbit = new ShardOrbit({ ...OPTIONS, volley: { shards: 2, seconds: 1.2, spread: 30, overshoot: 40 } }, setup, { x: 300, y: 300 });
     // Two shards sit half a lane either side of the aim: the outer one is half the spread out, and a shard's radius beyond.
     expect(orbit.volley(0.6)).toMatchObject({ active: 1.2, threat: { kind: 'lane', reach: 0.5 * 30 + 10 } });

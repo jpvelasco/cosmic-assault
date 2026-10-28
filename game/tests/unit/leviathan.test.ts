@@ -3,7 +3,7 @@ import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, GalaxyDef } from '../../src/content/types';
-import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
@@ -36,7 +36,7 @@ import { TAU, turnBetween } from '../../src/sim/math';
 import { createRng, type Rng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, breakPart, liveParts, runFor, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, breakPart, fightingRig, liveParts, rigStepper, runFor, stubArena, timedOfType, type BossRig } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 import { auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
@@ -48,32 +48,12 @@ const CENTRE = { x: BOSS_FIELD.width / 2, y: BOSS_FIELD.height / 2 };
 /** Float residue from summing steps. */
 const SLACK = 1e-6;
 
-interface Rig {
-  readonly r: BossRunner;
-  readonly arena: StubArena;
-  readonly bolts: Bolts;
-}
-
-/** A Leviathan on a stub arena whose still ship sits at `ship`, the field's centre unless given, with bolts to fire. */
-function rig(seed = 1, ship = CENTRE, rng: Rng = createRng(seed), field: Field = BOSS_FIELD): Rig {
-  const arena = stubArena(createShip(ship.x, ship.y), field);
-  const bolts = new Bolts(arena);
-  const setup: BossSetup = { maxHp: MAX_HP, rng, rockSpeed: 1, field, bolts };
-  return { r: new BossRunner(DEF, createLeviathan(setup), setup), arena, bolts };
-}
-
-const stepper = (rigged: Rig) => (dt: number, arena: StubArena) => {
-  rigged.r.step(dt, arena);
-  rigged.bolts.step(dt);
-};
+/** A Leviathan on a stub arena whose still ship sits at `ship`, the field's centre unless given; its fight draws from `rng`, else from `seed`. */
+const rig = (seed = 1, ship = CENTRE, rng?: Rng, field: Field = BOSS_FIELD): BossRig =>
+  bossRig(DEF, createLeviathan, MAX_HP, { seed, rng, arena: stubArena(createShip(ship.x, ship.y), field) });
 
 /** A Leviathan whose intro is over. */
-function fighting(seed = 1, ship = CENTRE): Rig {
-  const rigged = rig(seed, ship);
-  runFor(stepper(rigged), rigged.arena, BOSS_INTRO_SECONDS + STEP_SECONDS);
-  expect(rigged.r.state).toBe('fighting');
-  return rigged;
-}
+const fighting = (seed = 1, ship = CENTRE): BossRig => fightingRig(DEF, createLeviathan, MAX_HP, { seed, arena: stubArena(createShip(ship.x, ship.y)) });
 
 const segments = (r: BossRunner): readonly BossPart[] => r.view.parts;
 const distance = (a: Readonly<{ x: number; y: number }>, b: Readonly<{ x: number; y: number }>): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -84,18 +64,18 @@ function breakTail(r: BossRunner): void {
 }
 
 /** Steps until `attack` winds up, or throws after `seconds`. */
-function untilWindup(rigged: Rig, attack: AttackId, seconds = 30): void {
+function untilWindup(rigged: BossRig, attack: AttackId, seconds = 30): void {
   for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) {
     if (rigged.r.view.windup === attack) return;
-    runFor(stepper(rigged), rigged.arena, STEP_SECONDS);
+    runFor(rigStepper(rigged), rigged.arena, STEP_SECONDS);
   }
   throw new Error(`${attack} should wind up within ${String(seconds)} s`);
 }
 
 /** Steps until the attack winding up goes active. */
-function untilActive(rigged: Rig): void {
+function untilActive(rigged: BossRig): void {
   const attack = rigged.r.view.windup;
-  while (rigged.r.view.active !== attack) runFor(stepper(rigged), rigged.arena, STEP_SECONDS);
+  while (rigged.r.view.active !== attack) runFor(rigStepper(rigged), rigged.arena, STEP_SECONDS);
 }
 
 describe('the Leviathan definition', () => {
@@ -155,7 +135,7 @@ describe('the Leviathan body', () => {
   it('holds still at home through its intro', () => {
     const rigged = rig();
     const before = [rigged.r.view.x, rigged.r.view.y, ...segments(rigged.r).flatMap((p) => [p.x, p.y])];
-    runFor(stepper(rigged), rigged.arena, BOSS_INTRO_SECONDS - STEP_SECONDS);
+    runFor(rigStepper(rigged), rigged.arena, BOSS_INTRO_SECONDS - STEP_SECONDS);
     expect(rigged.r.state).toBe('intro');
     expect([rigged.r.view.x, rigged.r.view.y, ...segments(rigged.r).flatMap((p) => [p.x, p.y])]).toEqual(before);
   });
@@ -165,7 +145,7 @@ describe('the Leviathan body', () => {
     const { r } = rigged;
     let swimSteps = 0;
     let lastStrike = -Infinity;
-    runFor(stepper(rigged), rigged.arena, 90, () => {
+    runFor(rigStepper(rigged), rigged.arena, 90, () => {
       const { view } = r;
       if (view.active === 'dive' || view.active === 'coil') lastStrike = rigged.arena.elapsed();
       // The ease back onto the path starts on the step the attack ends, after its last active one.
@@ -182,7 +162,7 @@ describe('the Leviathan body', () => {
 
   it('turns its head the way it swims', () => {
     const rigged = fighting();
-    runFor(stepper(rigged), rigged.arena, 0.5);
+    runFor(rigStepper(rigged), rigged.arena, 0.5);
     const { view } = rigged.r;
     expect(turnBetween(view.facing, Math.atan2(view.y - view.py, view.x - view.px))).toBeCloseTo(0, 6);
   });
@@ -206,9 +186,9 @@ function blow(r: BossRunner): void {
 }
 
 /** Runs `rigged` for `seconds`, landing a blow a second where it does harm, calling `each` after every step. */
-function batter(rigged: Rig, seconds: number, each: () => void = () => undefined): void {
+function batter(rigged: BossRig, seconds: number, each: () => void = () => undefined): void {
   let step = 0;
-  runFor(stepper(rigged), rigged.arena, seconds, () => {
+  runFor(rigStepper(rigged), rigged.arena, seconds, () => {
     if (step++ % Math.round(1 / STEP_SECONDS) === 0) blow(rigged.r);
     each();
   });
@@ -263,13 +243,13 @@ describe('the Leviathan segment chain', () => {
 
   it('keeps its chain through a resize: re-laid along its stretched trail on the next step, and smooth from then on', () => {
     const rigged = fighting();
-    runFor(stepper(rigged), rigged.arena, 3);
+    runFor(rigStepper(rigged), rigged.arena, 3);
     const narrow: Field = { width: 960, height: 720 };
     rigged.r.resize(BOSS_FIELD, narrow);
     const resized = stubArena(rigged.arena.ship, narrow);
-    const after: Rig = { ...rigged, arena: resized };
+    const after: BossRig = { ...rigged, arena: resized };
     let first = true;
-    runFor(stepper(after), resized, 4, () => {
+    runFor(rigStepper(after), resized, 4, () => {
       const chain = [...segments(rigged.r), rigged.r.view];
       if (!first) for (const body of chain) expect(distance(body, { x: body.px, y: body.py })).toBeLessThan(SEGMENT_GAP / 4);
       first = false;
@@ -308,12 +288,12 @@ describe('dismantling the Leviathan', () => {
     const rigged = fighting();
     const { r } = rigged;
     for (let i = 0; i < SEGMENT_COUNT - 1; i++) breakTail(r);
-    const before = runFor(stepper(rigged), rigged.arena, 0.5);
+    const before = runFor(rigStepper(rigged), rigged.arena, 0.5);
     expect(timedOfType(before, 'bossExposed')).toHaveLength(0);
     breakTail(r);
     expect(r.view.vulnerable).toBe(true);
     expect(r.view.target).toBe(r.view);
-    const log = runFor(stepper(rigged), rigged.arena, 2);
+    const log = runFor(rigStepper(rigged), rigged.arena, 2);
     expect(timedOfType(log, 'bossExposed')).toHaveLength(1);
     expect(r.hit(1)).toBe('hit');
     expect(r.hp).toBe(MAX_HP - (DEF.partBreakDamage ?? 0) * SEGMENT_COUNT - 1);
@@ -326,7 +306,7 @@ describe('dismantling the Leviathan', () => {
     expect(r.phase).toBe(1);
     breakTail(r);
     expect(r.phase).toBe(2);
-    const log = runFor(stepper(rigged), rigged.arena, STEP_SECONDS);
+    const log = runFor(rigStepper(rigged), rigged.arena, STEP_SECONDS);
     expect(timedOfType(log, 'bossPhase').map((l) => l.event.phase)).toEqual([2]);
 
     const low = fighting(2);
@@ -348,7 +328,7 @@ describe('dismantling the Leviathan', () => {
 describe('Leviathan attacks', () => {
   it('runs each phase\'s list in order', () => {
     const rigged = fighting();
-    const log = runFor(stepper(rigged), rigged.arena, 16);
+    const log = runFor(rigStepper(rigged), rigged.arena, 16);
     expect(timedOfType(log, 'bossWindup').map((l) => l.event.attack).slice(0, 4)).toEqual(['spit', 'dive', 'spit', 'dive']);
   });
 
@@ -378,7 +358,7 @@ describe('Leviathan attacks', () => {
     // The ship moves off; the dive still goes where it was.
     Object.assign(rigged.arena.ship, { x: 1000, y: 200 });
     untilActive(rigged);
-    runFor(stepper(rigged), rigged.arena, DIVE_SECONDS);
+    runFor(rigStepper(rigged), rigged.arena, DIVE_SECONDS);
     expect(distance(rigged.r.view, aim)).toBeLessThan(1);
     expect(rigged.r.view.threat).toBeNull();
   });
@@ -388,7 +368,7 @@ describe('Leviathan attacks', () => {
     breakTail(rigged.r);
     untilWindup(rigged, 'spit');
     untilActive(rigged);
-    const log = runFor(stepper(rigged), rigged.arena, STEP_SECONDS);
+    const log = runFor(rigStepper(rigged), rigged.arena, STEP_SECONDS);
     const fired = timedOfType(log, 'boltFired').map((l) => l.event);
     expect(fired).toHaveLength(SEGMENT_COUNT - 1);
     // Fired from where the body was as the step began, before it swam on.
@@ -416,7 +396,7 @@ describe('Leviathan attacks', () => {
     untilActive(rigged);
     const bearings: number[] = [];
     const radii: number[] = [];
-    runFor(stepper(rigged), rigged.arena, COIL_SECONDS, () => {
+    runFor(rigStepper(rigged), rigged.arena, COIL_SECONDS, () => {
       const { view } = rigged.r;
       bearings.push(turnBetween(opening, Math.atan2(view.y - centre.y, view.x - centre.x)));
       radii.push(distance(view, centre));
@@ -474,7 +454,7 @@ describe('a Leviathan coil near the field\'s edge', () => {
     let steps = 0;
     let on = 0;
     const nearest = { onRing: Infinity, head: Infinity, segment: Infinity };
-    runFor(stepper(rigged), rigged.arena, COIL_SECONDS, () => {
+    runFor(rigStepper(rigged), rigged.arena, COIL_SECONDS, () => {
       const { view } = rigged.r;
       for (const body of [view, ...view.parts]) expect(distance(body, { x: body.px, y: body.py }), 'a step').toBeLessThan(SEGMENT_GAP);
       steps++;
@@ -551,7 +531,7 @@ describe('a Leviathan coil near the field\'s edge', () => {
       for (let i = 0; i < 5; i++) breakTail(rigged.r);
       let watching = false;
       let lastWindup: AttackId | null = null;
-      runFor(stepper(rigged), rigged.arena, 40, () => {
+      runFor(rigStepper(rigged), rigged.arena, 40, () => {
         const { view } = rigged.r;
         if (view.windup === 'coil' && lastWindup !== 'coil') {
           const bodies = [view, ...view.parts.filter((p) => p.hp > 0)];

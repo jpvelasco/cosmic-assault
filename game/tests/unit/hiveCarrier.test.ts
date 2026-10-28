@@ -6,7 +6,7 @@ import type { AttackId } from '../../src/content/types';
 import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { bossTarget } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
-import type { BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossView } from '../../src/sim/boss/behaviour';
 import { launchSlot } from '../../src/sim/boss/attacks';
 import { CRUISE_SPEED, createHiveCarrier, DRONE_CAP, HANGAR_HALF_ARC, HANGAR_OPEN_SECONDS, HIVE_HOME_SHARE, LAUNCH_WAVES, TURN_RATE } from '../../src/sim/boss/hiveCarrier';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, STEP_SECONDS } from '../../src/sim/config';
@@ -18,7 +18,7 @@ import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { turnBetween } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type Stepper, type StubArena, type Timed } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, fightingRig, runFor, stubArena, timedOfType, type BossRig, type Stepper, type StubArena, type Timed } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = BOSSES.hiveCarrier;
@@ -28,18 +28,8 @@ const APPROACH = 20;
 /** The foes stream's seed in these rigs. */
 const FOES_SEED = 99;
 
-interface Rig {
-  readonly r: BossRunner;
-  readonly arena: StubArena;
-  readonly foes: FoeField;
-}
-
-/** A Hive Carrier on a stub arena whose ship sits still at bottom-centre, launching into a foe field of its own. */
-function carrier(seed = 1, arena: StubArena = stubArena()): Rig {
-  const foes = new FoeField(arena, createRng(FOES_SEED), { score: (base) => base, killed: () => undefined });
-  const setup: BossSetup = { maxHp: MAX_HP, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD, foes };
-  return { r: new BossRunner(DEF, createHiveCarrier(setup), setup), arena, foes };
-}
+/** A Hive Carrier on `arena` (by default a stub whose ship sits still at bottom-centre), launching into a foe field of its own. */
+const carrier = (seed = 1, arena?: StubArena): BossRig => bossRig(DEF, createHiveCarrier, MAX_HP, { seed, arena, foesSeed: FOES_SEED });
 
 const ATTACKS = createHiveCarrier({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, foes: carrier().foes }).attacks;
 
@@ -48,16 +38,11 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
   r.step(dt, arena);
 };
 
-/** A Hive Carrier whose intro is over. */
-function fighting(seed = 1, arena?: StubArena): Rig {
-  const rig = carrier(seed, arena);
-  runFor(stepper(rig.r), rig.arena, BOSS_INTRO_SECONDS + 0.05);
-  expect(rig.r.state).toBe('fighting');
-  return rig;
-}
+/** A Hive Carrier whose intro is over: no drone is out before it, so the rig's own stepping moves nothing more. */
+const fighting = (seed = 1, arena?: StubArena): BossRig => fightingRig(DEF, createHiveCarrier, MAX_HP, { seed, arena, foesSeed: FOES_SEED });
 
 /** Steps until the hangar has just opened; throws if it does not within `seconds`. */
-function untilOpen(rig: Rig, seconds = 10): void {
+function untilOpen(rig: BossRig, seconds = 10): void {
   for (let i = 0; i < Math.round(seconds / STEP_SECONDS); i++) {
     runFor(stepper(rig.r), rig.arena, STEP_SECONDS);
     if (rig.r.view.vulnerable) return;
@@ -66,16 +51,16 @@ function untilOpen(rig: Rig, seconds = 10): void {
 }
 
 /** The point on the hull's rim at `offset` radians round from where it faces. */
-function rim(rig: Rig, offset: number): { x: number; y: number } {
+function rim(rig: BossRig, offset: number): { x: number; y: number } {
   const { x, y, radius, facing } = rig.r.view;
   return { x: x + Math.cos(facing + offset) * radius, y: y + Math.sin(facing + offset) * radius };
 }
 
 /** Lands a blow at `at`. */
-const hitAt = (rig: Rig, at: { x: number; y: number }, damage = 1) => rig.r.hit(damage, at.x, at.y);
+const hitAt = (rig: BossRig, at: { x: number; y: number }, damage = 1) => rig.r.hit(damage, at.x, at.y);
 
 /** Wounds the carrier through its open hangar down to `hp`. */
-function woundTo(rig: Rig, hp: number): void {
+function woundTo(rig: BossRig, hp: number): void {
   untilOpen(rig);
   if (hp < rig.r.hp) expect(hitAt(rig, rim(rig, 0), rig.r.hp - hp)).toBe('hit');
 }
@@ -348,9 +333,7 @@ describe('the Hive Carrier keeps clear of a fresh ship', () => {
 
   it('arrives on its own row, centred no lower than 110 on a 720-high field, its hull at least the safe radius from the field\'s centre', () => {
     for (const field of FIELDS) {
-      const foes = new FoeField(stubArena(undefined, field), createRng(FOES_SEED), { score: (base) => base, killed: () => undefined });
-      const setup: BossSetup = { maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field, foes };
-      const { view } = new BossRunner(DEF, createHiveCarrier(setup), setup);
+      const { view } = carrier(1, stubArena(undefined, field)).r;
       expect(view.y).toBeCloseTo(field.height * HIVE_HOME_SHARE, 9);
       expect(view.y).toBeLessThanOrEqual(110);
       expect(Math.hypot(view.x - field.width / 2, view.y - field.height / 2) - view.radius, `${String(field.width)} wide`).toBeGreaterThanOrEqual(ASTEROID.safeRadius);

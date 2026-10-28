@@ -96,6 +96,8 @@ function wardenRing(turn = 0, radius = WARDEN_RING.radius, cy = 200): BossPart[]
     return { x, y, px: x, py: y, radius: 16, hp: 3, maxHp: 3 };
   });
 }
+/** The sprite keys a spy on the baker was called with, in order. */
+const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
 const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600, field: { width: 1280, height: 720 } };
 
 describe('createBossPass', () => {
@@ -263,8 +265,6 @@ describe('createBossPass', () => {
     const shard = (x: number, hp = 2): BossPart => ({ x, y: 330, px: x, py: 330, radius: 15, hp, maxHp: 2 });
     const monolith = (over: Partial<BossView> = {}): BossView =>
       boss({ id: 'monolith', radius: 90, hp: 60, maxHp: 60, vulnerable: false, parts: [shard(600), shard(640, 1), shard(680, 0)], ...over });
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
-
     it('draws a rock core with fissures, and a shard for each live part, cracked once hurt, with no eye', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(monolith(), 1, LOOK);
@@ -359,7 +359,6 @@ describe('createBossPass', () => {
   describe('the Hive Carrier', () => {
     const DOWN = Math.PI / 2;
     const carrier = (over: Partial<BossView> = {}): BossView => boss({ id: 'hiveCarrier', radius: 100, hp: 70, maxHp: 70, vulnerable: false, facing: DOWN, ...over });
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
     /** The bearing a draw is turned to, from its transform, as |cos|: 0 straight down the field. */
     const turn = (d: Draw | undefined): number => Math.abs((d?.a ?? Number.NaN) / (d?.scale ?? Number.NaN));
 
@@ -489,7 +488,6 @@ describe('createBossPass', () => {
 
   describe('the Warden', () => {
     const warden = (over: Partial<BossView> = {}): BossView => boss({ id: 'warden', radius: 48, hp: 76, maxHp: 76, px: 640, parts: wardenRing(), ...over });
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
     const TRACK = 'boss|drift|warden|track|120';
     const TURRETS = ['boss|drift|warden|turret|0|16', 'boss|drift|warden|turret|1|16', 'boss|drift|warden|turret|2|16'] as const;
     /** The canvases of the sprites `spy` returned. */
@@ -618,8 +616,6 @@ describe('createBossPass', () => {
     const leviathan = (over: Partial<BossView> = {}, tailHp = 3): BossView =>
       boss({ id: 'leviathan', x: 640, px: 640, radius: 34, hp: 88, maxHp: 88, vulnerable: false, facing: 0, parts: [segment(480, 0), segment(520, tailHp), segment(560), segment(600)], ...over });
     const KEY = 'boss|drift|leviathan';
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
-
     it('draws each live segment, tail first, the open tail cracked once hurt and the rest armoured, then the shut head', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(leviathan(), 1, LOOK);
@@ -702,8 +698,6 @@ describe('createBossPass', () => {
     });
     const eclipse = (over: Partial<BossView> = {}): BossView => boss({ id: 'eclipse', radius: 70, hp: 134, maxHp: 134, px: 640, parts: corona(), ...over });
     const KEY = 'boss|drift|eclipse';
-    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
-
     it('draws a dark disc with a bright limb, and a lit shard for each live part, cracked once hurt', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(eclipse({ parts: corona([{ hp: 1 }]) }), 1, LOOK);
@@ -712,13 +706,20 @@ describe('createBossPass', () => {
     });
 
     it('brightens its corona\'s halo once the core is bare', () => {
-      pass.draw(eclipse({ vulnerable: false }), 1, LOOK);
-      const shielded = draws[1]?.alpha ?? 0;
-      draws.length = 0;
-      pass.draw(eclipse({ vulnerable: true }), 1, LOOK);
-      const bare = draws[1]?.alpha ?? 0;
+      const glow = vi.spyOn(baker, 'glow');
+      /** The alpha the halo, the widest glow in the corona's hue, is drawn at. */
+      const haloAlpha = (vulnerable: boolean): number => {
+        glow.mockClear();
+        draws.length = 0;
+        pass.draw(eclipse({ vulnerable }), 1, LOOK);
+        const corona = glow.mock.calls.map(([color, diameter], i) => ({ color, diameter, i })).filter(({ color }) => color === DRIFT.spark);
+        const widest = corona.reduce((a, b) => (b.diameter > a.diameter ? b : a));
+        const sprite = glow.mock.results[widest.i]?.value as { canvas: unknown } | undefined;
+        return draws.find((d) => d.image === sprite?.canvas)?.alpha ?? 0;
+      };
+      const shielded = haloAlpha(false);
       expect(shielded).toBeGreaterThan(0);
-      expect(bare).toBeGreaterThan(shielded);
+      expect(haloAlpha(true)).toBeGreaterThan(shielded);
     });
 
     it('flashes a shard white when a shot cracks it, and grows one back in', () => {
