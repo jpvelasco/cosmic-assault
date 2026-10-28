@@ -2,21 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { FOES } from '../../src/content/foes';
 import { WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { Bolt } from '../../src/sim/foes/bolts';
-import type { HazardBolts } from '../../src/sim/hazards/hazard';
-
-import { MOUTH_SPACING } from '../../src/sim/hazards/warpRift';
-import { wrappedDistance } from '../../src/sim/wrap';
 import type { GalaxyEvent } from '../../src/content/types';
-import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import type { Asteroid } from '../../src/sim/asteroid';
+import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
-import { hazardStreams, HazardField } from '../../src/sim/hazards/hazardField';
-import type { RiftState } from '../../src/sim/hazards/hazard';
-import { createShip } from '../../src/sim/ship';
-import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT } from '../../src/sim/config';
+import type { Bolt } from '../../src/sim/foes/bolts';
 import { zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
-import type { Asteroid } from '../../src/sim/asteroid';
+import type { HazardBolts, RiftState } from '../../src/sim/hazards/hazard';
+import { hazardStreams, HazardField } from '../../src/sim/hazards/hazardField';
+import { MOUTH_SPACING } from '../../src/sim/hazards/warpRift';
+import { createShip } from '../../src/sim/ship';
+import { wrappedDistance } from '../../src/sim/wrap';
+import type { Timed } from '../helpers/bossArena';
 import { foeAt, hazardFoes } from '../helpers/foeAt';
 import { JUMP_HEADINGS, JUMP_RADII, QUARTER_SECOND_STEPS, rockAt, strobeGaps } from '../helpers/riftStrobe';
 
@@ -46,12 +44,12 @@ function rig(opts: { seed?: number; field?: Field; intensity?: 1 | 2 | 3; at?: n
 }
 
 /** Steps the hazards to `seconds`, collecting every event pushed and the galaxy seconds it came at. */
-function stepTo(r: Rig, field: Field, seconds: number, each?: (t: number) => void): { t: number; event: SimEvent }[] {
-  const log: { t: number; event: SimEvent }[] = [];
+function stepTo(r: Rig, field: Field, seconds: number, each?: (t: number) => void): Timed[] {
+  const log: Timed[] = [];
   for (let t = DT; t <= seconds + 1e-9; t += DT) {
     const out: SimEvent[] = [];
     r.hazards.step(t, field, out);
-    for (const event of out) log.push({ t, event });
+    for (const event of out) log.push({ event, at: t });
     each?.(t);
   }
   return log;
@@ -73,7 +71,7 @@ describe('warp rift placement', () => {
       const opened = log.filter((l) => l.event.type === 'riftOpen');
       expect(opened).toHaveLength(pairs);
       expect(log.filter((l) => l.event.type === 'riftClose')).toHaveLength(pairs);
-      expect((opened[0]?.t ?? 0) - 20).toBeLessThan(DT * 2);
+      expect((opened[0]?.at ?? 0) - 20).toBeLessThan(DT * 2);
     }
   });
 

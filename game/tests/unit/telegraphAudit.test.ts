@@ -14,7 +14,8 @@ import type { AttackId } from '../../src/content/types';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { HAZARD_FACTORIES } from '../../src/sim/hazards/hazardField';
 import { playExpert } from '../helpers/eventDigest';
-import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, hazardsShown, type AttackPair, type FightStep, type TimedEvent } from '../helpers/telegraphAudit';
+import type { Timed } from '../helpers/bossArena';
+import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, hazardsShown, type AttackPair, type FightStep } from '../helpers/telegraphAudit';
 
 const SEEDS = [1, 2, 3];
 /** Every galaxy that schedules a hazard, with the hazards it shows. */
@@ -23,15 +24,15 @@ const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatM
 const PLAY_TIMEOUT_MS = 60_000;
 
 /** The expert's run of `id`, which clears it and so meets every hazard it schedules, as a timed log. */
-function timedLog(id: GalaxyId, seed: number): TimedEvent[] {
-  const log: TimedEvent[] = [];
+function timedLog(id: GalaxyId, seed: number): Timed[] {
+  const log: Timed[] = [];
   playExpert(id, seed, (world, events) => {
-    for (const event of events) log.push({ elapsed: world.elapsed, event: { ...event } });
+    for (const event of events) log.push({ event: { ...event }, at: world.elapsed });
   });
   return log;
 }
 
-const at = (elapsed: number, event: SimEvent): TimedEvent => ({ elapsed, event });
+const at = (elapsed: number, event: SimEvent): Timed => ({ event, at: elapsed });
 
 describe('auditTelegraphs', () => {
   it('has a telegraph for every hazard that is made: a new hazard cannot slip past the audit', () => {
@@ -87,8 +88,8 @@ describe('auditTelegraphs', () => {
 });
 
 describe('auditFoeAttacks', () => {
-  const windup = (elapsed: number, id: number): TimedEvent => at(elapsed, { type: 'foeWindup', id, x: 0, y: 0, angle: 0 });
-  const bolt = (elapsed: number, owner: number, id = 100): TimedEvent => at(elapsed, { type: 'boltFired', id, source: 'gunship', owner, x: 0, y: 0, angle: 0 });
+  const windup = (elapsed: number, id: number): Timed => at(elapsed, { type: 'foeWindup', id, x: 0, y: 0, angle: 0 });
+  const bolt = (elapsed: number, owner: number, id = 100): Timed => at(elapsed, { type: 'boltFired', id, source: 'gunship', owner, x: 0, y: 0, angle: 0 });
 
   it('pairs each gunship bolt and mine blast with its own foe\'s warning, by id', () => {
     const pairs = auditFoeAttacks([

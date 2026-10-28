@@ -13,7 +13,8 @@ import { createRng } from '../../src/sim/rng';
 import { createShip, type Ship } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
-import { auditTelegraphs, type TimedEvent } from '../helpers/telegraphAudit';
+import { timedOfType, type Timed } from '../helpers/bossArena';
+import { auditTelegraphs } from '../helpers/telegraphAudit';
 import { hazardFoes } from '../helpers/foeAt';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -26,25 +27,22 @@ const zone = (at: number, intensity: GalaxyEvent['intensity'] = 1): GalaxyEvent 
 const zonesOf = (states: readonly HazardState[]): ZoneState[] => states.filter((s): s is ZoneState => s.type === 'dangerZone');
 
 /** Runs a hazard field of `events` with `ship` moved each step, to `seconds`, logging every event with its time. */
-function play(events: readonly GalaxyEvent[], opts: { seed?: number; field?: Field; ship?: Ship; seconds?: number; each?: (hazards: HazardField, t: number) => void } = {}): { hazards: HazardField; log: TimedEvent[] } {
+function play(events: readonly GalaxyEvent[], opts: { seed?: number; field?: Field; ship?: Ship; seconds?: number; each?: (hazards: HazardField, t: number) => void } = {}): { hazards: HazardField; log: Timed[] } {
   const { seed = 1, field = FIELD, ship = createShip(field.width / 2, field.height / 2), seconds = 60, each } = opts;
   let last = 0;
   const hazards = new HazardField(events, () => createRng(seed), () => ++last);
-  const log: TimedEvent[] = [];
+  const log: Timed[] = [];
   const out: SimEvent[] = [];
   for (let i = 1; i <= Math.round(seconds / DT); i++) {
     const t = i * DT;
     out.length = 0;
     hazards.move(DT, ship, [], hazardFoes(), []);
     hazards.step(t, field, out);
-    for (const event of out) log.push({ elapsed: t, event: { ...event } });
+    for (const event of out) log.push({ event: { ...event }, at: t });
     each?.(hazards, t);
   }
   return { hazards, log };
 }
-
-const ofType = <T extends SimEvent['type']>(log: readonly TimedEvent[], type: T): (TimedEvent & { event: Extract<SimEvent, { type: T }> })[] =>
-  log.filter((l): l is TimedEvent & { event: Extract<SimEvent, { type: T }> } => l.event.type === type);
 
 describe('zoneClearance', () => {
   const box = { x: 500, y: 300, w: 200, h: 100 };
@@ -66,9 +64,9 @@ describe('zoneClearance', () => {
 describe('danger zones', () => {
   it('warn 2 s ahead with one zone per intensity, at most two, each 120 to 220 a side and inside the field, then start and end on time', () => {
     const { log } = play([zone(20, 1), zone(40, 2)]);
-    const warnings = ofType(log, 'zoneWarning');
+    const warnings = timedOfType(log, 'zoneWarning');
     expect(warnings).toHaveLength(3);
-    warnings.forEach((w, i) => { expect(w.elapsed).toBeCloseTo([18, 38, 38][i] ?? 0, 6); });
+    warnings.forEach((w, i) => { expect(w.at).toBeCloseTo([18, 38, 38][i] ?? 0, 6); });
     for (const { event } of warnings) {
       for (const side of [event.w, event.h]) {
         expect(side).toBeGreaterThanOrEqual(DANGER_ZONE.side[0]);
@@ -82,21 +80,21 @@ describe('danger zones', () => {
     const ids = warnings.map((w) => w.event.id);
     expect(new Set(ids).size).toBe(3);
     const starts = [20, 40, 40];
-    expect(ofType(log, 'zoneStart').map((s) => s.event.id)).toEqual(ids);
-    expect(ofType(log, 'zoneEnd').map((s) => s.event.id)).toEqual(ids);
-    ofType(log, 'zoneStart').forEach((s, i) => { expect(s.elapsed).toBeCloseTo(starts[i] ?? 0, 6); });
-    ofType(log, 'zoneEnd').forEach((s, i) => { expect(s.elapsed).toBeCloseTo((starts[i] ?? 0) + SECONDS, 6); });
+    expect(timedOfType(log, 'zoneStart').map((s) => s.event.id)).toEqual(ids);
+    expect(timedOfType(log, 'zoneEnd').map((s) => s.event.id)).toEqual(ids);
+    timedOfType(log, 'zoneStart').forEach((s, i) => { expect(s.at).toBeCloseTo(starts[i] ?? 0, 6); });
+    timedOfType(log, 'zoneEnd').forEach((s, i) => { expect(s.at).toBeCloseTo((starts[i] ?? 0) + SECONDS, 6); });
   });
 
   it('never shows more than two zones, whatever the intensity', () => {
     const { log } = play([zone(20, 3)], { seconds: 22 });
-    expect(ofType(log, 'zoneWarning')).toHaveLength(DANGER_ZONE.maxZones);
+    expect(timedOfType(log, 'zoneWarning')).toHaveLength(DANGER_ZONE.maxZones);
   });
 
   it('keeps the two zones of one event apart', () => {
     for (let seed = 1; seed <= 30; seed++) {
       const { log } = play([zone(20, 2)], { seed, seconds: 19 });
-      const [a, b] = ofType(log, 'zoneWarning').map((w) => w.event);
+      const [a, b] = timedOfType(log, 'zoneWarning').map((w) => w.event);
       if (a === undefined || b === undefined) throw new Error(`seed ${String(seed)} should show two zones`);
       const apart = Math.abs(a.x - b.x) >= (a.w + b.w) / 2 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2;
       expect(apart, `seed ${String(seed)}`).toBe(true);
@@ -129,8 +127,8 @@ describe('danger zones', () => {
 
   it('warns on the very step the zone before it ends, so back-to-back zones keep their whole telegraph', () => {
     const { log } = play([zone(20), zone(20 + SECONDS + TELEGRAPH)], { seconds: 45 });
-    const firstEnd = ofType(log, 'zoneEnd')[0]?.elapsed ?? 0;
-    const secondWarning = ofType(log, 'zoneWarning')[1]?.elapsed ?? 0;
+    const firstEnd = timedOfType(log, 'zoneEnd')[0]?.at ?? 0;
+    const secondWarning = timedOfType(log, 'zoneWarning')[1]?.at ?? 0;
     expect(secondWarning).toBe(firstEnd);
     const pairs = auditTelegraphs(log);
     expect(pairs).toHaveLength(2);
@@ -140,7 +138,7 @@ describe('danger zones', () => {
   it('warns a back-to-back force field on the step the one before it ends, too', () => {
     const well = (at: number): GalaxyEvent => ({ at, type: 'gravityWell', intensity: 1 });
     const { log } = play([well(20), well(20 + HAZARD_RULES.gravityWell.seconds + HAZARD_RULES.gravityWell.telegraph)], { seconds: 60 });
-    expect(ofType(log, 'wellWarning')[1]?.elapsed).toBe(ofType(log, 'wellEnd')[0]?.elapsed);
+    expect(timedOfType(log, 'wellWarning')[1]?.at).toBe(timedOfType(log, 'wellEnd')[0]?.at);
     for (const pair of auditTelegraphs(log)) expect(pair.active - pair.warned).toBeCloseTo(HAZARD_RULES.gravityWell.telegraph, 6);
   });
 
@@ -175,7 +173,7 @@ describe('danger zones', () => {
         for (let seed = 1; seed <= 4; seed++) {
           const ship = createShip(x, y);
           const { log } = play([zone(20, 2)], { seed, field, ship, seconds: 18.5 });
-          for (const { event } of ofType(log, 'zoneWarning')) {
+          for (const { event } of timedOfType(log, 'zoneWarning')) {
             zones++;
             expect(zoneClearance(field, event, field.width / 2, field.height / 2), `ship (${String(x)}, ${String(y)}) seed ${String(seed)}`).toBeGreaterThanOrEqual(150);
             expect(zoneClearance(field, event, x, y), `ship (${String(x)}, ${String(y)}) seed ${String(seed)}`).toBeGreaterThanOrEqual(ASTEROID.safeRadius);

@@ -1,5 +1,4 @@
 import { STEP_SECONDS } from '../../src/sim/config';
-import type { SimEvent } from '../../src/sim/events';
 import type { FoeKind } from '../../src/content/types';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
@@ -7,7 +6,7 @@ import type { Foe } from '../../src/sim/foes/foe';
 import { FoeField, type FoeHooks } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
-import { BOSS_FIELD, stubArena, type StubArena } from './bossArena';
+import { BOSS_FIELD, stubArena, type StubArena, type Timed } from './bossArena';
 
 /** A foe field on a stub arena with bolts of its own, noting the base points it scores and where its kills fell. */
 export interface FoeRig {
@@ -40,16 +39,14 @@ export function foeRig(opts: { seed?: number; field?: Field; shipX?: number; shi
   return { arena, foes: new FoeField(arena, createRng(seed), hooks, bolts), bolts, points, killed };
 }
 
-export type Logged = { readonly t: number; readonly event: SimEvent };
-
 /** Steps the foes and their bolts `seconds` on, clearing each step's events first as a World does; returns each event with its time. */
-export function runFoes(r: FoeRig, seconds: number, each?: (t: number) => void): Logged[] {
-  const log: Logged[] = [];
+export function runFoes(r: FoeRig, seconds: number, each?: (t: number) => void): Timed[] {
+  const log: Timed[] = [];
   for (let i = 1; i <= Math.round(seconds / STEP_SECONDS); i++) {
     r.arena.events.length = 0;
     r.foes.step(STEP_SECONDS);
     r.bolts.step(STEP_SECONDS);
-    for (const event of r.arena.events) log.push({ t: i * STEP_SECONDS, event: { ...event } });
+    for (const event of r.arena.events) log.push({ event: { ...event }, at: i * STEP_SECONDS });
     each?.(i * STEP_SECONDS);
     r.foes.sweep();
   }

@@ -11,6 +11,7 @@ import { fieldBudget, SIZE_COST } from '../../src/sim/galaxy/director';
 import { EDGE_BEARINGS, showerCap } from '../../src/sim/galaxy/showers';
 import { World, type WorldOptions } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
+import { ofType, type Timed } from '../helpers/bossArena';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const CENTRE = { x: FIELD.width / 2, y: FIELD.height / 2 };
@@ -41,27 +42,18 @@ function still(x: number, y: number, size: AsteroidSize) {
   return { x, y, size, angle: 0, speedMultiplier: 0 };
 }
 
-function ofType<T extends SimEvent['type']>(events: readonly SimEvent[], type: T) {
-  return events.filter((e): e is Extract<SimEvent, { type: T }> => e.type === type);
-}
-
-interface Logged {
-  readonly event: SimEvent;
-  readonly elapsed: number;
-}
-
 /** Steps until the run stops or `seconds` pass, logging every event with the elapsed time after its step. */
-function play(w: World, seconds: number, controls: Controls = NO_CONTROLS, onStep?: (events: readonly SimEvent[]) => void): Logged[] {
-  const log: Logged[] = [];
+function play(w: World, seconds: number, controls: Controls = NO_CONTROLS, onStep?: (events: readonly SimEvent[]) => void): Timed[] {
+  const log: Timed[] = [];
   for (let i = 0; i < seconds * STEPS_PER_SECOND && (w.status === 'playing' || w.status === 'warping'); i++) {
     const events = w.step(STEP_SECONDS, controls);
-    for (const e of events) log.push({ event: { ...e }, elapsed: w.elapsed });
+    for (const e of events) log.push({ event: { ...e }, at: w.elapsed });
     onStep?.(events);
   }
   return log;
 }
 
-const eventsOf = (log: readonly Logged[]): SimEvent[] => log.map((l) => l.event);
+const eventsOf = (log: readonly Timed[]): SimEvent[] => log.map((l) => l.event);
 
 describe('a galaxy run', () => {
   it('a statue in 1-1 (seed 3) ends gameOver or cleared, and never before 90 s while it has lives', () => {
@@ -153,16 +145,16 @@ describe('warp-out', () => {
     const log = play(w, 95);
     const warp = log.filter((l) => l.event.type === 'warpOut');
     expect(warp).toHaveLength(1);
-    const at = warp[0]?.elapsed ?? 0;
+    const at = warp[0]?.at ?? 0;
     expect(at).toBeGreaterThanOrEqual(90 - 1e-9);
     expect(at).toBeLessThan(90 + STEP_SECONDS);
-    const cleared = log.filter((l) => l.elapsed === at && l.event.type === 'asteroidDestroyed').map((l) => l.event);
+    const cleared = log.filter((l) => l.at === at && l.event.type === 'asteroidDestroyed').map((l) => l.event);
     expect(cleared.map((e) => (e.type === 'asteroidDestroyed' ? [e.id, e.points] : null))).toEqual(ids.map((id) => [id, 0]));
     expect(w.score).toBe(250 + 500); // 1-1 scores only its clear and no-death bonus
     // The outcome is final once the warp starts (the ship cannot be hit, warp kills score 0), so it is reported then.
     const done = log.filter((l) => l.event.type === 'galaxyCleared');
-    expect(done.map((l) => l.elapsed)).toEqual([at]);
-    const types = log.filter((l) => l.elapsed === at).map((l) => l.event.type);
+    expect(done.map((l) => l.at)).toEqual([at]);
+    const types = log.filter((l) => l.at === at).map((l) => l.event.type);
     expect(types.indexOf('warpOut')).toBeLessThan(types.indexOf('galaxyCleared'));
     expect(w.status).toBe('cleared');
   });
@@ -191,7 +183,7 @@ describe('warp-out', () => {
     // ...but not when the galaxy ends on that same step: the warp clears the field before anything collides.
     const w = galaxyWorld({ ...calm('1-1'), duration: vulnerableAt }, { initialAsteroids: lurker });
     const log = play(w, 5);
-    expect(log.find((l) => l.event.type === 'warpOut')?.elapsed).toBe(vulnerableAt);
+    expect(log.find((l) => l.event.type === 'warpOut')?.at).toBe(vulnerableAt);
     expect(ofType(eventsOf(log), 'shipHit')).toEqual([]);
     expect(w.lives).toBe(3);
     expect(w.status).toBe('cleared');
@@ -200,9 +192,9 @@ describe('warp-out', () => {
   it('spawns nothing and leaves the field empty while warping', () => {
     const w = galaxyWorld(galaxyById('1-1'), { seed: 3, mode: 'rank', startLives: 5 });
     const log = play(w, 95);
-    const warpAt = log.find((l) => l.event.type === 'warpOut')?.elapsed;
+    const warpAt = log.find((l) => l.event.type === 'warpOut')?.at;
     expect(warpAt).toBeDefined();
-    const during = log.filter((l) => l.elapsed > (warpAt ?? 0));
+    const during = log.filter((l) => l.at > (warpAt ?? 0));
     expect(ofType(eventsOf(during), 'shipHit')).toEqual([]);
     expect(ofType(eventsOf(during), 'asteroidDestroyed')).toEqual([]);
     expect(w.status).toBe('cleared');
@@ -279,8 +271,8 @@ describe('galaxy combos', () => {
     const hit = log.filter((l) => l.event.type === 'shipHit');
     expect(hit).toHaveLength(1);
     expect(log.filter((l) => l.event.type === 'combo')).toEqual([
-      { event: { type: 'combo', multiplier: 2 }, elapsed: expect.any(Number) as number },
-      { event: { type: 'combo', multiplier: 1 }, elapsed: hit[0]?.elapsed },
+      { event: { type: 'combo', multiplier: 2 }, at: expect.any(Number) as number },
+      { event: { type: 'combo', multiplier: 1 }, at: hit[0]?.at },
     ]);
     expect(w.combo).toBe(0);
   });

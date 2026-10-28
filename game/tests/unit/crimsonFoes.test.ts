@@ -75,12 +75,12 @@ describe('gunship', () => {
       r.arena.ship.x = 640 + 200 * Math.sin(t / 3);
     });
     // A windup begun in the run's last half second has not fired yet.
-    const windups = log.filter((l) => l.event.type === 'foeWindup' && l.t <= 40 - GUNSHIP.windup);
+    const windups = log.filter((l) => l.event.type === 'foeWindup' && l.at <= 40 - GUNSHIP.windup);
     const shots = log.filter((l) => l.event.type === 'boltFired');
     expect(windups.length).toBeGreaterThanOrEqual(12);
     expect(shots).toHaveLength(windups.length);
     for (let i = 1; i < windups.length; i++) {
-      const between = (windups[i]?.t ?? 0) - (windups[i - 1]?.t ?? 0);
+      const between = (windups[i]?.at ?? 0) - (windups[i - 1]?.at ?? 0);
       expect(between).toBeGreaterThanOrEqual(GUNSHIP.cadence - GUNSHIP.cadenceJitter - 1e-9);
       expect(between).toBeLessThanOrEqual(GUNSHIP.cadence + GUNSHIP.cadenceJitter + 1e-9);
     }
@@ -88,7 +88,7 @@ describe('gunship', () => {
       const shot = shots[i];
       if (windup.event.type !== 'foeWindup' || shot?.event.type !== 'boltFired') throw new Error('expected a windup and its shot');
       expect(windup.event.id).toBe(foe.id);
-      expect(shot.t - windup.t).toBeCloseTo(GUNSHIP.windup, 9);
+      expect(shot.at - windup.at).toBeCloseTo(GUNSHIP.windup, 9);
       expect(shot.event).toMatchObject({ source: 'gunship', owner: foe.id });
     }
   });
@@ -157,7 +157,7 @@ describe('gunship', () => {
     const log = runFoes(r, lapse + 2, (t) => {
       if (t >= lapse) r.arena.ship.invulnerable = false;
     });
-    const windups = log.filter((l) => l.event.type === 'foeWindup').map((l) => l.t);
+    const windups = log.filter((l) => l.event.type === 'foeWindup').map((l) => l.at);
     expect(windups.every((t) => t > lapse)).toBe(true);
     const first = windups.slice(0, 4);
     expect(first).toHaveLength(4);
@@ -248,8 +248,8 @@ describe('mine', () => {
     });
     const blast = rest.find((l) => l.event.type === 'mineBlast');
     expect(blast?.event).toEqual({ type: 'mineBlast', id: r.mine.id, x: 640, y: 360, radius: MINE.blastRadius });
-    const armedAt = armed[0]?.t ?? 0;
-    expect((blast?.t ?? 0) + 0.5 - armedAt).toBeCloseTo(MINE.fuse, 9);
+    const armedAt = armed[0]?.at ?? 0;
+    expect((blast?.at ?? 0) + 0.5 - armedAt).toBeCloseTo(MINE.fuse, 9);
     expect(rest.find((l) => l.event.type === 'foeDestroyed')?.event).toMatchObject({ id: r.mine.id, points: 0 });
     expect(r.foes.list).toEqual([]);
     expect(r.killed).toEqual([]);

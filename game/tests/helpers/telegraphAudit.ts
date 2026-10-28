@@ -7,12 +7,7 @@ import type { AttackId, FoeKind, GalaxyEvent, GalaxyId, HazardType } from '../..
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import type { BossView } from '../../src/sim/boss/behaviour';
-
-/** An event, with the galaxy seconds of the step that made it. */
-export interface TimedEvent {
-  readonly elapsed: number;
-  readonly event: SimEvent;
-}
+import type { Timed } from './bossArena';
 
 /** The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two; none for a shower. */
 export const hazardsShown = (e: GalaxyEvent): HazardType[] => {
@@ -26,7 +21,7 @@ export interface PlayedRun {
   readonly id: GalaxyId;
   readonly seed: number;
   readonly result: RunResult;
-  readonly log: readonly TimedEvent[];
+  readonly log: readonly Timed[];
   readonly field: Field;
 }
 
@@ -34,7 +29,7 @@ export interface PlayedRun {
 export function playLogged(ids: readonly GalaxyId[], profile: BotProfile, seeds: readonly number[]): PlayedRun[] {
   return ids.flatMap((id) =>
     seeds.map((seed) => {
-      const log: TimedEvent[] = [];
+      const log: Timed[] = [];
       let field: Field = { width: 0, height: 0 };
       const result = runGalaxy({
         galaxy: galaxyById(id),
@@ -42,7 +37,7 @@ export function playLogged(ids: readonly GalaxyId[], profile: BotProfile, seeds:
         profile,
         onStep: (world, _controls, events) => {
           field = world.field;
-          for (const event of events) log.push({ elapsed: world.elapsed, event: { ...event } });
+          for (const event of events) log.push({ event: { ...event }, at: world.elapsed });
         },
       });
       return { id, seed, result, log, field };
@@ -104,10 +99,10 @@ const seconds = (value: number): string => `${String(Number(value.toFixed(3)))} 
  * minimum before it. Returns the pairs, in the order the activations came; throws, naming the hazard, when an
  * activation was never warned or was warned too late.
  */
-export function auditTelegraphs(log: readonly TimedEvent[]): TelegraphPair[] {
+export function auditTelegraphs(log: readonly Timed[]): TelegraphPair[] {
   const warned = new Map<string, number>();
   const pairs: TelegraphPair[] = [];
-  for (const { elapsed, event } of log) {
+  for (const { at: elapsed, event } of log) {
     const id = idOf(event);
     if (id !== null) warned.set(key(event.type, id), elapsed);
     const hostile = activation(event);
@@ -301,10 +296,10 @@ function foeHarm(event: SimEvent): { readonly kind: FoeKind; readonly foe: numbe
  * the warning ran at least the attack's minimum before it. Returns the pairs in the order the harms came; throws,
  * naming the foe, at a harm never warned, warned too late, or by a kind `FOE_TELEGRAPHS` gives none.
  */
-export function auditFoeAttacks(log: readonly TimedEvent[]): FoeAttackPair[] {
+export function auditFoeAttacks(log: readonly Timed[]): FoeAttackPair[] {
   const warned = new Map<string, number>();
   const pairs: FoeAttackPair[] = [];
-  for (const { elapsed, event } of log) {
+  for (const { at: elapsed, event } of log) {
     for (const [kind, telegraph] of Object.entries(FOE_TELEGRAPHS) as [FoeKind, FoeTelegraph | null][]) {
       if (telegraph?.warning === event.type && 'id' in event) warned.set(`${kind}#${String(event.id)}`, elapsed);
     }

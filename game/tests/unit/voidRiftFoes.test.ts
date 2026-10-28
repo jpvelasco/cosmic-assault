@@ -43,7 +43,7 @@ describe('phaser', () => {
       r.foes.spawn('phaser', 1, 1);
       const warnings = runFoes(r, 40)
         .filter((l) => l.event.type === 'phaserWarn')
-        .map((l) => l.t);
+        .map((l) => l.at);
       expect(warnings.length, `seed ${String(seed)}`).toBeGreaterThanOrEqual(10);
       for (let i = 1; i < warnings.length; i++) {
         const gap = (warnings[i] ?? 0) - (warnings[i - 1] ?? 0);
@@ -69,7 +69,7 @@ describe('phaser', () => {
     if (warn === undefined || blink === undefined || warned?.type !== 'phaserWarn' || blinked?.type !== 'phaserBlink' || origin === undefined) throw new Error('expected a warning and a blink');
     expect(warned).toMatchObject({ id: foe.id, x: origin.x, y: origin.y });
     expect(blinked.id).toBe(foe.id);
-    expect(blink.t - warn.t).toBeCloseTo(PHASER.warn, 2);
+    expect(blink.at - warn.at).toBeCloseTo(PHASER.warn, 2);
     expect(blinked).toMatchObject({ x: warned.toX, y: warned.toY });
     expect(Math.hypot(blinked.x - origin.x, blinked.y - origin.y)).toBeGreaterThanOrEqual(PHASER.range[0]);
     expect(Math.hypot(blinked.x - origin.x, blinked.y - origin.y)).toBeLessThanOrEqual(PHASER.range[1]);
@@ -139,8 +139,8 @@ describe('phaser', () => {
     expect(seen.x).toBeCloseTo(warning.origin.x, 6);
     expect(seen.y).toBeCloseTo(warning.origin.y, 6);
     const near = (t: number): boolean => Math.abs(t - dueAt) < DT * 1.5;
-    expect(log.filter((l) => l.event.type === 'phaserBlink' && near(l.t))).toHaveLength(0);
-    expect(log.filter((l) => l.event.type === 'phaserWarn' && near(l.t))).toHaveLength(1);
+    expect(log.filter((l) => l.event.type === 'phaserBlink' && near(l.at))).toHaveLength(0);
+    expect(log.filter((l) => l.event.type === 'phaserWarn' && near(l.at))).toHaveLength(1);
   });
 
   it('leaves its pose unstretched on the blink step, and is struck where it lands', () => {
