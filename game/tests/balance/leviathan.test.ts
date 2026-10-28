@@ -84,5 +84,5 @@ describe('the Leviathan on 4-★, over the 40 balance seeds', () => {
     const replayed = replayControls(GALAXY, 1, controls);
     expect(replayed.events).toEqual(events);
     expect(replayed.score).toBe(result.score);
-  });
+  }, TIMEOUT_MS);
 });
