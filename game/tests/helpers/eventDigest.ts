@@ -35,13 +35,16 @@ export function canonicalEvent(event: SimEvent): string {
   return fields.map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(' ');
 }
 
+/** Called after each step with the step's events, which are valid until the next step. */
+export type StepHook = (world: World, events: readonly SimEvent[], step: number) => void;
+
 /**
  * Plays a Free play run of `id` on seed `seed` under the practice log's fixed input schedule until it is cleared or
- * lost, handing each step's events to `onStep` (valid until the next step), and returns the World.
+ * lost, or `seconds` have passed, handing each step's events to `onStep`, and returns the World.
  */
-export function playScripted(id: GalaxyId, seed: number, onStep: (world: World, events: readonly SimEvent[], step: number) => void): World {
+export function playScripted(id: GalaxyId, seed: number, onStep: StepHook, seconds = MAX_SECONDS): World {
   const world = new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById(id), mode: 'free' } });
-  for (let step = 0; step < MAX_SECONDS / STEP_SECONDS && world.status !== 'cleared' && world.status !== 'gameOver'; step++) {
+  for (let step = 0; step < seconds / STEP_SECONDS && world.status !== 'cleared' && world.status !== 'gameOver'; step++) {
     onStep(world, world.step(STEP_SECONDS, practiceScript(step)), step);
   }
   return world;
@@ -51,7 +54,7 @@ export function playScripted(id: GalaxyId, seed: number, onStep: (world: World, 
  * Plays `id` on seed `seed` with the expert bot, as the balance suite does, to the run's end (it clears every D1–D2
  * galaxy), handing each step's events to `onStep`, and returns the World.
  */
-export function playExpert(id: GalaxyId, seed: number, onStep: (world: World, events: readonly SimEvent[], step: number) => void): World {
+export function playExpert(id: GalaxyId, seed: number, onStep: StepHook): World {
   let last = null as World | null;
   let step = 0;
   runGalaxy({
@@ -80,9 +83,14 @@ export interface DigestRun {
 }
 
 export function digestRun(input: DigestInput, id: GalaxyId, seed: number): DigestRun {
+  return digestPlay((onStep) => DIGEST_INPUTS[input](id, seed, onStep));
+}
+
+/** The digest of the run `play` plays, handing each step to the `onStep` it is given. */
+export function digestPlay(play: (onStep: StepHook) => World): DigestRun {
   const hash = createHash('sha256');
   const types = new Set<SimEvent['type']>();
-  const world = DIGEST_INPUTS[input](id, seed, (_world, events, step) => {
+  const world = play((_world, events, step) => {
     for (const event of events) {
       types.add(event.type);
       hash.update(`${String(step)} ${canonicalEvent(event)}\n`);

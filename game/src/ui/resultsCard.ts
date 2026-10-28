@@ -1,4 +1,4 @@
-import { freeNext, type FlowState } from '../app/flow';
+import { freeNext, type ClearResult, type FlowState } from '../app/flow';
 import { galaxyById, galaxyLabel } from '../content/galaxies';
 import type { NewBest } from '../meta/bests';
 import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
@@ -43,6 +43,12 @@ export function newBestText(newBest: NewBest | null, shown: number): string {
   return newBest.score === shown ? 'New best!' : `New best! ${String(newBest.score)}`;
 }
 
+/** The line naming the looks the clear unlocked, or '' when it unlocked none. */
+export function newLookLabel(result: ClearResult | null): string {
+  const names = result?.newLooks ?? [];
+  return names.length === 0 ? '' : `New look unlocked: ${names.join(', ')}`;
+}
+
 /**
  * The end of a run: the galaxy, the heading, the stars won (lit one after another as the card pops in), the score, a
  * "New best!" badge, the bonus lines, the Rank run's total, and the buttons for what comes next. Enter and pad A take
@@ -56,6 +62,7 @@ export function createResultsCard(act: Act): ResultsCard {
   const stars = starRow('stars--big');
   const score = element('p', 'score');
   const newBest = element('p', 'badge new-best');
+  const newLook = element('p', 'hint new-look');
   const points = line();
   const clearBonus = line();
   const noDeathBonus = line();
@@ -74,7 +81,7 @@ export function createResultsCard(act: Act): ResultsCard {
   row.append(...buttons.map(([el]) => el));
   const receipt = element('div', 'end-lines');
   receipt.append(points.el, clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
-  card.append(galaxy, heading, stars.el, score, newBest, receipt, hint, row);
+  card.append(galaxy, heading, stars.el, score, newBest, newLook, receipt, hint, row);
 
   /**
    * The clear's bonuses and, in Rank, the Dimension's multiplier and the run total. After a game over only a Rank run
@@ -112,6 +119,8 @@ export function createResultsCard(act: Act): ResultsCard {
       score.textContent = `Score ${String(value)}`;
       newBest.textContent = newBestText(flow.newBest, value);
       newBest.hidden = newBest.textContent === '';
+      newLook.textContent = won ? newLookLabel(result) : '';
+      newLook.hidden = newLook.textContent === '';
       setLines(flow, value);
       hint.textContent = screen === 'gameOver' ? restartHint : '';
       hint.hidden = hint.textContent === '';

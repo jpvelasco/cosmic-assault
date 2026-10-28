@@ -3,7 +3,7 @@ import type { Command } from '../../src/app/commands';
 import { GAME_OVER_GUARD_MS } from '../../src/app/gameOverGuard';
 import { actsUnder, commandActs, coversFor, inputForCommand, type Cover, type RoutedInput } from '../../src/app/inputRouting';
 
-const UNCOVERED = { settings: false, records: false, rotate: false, crash: false };
+const UNCOVERED = { settings: false, records: false, hangar: false, rotate: false, crash: false };
 const NO_COVER = coversFor(UNCOVERED);
 
 describe('coversFor', () => {
@@ -15,25 +15,27 @@ describe('coversFor', () => {
     expect(coversFor({ ...UNCOVERED, settings: true })).toEqual(['settings']);
     expect(coversFor({ ...UNCOVERED, settings: true, rotate: true })).toEqual(['settings', 'rotate']);
     expect(coversFor({ ...UNCOVERED, records: true, rotate: true })).toEqual(['records', 'rotate']);
+    expect(coversFor({ ...UNCOVERED, hangar: true })).toEqual(['hangar']);
+    expect(coversFor({ ...UNCOVERED, hangar: true, rotate: true })).toEqual(['hangar', 'rotate']);
     expect(coversFor({ ...UNCOVERED, rotate: true, crash: true })).toEqual(['rotate', 'crash']);
   });
 });
 
 describe('actsUnder', () => {
   // The review's matrix, row by row: which inputs act under which cover.
-  it.each<[RoutedInput, none: boolean, settings: boolean, records: boolean, rotate: boolean, crash: boolean]>([
-    ['start', true, false, false, false, false],
-    ['resume', true, false, false, false, false],
-    ['pause', true, false, false, true, false],
-    ['leave', true, false, false, true, false],
-    ['toggleMute', true, true, true, true, false],
-    ['toggleFullscreen', true, true, true, true, true],
-    ['navigate', true, true, true, false, false],
-    ['pressFocused', true, true, true, false, false],
-    ['closeCard', true, true, true, false, false],
-  ])('%s: none %s, settings %s, records %s, rotate %s, crash %s', (input, none, settings, records, rotate, crash) => {
+  it.each<[RoutedInput, none: boolean, settings: boolean, records: boolean, hangar: boolean, rotate: boolean, crash: boolean]>([
+    ['start', true, false, false, false, false, false],
+    ['resume', true, false, false, false, false, false],
+    ['pause', true, false, false, false, true, false],
+    ['leave', true, false, false, false, true, false],
+    ['toggleMute', true, true, true, true, true, false],
+    ['toggleFullscreen', true, true, true, true, true, true],
+    ['navigate', true, true, true, true, false, false],
+    ['pressFocused', true, true, true, true, false, false],
+    ['closeCard', true, true, true, true, false, false],
+  ])('%s: none %s, settings %s, records %s, hangar %s, rotate %s, crash %s', (input, none, settings, records, hangar, rotate, crash) => {
     const under = (cover: Cover) => actsUnder(input, [cover]);
-    expect([under('none'), under('settings'), under('records'), under('rotate'), under('crash')]).toEqual([none, settings, records, rotate, crash]);
+    expect([under('none'), under('settings'), under('records'), under('hangar'), under('rotate'), under('crash')]).toEqual([none, settings, records, hangar, rotate, crash]);
   });
 
   it('needs every cover that is up to allow the input', () => {
@@ -41,6 +43,7 @@ describe('actsUnder', () => {
     expect(actsUnder('toggleMute', ['settings', 'rotate'])).toBe(true);
     expect(actsUnder('closeCard', ['settings', 'rotate'])).toBe(false);
     expect(actsUnder('closeCard', ['records', 'rotate'])).toBe(false);
+    expect(actsUnder('closeCard', ['hangar', 'rotate'])).toBe(false);
     // Leaving a card acts under the rotate prompt alone, but not when the settings card is open beneath it.
     expect(actsUnder('leave', ['settings', 'rotate'])).toBe(false);
   });

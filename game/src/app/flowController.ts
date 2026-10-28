@@ -1,7 +1,9 @@
 import { galaxyIdOf, type GalaxyId } from '../content/types';
 import { bestsBefore, NO_BESTS, type BestsBefore } from '../meta/bests';
+import { newlyUnlocked } from '../meta/cosmetics';
 import { forfeitRankRun, isUnlocked } from '../meta/progress';
 import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
+import type { SaveData } from '../meta/save';
 import type { SimEvent } from '../sim/events';
 import type { World } from '../sim/world';
 import type { FlowCommand } from './commands';
@@ -40,6 +42,11 @@ export interface FlowController {
    * `rankSeq` it asked about; true if it took a life. A run another tab has moved on since is left alone.
    */
   forfeitLeftRun(probedSeq: number): boolean;
+}
+
+/** A clear's result, naming the looks its save write unlocked. */
+function namingUnlocks(state: FlowState, before: SaveData, after: SaveData): FlowState {
+  return state.result === null ? state : { ...state, result: { ...state.result, newLooks: newlyUnlocked(before, after) } };
 }
 
 /**
@@ -95,12 +102,13 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     // On the title the player sees the run as the save has it now, other tabs' changes included; Resume plays it so.
     if (before.screen === 'title' || action.kind === 'resumeRank') knownSeq = store.save.rankSeq;
     const change = saveChange(before, action, after, () => deps.today());
+    const saveBefore = store.save;
     if (change !== null && !write(change)) {
       deps.notify(action.kind === 'startRank' ? STALE_NEW_RUN_NOTICE : STALE_RUN_NOTICE);
       show(before, toTitle(before));
       return;
     }
-    show(before, after);
+    show(before, action.kind === 'clear' ? namingUnlocks(after, saveBefore, store.save) : after);
   }
 
   /** A new Rank run, at `from`; `?lives=` sets its lives. */

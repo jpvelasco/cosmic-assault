@@ -2,8 +2,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { GalaxyId } from '../src/content/types';
+import { SKIN_IDS, TRAILS, TRAIL_IDS, type Look, type TrailId } from '../src/content/cosmetics';
 import { SPRITE_CACHE_CAPACITY } from '../src/render/sprites';
-import { expect, fastForward, gameState, openGame, startRun, test } from './fixtures';
+import { ALL_STARS_SAVE, expect, fastForward, gameState, openGame, seedLook, seedSave, startRun, test } from './fixtures';
 import { CACHE_GALAXY, CACHE_HOLD_SECONDS, CACHE_LIVES, ECLIPSE_GALAXY, LEVIATHAN_GALAXY, seedFor, TO_BOSS_FIGHT_SECONDS, WARDEN_GALAXY, type ClaimId } from './seeds';
 
 /** Evictions the cache may make in a scene's steady play: a cache sized for the scene should make next to none. */
@@ -13,6 +14,17 @@ const CAPACITY_HEADROOM = 1.5;
 /** How often the spec reads the cache during a hold, in ms. */
 const SAMPLE_MS = 250;
 const REPORT_PATH = 'test-results/sprite-cache.json';
+
+/** The glow colours a trail bakes: its colours, and its core when it draws one. */
+const trailColours = (id: TrailId): number => new Set([...TRAILS[id].colors, ...(TRAILS[id].coreShare > 0 ? [TRAILS[id].core] : [])]).size;
+/**
+ * The scenes are played in the look that bakes the most sprites: the trail with the most glow colours (a skin bakes
+ * one hull whichever it is), so the capacity holds for every look a player can choose.
+ */
+const HEAVIEST_LOOK: Look = {
+  skin: SKIN_IDS[SKIN_IDS.length - 1] ?? 'classic',
+  trail: TRAIL_IDS.reduce((most, id) => (trailColours(id) > trailColours(most) ? id : most)),
+};
 
 interface CacheScene {
   readonly name: string;
@@ -46,7 +58,10 @@ async function cacheUse(page: Page): Promise<{ size: number; evictions: number }
 for (const scene of SCENES) {
   test(`the sprite cache holds ${scene.name} in ${scene.galaxy} without evicting what it draws`, async ({ page }) => {
     test.setTimeout(CACHE_HOLD_SECONDS * 1000 + 40_000);
+    await seedSave(page, ALL_STARS_SAVE);
+    await seedLook(page, HEAVIEST_LOOK);
     await openGame(page, { seed: seedFor(scene.claim), galaxy: scene.galaxy, lives: CACHE_LIVES });
+    expect((await gameState(page)).look, 'the scene is played in the heaviest look').toEqual(HEAVIEST_LOOK);
     await startRun(page, false);
     if (scene.skipSeconds > 0) await fastForward(page, scene.skipSeconds);
 
@@ -66,7 +81,7 @@ for (const scene of SCENES) {
 
     const { screen } = await gameState(page);
     const evictions = last.evictions - start.evictions;
-    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), holdMs: CACHE_HOLD_SECONDS * 1000, peak, evictions, endSize: last.size, screen };
+    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), look: HEAVIEST_LOOK, holdMs: CACHE_HOLD_SECONDS * 1000, peak, evictions, endSize: last.size, screen };
     console.log(`sprite cache ${scene.name}: ${JSON.stringify(reports[scene.name])}`);
 
     expect(screen, 'the scene stays in play through the hold').toBe('playing');

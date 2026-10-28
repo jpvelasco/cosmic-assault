@@ -26,6 +26,7 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
     muted: false,
     ...look,
     settings: {},
+    look: { skin: 'ember', trail: 'ion' },
     motion: { reducedMotion: false, shake: true },
     audioState: 'none',
     log: { size: 0 },
@@ -38,11 +39,19 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 }
 
 describe('the test bridge look and music', () => {
-  it('reports the palette and the music theme in force, beside the version-4 fields', () => {
+  it('reports the palette and the music theme in force, beside the version-5 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(4);
+    expect(api.version).toBe(5);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
+  });
+});
+
+describe('the test bridge ship look', () => {
+  it('reports the skin and trail the ship draws, as a copy a spec cannot change', () => {
+    const state = bridgeFor(null).getState();
+    expect(state.look).toEqual({ skin: 'ember', trail: 'ion' });
+    expect(Object.isFrozen(state.look)).toBe(true);
   });
 });
 

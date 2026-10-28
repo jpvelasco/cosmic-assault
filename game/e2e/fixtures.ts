@@ -1,7 +1,10 @@
 import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
+import { SETTINGS_KEY } from '../src/app/settings';
+import type { Look } from '../src/content/cosmetics';
+import { GALAXIES } from '../src/content/galaxies';
 import type { GalaxyId, PickupId } from '../src/content/types';
-import { SAVE_KEY, type SaveData } from '../src/meta/save';
+import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { BRIDGE_VERSION } from '../src/testBridge';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
@@ -103,6 +106,19 @@ export async function seedStorage(page: Page, text: string, { once = false } = {
 /** `seedStorage` for a save object. */
 export function seedSave(page: Page, save: SaveData, options: { once?: boolean } = {}): Promise<void> {
   return seedStorage(page, JSON.stringify(save), options);
+}
+
+/** Three stars in every galaxy, which unlocks every look. */
+export const ALL_STARS_SAVE: SaveData = {
+  ...defaultSave(),
+  galaxies: Object.fromEntries(GALAXIES.map(({ id }) => [id, { bestScore: 1000, stars: 3 }])),
+};
+
+/** Stores settings that choose `look`, before the page loads; the ship draws it only where the save's stars unlock it. */
+export async function seedLook(page: Page, look: Look): Promise<void> {
+  await page.addInitScript(([key, value]) => {
+    localStorage.setItem(key, value);
+  }, [SETTINGS_KEY, JSON.stringify(look)] as const);
 }
 
 /** The save as `localStorage` holds it, parsed; empty before anything is written. */

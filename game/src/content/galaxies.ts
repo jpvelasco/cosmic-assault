@@ -152,6 +152,10 @@ function galaxy(dimension: Dimension, index: GalaxyIndex): GalaxyDef {
 
 export const DIMENSION_NUMBERS: readonly Dimension[] = [1, 2, 3, 4, 5];
 export const GALAXY_INDEXES: readonly GalaxyIndex[] = [1, 2, 3, 4, 5, 6];
+/** Stars a Dimension holds: three for each of its galaxies. */
+export const STARS_PER_DIMENSION = 3 * GALAXY_INDEXES.length;
+/** Stars across every Dimension. */
+export const ALL_STARS = STARS_PER_DIMENSION * DIMENSION_NUMBERS.length;
 
 export const GALAXIES: readonly GalaxyDef[] = DIMENSION_NUMBERS.flatMap((dimension) => GALAXY_INDEXES.map((index) => galaxy(dimension, index)));
 

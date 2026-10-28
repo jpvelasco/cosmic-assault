@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK, SKINS, type SkinId } from '../content/cosmetics';
 import type { Asteroid } from '../sim/asteroid';
 import { TAU } from '../sim/math';
 import { FNV_OFFSET_BASIS, fnv1aStep, mulberry32 } from '../sim/rng';
@@ -17,8 +18,11 @@ export interface Sprite {
 export interface SpriteBaker {
   /** Additive radial glow; `diameter` (field units) snaps to a multiple of 4. */
   glow(color: string, diameter: number): Sprite;
-  /** The hull, centred on the ship's origin with the nose along +x. */
-  ship(palette: Palette): Sprite;
+  /**
+   * The hull, centred on the ship's origin with the nose along +x. `skin` trims it: the rim, the wing panel lines and
+   * the cockpit change, but the outline and the body fill (always the palette's) do not.
+   */
+  ship(palette: Palette, skin?: SkinId): Sprite;
   /**
    * The rock unrotated, centred on its origin and lit from the sprite's upper left, so the
    * light turns with the rock. Cached per id, size and shape, so ids reused by a later World never collide.
@@ -109,6 +113,19 @@ export const SHIP_HULL: readonly Point[] = [
 ];
 const SHIP_HALF_BEAM = 9;
 const SHIP_RIM_WIDTH = 1;
+const SHIP_RIM_ALPHA = 0.7;
+const SHIP_PANEL_WIDTH = 0.6;
+/** The wing panel lines, from near the cockpit out along each wing, inside the outline. */
+const SHIP_PANEL_LINES: readonly (readonly [Point, Point])[] = [
+  [
+    { x: 2, y: -3 },
+    { x: -8, y: -6 },
+  ],
+  [
+    { x: 2, y: 3 },
+    { x: -8, y: 6 },
+  ],
+];
 
 const ROCK_RIM_WIDTH = 1.5;
 /** Every crater lies within this fraction of the radius: inside the outline for 7+ vertices at ±30 % jaggedness. */
@@ -239,7 +256,8 @@ export function addStops(gradient: CanvasGradient, colors: readonly string[], of
   return gradient;
 }
 
-function paintShip(ctx: CanvasRenderingContext2D, p: Palette): void {
+function paintShip(ctx: CanvasRenderingContext2D, p: Palette, skin: SkinId): void {
+  const trim = SKINS[skin];
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   tracePath(ctx, SHIP_HULL);
@@ -254,9 +272,10 @@ function paintShip(ctx: CanvasRenderingContext2D, p: Palette): void {
   ctx.fillStyle = tail;
   ctx.fillRect(-10, -SHIP_HALF_BEAM, 24, SHIP_HALF_BEAM * 2);
   ctx.restore();
-  ctx.strokeStyle = rgba(WHITE, 0.7);
+  ctx.strokeStyle = rgba(trim.rim, SHIP_RIM_ALPHA);
   ctx.lineWidth = SHIP_RIM_WIDTH;
   ctx.stroke();
+  if (trim.panel !== null) strokeShipPanels(ctx, trim.panel);
   // Specular glint along the lit leading edge.
   ctx.beginPath();
   ctx.moveTo(12.4, -1.1);
@@ -264,7 +283,19 @@ function paintShip(ctx: CanvasRenderingContext2D, p: Palette): void {
   ctx.strokeStyle = rgba(WHITE, 0.6);
   ctx.lineWidth = 0.5;
   ctx.stroke();
-  paintCockpit(ctx, p.cockpit);
+  paintCockpit(ctx, trim.cockpit ?? p.cockpit);
+}
+
+/** The wing panel lines of a skin, in its panel colour, one stroke for both wings. */
+function strokeShipPanels(ctx: CanvasRenderingContext2D, color: string): void {
+  ctx.beginPath();
+  for (const [from, to] of SHIP_PANEL_LINES) {
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = SHIP_PANEL_WIDTH;
+  ctx.stroke();
 }
 
 function paintCockpit(ctx: CanvasRenderingContext2D, color: string): void {
@@ -385,6 +416,8 @@ interface RockKey {
  * `setScale` clears the cache, so every live entry was baked at the current ones.
  */
 export function createSpriteBaker(capacity = SPRITE_CACHE_CAPACITY): SpriteBaker {
+  /** The `palette:skin` name of each ship look, built once, so drawing the ship each frame allocates nothing. */
+  const shipNames = new Map<string, Map<SkinId, string>>();
   /** Cache keys per asteroid id, so `forget` finds every entry; eviction keeps it in step. */
   const asteroidKeys = new Map<number, Set<string>>();
   const cache = new SpriteCache<CacheEntry>(capacity, (key, { sprite, asteroidId }) => {
@@ -401,6 +434,16 @@ export function createSpriteBaker(capacity = SPRITE_CACHE_CAPACITY): SpriteBaker
   let pixelsPerUnit = 1;
   let dpr = 1;
   let visual = UNIT_VISUAL;
+
+  function shipNameOf(p: Palette, skin: SkinId): string {
+    const bySkin = inner(shipNames, p.id);
+    let name = bySkin.get(skin);
+    if (name === undefined) {
+      name = `${p.id}:${skin}`;
+      bySkin.set(skin, name);
+    }
+    return name;
+  }
 
   function keyOf(kind: string, name: string, size: number): string {
     const bySize = inner(inner(keys, kind), name);
@@ -499,15 +542,15 @@ export function createSpriteBaker(capacity = SPRITE_CACHE_CAPACITY): SpriteBaker
         )
       );
     },
-    ship(p) {
-      const key = keyOf('ship', p.id, 0);
+    ship(p, skin = DEFAULT_LOOK.skin) {
+      const key = keyOf('ship', shipNameOf(p, skin), 0);
       const half = SHIP_RIM_WIDTH / 2;
       return (
         cache.get(key)?.sprite ??
         store(
           key,
           bake(maxDistance(SHIP_HULL) + half, SHIP_HALF_BEAM + half, visual.ship, (ctx) => {
-            paintShip(ctx, p);
+            paintShip(ctx, p, skin);
           }),
         )
       );

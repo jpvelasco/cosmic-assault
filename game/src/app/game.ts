@@ -1,6 +1,7 @@
 import { createAudioEngine, needsSoundGesture, type AudioState } from '../audio/engine';
 import type { ThemeId } from '../audio/themes';
 import { currentBuildLabel } from '../buildLabel';
+import type { Look } from '../content/cosmetics';
 import type { GalaxyDef, PaletteId } from '../content/types';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
@@ -12,6 +13,7 @@ import { createCrashGuard } from '../platform/crashGuard';
 import { createFullscreen } from '../platform/fullscreen';
 import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
+import { effectiveLook } from '../meta/cosmetics';
 import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { paletteFor } from '../render/palette';
@@ -34,6 +36,7 @@ import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
 import { coversFor, createInputRouter, type Cover } from './inputRouting';
+import { createHangar } from './hangar';
 import { createRunController, type RunController } from './runController';
 import { runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
@@ -64,6 +67,8 @@ export interface App {
   readonly musicTheme: ThemeId;
   /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
   readonly settings: Settings;
+  /** The skin and trail the ship draws: the chosen ones where unlocked, the defaults otherwise. */
+  readonly look: Look;
   /** The motion rules in force once reduced motion and the shake setting are combined. */
   readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or tap creates the audio context. */
@@ -164,6 +169,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     openRecords: () => {
       records.show();
     },
+    openHangar: () => {
+      hangar.show();
+    },
     install: installPrompt.install,
   });
   // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
@@ -178,16 +186,20 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     ...coverCardDeps('settings'),
   });
   const records = createRecords(root, coverCardDeps('records'));
+  const hangar = createHangar(root, coverCardDeps('hangar'), prefs.choose);
   const rotatePrompt = createRotatePrompt(root);
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
     toast,
   });
   const guard = createCrashGuard(log, stopAfterCrash);
+  /** The cards a player opens over the title, mode select or pause; the menu keys go to the one that is up. */
+  const coverCards = [prefs, records, hangar] as const;
   const view = createViewSync(root, {
     overlay,
     settingsCard: prefs.card,
     records,
+    hangar,
     rotatePrompt,
     touch,
     renderer,
@@ -201,6 +213,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       installOffer: installPrompt.offer,
       settings: prefs.settings,
       settingsOpen: prefs.open,
+      look: look(),
     }),
     screen: () => mode,
     tripped: () => guard.tripped,
@@ -221,15 +234,16 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     screen: () => mode,
     covers,
     msSinceRunEnd: (now) => now - runEndedAt,
-    menuControls: () => (prefs.open ? prefs.card.controls() : records.open ? records.card.controls() : overlay.controls(mode)),
+    menuControls: () => coverCards.find((cover) => cover.open)?.card.controls() ?? overlay.controls(mode),
     closeCard: () => {
       prefs.closeSettings();
       records.close();
+      hangar.close();
     },
   });
 
-  /** What the settings or records card needs to open and close over the screens, its focus going back to its chip. */
-  function coverCardDeps(chip: 'settings' | 'records'): Omit<CardToggleDeps, 'opensOn'> {
+  /** What the settings, records or Hangar card needs to open and close over the screens, its focus going back to its chip. */
+  function coverCardDeps(chip: 'settings' | 'records' | 'hangar'): Omit<CardToggleDeps, 'opensOn'> {
     const focusOpener = (): void => {
       overlay.focusChip(chip);
     };
@@ -238,7 +252,12 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
 
   /** What covers the cards right now, for the router's table. */
   function covers(): Cover[] {
-    return coversFor({ settings: prefs.open, records: records.open, rotate: view.needsRotation(), crash: guard.tripped });
+    return coversFor({ settings: prefs.open, records: records.open, hangar: hangar.open, rotate: view.needsRotation(), crash: guard.tripped });
+  }
+
+  /** The look the ship draws: the chosen one where the save's stars unlock it. */
+  function look(): Look {
+    return effectiveLook(prefs.settings, run.save);
   }
 
   function syncView(): void {
@@ -484,6 +503,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get settings() {
       return prefs.settings;
     },
+    get look() {
+      return look();
+    },
     get motion() {
       return { reducedMotion: renderer.effects.reducedMotion, shake: renderer.effects.shakeEnabled };
     },
@@ -507,6 +529,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       overlay.dispose();
       prefs.dispose();
       records.card.dispose();
+      hangar.card.dispose();
       rotatePrompt.dispose();
       toast.dispose();
       crashCard.dispose();

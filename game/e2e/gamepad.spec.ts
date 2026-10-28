@@ -173,6 +173,29 @@ test('the D-pad walks from Play down to Settings and across to Records, A opens 
   await expectMode(page, 'title');
 });
 
+test('the D-pad reaches the Hangar after Records, A opens it, the D-pad moves within it, and B closes it', { tag: '@desktop' }, async ({ page }) => {
+  await tap(page, DPAD_DOWN);
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('settings-open')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('records-open')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('hangar-open')).toBeFocused();
+  await tap(page, A);
+  const hangar = page.getByTestId('hangar');
+  await expect(hangar).toBeVisible();
+  await expect(page.getByTestId('hangar-skin-classic')).toBeFocused();
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('hangar-trail-standard')).toBeFocused();
+  // A picks the focused look, which is the unlocked default here, and B closes the card with focus back on its chip.
+  await tap(page, A);
+  await expect.poll(async () => (await gameState(page)).settings.trail).toBe('standard');
+  await tap(page, B);
+  await expect(hangar).toBeHidden();
+  await expect(page.getByTestId('hangar-open')).toBeFocused();
+  await expectMode(page, 'title');
+});
+
 test('in settings the D-pad adjusts a slider and B closes the card', { tag: '@desktop' }, async ({ page }) => {
   await page.getByTestId('settings-open').click();
   const music = page.getByTestId('settings-music');

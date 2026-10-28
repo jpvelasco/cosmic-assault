@@ -60,6 +60,9 @@ test('arrow keys reach the Install chip, and Enter on it opens the prompt withou
   await sendInstallPrompt(page);
   await page.getByTestId('records-open').focus();
 
+  // The Hangar chip sits between Records and the offer.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('hangar-open')).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(offer(page)).toBeFocused();
   await page.keyboard.press('Enter');
@@ -67,7 +70,7 @@ test('arrow keys reach the Install chip, and Enter on it opens the prompt withou
   await expect(page.getByTestId('build-label')).toBeVisible();
   // The installed chip goes, and focus moves to its neighbour instead of dropping to the page, where Space would start a run.
   await expect(offer(page)).toHaveCount(0);
-  await expect(page.getByTestId('records-open')).toBeFocused();
+  await expect(page.getByTestId('hangar-open')).toBeFocused();
 });
 
 test('a dismissed prompt keeps the Install chip for another try', async ({ page }) => {

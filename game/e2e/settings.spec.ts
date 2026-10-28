@@ -142,11 +142,13 @@ test('volume, shake and the sound chip apply live and persist across a reload', 
     sfxVolume: 0.45,
     screenShake: 'off',
     leftHanded: false,
+    skin: 'classic',
+    trail: 'standard',
   });
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([SETTINGS_KEY]);
 
   await openGame(page);
-  expect(await settingsOf(page)).toEqual({ muted: true, musicVolume: 0.2, sfxVolume: 0.45, screenShake: 'off', leftHanded: false });
+  expect(await settingsOf(page)).toEqual({ muted: true, musicVolume: 0.2, sfxVolume: 0.45, screenShake: 'off', leftHanded: false, skin: 'classic', trail: 'standard' });
   await expect(page.getByTestId('sound-toggle')).toHaveText('Sound: off');
   await openChip(page).click();
   await expect(music(page)).toHaveValue('20');

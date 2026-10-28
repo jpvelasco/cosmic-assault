@@ -1,3 +1,5 @@
+import { DEFAULT_LOOK, SKIN_IDS, TRAIL_IDS, type SkinId, type TrailId } from '../content/cosmetics';
+
 /** Screen shake: follows the system's reduced-motion preference (`auto`), or is switched on or off outright. */
 export type ScreenShake = 'auto' | 'on' | 'off';
 
@@ -12,6 +14,10 @@ export interface Settings {
   readonly screenShake: ScreenShake;
   /** Swaps the touch joystick and FIRE button. */
   readonly leftHanded: boolean;
+  /** The hull's trim the player chose; drawn only once unlocked (see meta/cosmetics.ts). */
+  readonly skin: SkinId;
+  /** The engine trail the player chose; drawn only once unlocked. */
+  readonly trail: TrailId;
 }
 
 export const SETTINGS_KEY = 'cosmic-assault.v2.settings';
@@ -22,6 +28,8 @@ export const DEFAULT_SETTINGS: Settings = Object.freeze({
   sfxVolume: 0.8,
   screenShake: 'auto',
   leftHanded: false,
+  skin: DEFAULT_LOOK.skin,
+  trail: DEFAULT_LOOK.trail,
 });
 
 function isVolume(value: unknown): value is number {
@@ -75,6 +83,8 @@ export function loadSettings(storage: Pick<Storage, 'getItem'> | null): Settings
     sfxVolume: volume(saved['sfxVolume'], DEFAULT_SETTINGS.sfxVolume),
     screenShake: oneOf(SCREEN_SHAKES, saved['screenShake'], DEFAULT_SETTINGS.screenShake),
     leftHanded: flag(saved['leftHanded'], DEFAULT_SETTINGS.leftHanded),
+    skin: oneOf(SKIN_IDS, saved['skin'], DEFAULT_SETTINGS.skin),
+    trail: oneOf(TRAIL_IDS, saved['trail'], DEFAULT_SETTINGS.trail),
   };
 }
 

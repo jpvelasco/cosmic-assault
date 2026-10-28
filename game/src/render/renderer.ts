@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK, type Look, type SkinId } from '../content/cosmetics';
 import type { PaletteId } from '../content/types';
 import type { Asteroid } from '../sim/asteroid';
 import type { SimEvent } from '../sim/events';
@@ -61,6 +62,11 @@ export interface Renderer {
   setPalette(id: PaletteId): void;
   /** The palette in force. */
   readonly palette: PaletteId;
+  /**
+   * The ship's skin and engine trail from now on. Cosmetic only: the hull outline and the trail's particles never change
+   * how the ship flies. The app passes the look in force, with unlocks applied, whenever it changes.
+   */
+  setLook(look: Look): void;
   readonly effects: Effects;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
@@ -136,6 +142,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   let view: View | null = null;
   let quality = HIGH_QUALITY;
   let drawCount = 0;
+  let skin: SkinId = DEFAULT_LOOK.skin;
 
   function resize(cssWidth: number, cssHeight: number, field: Field): void {
     if (!isPositiveFiniteSize(cssWidth, cssHeight)) {
@@ -276,7 +283,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
       const length = FLAME_MIN_LENGTH + flicker.range(0, FLAME_FLICKER);
       stamp(baker.flame(palette, length), x, y, cos, sin, radius, field);
     }
-    stamp(baker.ship(palette), x, y, cos, sin, radius, field);
+    stamp(baker.ship(palette, skin), x, y, cos, sin, radius, field);
   }
 
   /** Under the rocks, so an attack's shards fly out of the core; its eye follows the ship. */
@@ -421,6 +428,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     setPalette,
     get palette() {
       return palette.id;
+    },
+    setLook({ skin: nextSkin, trail }) {
+      skin = nextSkin;
+      effects.setTrail(trail);
     },
     effects,
     get hudRects() {

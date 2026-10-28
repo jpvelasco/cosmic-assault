@@ -6,7 +6,7 @@ const storing = (raw: string | null): Pick<Storage, 'getItem'> => ({ getItem: ()
 describe('loadSettings', () => {
   it('uses the namespaced v2 key and the documented defaults', () => {
     expect(SETTINGS_KEY).toBe('cosmic-assault.v2.settings');
-    expect(DEFAULT_SETTINGS).toEqual({ muted: false, musicVolume: 0.6, sfxVolume: 0.8, screenShake: 'auto', leftHanded: false });
+    expect(DEFAULT_SETTINGS).toEqual({ muted: false, musicVolume: 0.6, sfxVolume: 0.8, screenShake: 'auto', leftHanded: false, skin: 'classic', trail: 'standard' });
   });
 
   it('returns defaults without storage, with a missing key, or when storage throws', () => {
@@ -25,7 +25,7 @@ describe('loadSettings', () => {
   });
 
   it('keeps valid fields', () => {
-    const saved = { muted: true, musicVolume: 0.25, sfxVolume: 1, screenShake: 'off', leftHanded: true };
+    const saved = { muted: true, musicVolume: 0.25, sfxVolume: 1, screenShake: 'off', leftHanded: true, skin: 'solar', trail: 'ion' };
     expect(loadSettings(storing(JSON.stringify(saved)))).toEqual(saved);
   });
 
@@ -48,8 +48,23 @@ describe('loadSettings', () => {
     [{ leftHanded: 'yes' }, { leftHanded: false }],
     [{ leftHanded: 1 }, { leftHanded: false }],
     [{ leftHanded: null }, { leftHanded: false }],
+    [{ skin: 'chrome' }, { skin: 'classic' }],
+    [{ skin: 'Ember' }, { skin: 'classic' }],
+    [{ skin: 3 }, { skin: 'classic' }],
+    [{ skin: null }, { skin: 'classic' }],
+    [{ trail: 'rainbow' }, { trail: 'standard' }],
+    [{ trail: ['ion'] }, { trail: 'standard' }],
+    [{ trail: null }, { trail: 'standard' }],
   ])('replaces the wrong-typed or out-of-range field in %j', (stored, expected) => {
     expect(loadSettings(storing(JSON.stringify(stored)))).toEqual({ ...DEFAULT_SETTINGS, ...expected });
+  });
+
+  it.each(['classic', 'ember', 'glacier', 'aurora', 'solar', 'nova'] as const)('keeps the %s skin', (skin) => {
+    expect(loadSettings(storing(JSON.stringify({ skin }))).skin).toBe(skin);
+  });
+
+  it.each(['standard', 'comet', 'ion', 'prism'] as const)('keeps the %s trail', (trail) => {
+    expect(loadSettings(storing(JSON.stringify({ trail }))).trail).toBe(trail);
   });
 
   it.each(['auto', 'on', 'off'] as const)('keeps the %s shake setting', (screenShake) => {

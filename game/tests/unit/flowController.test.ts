@@ -157,6 +157,22 @@ describe('createFlowController: events', () => {
     expect(cleared({ '1-1': { bestScore: score, stars: 1 } }).newBest).toBeNull();
   });
 
+  it('names the look a clear unlocks on its result, and only on the clear that unlocks it', () => {
+    // Eight stars saved elsewhere: whatever the clear of 1-1 wins (one to three), the total reaches Ember's nine.
+    const save: SaveData = { ...defaultSave(), galaxies: { '1-2': { bestScore: 1, stars: 3 }, '1-3': { bestScore: 1, stars: 3 }, '1-4': { bestScore: 1, stars: 2 } } };
+    const { flow } = setup({ save });
+    flow.command({ kind: 'start' });
+    flow.command({ kind: 'chooseMode', mode: 'free' });
+    flow.command({ kind: 'openDimension', dimension: 1 });
+    flow.command({ kind: 'openGalaxy', id: '1-1' });
+    playUntilEnd(flow, '1-1');
+    expect(flow.state.result?.newLooks).toEqual(['Ember trim']);
+
+    flow.command({ kind: 'retry' });
+    playUntilEnd(flow, '1-1');
+    expect(flow.state.result?.newLooks).toEqual([]);
+  });
+
   it('never calls a debug run a new best: its store never writes, so it keeps no record to beat', () => {
     const { flow } = setup({ save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1', writes: false });
     flow.command({ kind: 'start' });

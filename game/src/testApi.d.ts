@@ -93,6 +93,8 @@ interface CosmicAssaultTestState {
   readonly musicTheme: import('./audio/themes').ThemeId;
   /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
   readonly settings: import('./app/settings').Settings;
+  /** The skin and engine trail the ship draws: the chosen ones where unlocked, the defaults otherwise. */
+  readonly look: import('./content/cosmetics').Look;
   /** The motion rules in force: reduced motion (the browser's setting) and whether shake is on once the shake setting is applied. */
   readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or pointer press creates the audio context. */
@@ -106,7 +108,7 @@ interface CosmicAssaultTestState {
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 4;
+  readonly version: 5;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event

@@ -10,8 +10,8 @@ import { commandForKey, commandForPad, TOGGLE_FULLSCREEN, type Command, type Flo
 import type { Screen } from './flow';
 import { passesGameOverGuard } from './gameOverGuard';
 
-/** What can sit over the game's cards: nothing, the settings or records card, the rotate prompt or the crash card. */
-export type Cover = 'none' | 'settings' | 'records' | 'rotate' | 'crash';
+/** What can sit over the game's cards: nothing, the settings, records or Hangar card, the rotate prompt or the crash card. */
+export type Cover = 'none' | 'settings' | 'records' | 'hangar' | 'rotate' | 'crash';
 
 /** The inputs the router hands on: the commands, grouped (and a pause toggle split by screen), and the menu's own inputs. */
 export type RoutedInput =
@@ -27,7 +27,7 @@ export type RoutedInput =
   | 'navigate'
   /** Pad A pressing the focused control. */
   | 'pressFocused'
-  /** Esc, pad Back, Done or Back closing the settings or records card. */
+  /** Esc, pad Back, Done or Back closing the settings, records or Hangar card. */
   | 'closeCard';
 
 const Y = true;
@@ -38,23 +38,23 @@ const N = false;
  * every cover that is up allows it. Under the crash card the loop is dead, so only the synchronous F key still runs.
  */
 const ACTS_UNDER: Readonly<Record<RoutedInput, Readonly<Record<Cover, boolean>>>> = {
-  start: { none: Y, settings: N, records: N, rotate: N, crash: N },
-  resume: { none: Y, settings: N, records: N, rotate: N, crash: N },
-  pause: { none: Y, settings: N, records: N, rotate: Y, crash: N },
-  leave: { none: Y, settings: N, records: N, rotate: Y, crash: N },
-  toggleMute: { none: Y, settings: Y, records: Y, rotate: Y, crash: N },
-  toggleFullscreen: { none: Y, settings: Y, records: Y, rotate: Y, crash: Y },
-  navigate: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
-  pressFocused: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
-  closeCard: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
+  start: { none: Y, settings: N, records: N, hangar: N, rotate: N, crash: N },
+  resume: { none: Y, settings: N, records: N, hangar: N, rotate: N, crash: N },
+  pause: { none: Y, settings: N, records: N, hangar: N, rotate: Y, crash: N },
+  leave: { none: Y, settings: N, records: N, hangar: N, rotate: Y, crash: N },
+  toggleMute: { none: Y, settings: Y, records: Y, hangar: Y, rotate: Y, crash: N },
+  toggleFullscreen: { none: Y, settings: Y, records: Y, hangar: Y, rotate: Y, crash: Y },
+  navigate: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
+  pressFocused: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
+  closeCard: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
 };
 
 /** The cover cards a player opens and closes: pad Back closes the one that is up. */
-const CARD_COVERS: readonly Cover[] = ['settings', 'records'];
+const CARD_COVERS: readonly Cover[] = ['settings', 'records', 'hangar'];
 
 /** The covers that are up, bottom first; `['none']` when the cards are uncovered. */
 export function coversFor(up: Readonly<Record<Exclude<Cover, 'none'>, boolean>>): Cover[] {
-  const covers = (['settings', 'records', 'rotate', 'crash'] as const).filter((cover) => up[cover]);
+  const covers = (['settings', 'records', 'hangar', 'rotate', 'crash'] as const).filter((cover) => up[cover]);
   return covers.length === 0 ? ['none'] : covers;
 }
 
@@ -184,7 +184,7 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         break;
       }
       case 'back':
-        // Back closes the top card: the settings or records card when one is open, else what Esc does on the card for the screen.
+        // Back closes the top card: the settings, records or Hangar card when one is open, else what Esc does on the card for the screen.
         if (deps.covers().some((cover) => CARD_COVERS.includes(cover))) deps.closeCard();
         else runPadCommand('back', now);
         break;

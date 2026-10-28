@@ -51,6 +51,8 @@ export interface FlowState {
 export interface ClearResult {
   readonly report: ClearReport;
   readonly total: number;
+  /** The looks this clear unlocked, named for the results card, once the flow controller has written the save. */
+  readonly newLooks?: readonly string[];
 }
 
 export type FlowAction =
