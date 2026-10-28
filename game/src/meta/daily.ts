@@ -55,6 +55,9 @@ function countClear(daily: DailySave, date: string): Pick<DailySave, 'lastCleare
  */
 export function recordDailyClear(save: SaveData, date: string, score: number): SaveData {
   assertCalendarDate(date);
+  if (!Number.isSafeInteger(score) || score < 0) {
+    throw new RangeError(`Expected a Daily score as a whole number of points, 0 or more, but got ${String(score)}. Pass the run's final score.`);
+  }
   const { daily } = save;
   const best = later(daily.best, { date, score }, compareBest);
   const counted = countClear(daily, date);

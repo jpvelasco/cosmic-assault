@@ -126,6 +126,7 @@ describe('sanitizeSave', () => {
         { ...RUN, continued: 'no' },
         { ...RUN, startedAt: 'yesterday' },
         { ...RUN, startedAt: 20261026 },
+        { ...RUN, startedAt: '2026-02-30' },
         { ...RUN, inGalaxy: 'yes' },
         { score: 1 },
         null,
@@ -238,7 +239,7 @@ describe('sanitizeSave', () => {
       expect(sanitizeSave({ rankBoard: [{ ...ENTRY, date: '2026-02-30' }] }).rankBoard).toEqual([]);
     });
 
-  it('sorts the board and keeps the best ten', () => {
+    it('sorts the board and keeps the best ten', () => {
       const rankBoard = Array.from({ length: 14 }, (_, i) => ({ ...ENTRY, score: i * 3 }));
       const board = sanitizeSave({ rankBoard }).rankBoard;
       expect(board).toHaveLength(10);
@@ -282,8 +283,20 @@ describe('sanitizeSave daily', () => {
     expect(daily({ lastCleared: null, streak: 4, bestStreak: 4, best: null }).streak).toBe(0);
   });
 
-  it.each([-1, 2.5, 'three', null, 2 ** 53])('falls back to 0 for a streak of %j, keeping the rest', (streak) => {
-    expect(daily({ ...GOOD.daily, streak })).toEqual({ ...GOOD.daily, streak: 0, bestStreak: 4 });
+  it('keeps a stored streak of 1 or more with a lastCleared', () => {
+    expect(daily({ ...GOOD.daily, streak: 3 }).streak).toBe(3);
+  });
+
+  it('floors a stored streak of 0 at 1 when there is a lastCleared, since that date was cleared', () => {
+    expect(daily({ ...GOOD.daily, streak: 0 })).toEqual({ ...GOOD.daily, streak: 1, bestStreak: 4 });
+  });
+
+  it.each([-1, 2.5, 'three', null, 2 ** 53])('floors a streak of %j at 1 with a lastCleared, keeping the rest', (streak) => {
+    expect(daily({ ...GOOD.daily, streak })).toEqual({ ...GOOD.daily, streak: 1, bestStreak: 4 });
+  });
+
+  it('takes a corrupt streak and a corrupt bestStreak as 1 and 1 with a lastCleared', () => {
+    expect(daily({ ...GOOD.daily, streak: 'x', bestStreak: 'y' })).toEqual({ ...GOOD.daily, streak: 1, bestStreak: 1 });
   });
 
   it('raises a best streak below the streak to the streak', () => {

@@ -91,12 +91,15 @@ function sanitizeDailyBest(raw: unknown): DailyBest | null {
   return isCalendarDate(date) && isCount(score) ? { date, score } : null;
 }
 
-/** Each field falls back on its own; a streak needs a last clear to hold, so it is 0 without one. */
+/**
+ * Each field falls back on its own. With no last clear the streak is 0; with one, the streak is at least 1,
+ * since the last clear's own date was cleared.
+ */
 function sanitizeDaily(raw: unknown): DailySave {
   const daily = asRecord(raw);
   if (daily === null) return defaultDaily();
   const lastCleared = isCalendarDate(daily['lastCleared']) ? daily['lastCleared'] : null;
-  const streak = lastCleared !== null && isCount(daily['streak']) ? daily['streak'] : 0;
+  const streak = lastCleared === null ? 0 : Math.max(1, isCount(daily['streak']) ? daily['streak'] : 0);
   const bestStreak = isCount(daily['bestStreak']) ? Math.max(daily['bestStreak'], streak) : streak;
   return { lastCleared, streak, bestStreak, best: sanitizeDailyBest(daily['best']) };
 }

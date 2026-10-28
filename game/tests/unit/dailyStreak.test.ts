@@ -4,6 +4,7 @@ import { nextDate, previousDate } from '../../src/meta/calendar';
 import { dailyBestBefore, recordDailyClear, shownStreak } from '../../src/meta/daily';
 import { defaultSave, mergeSaves, type SaveData } from '../../src/meta/save';
 import { createRng, type Rng } from '../../src/sim/rng';
+import { inZone } from '../helpers/timeZone';
 
 /** Clears each date in turn, all scoring 100. */
 function clearAll(dates: readonly string[], save: SaveData = defaultSave()): SaveData {
@@ -79,6 +80,16 @@ describe('recordDailyClear', () => {
   it('never lets an earlier date replace the best', () => {
     const save = recordDailyClear(recordDailyClear(defaultSave(), '2026-10-28', 50), '2026-10-27', 9999);
     expect(save.daily.best).toEqual({ date: '2026-10-28', score: 50 });
+  });
+
+  it('accepts a score of 0 as a record', () => {
+    expect(recordDailyClear(defaultSave(), '2026-10-27', 0).daily.best).toEqual({ date: '2026-10-27', score: 0 });
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5, 2 ** 53])('throws a RangeError naming a whole, non-negative score for %j', (score) => {
+    const save = clearAll(['2026-10-26']);
+    expect(() => recordDailyClear(save, '2026-10-27', score)).toThrow(RangeError);
+    expect(() => recordDailyClear(save, '2026-10-27', score)).toThrow(/whole number of points, 0 or more/);
   });
 
   it('throws a RangeError for a malformed date, before the streak is touched', () => {
@@ -202,9 +213,7 @@ describe('the streak across daylight saving changes', () => {
   for (const [zone, changes] of ZONES) {
     for (const day of changes) {
       it(`${zone}: clears either side of ${day} at 23:30 and 00:30 make one unbroken streak`, () => {
-        const before = process.env.TZ;
-        process.env.TZ = zone;
-        try {
+        inZone(zone, () => {
           const dayBefore = localDate(new Date(`${previousDate(day)}T23:30`));
           const changeDay = localDate(new Date(`${day}T00:30`));
           const sameDayLater = localDate(new Date(`${day}T23:30`));
@@ -214,10 +223,7 @@ describe('the streak across daylight saving changes', () => {
           expect(save.daily).toMatchObject({ lastCleared: day, streak: 2 });
           expect(recordDailyClear(save, sameDayLater, 100)).toBe(save);
           expect(clearAll([dayBefore, changeDay, dayAfter]).daily).toMatchObject({ streak: 3, bestStreak: 3 });
-        } finally {
-          if (before === undefined) delete process.env.TZ;
-          else process.env.TZ = before;
-        }
+        });
       });
     }
   }

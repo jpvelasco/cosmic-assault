@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { localDate } from '../../src/app/date';
 import { compareDates, dayNumber, isCalendarDate, nextDate, previousDate } from '../../src/meta/calendar';
+import { inZone } from '../helpers/timeZone';
 
 const HOUR_MS = 3_600_000;
 
@@ -95,6 +96,9 @@ describe('compareDates', () => {
     expect(compareDates('2027-01-01', '2026-12-31')).toBe(1);
     expect(compareDates('2028-02-29', '2028-03-01')).toBe(-1);
     expect(compareDates('2026-09-30', '2026-10-01')).toBe(-1);
+    expect(compareDates('2026-01-01', '2026-12-31')).toBe(-1);
+    expect(compareDates('2026-12-31', '2026-01-01')).toBe(1);
+    expect(compareDates('1970-01-01', '2026-10-27')).toBe(-1);
   });
 });
 
@@ -126,18 +130,6 @@ describe('localDate across daylight saving changes', () => {
     { zone: 'Australia/Lord_Howe', before: '2026-04-04', day: '2026-04-05', after: '2026-04-06', hours: 24.5 },
     { zone: 'Australia/Lord_Howe', before: '2026-10-03', day: '2026-10-04', after: '2026-10-05', hours: 23.5 },
   ] as const;
-
-  /** Runs `body` with `process.env.TZ` set to `zone`, restoring it afterwards. */
-  function inZone(zone: string, body: () => void): void {
-    const before = process.env.TZ;
-    process.env.TZ = zone;
-    try {
-      body();
-    } finally {
-      if (before === undefined) delete process.env.TZ;
-      else process.env.TZ = before;
-    }
-  }
 
   /** A local wall-clock time; a date-time with no offset is read as local time. */
   const at = (day: string, time: string): Date => new Date(`${day}T${time}`);
