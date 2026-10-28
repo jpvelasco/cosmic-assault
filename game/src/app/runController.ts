@@ -1,5 +1,6 @@
-import { galaxyById } from '../content/galaxies';
+import { TWISTS_BY_ID } from '../content/daily';
 import type { GalaxyDef } from '../content/types';
+import { dailyGalaxy, type DailyGalaxy } from '../meta/dailyGalaxy';
 import { recordPickupSeen } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
@@ -9,14 +10,15 @@ import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
 import { hasEnded, World } from '../sim/world';
+import { twistToast } from '../ui/dailyCopy';
 import { CALLOUT_MS } from '../ui/toast';
 import type { FlowCommand } from './commands';
-import { localDate } from './date';
-import { END_SCREENS, MENU_SCREENS, type FlowState, type Screen } from './flow';
+import { appToday } from './date';
+import { END_SCREENS, MENU_SCREENS, runDef, type FlowState, type Screen } from './flow';
 import { createFlowController } from './flowController';
 import { createPickupNotices } from './pickupNotices';
 import { createSaveStore, type StorageEvents } from './saveStore';
-import { clockSeed, isDebugRun, playedGalaxy, type RunOverrides } from './seed';
+import { isDebugRun, playedGalaxy, runSeed, type RunOverrides } from './seed';
 
 export interface RunControllerDeps {
   /** Where the save lives; null where the browser refuses storage. */
@@ -29,8 +31,11 @@ export interface RunControllerDeps {
   field(): Field | null;
   /** The flow is on a new screen; on a menu screen the run is already dropped. */
   showScreen(screen: Screen): void;
-  /** A new World is in place, playing `galaxy`: reset the input latches, the loop and the renderer for it, in its palette. */
-  onRunStarted(galaxy: GalaxyDef): void;
+  /**
+   * A new World is in place, playing `galaxy`: reset the input latches, the loop and the renderer for it, in its palette.
+   * `target` is the score a Daily sets to beat, null outside the Daily.
+   */
+  onRunStarted(galaxy: GalaxyDef, target: number | null): void;
   /** Tells the player something in a toast, up for `ms` (the toast's default when omitted). */
   notify(text: string, ms?: number): void;
   /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
@@ -64,6 +69,10 @@ export interface RunController {
   readonly save: SaveData;
   /** The score the run stands on: in Rank, the run's score so far plus this galaxy's; in Free play, the galaxy's. */
   readonly runTotal: number;
+  /** The Daily Galaxy of the run in play or on its end card; null outside the Daily. */
+  readonly daily: DailyGalaxy | null;
+  /** The app's date, `YYYY-MM-DD`: the device's, or the one `?today=` pins in e2e and dev builds. */
+  today(): string;
   readonly command: (command: FlowCommand) => void;
   readonly rankLock: RankLock;
   /** True while an end card is up over a World still warping out: the app keeps stepping it until it ends. */
@@ -102,7 +111,9 @@ export function createRunController(deps: RunControllerDeps): RunController {
     },
   });
   const presence = deps.presence ?? createTabPresence();
+  const today = appToday(overrides.today);
   let world: World | null = null;
+  let daily: DailyGalaxy | null = null;
   let rankLock: RankLock = 'free';
   /** The answer to probes for the Rank galaxy this tab plays; a no-op while it plays none. */
   let releaseOwnership = (): void => undefined;
@@ -112,18 +123,24 @@ export function createRunController(deps: RunControllerDeps): RunController {
   let recheckTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
 
-  /** Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives and weapon. */
-  function startRun({ galaxy, mode, rankRun }: FlowState): void {
+  /**
+   * Builds the World for the run the flow just started: its galaxy, in its mode, with a Rank run's lives and weapon. A
+   * Daily plays its date's galaxy on its date's World seed, and its twist is named as it starts.
+   */
+  function startRun(flow: FlowState): void {
+    const { mode, rankRun } = flow;
     const field = deps.field();
     if (field === null) {
       throw new Error('Cannot start a run: the game root has no size yet; give #app a visible size before starting');
     }
-    if (galaxy === null || mode === null) {
+    const played = runDef(flow);
+    if (played === null || mode === null) {
       throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow, from mode select or galaxy select');
     }
-    const def = playedGalaxy(galaxyById(galaxy), overrides.storm);
+    daily = flow.daily === null ? null : dailyGalaxy(flow.daily);
+    const def = playedGalaxy(played, overrides.storm);
     world = new World({
-      seed: overrides.seed ?? clockSeed(),
+      seed: runSeed(overrides.seed, daily?.seed ?? null),
       field,
       rules: { kind: 'galaxy', galaxy: def, mode },
       // Free play always starts with the default lives and weapon; Rank carries its own.
@@ -131,19 +148,21 @@ export function createRunController(deps: RunControllerDeps): RunController {
       startTier: rankRun?.weaponTier ?? 0,
     });
     notices.newRun();
-    deps.onRunStarted(def);
+    deps.onRunStarted(def, daily?.target ?? null);
+    if (daily !== null) deps.notify(twistToast(TWISTS_BY_ID[daily.twist].name));
   }
 
   /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */
   function dropRun(): void {
     world?.endRun();
     world = null;
+    daily = null;
   }
 
   const flow = createFlowController({
     store,
     overrides,
-    today: () => localDate(new Date()),
+    today,
     startRun,
     showScreen: (screen) => {
       if (MENU_SCREENS.includes(screen)) dropRun();
@@ -245,6 +264,10 @@ export function createRunController(deps: RunControllerDeps): RunController {
       const { result, rankRun } = flow.state;
       return result?.total ?? (rankRun?.score ?? 0) + (world?.score ?? 0);
     },
+    get daily() {
+      return daily;
+    },
+    today,
     get rankLock() {
       return rankLock;
     },

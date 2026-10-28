@@ -1,4 +1,5 @@
 import type { GalaxyId } from '../content/types';
+import { dailyBestBefore } from './daily';
 import type { SaveData } from './save';
 
 /** The kinds of record a run can beat: a galaxy's best, the Rank board's top, and a Daily's best on its date. */
@@ -20,7 +21,7 @@ export type NewBest = BestOutcome;
 export interface BestsBefore {
   readonly galaxy: number | null;
   readonly rankTop: number | null;
-  /** The best Daily score on the date in play. Nothing fills it until a Daily run exists. */
+  /** The best Daily score on the date in play. */
   readonly daily: number | null;
 }
 
@@ -30,12 +31,21 @@ export const NO_BESTS: BestsBefore = { galaxy: null, rankTop: null, daily: null 
 /** The field of `BestsBefore` each kind is compared against. */
 const RECORD_OF: Readonly<Record<BestKind, keyof BestsBefore>> = { galaxy: 'galaxy', rankRun: 'rankTop', daily: 'daily' };
 
-/** The records in `save` for a run on `galaxy` (null outside a galaxy run), as they stand before the run writes. */
-export function bestsBefore(save: SaveData, galaxy: GalaxyId | null): BestsBefore {
+/** The run a record is looked up for: its galaxy (null outside a galaxy run), and the date of a Daily (null outside one). */
+export interface BestsRun {
+  readonly galaxy: GalaxyId | null;
+  readonly daily: string | null;
+}
+
+/**
+ * The records in `save` for `run`, as they stand before the run writes. A Daily has its date's best and no galaxy best:
+ * the anchor galaxy it is built on keeps a record of its own.
+ */
+export function bestsBefore(save: SaveData, { galaxy, daily }: BestsRun): BestsBefore {
   return {
-    galaxy: galaxy === null ? null : (save.galaxies[galaxy]?.bestScore ?? null),
+    galaxy: galaxy === null || daily !== null ? null : (save.galaxies[galaxy]?.bestScore ?? null),
     rankTop: save.rankBoard[0]?.score ?? null,
-    daily: null,
+    daily: daily === null ? null : dailyBestBefore(save, daily),
   };
 }
 

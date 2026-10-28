@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Screen } from '../../src/app/flow';
+import { localDate } from '../../src/app/date';
+import { TWISTS_BY_ID } from '../../src/content/daily';
 import { galaxyById } from '../../src/content/galaxies';
+import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
+import { twistToast } from '../../src/ui/dailyCopy';
 import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
@@ -9,6 +13,7 @@ import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
+import { World } from '../../src/sim/world';
 import { RingLog } from '../../src/platform/log';
 import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
 import { memoryStorage } from '../helpers/memoryStorage';
@@ -17,7 +22,7 @@ import { CALLOUT_MS, TOAST_MS } from '../../src/ui/toast';
 
 const FIELD = { width: 1280, height: 720 };
 const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
-const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined };
+const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined, today: undefined };
 
 /** A presence where no other tab ever answers, unless `owner` is set: then one owns every run. */
 function fakePresence(owner = false): TabPresence {
@@ -63,7 +68,7 @@ describe('createRunController', () => {
     expect(run.world?.galaxy?.id).toBe('2-3');
     expect(run.world?.lives).toBe(3);
     expect(onRunStarted).toHaveBeenCalledTimes(1);
-    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'));
+    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'), null);
   });
 
   it('gives a Rank run its lives', () => {
@@ -101,6 +106,57 @@ describe('createRunController', () => {
     const { run } = setup({ galaxy: '1-1', seed: seedFor('clears-1-1') });
     run.command({ kind: 'start' });
     expect(run.runTotal).toBe(run.world?.score);
+  });
+
+  describe('the Daily', () => {
+    const DATE = '2026-10-26';
+    const daily = dailyGalaxy(DATE);
+    /** Whether `world` plays as a fresh World of the Daily on `seed` does: the same rocks after its first idle seconds. */
+    const playsOnSeed = (world: World | null, seed: number): boolean => {
+      const twin = new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy: daily.def, mode: 'daily' } });
+      const rocks = (w: World) => JSON.stringify(w.asteroids.map(({ x, y }) => [x, y]));
+      for (let i = 0; i < 6 / STEP_SECONDS; i++) {
+        world?.step(STEP_SECONDS, NO_CONTROLS);
+        twin.step(STEP_SECONDS, NO_CONTROLS);
+      }
+      return world !== null && twin.asteroids.length > 0 && rocks(world) === rocks(twin);
+    };
+    const playDaily = (overrides: Partial<RunOverrides> = {}) => {
+      const tab = setup({ today: DATE, ...overrides });
+      tab.run.command({ kind: 'start' });
+      tab.run.command({ kind: 'chooseMode', mode: 'daily' });
+      return tab;
+    };
+
+    it("plays the pinned date's Daily Galaxy on its own World seed, with its target, and names the twist", () => {
+      const { run, onRunStarted, notify } = playDaily();
+      expect(run.flow).toMatchObject({ screen: 'playing', mode: 'daily', daily: DATE });
+      expect(run.world?.galaxy).toEqual(daily.def);
+      expect(playsOnSeed(run.world, daily.seed)).toBe(true);
+      expect(run.daily).toEqual(daily);
+      expect(onRunStarted).toHaveBeenCalledWith(daily.def, daily.target);
+      expect(notify).toHaveBeenCalledWith(twistToast(TWISTS_BY_ID[daily.twist].name));
+    });
+
+    it('ignores ?seed= for the Daily, whose date fixes its World', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { run } = playDaily({ seed: 42 });
+      expect(playsOnSeed(run.world, daily.seed)).toBe(true);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring ?seed=42'));
+    });
+
+    it('takes today from ?today=, and writes the save, as a device clock set to that date would', () => {
+      const { run, storage } = playDaily();
+      expect(run.today()).toBe(DATE);
+      expect(storage.items.has(SAVE_KEY)).toBe(true);
+      expect(setup().run.today()).toBe(localDate(new Date()));
+    });
+
+    it('has no Daily outside one', () => {
+      const { run } = setup({ galaxy: '1-1' });
+      run.command({ kind: 'start' });
+      expect(run.daily).toBeNull();
+    });
   });
 
   describe('weapon tiers and pickups', () => {

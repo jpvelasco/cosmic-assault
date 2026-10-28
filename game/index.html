@@ -596,6 +596,11 @@
       .records-classic {
         font-weight: 900;
       }
+      .records-daily {
+        display: grid;
+        gap: 2px;
+        font-variant-numeric: tabular-nums;
+      }
       .records-row__mark {
         font-size: 0.7rem;
         font-weight: 800;
@@ -603,7 +608,7 @@
         text-transform: uppercase;
         opacity: 0.75;
       }
-      /* Mode select: Resume Rank (when a run is saved) over two large mode cards. */
+      /* Mode select: Resume Rank (when a run is saved) over three large mode cards: Rank, Free play and the Daily. */
       .resume-slot {
         display: contents;
       }
@@ -618,9 +623,9 @@
       }
       .mode-cards {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: clamp(10px, 2.4vmin, 18px);
-        width: min(560px, calc(100vw - 72px));
+        width: min(780px, calc(100vw - 72px));
       }
       .overlay .mode-card,
       .overlay .dimension-card,
@@ -655,6 +660,10 @@
         background: var(--gloss), radial-gradient(circle at 35% 30%, var(--nebula-teal), var(--accent-1) 55%, var(--sky-2));
         box-shadow: var(--gloss-edge), 0 0 18px color-mix(in srgb, var(--accent-1) 50%, transparent);
       }
+      .mode-card--daily .mode-card__badge {
+        background: var(--gloss), radial-gradient(circle at 35% 30%, var(--accent-3), var(--accent-2) 55%, var(--sky-2));
+        box-shadow: var(--gloss-edge), 0 0 18px color-mix(in srgb, var(--accent-3) 50%, transparent);
+      }
       .mode-card__name {
         font-size: clamp(1.15rem, 4vmin, 1.5rem);
         font-weight: 900;
@@ -664,6 +673,18 @@
         font-size: 0.85rem;
         font-weight: 600;
         opacity: 0.8;
+      }
+      .mode-card__blurb {
+        max-width: 24ch;
+        font-size: 0.75rem;
+        opacity: 0.7;
+      }
+      .mode-card__streak {
+        padding: 1px 10px;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 900;
+        background: color-mix(in srgb, var(--accent-3) 30%, transparent);
       }
       /* The Dimension map: five planet cards in a row, each tinted by its Dimension. */
       .dimension-row {
@@ -892,6 +913,11 @@
           var(--gloss-edge),
           0 0 16px color-mix(in srgb, var(--accent-3) 55%, transparent);
         animation: pop-in 360ms var(--pop) 700ms both;
+      }
+      .end-target {
+        font-size: 0.9rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
       }
       .end-lines {
         display: grid;

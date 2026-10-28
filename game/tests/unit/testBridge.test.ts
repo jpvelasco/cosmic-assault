@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { E2eHooks } from '../../src/app/e2eHooks';
 import type { App } from '../../src/app/game';
 import { galaxyById } from '../../src/content/galaxies';
+import { dailyGalaxy, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { defaultSave } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -12,12 +13,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }, hooks: E2eHooks = {}) {
+function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }, hooks: E2eHooks = {}, daily: DailyGalaxy | null = null) {
   const fakeWindow: { __COSMIC_ASSAULT_TEST_API__?: CosmicAssaultTestApi } = {};
   vi.stubGlobal('window', fakeWindow);
   const app = {
     mode: 'playing',
-    run: { world, flow: { galaxy: null, rankRun: null }, save: defaultSave() },
+    run: { world, flow: { galaxy: null, rankRun: null }, save: defaultSave(), daily },
     hudRects: [],
     drawCount: 0,
     visualScale: { ship: 1, rock: 1, shot: 1, effect: 1 },
@@ -39,11 +40,21 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 }
 
 describe('the test bridge look and music', () => {
-  it('reports the palette and the music theme in force, beside the version-5 fields', () => {
+  it('reports the palette and the music theme in force, beside the version-6 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(5);
+    expect(api.version).toBe(6);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
+  });
+});
+
+describe('the test bridge Daily', () => {
+  it("reports the Daily in play as its date, twist and target, and null outside one", () => {
+    expect(bridgeFor(null).getState().daily).toBeNull();
+    const daily = dailyGalaxy('2026-10-26');
+    const state = bridgeFor(null, undefined, {}, daily).getState();
+    expect(state.daily).toEqual({ date: '2026-10-26', twist: daily.twist, target: daily.target });
+    expect(Object.isFrozen(state.daily)).toBe(true);
   });
 });
 

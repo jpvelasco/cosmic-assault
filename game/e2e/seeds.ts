@@ -121,6 +121,45 @@ export function seedFor(claim: ClaimId): number {
   return entryFor(claim).seed;
 }
 
+/** One date and the claim its Daily Galaxy, on that date's own World seed, makes about an idle ship. */
+export interface DateEntry {
+  readonly date: string;
+  readonly claim: DateClaimId;
+}
+
+/** The first date `find-seeds` tries for a date claim; it counts `--from` and `--to` in days from here. */
+export const DATE_EPOCH = '2026-01-01';
+
+const DATE_ENTRIES = [
+  // The Daily spec's clear: the idle ship lives to the warp on the desktop and phone fields, and the clear writes the Daily record.
+  { date: '2026-01-04', claim: 'daily-clears' },
+  // The Daily spec's game over: the idle ship loses its three lives within DAILY_GAME_OVER_SECONDS.
+  { date: '2026-01-01', claim: 'daily-game-over' },
+] as const satisfies readonly { readonly date: string; readonly claim: string }[];
+
+/** A claim a date in the table makes. */
+export type DateClaimId = (typeof DATE_ENTRIES)[number]['claim'];
+
+/**
+ * Every date an e2e spec plays a Daily of with `?today=`, in one table, as for the seeds: a Daily's World seed comes from
+ * its date, so the date is what a spec picks. tests/helpers/seedClaims.ts holds each claim's check, and a broken one
+ * prints `run: npm run find-seeds -- <claim>`, which lists the earliest dates from DATE_EPOCH that keep it.
+ */
+export const E2E_DATES: readonly DateEntry[] = DATE_ENTRIES;
+
+/** The date the table holds for `claim`. */
+export function dateFor(claim: DateClaimId): string {
+  const entry = E2E_DATES.find((candidate) => candidate.claim === claim);
+  if (entry === undefined) throw new RangeError(`No date for claim "${claim}" in e2e/seeds.ts; add an entry and a check in tests/helpers/seedClaims.ts`);
+  return entry.date;
+}
+
+/** Sim seconds within which the 'daily-game-over' idle ship loses its three lives on the desktop field. */
+export const DAILY_GAME_OVER_SECONDS = 60;
+
+/** Sim seconds that outlast any Daily: its galaxy's length and the warp, with room to spare. */
+export const DAILY_CLEAR_SECONDS = 150;
+
 /** Sim seconds into a boss galaxy by which its boss is fighting: the approach, the intro, and half a second. */
 export const TO_BOSS_FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 0.5;
 

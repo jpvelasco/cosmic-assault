@@ -3,6 +3,7 @@ import { clamp } from '../content/curves';
 import { galaxyLabel } from '../content/galaxies';
 import { TIMED_PICKUPS, type TimedPickupId } from '../content/pickups';
 import type { BossId, GalaxyDef } from '../content/types';
+import { reachesTarget } from '../meta/dailyGalaxy';
 import type { World } from '../sim/world';
 import { rgba, WHITE } from './color';
 import { BOSS_MIN_W, bossBarWidth, bossNameX, drawBossHp, placeHpTrack } from './hudBoss';
@@ -48,6 +49,8 @@ export interface Hud {
   setBounds(bounds: HudBounds): void;
   /** Recolours the bars, labels and arrows from the next draw. */
   setPalette(palette: Palette): void;
+  /** The score the run sets to beat, shown in the score pill, which lights once the score reaches it; null for none. */
+  setTarget(target: number | null): void;
   /**
    * Draws the pills, showing `score` (in Rank, the run's total) and, while a shower is telegraphed, arrows at its edge.
    * `still` holds the arrows steady and the expiring pickup badges dim rather than blinking, for reduced motion. The
@@ -136,6 +139,10 @@ export function createHud(initial: Palette): Hud {
   // Text and its measured width are cached by value: rebuilt only when it changes.
   let shownScore = -1;
   const scoreText = measured();
+  let target: number | null = null;
+  /** The target the text was last built for; undefined when it must be rebuilt. */
+  let shownTarget: number | null | undefined;
+  const targetText = measured();
   let shownLives = -1;
   let shownGalaxy: GalaxyDef | null | undefined;
   let shownLevel = 0;
@@ -147,6 +154,7 @@ export function createHud(initial: Palette): Hud {
   const bossName = measured();
   let timerFill: CanvasGradient | string = '';
   let comboFill: CanvasGradient | string = '';
+  let scoreFill: CanvasGradient | string = '';
   let hpFill: CanvasGradient | string = '';
 
   /** Sets `into` to `text` in `font`, measuring it, and marks the layout stale when it changed. */
@@ -168,6 +176,10 @@ export function createHud(initial: Palette): Hud {
     if (value !== shownScore) {
       shownScore = value;
       remeasure(ctx, scoreText, SCORE_FORMAT.format(value), valueFont);
+    }
+    if (target !== shownTarget) {
+      shownTarget = target;
+      remeasure(ctx, targetText, target === null ? '' : `/ ${SCORE_FORMAT.format(target)}`, labelFont);
     }
     const { galaxy: def, boss: fight, multiplier } = world;
     // The level only changes with the World, so its text is rebuilt only then.
@@ -238,7 +250,8 @@ export function createHud(initial: Palette): Hud {
     const edge = EDGE * s;
     const left = Math.max(edge, bounds.insets.left);
     const top = Math.max(edge, bounds.insets.top);
-    Object.assign(score, { x: left, y: top, width: Math.max(MIN_SCORE_W * s, (SCORE_VALUE_X + PILL_PAD) * s + scoreText.width), height: PILL_H * s });
+    const targetWidth = targetText.text === '' ? 0 : CAPTION_GAP * s + targetText.width;
+    Object.assign(score, { x: left, y: top, width: Math.max(MIN_SCORE_W * s, (SCORE_VALUE_X + PILL_PAD) * s + scoreText.width + targetWidth), height: PILL_H * s });
     Object.assign(lives, { x: left, y: bottom(score) + LIVES_GAP * s, width: (2 * LIFE_FIRST_X + LIFE_SPACING * (shownLives - 1)) * s, height: LIVES_H * s });
     layoutLevel(left, top);
     Object.assign(combo, { x: shown.lives ? lives.x + lives.width + LIVES_GAP * s : left, y: lives.y, width: comboText.width + 2 * COMBO_PAD * s, height: LIVES_H * s });
@@ -247,6 +260,7 @@ export function createHud(initial: Palette): Hud {
     rects = HUD_PILLS.filter((id) => shown[id]).map((id) => boxes[id]);
     timerFill = across(ctx, timer, palette.accent[0], palette.accent[2]);
     comboFill = across(ctx, combo, palette.accent[1], palette.accent[2]);
+    scoreFill = across(ctx, score, palette.accent[1], palette.accent[2]);
     hpFill = across(ctx, hpTrack, palette.ring, palette.shot);
     dirty = false;
   }
@@ -269,16 +283,23 @@ export function createHud(initial: Palette): Hud {
     ctx.fill();
   }
 
+  /** Whether the score has reached the target, which lights the score pill. */
+  const lit = (): boolean => target !== null && reachesTarget(shownScore, target);
+
+  function accentPill(ctx: CanvasRenderingContext2D, r: HudRect, fill: CanvasGradient | string): void {
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = BRIGHT_STROKE;
+    tracePill(ctx, r);
+  }
+
   function drawPills(ctx: CanvasRenderingContext2D): void {
+    ctx.lineWidth = 1;
+    const scoreLit = lit();
+    if (scoreLit) accentPill(ctx, score, scoreFill);
     ctx.fillStyle = PILL_FILL;
     ctx.strokeStyle = PILL_STROKE;
-    ctx.lineWidth = 1;
-    for (const id of GLASS_PILLS) if (shown[id]) tracePill(ctx, boxes[id]);
-    if (shown.combo) {
-      ctx.fillStyle = comboFill;
-      ctx.strokeStyle = BRIGHT_STROKE;
-      tracePill(ctx, combo);
-    }
+    for (const id of GLASS_PILLS) if (shown[id] && !(scoreLit && id === 'score')) tracePill(ctx, boxes[id]);
+    if (shown.combo) accentPill(ctx, combo, comboFill);
   }
 
   function drawPickups(ctx: CanvasRenderingContext2D, world: World, still: boolean): void {
@@ -300,6 +321,10 @@ export function createHud(initial: Palette): Hud {
     ctx.fillText('SCORE', score.x + SCORE_LABEL_X * s, score.y + score.height / 2);
     if (caption.text !== '') ctx.fillText(caption.text, galaxy.x + PILL_PAD * s, galaxy.y + galaxy.height / 2);
     if (shown.boss) ctx.fillText(bossName.text, bossNameX(boss, s), boss.y + boss.height / 2);
+    if (targetText.text !== '') {
+      ctx.fillStyle = lit() ? WHITE : palette.hud;
+      ctx.fillText(targetText.text, score.x + SCORE_VALUE_X * s + scoreText.width + CAPTION_GAP * s, score.y + score.height / 2);
+    }
     ctx.font = valueFont;
     ctx.fillStyle = WHITE;
     ctx.fillText(scoreText.text, score.x + SCORE_VALUE_X * s, score.y + score.height / 2 + 0.5 * s);
@@ -324,16 +349,20 @@ export function createHud(initial: Palette): Hud {
       comboFont = `900 ${String(12 * scale)}px ${ROUNDED}`;
       // Fonts changed, so every cached width is stale.
       shownScore = -1;
+      shownTarget = undefined;
       shownGalaxy = undefined;
       shownMultiplier = 1;
       shownBoss = null;
-      for (const text of [scoreText, caption, level, comboText, bossName]) text.text = '\u0000';
+      for (const text of [scoreText, targetText, caption, level, comboText, bossName]) text.text = '\u0000';
       dirty = true;
     },
     setPalette(next) {
       palette = next;
       // The bar gradients are made on layout.
       dirty = true;
+    },
+    setTarget(next) {
+      target = next;
     },
     setBounds(next) {
       bounds = next;

@@ -67,6 +67,8 @@ export interface Renderer {
    * how the ship flies. The app passes the look in force, with unlocks applied, whenever it changes.
    */
   setLook(look: Look): void;
+  /** The score the run sets to beat, which the HUD's score pill shows (a Daily's target); null for none. */
+  setTarget(target: number | null): void;
   readonly effects: Effects;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
@@ -432,6 +434,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     setLook({ skin: nextSkin, trail }) {
       skin = nextSkin;
       effects.setTrail(trail);
+    },
+    setTarget(target) {
+      hud.setTarget(target);
     },
     effects,
     get hudRects() {

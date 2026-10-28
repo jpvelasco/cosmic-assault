@@ -33,6 +33,9 @@ export interface DailyGalaxy {
   readonly target: number;
 }
 
+/** Whether `score` reaches a Daily's `target`: at it or above. */
+export const reachesTarget = (score: number, target: number): boolean => score >= target;
+
 const dailySeed = (date: string): number => hashString(`cosmic-assault.daily:${date}`) >>> 0;
 /** The generator's own stream for a date, apart from every stream the World draws. */
 const dailyStream = (date: string): Rng => createRng(deriveSeed(dailySeed(date), 'daily'));

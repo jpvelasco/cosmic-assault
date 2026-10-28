@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { runGalaxy } from '../../src/bot/run';
 import { threatBudget } from '../../src/content/curves';
-import { DAILY_ANCHORS, DAILY_TWISTS, dailyTitle, TARGET_K, TARGET_SPREAD, type DailyTwistId } from '../../src/content/daily';
+import { DAILY_ANCHORS, DAILY_TWISTS, TARGET_K, TARGET_SPREAD, type DailyTwistId } from '../../src/content/daily';
 import { GALAXIES, galaxyById, tierOf } from '../../src/content/galaxies';
 import { HAZARD_RULES } from '../../src/content/hazards';
 import { OPENING_SECONDS } from '../../src/content/pacingRules';
@@ -222,12 +222,6 @@ describe('dailyGalaxy', () => {
     }
     expect(built).toBe(dayNumber('2036-12-31') - dayNumber('2026-01-01') + 1);
   }, RANGE_TIMEOUT_MS);
-});
-
-describe('dailyTitle', () => {
-  it('names a Daily by its date', () => {
-    expect(dailyTitle('2026-10-26')).toBe('Daily Galaxy · 2026-10-26');
-  });
 });
 
 describe('a Daily that breaks a content rule', () => {

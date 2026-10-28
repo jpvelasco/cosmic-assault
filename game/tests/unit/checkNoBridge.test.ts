@@ -7,6 +7,7 @@ const { run: runGuard, tempRoot } = guardScript('check-no-bridge.mjs', 'check-no
 
 const BRIDGE = 'window.__COSMIC_ASSAULT_TEST_API__ = {}';
 const QUERY = 'console.warn(`__E2E_QUERY__ Ignoring ?seed=`)';
+const TODAY_QUERY = 'console.warn(`__E2E_QUERY__ Ignoring ?today=`)';
 const HOOK = 'e2e.e2eBeforeFrame?.()';
 const FAST_FORWARD = 'e2e.e2eFastForward = (s) => s';
 const DAMAGE_BOSS = 'e2e.e2eDamageBoss = (n) => n';
@@ -49,9 +50,17 @@ describe('check-no-bridge (release build)', { timeout: SPAWN_TIMEOUT_MS }, () =>
     const result = runGuard(dist);
     expect(result.status).toBe(1);
     expect(result.output).toContain(
-      `release build ${dist} contains the e2e ?seed=, ?lives=, ?quality=, ?galaxy= and ?storm= parsing; release builds must not — check the import.meta.env.MODE guard in src/app/seed.ts`,
+      `release build ${dist} contains the e2e ?seed=, ?lives=, ?quality=, ?galaxy=, ?storm= and ?today= parsing; release builds must not — check the import.meta.env.MODE guard in src/app/seed.ts`,
     );
     expect(result.output).toContain(join('assets', 'index.js'));
+  });
+
+  it('fails when a file carries the ?today= date override, which shares the query mark', () => {
+    const dist = writeDist({ 'assets/today.js': TODAY_QUERY });
+    const result = runGuard(dist);
+    expect(result.status).toBe(1);
+    expect(result.output).toContain(`release build ${dist} contains the e2e ?seed=, ?lives=, ?quality=, ?galaxy=, ?storm= and ?today= parsing`);
+    expect(result.output).toContain(join('assets', 'today.js'));
   });
 
   it('fails when a file carries the e2e frame hook, naming the build and the file', () => {
@@ -82,7 +91,7 @@ describe('check-no-bridge --e2e (e2e build)', { timeout: SPAWN_TIMEOUT_MS }, () 
     const result = runGuard('--e2e', dist);
     expect(result.status).toBe(1);
     expect(result.output).toContain(
-      `e2e build ${dist} lacks the e2e ?seed=, ?lives=, ?quality=, ?galaxy= and ?storm= parsing (__E2E_QUERY__); the release check scans for that mark, so keep it in src/app/seed.ts or update scripts/check-no-bridge.mjs`,
+      `e2e build ${dist} lacks the e2e ?seed=, ?lives=, ?quality=, ?galaxy=, ?storm= and ?today= parsing (__E2E_QUERY__); the release check scans for that mark, so keep it in src/app/seed.ts or update scripts/check-no-bridge.mjs`,
     );
   });
 

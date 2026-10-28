@@ -47,8 +47,8 @@ import { createRecords } from './records';
 export interface App {
   /** The screen shown. */
   readonly mode: Screen;
-  /** The run: its World (null on the menu screens), the screen flow, the save in memory and the run total. */
-  readonly run: Pick<RunController, 'world' | 'flow' | 'save' | 'runTotal'>;
+  /** The run: its World (null on the menu screens), the screen flow, the save in memory, the run total and the Daily in play. */
+  readonly run: Pick<RunController, 'world' | 'flow' | 'save' | 'runTotal' | 'daily'>;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
@@ -206,6 +206,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     read: () => ({
       flow: run.flow,
       save: run.save,
+      today: run.today(),
+      daily: run.daily,
       rankLock: run.rankLock,
       score: run.world?.score ?? 0,
       muted: audio.muted,
@@ -296,13 +298,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     redrawPending = true;
   }
 
-  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette) and frame stats for it. */
-  function onRunStarted(galaxy: GalaxyDef): void {
+  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette, with its target) and frame stats for it. */
+  function onRunStarted(galaxy: GalaxyDef, target: number | null): void {
     startKeys.latch(keyboard.held);
     padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
     renderer.setPalette(galaxy.palette);
+    renderer.setTarget(target);
     applyAccents(document.documentElement.style, paletteFor(galaxy.palette));
     renderer.reset();
     monitor.reset();

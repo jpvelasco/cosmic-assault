@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
 import { defaultSave } from '../src/meta/save';
-import { expect, expectMode, gameState, nextFrames, openGame, seedSave, shipState, test, toastOf } from './fixtures';
+import { DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
+import { expect, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, test, toastOf, waitOutGameOverGuard } from './fixtures';
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -252,6 +253,27 @@ test('on mode select A focuses the first button, A presses it, and B goes back a
   await expectMode(page, 'title');
 });
 
+test('the D-pad reaches the Daily card, A plays it, and A after its game over plays the same date again', { tag: '@desktop' }, async ({ page }) => {
+  const date = dateFor('daily-game-over');
+  await openDaily(page, date);
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
+  await tap(page, A);
+  await tap(page, DPAD_RIGHT);
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await tap(page, A);
+  await expectMode(page, 'playing');
+  expect((await gameState(page)).daily?.date).toBe(date);
+
+  await fastForward(page, DAILY_GAME_OVER_SECONDS);
+  await expectMode(page, 'gameOver');
+  await waitOutGameOverGuard(page);
+  await tap(page, A);
+  await expectMode(page, 'playing');
+  expect((await gameState(page)).daily?.date).toBe(date);
+});
+
 test('behind the settings card the pad can only reach the card, and Start does not begin a run', { tag: '@desktop' }, async ({ page }) => {
   await page.getByTestId('settings-open').click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
@@ -278,7 +300,7 @@ test('the rotate prompt covers every card: the pad focuses nothing and cannot st
   await expectMode(page, 'title');
 });
 
-test('the D-pad walks the side-by-side mode cards and the row of Dimensions, skipping the locked ones', { tag: '@desktop' }, async ({ page }) => {
+test('the D-pad walks the three side-by-side mode cards and the row of Dimensions, skipping the locked ones', { tag: '@desktop' }, async ({ page }) => {
   await seedSave(page, { ...defaultSave(), frontier: '2-1' });
   await openGame(page, { galaxy: null });
   await tap(page, A);
@@ -286,6 +308,12 @@ test('the D-pad walks the side-by-side mode cards and the row of Dimensions, ski
   await tap(page, A);
   await expect(page.getByTestId('mode-rank')).toBeFocused();
   await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await tap(page, DPAD_LEFT);
   await expect(page.getByTestId('mode-free')).toBeFocused();
   await tap(page, DPAD_LEFT);
   await expect(page.getByTestId('mode-rank')).toBeFocused();

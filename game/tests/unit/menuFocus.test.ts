@@ -59,6 +59,35 @@ describe('nextFocus', () => {
   });
 });
 
+describe('nextFocus on mode select', () => {
+  // Resume Rank over the three mode cards (Rank, Free play, the Daily), and the Records, Hangar and Back chips under them, as at 1366×860.
+  const [RESUME, RANK, FREE, DAILY, RECORDS, HANGAR, BACK] = [0, 1, 2, 3, 4, 5, 6];
+  const screen = [
+    rect(583, 100, 200, 40),
+    rect(293, 160, 240, 170),
+    rect(553, 160, 240, 170),
+    rect(813, 160, 240, 170),
+    rect(560, 360, 80, 34),
+    rect(650, 360, 80, 34),
+    rect(740, 360, 80, 34),
+  ];
+
+  it('walks the three cards side by side, stopping at either end', () => {
+    expect(nextFocus(screen, RANK, 'right')).toBe(FREE);
+    expect(nextFocus(screen, FREE, 'right')).toBe(DAILY);
+    expect(nextFocus(screen, DAILY, 'right')).toBe(DAILY);
+    expect(nextFocus(screen, DAILY, 'left')).toBe(FREE);
+    expect(nextFocus(screen, RANK, 'left')).toBe(RANK);
+  });
+
+  it('reaches the Daily from the chips and Resume above, and leaves it for either', () => {
+    expect(nextFocus(screen, DAILY, 'up')).toBe(RESUME);
+    expect(nextFocus(screen, DAILY, 'down')).toBe(BACK);
+    // Every chip sits under the middle card, so up from any of them lands on Free play, one step from the Daily.
+    for (const chip of [RECORDS, HANGAR, BACK]) expect(nextFocus(screen, chip, 'up')).toBe(FREE);
+  });
+});
+
 describe('arrowDirection', () => {
   it.each([
     ['ArrowUp', 'up'],

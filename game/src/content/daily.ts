@@ -34,6 +34,9 @@ export const DAILY_TWISTS: readonly DailyTwist[] = [
   { id: 'splitterField', name: 'Splitter field', blurb: 'Splitter rocks come more often', minDimension: 1, rampScale: { splitter: { times: 1.6, cap: 0.6 } }, showerFactor: 1, setPiece: null, targetScale: 1.1 },
 ];
 
+/** Each twist's row, by its id. */
+export const TWISTS_BY_ID = Object.fromEntries(DAILY_TWISTS.map((twist) => [twist.id, twist])) as Readonly<Record<DailyTwistId, DailyTwist>>;
+
 /** The survival galaxies a Daily is built on, from tier 0.2 to 1.6. (A tuning value.) */
 export const DAILY_ANCHORS: readonly GalaxyId[] = ['1-2', '1-3', '1-4', '1-5', '2-1', '2-2', '2-3', '2-4'];
 
@@ -63,6 +66,3 @@ export const TARGET_ROUNDING = 50;
 
 /** What the HUD and the cards call a Daily Galaxy. */
 export const DAILY_LABEL = 'Daily';
-
-/** A Daily's title on its cards: "Daily Galaxy · 2026-10-26". */
-export const dailyTitle = (date: string): string => `Daily Galaxy · ${date}`;

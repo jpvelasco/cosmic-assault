@@ -81,7 +81,7 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     const rotating = needsRotation();
     overlay.update({ ...state, covered: settingsOpen || records.open || hangar.open || rotating, inputStyle: touchStyle.matches ? 'touch' : 'keys' });
     settingsCard.update(settings, coarsePointer.matches);
-    records.card.update(state.save);
+    records.card.update(state.save, state.today);
     hangar.card.update(state.save, settings);
     for (const card of [settingsCard, records.card, hangar.card]) card.cover(rotating);
     renderer.setLook(look);

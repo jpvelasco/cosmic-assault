@@ -1,6 +1,8 @@
 import { galaxyById, nextGalaxyId } from '../content/galaxies';
-import type { Dimension, GalaxyId, WeaponTier } from '../content/types';
+import type { Dimension, GalaxyDef, GalaxyId, WeaponTier } from '../content/types';
 import { newBest, type BestsBefore, type NewBest } from '../meta/bests';
+import { recordDailyClear } from '../meta/daily';
+import { dailyGalaxy } from '../meta/dailyGalaxy';
 import { abandonRankRun, endRankRun, forfeitRankRun, loseRankRun, rankEntry, recordClear, setRankRun } from '../meta/progress';
 import { afterClear, afterGameOver, afterHit, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
@@ -37,6 +39,8 @@ export interface FlowState {
   readonly galaxy: GalaxyId | null;
   /** In Rank, the run as carried into `galaxy`; on results, as carried into the next galaxy. Null outside Rank. */
   readonly rankRun: RankRun | null;
+  /** In the Daily, the date it plays: read once as the run starts and kept for its retries. Null outside the Daily. */
+  readonly daily: string | null;
   /** The last clear: its report and the score it leaves the run on (in Rank, the run's total). */
   readonly result: ClearResult | null;
   /**
@@ -65,6 +69,8 @@ export type FlowAction =
   /** The title's Resume Rank (or Continue Rank), with the run to play from the save. */
   | { readonly kind: 'resumeRank'; readonly run: RankRun }
   | { readonly kind: 'chooseFree' }
+  /** The Daily Galaxy of `date`, today as mode select read it. */
+  | { readonly kind: 'playDaily'; readonly date: string }
   | { readonly kind: 'openDimension'; readonly dimension: Dimension }
   /** A Free play run of `id`, from galaxy select or a `?galaxy=` switch on the title. */
   | { readonly kind: 'playGalaxy'; readonly id: GalaxyId }
@@ -91,7 +97,7 @@ export type FlowAction =
   /** Esc, pad B or a Back button: one screen back. */
   | { readonly kind: 'back' };
 
-export const INITIAL_FLOW: FlowState = { screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, result: null, newBest: null, runs: 0 };
+export const INITIAL_FLOW: FlowState = { screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, daily: null, result: null, newBest: null, runs: 0 };
 
 const dimensionOf = (id: GalaxyId): Dimension => galaxyById(id).dimension;
 
@@ -100,13 +106,28 @@ export function freeNext(state: FlowState): GalaxyId | null {
   return state.screen === 'results' && state.mode === 'free' && state.galaxy !== null ? nextGalaxyId(state.galaxy) : null;
 }
 
+/** A new run of `galaxy` in `mode`: nothing of the last run's end card carries into it. */
+const newRun = (state: FlowState, mode: GalaxyMode, galaxy: GalaxyId): FlowState =>
+  ({ ...state, screen: 'playing', mode, galaxy, rankRun: null, daily: null, result: null, newBest: null, runs: state.runs + 1 });
+
 function playFree(state: FlowState, id: GalaxyId): FlowState {
-  return { ...state, screen: 'playing', mode: 'free', galaxy: id, dimension: dimensionOf(id), rankRun: null, result: null, newBest: null, runs: state.runs + 1 };
+  return { ...newRun(state, 'free', id), dimension: dimensionOf(id) };
 }
 
 /** Plays `run.next`; the run is marked as in its galaxy, so leaving it unfinished forfeits. */
 function playRank(state: FlowState, run: RankRun): FlowState {
-  return { ...state, screen: 'playing', mode: 'rank', galaxy: run.next, rankRun: { ...run, inGalaxy: true }, result: null, newBest: null, runs: state.runs + 1 };
+  return { ...newRun(state, 'rank', run.next), rankRun: { ...run, inGalaxy: true } };
+}
+
+/** Plays the Daily of `date` on the anchor galaxy it is built on, the date pinned for the run and its retries. */
+function playDaily(state: FlowState, date: string): FlowState {
+  return { ...newRun(state, 'daily', dailyGalaxy(date).def.id), daily: date };
+}
+
+/** The galaxy the run of `flow` plays: its date's Daily Galaxy in the Daily, else the galaxy itself; null with none chosen. */
+export function runDef({ galaxy, daily }: Pick<FlowState, 'galaxy' | 'daily'>): GalaxyDef | null {
+  if (daily !== null) return dailyGalaxy(daily).def;
+  return galaxy === null ? null : galaxyById(galaxy);
 }
 
 /** The title, with nothing chosen; `runs` keeps counting. */
@@ -119,20 +140,21 @@ function toMap(state: FlowState): FlowState {
 /** The Rank run's entry, at `total`, beating the board: the run's record. */
 const runBest = (bests: BestsBefore, total: number): NewBest | null => newBest(bests, { kind: 'rankRun', score: total });
 
-/** What the clear `report` of the galaxy in play counts toward that galaxy's best: its score without Rank's multiplier. */
+/** What the clear `report` of the galaxy in play counts toward its best (the galaxy's, or the Daily's): its score without Rank's multiplier. */
 const bestScoreOf = ({ galaxy, mode }: FlowState, report: ClearReport): number =>
   galaxy === null ? report.score : galaxyBestScore(report, dimensionOf(galaxy), mode ?? 'free');
 
 function cleared(state: FlowState, { report, livesLeft, weaponTier, bests }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
   const { rankRun, galaxy } = state;
   if (galaxy === null) return state;
-  const galaxyBest = newBest(bests, { kind: 'galaxy', score: bestScoreOf(state, report) });
-  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score }, newBest: galaxyBest };
+  // A Daily is judged against its date's best alone: the anchor galaxy's record is not its own.
+  const clearBest = newBest(bests, { kind: state.daily === null ? 'galaxy' : 'daily', score: bestScoreOf(state, report) });
+  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score }, newBest: clearBest };
   const total = rankRun.score + report.score;
   const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft, weaponTier);
   const result = { report, total };
-  if (next === 'complete') return { ...state, screen: 'rankComplete', rankRun: null, result, newBest: runBest(bests, total) ?? galaxyBest };
-  return { ...state, screen: 'results', rankRun: next, result, newBest: galaxyBest };
+  if (next === 'complete') return { ...state, screen: 'rankComplete', rankRun: null, result, newBest: runBest(bests, total) ?? clearBest };
+  return { ...state, screen: 'results', rankRun: next, result, newBest: clearBest };
 }
 
 /** A Rank game over posts the run's total as its entry, so that total is what it may beat; a Free game over beats nothing. */
@@ -174,6 +196,16 @@ function rankEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
   return kind === 'continue' || kind === 'confirm' || kind === 'retry' ? playRank(state, afterGameOver(rankRun)) : state;
 }
 
+/** Where an end screen's action leads in the Daily: Enter, R and pad A play the same date again, Title and Back go to the title. */
+function dailyEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
+  const { daily } = state;
+  if (kind === 'title' || kind === 'back') return toTitle(state);
+  return daily !== null && (kind === 'confirm' || kind === 'retry') ? playDaily(state, daily) : state;
+}
+
+/** The end screens' moves for each mode. */
+const END_MOVES: Readonly<Record<GalaxyMode, (state: FlowState, kind: FlowAction['kind']) => FlowState>> = { rank: rankEnd, free: freeEnd, daily: dailyEnd };
+
 /** The menu screens' moves; the state itself for anything a screen does not offer. */
 function menuMove(state: FlowState, action: FlowAction): FlowState {
   switch (state.screen) {
@@ -187,6 +219,7 @@ function menuMove(state: FlowState, action: FlowAction): FlowState {
       if (action.kind === 'startRank' || action.kind === 'resumeRank') return playRank(state, action.run);
       if (action.kind === 'askNewRank') return { ...state, screen: 'confirmNewRank' };
       if (action.kind === 'chooseFree') return { ...state, screen: 'map', mode: 'free' };
+      if (action.kind === 'playDaily') return playDaily(state, action.date);
       return action.kind === 'back' ? { ...state, screen: 'title', mode: null } : state;
     case 'confirmNewRank':
       if (action.kind === 'startRank') return playRank(state, action.run);
@@ -245,7 +278,7 @@ export function transition(state: FlowState, action: FlowAction): FlowState {
     case 'results':
     case 'gameOver':
     case 'rankComplete':
-      return state.mode === 'rank' ? rankEnd(state, action.kind) : freeEnd(state, action.kind);
+      return END_MOVES[state.mode ?? 'free'](state, action.kind);
     default:
       return menuMove(state, action);
   }
@@ -255,7 +288,7 @@ type Change = (save: SaveData) => SaveData;
 
 /** What an action writes: progress every mode keeps, and the Rank run's own change, which a stale tab must not make. */
 export interface SaveChange {
-  /** A clear's best score, stars and unlock. */
+  /** A clear's best score, stars and unlock; in the Daily, its streak and best. */
   readonly record: Change | null;
   /** The Rank run started, carried on, forfeited, lost or ended, with its board entries. */
   readonly rank: Change | null;
@@ -284,6 +317,9 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
     case 'clear': {
       const { galaxy, result } = after;
       if (galaxy === null || result === null) return null;
+      const date = before.daily;
+      // A Daily clear writes the Daily record alone, for the date the run began on.
+      if (date !== null) return { record: (save) => recordDailyClear(save, date, action.report.score), rank: null };
       const record: Change = (save) => recordClear(save, galaxyById(galaxy), bestScoreOf(before, action.report), action.report.stars);
       if (run === null) return { record, rank: null };
       const next = after.rankRun;

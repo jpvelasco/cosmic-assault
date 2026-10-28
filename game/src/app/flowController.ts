@@ -5,6 +5,7 @@ import { forfeitRankRun, isUnlocked } from '../meta/progress';
 import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
 import type { SimEvent } from '../sim/events';
+import type { GalaxyMode } from '../sim/scoring';
 import type { World } from '../sim/world';
 import type { FlowCommand } from './commands';
 import { applySaveChange, INITIAL_FLOW, saveChange, toTitle, transition, type FlowAction, type FlowState, type SaveChange, type Screen } from './flow';
@@ -19,7 +20,7 @@ export const STALE_NEW_RUN_NOTICE = 'Another tab changed your Rank run; try agai
 export interface FlowControllerDeps {
   readonly store: SaveStore;
   readonly overrides: Pick<RunOverrides, 'galaxy' | 'startLives'>;
-  /** The local date, `YYYY-MM-DD`. */
+  /** The local date, `YYYY-MM-DD`, or the date `?today=` pins in e2e and dev builds. */
   today(): string;
   /** The flow has just started a run of `flow.galaxy`: build its World. Called before `showScreen('playing')`. */
   startRun(flow: FlowState): void;
@@ -136,6 +137,12 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     return state.screen === 'modeSelect' && store.save.rankRun !== null ? { kind: 'askNewRank' } : { kind: 'startRank', run: newRank() };
   }
 
+  /** A mode card: Rank (asking first over a saved run), Free play's map, or the Daily of today as read now. */
+  function chooseMode(mode: GalaxyMode): FlowAction {
+    if (mode === 'rank') return chooseRank();
+    return mode === 'daily' ? { kind: 'playDaily', date: deps.today() } : { kind: 'chooseFree' };
+  }
+
   function actionFor(command: FlowCommand): FlowAction | null {
     switch (command.kind) {
       case 'start':
@@ -143,7 +150,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
       case 'resumeRank':
         return resume();
       case 'chooseMode':
-        return command.mode === 'rank' ? chooseRank() : { kind: 'chooseFree' };
+        return chooseMode(command.mode);
       case 'openDimension':
         return isUnlocked(store.save, galaxyIdOf(command.dimension, 1)) ? command : null;
       case 'openGalaxy':
@@ -157,7 +164,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
    * The records as saved now, before a clear or game over is written, for its "New best!". A debug run (a store that
    * never writes) keeps none, so it never beats one.
    */
-  const bests = (): BestsBefore => (store.writes ? bestsBefore(store.save, state.galaxy) : NO_BESTS);
+  const bests = (): BestsBefore => (store.writes ? bestsBefore(store.save, state) : NO_BESTS);
 
   function handle(events: readonly SimEvent[], world: Pick<World, 'lives' | 'weaponTier'>): void {
     for (const event of events) {

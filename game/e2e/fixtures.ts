@@ -75,6 +75,12 @@ export async function openFreshGame(page: Page): Promise<void> {
   await waitForBridge(page);
 }
 
+/** Opens the e2e build with `?today=` alone, which makes `date` today: not a debug run, so its runs write the save. */
+export async function openDaily(page: Page, date: string): Promise<void> {
+  await page.goto(`/?${new URLSearchParams({ today: date }).toString()}`);
+  await waitForBridge(page);
+}
+
 /** Waits for the test bridge, which loads after an `import()`; call it again after a reload. */
 export async function waitForBridge(page: Page): Promise<void> {
   await page.waitForFunction((version) => window.__COSMIC_ASSAULT_TEST_API__?.version === version, BRIDGE_VERSION);

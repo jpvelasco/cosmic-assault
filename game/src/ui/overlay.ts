@@ -1,6 +1,7 @@
 import type { Command } from '../app/commands';
 import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
+import type { DailyGalaxy } from '../meta/dailyGalaxy';
 import type { SaveData } from '../meta/save';
 import type { RankLock } from '../app/runController';
 import { galaxyLabel } from '../content/galaxies';
@@ -33,6 +34,10 @@ export interface OverlayActions {
 export interface OverlayState {
   readonly flow: FlowState;
   readonly save: SaveData;
+  /** The app's date, whose Daily mode select offers. */
+  readonly today: string;
+  /** The Daily of the run in play or on its end card; null outside the Daily. */
+  readonly daily: DailyGalaxy | null;
   /** Whether the saved Rank run is being checked, or played in another tab, so it cannot be resumed here. */
   readonly rankLock: RankLock;
   /** The galaxy's score, which the end cards show. */
@@ -181,7 +186,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const announcer = createBossAnnouncer(root);
 
   return {
-    update({ flow, save, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+    update({ flow, save, today, daily, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
       const { screen } = flow;
       for (const panel of all) {
         panel.hidden = panel !== panels[screen];
@@ -208,7 +213,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       resumeGroup.hidden = save.rankRun === null;
       resumeRank.textContent = resumeLabel(save);
       resumeRank.disabled = rankLock !== 'free';
-      // On mode select Resume leads, ahead of the two mode cards.
+      // On mode select Resume leads, ahead of the mode cards.
       resumeRank.classList.toggle(PRIMARY, screen === 'modeSelect');
       savedRun.textContent = savedRunText(save);
       elsewhere.hidden = rankLock !== 'elsewhere';
@@ -218,9 +223,10 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       controlsHint.textContent = hints.controls;
       controlsHint.hidden = hints.controls === '';
       modes.setHint(hints.choose);
+      if (screen === 'modeSelect') modes.update(save, today);
       dimensionMap.update(save);
       galaxySelect.update(flow.dimension, save);
-      results.update({ flow, score, restartHint: hints.restart });
+      results.update({ flow, score, restartHint: hints.restart, target: daily?.target ?? null });
     },
     handle(events) {
       announcer.handle(events);

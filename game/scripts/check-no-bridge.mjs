@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 //        check-no-bridge.mjs --e2e [dist-e2e] fails if the e2e build lacks a mark, which would blind the first check.
 const MARKS = [
   { text: '__COSMIC_ASSAULT_TEST_API__', what: 'the e2e test bridge', owner: 'src/main.ts' },
-  { text: '__E2E_QUERY__', what: 'the e2e ?seed=, ?lives=, ?quality=, ?galaxy= and ?storm= parsing', owner: 'src/app/seed.ts' },
+  { text: '__E2E_QUERY__', what: 'the e2e ?seed=, ?lives=, ?quality=, ?galaxy=, ?storm= and ?today= parsing', owner: 'src/app/seed.ts' },
   { text: 'e2eBeforeFrame', what: 'the e2e frame hook', owner: 'src/app/game.ts' },
   { text: 'e2eFastForward', what: 'the e2e fast-forward hook', owner: 'src/app/e2eHooks.ts' },
   { text: 'e2eDamageBoss', what: 'the e2e boss-damage hook', owner: 'src/app/e2eHooks.ts' },

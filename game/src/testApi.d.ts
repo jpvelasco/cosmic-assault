@@ -42,10 +42,12 @@ interface CosmicAssaultTestState {
   readonly screen: import('./app/flow').Screen;
   /** The galaxy in play or just played (on its end card); null before the first run. */
   readonly galaxy: import('./content/types').GalaxyId | null;
-  /** A frozen copy of the save in memory. A debug run (`?galaxy=`, `?seed=` or `?lives=`) keeps it in memory only. */
+  /** A frozen copy of the save in memory. A debug run (`?galaxy=`, `?seed=`, `?lives=` or `?storm=`) keeps it in memory only; `?today=` is not one. */
   readonly save: import('./meta/save').SaveData;
   /** The Rank run as carried into the galaxy in play (on results, into the next one); null outside Rank. A frozen copy. */
   readonly rankRun: import('./meta/rankRun').RankRun | null;
+  /** The Daily in play or on its end card: its date, twist and target score; null outside the Daily. */
+  readonly daily: { readonly date: string; readonly twist: import('./content/daily').DailyTwistId; readonly target: number } | null;
   /** Score, lives and counts are 0 and ship is null while no run exists (title and menu screens). */
   readonly score: number;
   readonly lives: number;
@@ -108,7 +110,7 @@ interface CosmicAssaultTestState {
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 5;
+  readonly version: 6;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event

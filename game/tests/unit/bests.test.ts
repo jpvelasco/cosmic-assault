@@ -50,15 +50,15 @@ describe('bestsBefore', () => {
 
   it('reads the galaxy in play and the top of the Rank board, as saved', () => {
     const save = saveWith({ '2-3': { bestScore: 2400, stars: 2 } }, board([5100, 3000]));
-    expect(bestsBefore(save, '2-3')).toEqual({ galaxy: 2400, rankTop: 5100, daily: null });
+    expect(bestsBefore(save, { galaxy: '2-3', daily: null })).toEqual({ galaxy: 2400, rankTop: 5100, daily: null });
   });
 
   it('has no galaxy best for a galaxy never cleared, nor a galaxy when none is in play', () => {
-    expect(bestsBefore(defaultSave(), '2-3').galaxy).toBeNull();
-    expect(bestsBefore(saveWith({ '2-3': { bestScore: 2400, stars: 2 } }), null).galaxy).toBeNull();
+    expect(bestsBefore(defaultSave(), { galaxy: '2-3', daily: null }).galaxy).toBeNull();
+    expect(bestsBefore(saveWith({ '2-3': { bestScore: 2400, stars: 2 } }), { galaxy: null, daily: null }).galaxy).toBeNull();
   });
 
   it('has no Rank record on an empty board', () => {
-    expect(bestsBefore(defaultSave(), '1-1').rankTop).toBeNull();
+    expect(bestsBefore(defaultSave(), { galaxy: '1-1', daily: null }).rankTop).toBeNull();
   });
 });

@@ -6,7 +6,7 @@ import type { World } from './sim/world';
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
 export const DELIBERATE_CRASH = 'e2e: deliberate crash';
 /** The bridge's shape version, raised whenever its state changes shape; the specs wait for this one. */
-export const BRIDGE_VERSION = 5;
+export const BRIDGE_VERSION = 6;
 
 function shipState({ ship }: World): CosmicAssaultTestShip {
   const { x, y, vx, vy, angle, thrusting, invulnerable } = ship;
@@ -47,6 +47,11 @@ function frozenCopy<T>(value: T): T {
   return freeze(structuredClone(value)) as T;
 }
 
+/** The Daily in play as plain data, or null outside one. */
+function dailyOf({ daily }: App['run']): CosmicAssaultTestState['daily'] {
+  return daily === null ? null : Object.freeze({ date: daily.date, twist: daily.twist, target: daily.target });
+}
+
 function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
   const { world, flow, save } = app.run;
   return {
@@ -55,6 +60,7 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
     galaxy: flow.galaxy,
     save: frozenCopy(save),
     rankRun: flow.rankRun === null ? null : frozenCopy(flow.rankRun),
+    daily: dailyOf(app.run),
     score: world?.score ?? 0,
     lives: world?.lives ?? 0,
     ship: world === null ? null : shipState(world),

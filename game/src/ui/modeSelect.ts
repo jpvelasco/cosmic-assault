@@ -1,4 +1,9 @@
+import { TWISTS_BY_ID } from '../content/daily';
+import { shownStreak } from '../meta/daily';
+import { dailyGalaxy } from '../meta/dailyGalaxy';
+import type { SaveData } from '../meta/save';
 import type { GalaxyMode } from '../sim/scoring';
+import { DAILY_BADGE, DAILY_NAME, dailyCardLine, streakText } from './dailyCopy';
 import { button, element, menuCard, PRIMARY_BUTTON, withTestId, type Act, type MenuCard } from './dom';
 
 export interface ModeSelect {
@@ -10,6 +15,8 @@ export interface ModeSelect {
   readonly chipRow: HTMLElement;
   /** Sets the line on how to choose, for keys or taps. */
   setHint(text: string): void;
+  /** Shows the Daily of `today` on its card, with the streak `save` holds. */
+  update(save: SaveData, today: string): void;
 }
 
 interface ModeSpec {
@@ -25,30 +32,54 @@ const MODES: readonly ModeSpec[] = [
   { mode: 'free', name: 'Free play', text: "Replay any galaxy you've unlocked", badge: '∞' },
 ];
 
-/** A large glass card for `spec`, named by its title alone and described by its line, so its accessible name stays the mode's. */
-function modeCard(spec: ModeSpec, act: Act): HTMLButtonElement {
+/** The third card; its line names the day's twist and target, set by `update`. */
+const DAILY_MODE: ModeSpec = { mode: 'daily', name: DAILY_NAME, text: '', badge: DAILY_BADGE };
+
+/** The streak the Daily card shows from. */
+const CARD_STREAK_FROM = 2;
+
+/** What the Daily card shows on `today`: its twist and target, the twist's blurb, and the streak from 2 on ('' below). */
+export function dailyCardView(save: SaveData, today: string): { readonly line: string; readonly blurb: string; readonly streak: string } {
+  const { twist, target } = dailyGalaxy(today);
+  const { name, blurb } = TWISTS_BY_ID[twist];
+  const streak = shownStreak(save, today);
+  return { line: dailyCardLine(name, target), blurb, streak: streak >= CARD_STREAK_FROM ? streakText(streak) : '' };
+}
+
+/**
+ * A large glass card for `spec`, named by its title alone and described by its line and any `extra` lines, so its
+ * accessible name stays the mode's. Returns the card and its line.
+ */
+function modeCard(spec: ModeSpec, act: Act, ...extra: HTMLElement[]): { readonly card: HTMLButtonElement; readonly text: HTMLElement } {
   const id = `mode-${spec.mode}`;
   const card = withTestId(button(`mode-card mode-card--${spec.mode}`, '', act({ kind: 'chooseMode', mode: spec.mode })), id);
   const name = element('span', 'mode-card__name', spec.name);
   const text = element('span', 'mode-card__text', spec.text);
   name.id = `${id}-name`;
   text.id = `${id}-text`;
+  extra.forEach((line, i) => {
+    line.id = `${id}-line-${String(i + 1)}`;
+  });
   card.setAttribute('aria-labelledby', name.id);
-  card.setAttribute('aria-describedby', text.id);
+  card.setAttribute('aria-describedby', [text, ...extra].map((line) => line.id).join(' '));
   const badge = element('span', 'mode-card__badge', spec.badge);
   badge.setAttribute('aria-hidden', 'true');
-  card.append(badge, name, text);
-  return card;
+  card.append(badge, name, text, ...extra);
+  return { card, text };
 }
 
-/** Mode select (two large cards, Rank and Free play) and the card that confirms a new Rank run over a saved one. */
+/** Mode select (three large cards, Rank, Free play and the Daily) and the card that confirms a new Rank run over a saved one. */
 export function createModeSelect(act: Act): ModeSelect {
   const hint = element('p', 'hint');
   const resumeSlot = element('div', 'resume-slot');
+  const blurb = element('span', 'mode-card__blurb');
+  const streak = withTestId(element('span', 'mode-card__streak'), 'daily-streak');
+  const dailyCard = modeCard(DAILY_MODE, act, blurb, streak);
   const cards = element('div', 'mode-cards');
-  cards.append(...MODES.map((spec) => modeCard(spec, act)));
+  cards.append(...MODES.map((spec) => modeCard(spec, act).card), dailyCard.card);
   const start = withTestId(button(PRIMARY_BUTTON, 'Start new run', act({ kind: 'chooseMode', mode: 'rank' })), 'confirm-new-rank');
   const chipRow = element('div', 'chips');
+  let shown: { readonly save: SaveData; readonly today: string } | null = null;
   return {
     modeSelect: menuCard('modes', 'Choose a mode', resumeSlot, cards, hint, chipRow),
     confirmNewRank: menuCard('confirm', 'Start a new run?', element('p', 'hint', 'Your saved run will end.'), start),
@@ -56,6 +87,15 @@ export function createModeSelect(act: Act): ModeSelect {
     chipRow,
     setHint(text) {
       hint.textContent = text;
+    },
+    update(save, today) {
+      if (shown?.save === save && shown.today === today) return;
+      shown = { save, today };
+      const view = dailyCardView(save, today);
+      dailyCard.text.textContent = view.line;
+      blurb.textContent = view.blurb;
+      streak.textContent = view.streak;
+      streak.hidden = view.streak === '';
     },
   };
 }

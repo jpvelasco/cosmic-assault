@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clockSeed, E2E_QUERY_MARK, isDebugRun, parseGalaxy, parseLives, parseQuality, parseSeed, parseStorm, playedGalaxy, withStorm } from '../../src/app/seed';
+import { clockSeed, E2E_QUERY_MARK, isDebugRun, parseGalaxy, parseLives, parseQuality, parseSeed, parseStorm, parseToday, playedGalaxy, runSeed, withStorm } from '../../src/app/seed';
 import { galaxyById } from '../../src/content/galaxies';
 
 afterEach(() => {
@@ -83,7 +83,7 @@ describe('parseGalaxy', () => {
 });
 
 describe('isDebugRun', () => {
-  const none = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined };
+  const none = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined, today: undefined };
 
   it('is true when ?galaxy=, ?seed=, ?lives= or ?storm= is in force, so the run never writes the save', () => {
     expect(isDebugRun({ ...none, galaxy: '1-1' })).toBe(true);
@@ -95,6 +95,47 @@ describe('isDebugRun', () => {
   it('is false with none of them; ?quality= alone changes nothing a save could record', () => {
     expect(isDebugRun(none)).toBe(false);
     expect(isDebugRun({ ...none, quality: 2 })).toBe(false);
+  });
+
+  it('is false with ?today=, which a device clock could set as well, so the run writes the save', () => {
+    expect(isDebugRun({ ...none, today: '2026-10-26' })).toBe(false);
+  });
+});
+
+describe('the ?today= override', () => {
+  it('reads a calendar date, and warns of and ignores anything else', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(parseToday(null)).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+    expect(parseToday('2026-10-26')).toBe('2026-10-26');
+    expect(parseToday('2028-02-29')).toBe('2028-02-29');
+    for (const raw of ['2026-02-30', '2027-02-29', '2026-1-5', '20261026', 'today', '']) expect(parseToday(raw)).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(6);
+    expect(warn).toHaveBeenCalledWith(`${E2E_QUERY_MARK} Ignoring ?today=2026-02-30: it must be a calendar date as YYYY-MM-DD; using the device's date instead`);
+  });
+});
+
+describe('runSeed', () => {
+  it("plays ?seed=, else the clock, outside the Daily", () => {
+    expect(runSeed(42, null)).toBe(42);
+    const seed = runSeed(undefined, null);
+    expect(Number.isInteger(seed) && seed >= 0 && seed <= 0xffffffff).toBe(true);
+  });
+
+  it("plays a Daily on its date's own seed, warning that a ?seed= is ignored", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(runSeed(undefined, 7)).toBe(7);
+    expect(warn).not.toHaveBeenCalled();
+    expect(runSeed(42, 7)).toBe(7);
+    expect(warn).toHaveBeenCalledWith(`${E2E_QUERY_MARK} Ignoring ?seed=42: it must be left out of a Daily, whose date fixes its World seed; playing the Daily's own seed instead`);
+  });
+
+  it('never warns in a release build, which keeps no trace of the warning', () => {
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('MODE', 'production');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(runSeed(42, 7)).toBe(7);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -172,6 +213,8 @@ describe('e2e query warnings', () => {
     ['lives', parseLives],
     ['quality', parseQuality],
     ['galaxy', parseGalaxy],
+    ['storm', parseStorm],
+    ['today', parseToday],
   ])('carry the release-build mark for ?%s=', (_name, parse) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     parse('bad');

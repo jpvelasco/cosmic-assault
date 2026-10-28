@@ -1,5 +1,6 @@
 import { isGalaxyId } from '../content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../content/types';
+import { isCalendarDate } from '../meta/calendar';
 import { QUALITY_LEVELS } from '../render/quality';
 import { isGalaxyStartLives, isWorldSeed, MAX_GALAXY_START_LIVES, UINT32_MAX } from '../sim/world';
 
@@ -28,9 +29,11 @@ export interface RunOverrides {
   readonly galaxy: GalaxyId | undefined;
   /** Seconds into the galaxy played at which a gravity storm is added to it, which no authored galaxy schedules. */
   readonly storm: number | undefined;
+  /** The date the app takes as today, `YYYY-MM-DD`, in place of the device's. */
+  readonly today: string | undefined;
 }
 
-const NO_OVERRIDES: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined };
+const NO_OVERRIDES: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined, today: undefined };
 
 /** Warns, with the e2e mark, that `?name=raw` breaks `rule` and what happens instead. */
 function warnIgnored(name: string, raw: string, rule: string, fallback: string): void {
@@ -85,7 +88,18 @@ export function parseStorm(raw: string | null): number | undefined {
   return parseQueryInteger('storm', raw, (value) => value >= 3 && value <= 600, '3 to 600 seconds', 'playing the galaxy without a storm instead');
 }
 
-/** A run started with `?galaxy=`, `?seed=`, `?lives=` or `?storm=` is a debug run: it never writes the save. */
+/** Parses a `?today=` value (a calendar date, `YYYY-MM-DD`), or warns and returns undefined. */
+export function parseToday(raw: string | null): string | undefined {
+  if (raw === null) return undefined;
+  if (isCalendarDate(raw)) return raw;
+  warnIgnored('today', raw, 'a calendar date as YYYY-MM-DD', "using the device's date instead");
+  return undefined;
+}
+
+/**
+ * A run started with `?galaxy=`, `?seed=`, `?lives=` or `?storm=` is a debug run: it never writes the save. `?today=`
+ * is not: a device clock can be set to any date as well.
+ */
 export function isDebugRun({ seed, startLives, galaxy, storm }: RunOverrides): boolean {
   return seed !== undefined || startLives !== undefined || galaxy !== undefined || storm !== undefined;
 }
@@ -105,7 +119,19 @@ export function playedGalaxy(def: GalaxyDef, storm: number | undefined): GalaxyD
   return storm === undefined ? def : withStorm(def, storm);
 }
 
-/** The `?seed=`, `?lives=`, `?quality=`, `?galaxy=` and `?storm=` overrides; only e2e and dev builds honour them, release builds never parse the URL. */
+/**
+ * The World seed a run plays on: a Daily's own (`daily`, null outside the Daily), else `?seed=` or the clock. A Daily's
+ * date fixes its World, so a `?seed=` is ignored there, with a warning in e2e and dev builds.
+ */
+export function runSeed(seed: number | undefined, daily: number | null): number {
+  if (daily === null) return seed ?? clockSeed();
+  if (seed !== undefined && (import.meta.env.MODE === 'e2e' || import.meta.env.DEV)) {
+    warnIgnored('seed', String(seed), 'left out of a Daily, whose date fixes its World seed', "playing the Daily's own seed instead");
+  }
+  return daily;
+}
+
+/** The `?seed=`, `?lives=`, `?quality=`, `?galaxy=`, `?storm=` and `?today=` overrides; only e2e and dev builds honour them, release builds never parse the URL. */
 export function runOverrides(): RunOverrides {
   if (import.meta.env.MODE !== 'e2e' && !import.meta.env.DEV) return NO_OVERRIDES;
   const params = new URLSearchParams(window.location.search);
@@ -115,6 +141,7 @@ export function runOverrides(): RunOverrides {
     quality: parseQuality(params.get('quality')),
     galaxy: parseGalaxy(params.get('galaxy')),
     storm: parseStorm(params.get('storm')),
+    today: parseToday(params.get('today')),
   };
 }
 

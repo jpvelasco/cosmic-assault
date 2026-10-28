@@ -1,7 +1,7 @@
 import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { DAILY_TWISTS, type DailyTwistId } from '../../src/content/daily';
 import { nextDate, previousDate } from '../../src/meta/calendar';
-import { dailyGalaxy, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
+import { dailyGalaxy, reachesTarget, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { fixed, formatColumns, percent } from './botRuns';
 
 /** `count` consecutive dates from `from`. */
@@ -49,7 +49,7 @@ export function playDate(date: string): DailyPlay {
 }
 
 /** Whether `run` scored the Daily's target or more. */
-const beatTarget = (play: DailyPlay, run: RunResult): boolean => run.score >= play.daily.target;
+const beatTarget = (play: DailyPlay, run: RunResult): boolean => reachesTarget(run.score, play.daily.target);
 const share = (plays: readonly DailyPlay[], keep: (p: DailyPlay) => boolean): number => percent(plays.filter(keep).length, plays.length);
 
 /** The rates the suite pins over a set of dates. */

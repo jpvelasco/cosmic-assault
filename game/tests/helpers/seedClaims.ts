@@ -3,6 +3,10 @@ import {
   CACHE_HOLD_SECONDS,
   CACHE_LIVES,
   CLEAR_1_1_SECONDS,
+  DAILY_CLEAR_SECONDS,
+  DAILY_GAME_OVER_SECONDS,
+  DATE_EPOCH,
+  E2E_DATES,
   WATCH_LIVES,
   CRIMSON_WATCH_SECONDS,
   GUNSHIP_WATCH_SECONDS,
@@ -21,8 +25,12 @@ import {
   warnedSeconds,
   WELL_WARNING_SECONDS,
   type ClaimId,
+  type DateClaimId,
+  type DateEntry,
   type SeedEntry,
 } from '../../e2e/seeds';
+import { nextDate } from '../../src/meta/calendar';
+import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { galaxyById } from '../../src/content/galaxies';
 import { BLACK_HOLE } from '../../src/content/hazards';
 import type { GalaxyId, HazardType } from '../../src/content/types';
@@ -31,7 +39,7 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import { fieldForViewport, type Field } from '../../src/sim/field';
 import type { GalaxyMode } from '../../src/sim/scoring';
 import type { SimEvent } from '../../src/sim/events';
-import { World } from '../../src/sim/world';
+import { hasEnded, World } from '../../src/sim/world';
 
 /** The fire assertions finish within about 1 s of a run starting; this leaves slow CI hosts headroom. */
 const GUARD_SECONDS = 2.5;
@@ -459,6 +467,54 @@ export function findSeeds(claim: ClaimId, { from = 1, count = 5, to = 2000 }: Fi
   const found: number[] = [];
   for (let seed = from; seed < to && found.length < count; seed++) {
     if (CLAIMS[claim].holds(seed, galaxy)) found.push(seed);
+  }
+  return found;
+}
+
+/** The field of a phone on its side at 844×390, where the Daily spec plays its phone clear. */
+const PHONE_DAILY_FIELD = fieldForViewport(844, 390);
+
+/** An idle ship in the Daily of `date`, on its own World seed, on `field`, played until it ends or `seconds` pass. */
+function idleDaily(date: string, seconds: number, field: Field = DESKTOP_FIELD): World {
+  const { seed, def } = dailyGalaxy(date);
+  const world = new World({ seed, field, rules: { kind: 'galaxy', galaxy: def, mode: 'daily' } });
+  run(world, seconds, () => hasEnded(world.status));
+  return world;
+}
+
+interface DateClaim {
+  /** What the date promises, for the failure message. */
+  readonly promise: (date: string) => string;
+  readonly holds: (date: string) => boolean;
+}
+
+export const DATE_CLAIMS: Readonly<Record<DateClaimId, DateClaim>> = {
+  'daily-clears': {
+    promise: (date) => `lets an idle ship clear the Daily Galaxy of ${date} on the desktop field and on a phone's at 844×390`,
+    holds: (date) => [DESKTOP_FIELD, PHONE_DAILY_FIELD].every((field) => idleDaily(date, DAILY_CLEAR_SECONDS, field).status === 'cleared'),
+  },
+  'daily-game-over': {
+    promise: (date) => `ends an idle run of the Daily Galaxy of ${date} within ${String(DAILY_GAME_OVER_SECONDS)} s on the desktop field`,
+    holds: (date) => idleDaily(date, DAILY_GAME_OVER_SECONDS).status === 'gameOver',
+  },
+};
+
+/** The failure message for a date whose claim no longer holds: what broke, and the command that re-picks the date. */
+export function unmetDateClaimMessage({ date, claim }: DateEntry): string {
+  return `${date} no longer ${DATE_CLAIMS[claim].promise(date)}, because the Daily generator, spawning, pacing or balance changed; run: npm run find-seeds -- ${claim}, then set the "${claim}" date in game/e2e/seeds.ts to the earliest one it lists`;
+}
+
+/** The date claims the table lists, in table order. */
+export function dateClaimIds(): DateClaimId[] {
+  return E2E_DATES.map((entry) => entry.claim);
+}
+
+/** The earliest dates `from` days after DATE_EPOCH (and before day `to`) whose Daily keeps `claim`, earliest first. */
+export function findDates(claim: DateClaimId, { from = 0, count = 5, to = 2000 }: FindOptions = {}): string[] {
+  const found: string[] = [];
+  let date = DATE_EPOCH;
+  for (let day = 0; day < to && found.length < count; day++, date = nextDate(date)) {
+    if (day >= from && DATE_CLAIMS[claim].holds(date)) found.push(date);
   }
   return found;
 }

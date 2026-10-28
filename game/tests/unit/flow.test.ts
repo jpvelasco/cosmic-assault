@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { localDate } from '../../src/app/date';
+import { describe, expect, it, vi } from 'vitest';
+import { appToday, localDate } from '../../src/app/date';
 import { applySaveChange, freeNext, INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState, type SaveChange } from '../../src/app/flow';
 import type { GalaxyId } from '../../src/content/types';
 import { NO_BESTS } from '../../src/meta/bests';
@@ -31,8 +31,8 @@ function saved(save: SaveData, state: FlowState, action: FlowAction): { state: F
 }
 
 describe('INITIAL_FLOW', () => {
-  it('starts on the title with no mode, galaxy or Rank run', () => {
-    expect(INITIAL_FLOW).toEqual({ screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, result: null, newBest: null, runs: 0 });
+  it('starts on the title with no mode, galaxy, Rank run or Daily date', () => {
+    expect(INITIAL_FLOW).toEqual({ screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, daily: null, result: null, newBest: null, runs: 0 });
   });
 });
 
@@ -480,5 +480,18 @@ describe('localDate', () => {
   it('formats the local calendar date as YYYY-MM-DD', () => {
     expect(localDate(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05');
     expect(localDate(new Date(2026, 11, 31, 0, 0))).toBe('2026-12-31');
+  });
+});
+
+describe('appToday', () => {
+  it('reads the local date at each call, or keeps to a pinned date', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 26, 23, 59));
+    const today = appToday(undefined);
+    expect(today()).toBe('2026-10-26');
+    vi.setSystemTime(new Date(2026, 9, 27, 0, 1));
+    expect(today()).toBe('2026-10-27');
+    expect(appToday('2030-01-01')()).toBe('2030-01-01');
+    vi.useRealTimers();
   });
 });

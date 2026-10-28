@@ -77,10 +77,16 @@ test('arrow keys walk the side-by-side mode cards and the row of Dimensions, ski
   await openGame(page, { galaxy: null });
   await page.keyboard.press('Space');
   await expectMode(page, 'modeSelect');
-  // The first arrow lands on the first card; Rank and Free play sit side by side.
+  // The first arrow lands on the first card; Rank, Free play and the Daily sit side by side, the Daily last.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('mode-rank')).toBeFocused();
   await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
   await expect(page.getByTestId('mode-free')).toBeFocused();
   await page.keyboard.press('ArrowLeft');
   await expect(page.getByTestId('mode-rank')).toBeFocused();

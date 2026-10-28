@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { E2E_SEEDS, seedFor } from '../../e2e/seeds';
-import { CLAIMS, findSeeds, unmetClaimMessage } from '../helpers/seedClaims';
+import { dateFor, E2E_DATES, E2E_SEEDS, seedFor } from '../../e2e/seeds';
+import { CLAIMS, DATE_CLAIMS, findDates, findSeeds, unmetClaimMessage, unmetDateClaimMessage } from '../helpers/seedClaims';
 import { guardScript } from '../helpers/guardScript';
 
 const { run: runFinder } = guardScript('find-seeds.mjs', 'find-seeds-');
@@ -21,6 +21,33 @@ describe('the e2e seed table', () => {
 
   it('looks a claim up by name', () => {
     expect(seedFor('boss-fight')).toBe(E2E_SEEDS.find((entry) => entry.claim === 'boss-fight')?.seed);
+  });
+});
+
+describe('the e2e date table', () => {
+  it.each(E2E_DATES)('keeps $date for the "$claim" claim', (entry) => {
+    expect(DATE_CLAIMS[entry.claim].holds(entry.date), unmetDateClaimMessage(entry)).toBe(true);
+  });
+
+  it('names every date claim once, and has a check for each', () => {
+    const claims = E2E_DATES.map((entry) => entry.claim);
+    expect(new Set(claims).size).toBe(claims.length);
+    expect(Object.keys(DATE_CLAIMS).sort()).toEqual([...claims].sort());
+  });
+
+  it('says which date broke and the command that re-picks it', () => {
+    const message = unmetDateClaimMessage({ date: '2026-03-04', claim: 'daily-clears' });
+    expect(message).toContain('2026-03-04');
+    expect(message).toContain('run: npm run find-seeds -- daily-clears');
+    expect(message).toContain('game/e2e/seeds.ts');
+  });
+
+  it('finds the earliest dates that keep a claim, from a day after the epoch on', () => {
+    const found = findDates('daily-game-over', { count: 2 });
+    expect(found).toHaveLength(2);
+    expect(found[0]).toBe(dateFor('daily-game-over'));
+    for (const date of found) expect(DATE_CLAIMS['daily-game-over'].holds(date)).toBe(true);
+    expect(findDates('daily-game-over', { from: 30, count: 1 })[0]?.localeCompare('2026-01-31')).toBeGreaterThanOrEqual(0);
   });
 });
 
