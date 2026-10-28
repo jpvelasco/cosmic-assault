@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { BossId } from '../../src/content/types';
-import { aimedBoltsAttack, dash, dashAttack, fireBolt, pulseAttack, radialBoltsAttack } from '../../src/sim/boss/attacks';
+import { aimedBolts, dash, dashAttack, fireBolt, pulseAttack, radialBolts } from '../../src/sim/boss/attacks';
 import type { AttackSpec, BossBehaviour, BossPart, BossSetup } from '../../src/sim/boss/behaviour';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { createMonolith, MONOLITH_SHARDS } from '../../src/sim/boss/monolith';
@@ -58,6 +58,10 @@ describe('the shared attack library', () => {
   /** The fixture fights stand their bolt attacks in for the fixture's two. */
   const BOLT_HARMS = { ...ATTACK_TELEGRAPHS, quake: 'bolts', dive: 'bolts' } as const;
 
+  /** An attack telegraphed for `windup` s that makes its move as it ends. */
+  const endingIn = (windup: number, run: AttackSpec['run']): AttackSpec => ({ windup, active: 0, run });
+  const aimedVolley = (windup: number): AttackSpec => endingIn(windup, (ctx) => { aimedBolts(ctx, ctx.boss, 3, 0.4, 200); });
+
   /** A fight whose every attack is `spec`, on a stub arena with bolts, its fight steps recorded for the audit. */
   function boltFight(spec: AttackSpec, parts: readonly BossPart[] = []) {
     const arena = stubArena();
@@ -71,7 +75,7 @@ describe('the shared attack library', () => {
   }
 
   it("fires attack bolts only once the attack's own windup has run, each marked as its attack's", () => {
-    const { bolts, log, pairs } = boltFight(aimedBoltsAttack(0.7, 3, 0.4, 200));
+    const { bolts, log, pairs } = boltFight(aimedVolley(0.7));
     expect(pairs.length).toBeGreaterThan(0);
     for (const pair of pairs) expect(pair.harm).toEqual(new Set(['bolts']));
     expect(timedOfType(log, 'boltFired')[0]?.event.source).toBe('boss');
@@ -79,7 +83,7 @@ describe('the shared attack library', () => {
   });
 
   it('fans aimed bolts across their spread about the bearing to where the ship was as the windup began', () => {
-    const { runner, log } = boltFight(aimedBoltsAttack(0.5, 3, 0.4, 200));
+    const { runner, log } = boltFight(aimedVolley(0.5));
     const [first] = timedOfType(log, 'bossWindup');
     const volley = timedOfType(log, 'boltFired').filter((l) => l.at === timedOfType(log, 'boltFired')[0]?.at);
     expect(first).toBeDefined();
@@ -90,7 +94,7 @@ describe('the shared attack library', () => {
 
   it('fires radial bolts outward from the core through each live part, from the part, and none from a broken one', () => {
     const parts: BossPart[] = [0, 1, 2, 3].map((i) => ({ x: 640 + Math.cos(i * Math.PI / 2) * 100, y: 201.6 + Math.sin(i * Math.PI / 2) * 100, px: 0, py: 0, radius: 12, hp: i === 2 ? 0 : 1, maxHp: 1 }));
-    const { log } = boltFight(radialBoltsAttack(0.6, parts, 230), parts);
+    const { log } = boltFight(endingIn(0.6, (ctx) => { radialBolts(ctx, parts, 230); }), parts);
     const volley = timedOfType(log, 'boltFired').filter((l) => l.at === timedOfType(log, 'boltFired')[0]?.at);
     expect(volley.map((l) => [Math.round(l.event.x), Math.round(l.event.y)])).toEqual([[740, 202], [640, 302], [640, 102]]);
     expect(volley.map((l) => l.event.angle)).toEqual([0, Math.PI / 2, -Math.PI / 2].map((a) => expect.closeTo(a, 9) as number));

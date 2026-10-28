@@ -218,13 +218,6 @@ export const fanBearing = (from: Readonly<Point>, aimX: number, aimY: number, i:
  */
 export const crosses = (ctx: Readonly<Pick<AttackContext, 'age' | 'dt'>>, t: number): boolean => ctx.age - TIME_EPSILON <= t && t < ctx.age + ctx.dt - TIME_EPSILON;
 
-/** An attack telegraphed for `windup` s that fires `radialBolts` from `parts` (the behaviour's own, the same objects all fight) as it ends. */
-export const radialBoltsAttack = (windup: number, parts: readonly Readonly<BossPart>[], speed: number = BOLT.speed): AttackSpec => ({
-  windup,
-  active: 0,
-  run: (ctx) => { radialBolts(ctx, parts, speed); },
-});
-
 /**
  * A turret volley, telegraphed for `windup` s and running `active` s: every live part of `parts` fires one bolt outward
  * as it goes active, and once more `repeat.at` s later if the boss is in `repeat.phase`.
@@ -242,11 +235,4 @@ export const rockRingAttack = (windup: number, counts: Readonly<Record<BossPhase
   windup,
   active: 0,
   run: (ctx) => { rockRing(ctx, counts[ctx.boss.phase], size, speed); },
-});
-
-/** An attack telegraphed for `windup` s that fires `aimedBolts` from the core as it ends. */
-export const aimedBoltsAttack = (windup: number, count: number, spread: number, speed: number = BOLT.speed): AttackSpec => ({
-  windup,
-  active: 0,
-  run: (ctx) => { aimedBolts(ctx, ctx.boss, count, spread, speed); },
 });
