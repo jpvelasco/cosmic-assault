@@ -212,7 +212,8 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    4318 (release), clear of Vite's default preview port. `npm run test:perf`
    (the `perf` project: 4x CPU slowdown, a busy field and a boss fight, each
    held to the frame-time ceilings in `game/e2e/perfThresholds.ts`, which are
-   worked out from recorded runs of the CI job, and both written to
+   worked out from eight recorded runs of the CI job spread over hours (runner
+   speed varies), and both written to
    `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
    `perf` job, which gates deployment. `npm run test:balance` runs the slow many-seed bot
    suites in `game/tests/balance/`, which `npm test` leaves out. `targets.ts`
