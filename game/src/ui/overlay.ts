@@ -48,12 +48,15 @@ export interface OverlayState {
   readonly installOffer: InstallOffer;
 }
 
+/** The chips that open a card over the title or mode select, and take focus back when it closes. */
+export type CoverChip = 'settings' | 'records' | 'hangar';
+
 export interface Overlay {
   update(state: OverlayState): void;
   /** One step's events: a boss's arrival, phases and fall are announced to screen readers. */
   handle(events: readonly SimEvent[]): void;
   /** Puts keyboard focus on the visible card's Settings, Records or Hangar chip, as the card it opened closes. */
-  focusChip(which: 'settings' | 'records' | 'hangar'): void;
+  focusChip(which: CoverChip): void;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
   controls(screen: Screen): HTMLElement[];
   dispose(): void;
@@ -153,7 +156,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   records.textContent = 'Records';
   const hangar = chip('hangar-open', actions.openHangar);
   hangar.textContent = 'Hangar';
-  const coverChips = { settings, records, hangar };
+  const coverChips: Readonly<Record<CoverChip, HTMLButtonElement>> = { settings, records, hangar };
   // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
   const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
   installChip.textContent = 'Install';

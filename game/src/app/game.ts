@@ -26,7 +26,7 @@ import { applyAccents } from '../ui/accents';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
-import { createOverlay } from '../ui/overlay';
+import { createOverlay, type CoverChip } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
 import type { CardToggleDeps } from './cardToggle';
@@ -243,7 +243,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   });
 
   /** What the settings, records or Hangar card needs to open and close over the screens, its focus going back to its chip. */
-  function coverCardDeps(chip: 'settings' | 'records' | 'hangar'): Omit<CardToggleDeps, 'opensOn'> {
+  function coverCardDeps(chip: CoverChip): Omit<CardToggleDeps, 'opensOn'> {
     const focusOpener = (): void => {
       overlay.focusChip(chip);
     };

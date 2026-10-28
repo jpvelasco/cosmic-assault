@@ -22,6 +22,20 @@ export interface CardToggle<C> {
   readonly close: () => void;
 }
 
+/** A card a player opens from the title or mode select, built with the close its own Back or Esc calls. */
+export function createMenuCardToggle<C extends Pick<CoverCard, 'show' | 'hide'>>(
+  makeCard: (close: () => void) => C,
+  deps: Omit<CardToggleDeps, 'opensOn'>,
+): CardToggle<C> {
+  const toggle = createCardToggle(
+    makeCard(() => {
+      toggle.close();
+    }),
+    { ...deps, opensOn: ['title', 'modeSelect'] },
+  );
+  return toggle;
+}
+
 export function createCardToggle<C extends Pick<CoverCard, 'show' | 'hide'>>(card: C, deps: CardToggleDeps): CardToggle<C> {
   let open = false;
   return {
