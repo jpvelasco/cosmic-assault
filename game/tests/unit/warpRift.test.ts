@@ -258,10 +258,11 @@ describe('warp rift passage', () => {
   it('leaves a phaser warning of its blink where it is, so it blinks to the spot it showed, and carries one that is not warning', () => {
     const { r, pair } = openRift(8);
     const warning = foeAt('phaser', pair.x, pair.y, { id: 502, charging: true, aimX: 100, aimY: 100 });
-    const roaming = foeAt('phaser', pair.toX, pair.toY, { id: 503 });
+    const roaming = foeAt('phaser', pair.x, pair.y, { id: 503 });
     r.hazards.move(DT, r.ship, [], hazardFoes(warning, roaming), []);
     expect(warning).toMatchObject({ x: pair.x, y: pair.y, aimX: 100, aimY: 100 });
-    expect(dist(roaming, { x: pair.x, y: pair.y })).toBeGreaterThanOrEqual(R + FOES.phaser.radius);
+    // Carried from the same mouth: it lands just outside the far one, its exit gap out.
+    expect(wrappedDistance(roaming, { x: pair.toX, y: pair.toY }, FIELD_169)).toBeCloseTo(R + FOES.phaser.radius + 2, 6);
   });
 });
 
