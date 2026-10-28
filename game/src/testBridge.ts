@@ -5,6 +5,8 @@ import type { World } from './sim/world';
 
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
 export const DELIBERATE_CRASH = 'e2e: deliberate crash';
+/** The bridge's shape version, raised whenever its state changes shape; the specs wait for this one. */
+export const BRIDGE_VERSION = 4;
 
 function shipState({ ship }: World): CosmicAssaultTestShip {
   const { x, y, vx, vy, angle, thrusting, invulnerable } = ship;
@@ -88,7 +90,7 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
 /** Exposes read-only game state to Playwright; main.ts imports this only in `--mode e2e` builds. */
 export function exposeTestBridge(app: App, hooks: E2eHooks): void {
   window.__COSMIC_ASSAULT_TEST_API__ = {
-    version: 3,
+    version: BRIDGE_VERSION,
     getState: () => snapshot(app, hooks),
     fastForward(seconds) {
       hooks.e2eFastForward?.(seconds);

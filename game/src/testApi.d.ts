@@ -106,7 +106,7 @@ interface CosmicAssaultTestState {
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 3;
+  readonly version: 4;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event

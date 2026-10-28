@@ -1,5 +1,5 @@
 import { precacheName } from '../src/platform/swLogic';
-import { expect, openGame, test } from './fixtures';
+import { expect, openGame, test, waitForBridge } from './fixtures';
 
 const STALE = precacheName('old');
 const FOREIGN = 'another-app-cache';
@@ -35,7 +35,7 @@ test('after one visit the game starts offline, keeping only this build of our ca
 
   await context.setOffline(true);
   await page.reload();
-  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+  await waitForBridge(page);
   await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
   expect(await page.evaluate(() => navigator.serviceWorker.controller !== null), 'the offline page is served by the worker').toBe(true);
 });

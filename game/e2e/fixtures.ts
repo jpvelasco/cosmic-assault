@@ -3,6 +3,7 @@ import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
 import type { GalaxyId, PickupId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
+import { BRIDGE_VERSION } from '../src/testBridge';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /**
@@ -70,7 +71,7 @@ export async function openFreshGame(page: Page): Promise<void> {
 
 /** Waits for the test bridge, which loads after an `import()`; call it again after a reload. */
 export async function waitForBridge(page: Page): Promise<void> {
-  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+  await page.waitForFunction((version) => window.__COSMIC_ASSAULT_TEST_API__?.version === version, BRIDGE_VERSION);
 }
 
 /** Steps the run in play by `seconds` of sim time at once, stopping early if it leaves play. */

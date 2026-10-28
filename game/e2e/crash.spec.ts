@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { SETTINGS_KEY } from '../src/app/settings';
 import { DELIBERATE_CRASH } from '../src/testBridge';
-import { expect, expectMode, gameState, nextFrames, openGame, test, toastOf } from './fixtures';
+import { expect, expectMode, gameState, nextFrames, openGame, test, toastOf, waitForBridge } from './fixtures';
 
 
 test.use({ allowedErrors: [DELIBERATE_CRASH] });
@@ -120,7 +120,7 @@ test('Try again reloads to the title', async ({ page }) => {
   await expect(card(page)).toBeVisible();
   await page.getByRole('button', { name: 'Try again' }).click();
 
-  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.version === 3);
+  await waitForBridge(page);
   await expect(card(page)).toBeHidden();
   await expect(page.getByText('Press Space to start')).toBeVisible();
   expect((await gameState(page)).mode).toBe('title');
