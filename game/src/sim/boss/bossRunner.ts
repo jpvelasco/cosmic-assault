@@ -86,6 +86,7 @@ export class BossRunner {
       target: null,
       threat: null,
       aim: { x: home.x, y: home.y },
+      opening: 0,
     };
     this.assertFits(setup.field);
     const heading = setup.rng.range(0, TAU);

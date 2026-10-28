@@ -74,31 +74,14 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   let placeY = new Float64Array(0);
   let turns = new Float64Array(0);
   const offset = { x: 0, y: 0 };
-  /** The coil's ring: whether one is shown, and the bearing of its opening from its centre. */
-  let coiling = false;
-  let opening = 0;
 
   /**
-   * Notes the coil's opening on its windup's first frame: the bearing from its aim to the head, which holds still
-   * through the windup. Forgets it once the coil is over.
-   */
-  function trackCoil(boss: Readonly<BossView>, frame: Readonly<BossFrame>): void {
-    if (boss.windup !== 'coil' && boss.active !== 'coil') {
-      coiling = false;
-      return;
-    }
-    if (coiling) return;
-    coiling = true;
-    opening = Math.atan2(frame.y - boss.aim.y, frame.x - boss.aim.x);
-  }
-
-  /**
-   * The coil's ring round the windup's aim, at the radius its threat declares: the whole circle but its opening, with a
-   * tick at each of the opening's edges.
+   * The coil's ring round the windup's aim, at the radius its threat declares: the whole circle but the opening the sim
+   * planned (`BossView.opening`), with a tick at each of the opening's edges.
    */
   function drawRing(boss: Readonly<BossView>, frame: Readonly<BossFrame>): void {
     const { shown, look } = frame;
-    const { x, y } = boss.aim;
+    const { aim: { x, y }, opening } = boss;
     const radius = boss.threat?.ring?.radius ?? 0;
     const half = COIL_OPENING / 2;
     pen.field();
@@ -157,8 +140,7 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
   return {
     glow: palette.accent[1],
     underglow(boss, frame) {
-      trackCoil(boss, frame);
-      if (coiling) drawRing(boss, frame);
+      if (boss.windup === 'coil' || boss.active === 'coil') drawRing(boss, frame);
       const tail = boss.parts[openPart(boss.parts)];
       if (tail === undefined || boss.state !== 'fighting') return;
       // Just the tail's place: the whole body is laid out once a frame, for its body.
@@ -203,9 +185,5 @@ export const leviathanDrawer: DrawerFactory = (kit) => {
       ctx.globalAlpha = frame.shown;
     },
     ...clockHooks(clocks),
-    reset() {
-      clocks.reset();
-      coiling = false;
-    },
   };
 };

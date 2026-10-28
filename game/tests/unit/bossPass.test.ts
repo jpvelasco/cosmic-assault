@@ -7,6 +7,7 @@ import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { BOSSES } from '../../src/content/bosses';
 import type { BossId } from '../../src/content/types';
 import { WARDEN_RING } from '../../src/sim/boss/warden';
+import { COIL_OPENING } from '../../src/sim/boss/leviathan';
 import { bossView } from '../helpers/bossView';
 
 interface Draw {
@@ -24,9 +25,10 @@ interface Draw {
  * A 2D context that accepts every call and logs each drawImage with the transform offset and alpha in force, to `sink`,
  * and the name of every other call, to `calls`.
  */
-function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[]; calls: string[] } {
+function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext2D; draws: Draw[]; calls: string[]; arcStarts: number[] } {
   const draws: Draw[] = [];
   const calls: string[] = [];
+  const arcStarts: number[] = [];
   const log = sink ?? ((draw: Draw) => draws.push(draw));
   let a = 1;
   let b = 0;
@@ -53,6 +55,11 @@ function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext
           case 'createLinearGradient':
           case 'createRadialGradient':
             return () => gradient;
+          case 'arc':
+            return (_x: number, _y: number, _r: number, start: number) => {
+              calls.push('arc');
+              arcStarts.push(start);
+            };
           default:
             return () => {
               calls.push(String(name));
@@ -66,7 +73,7 @@ function fakeContext(sink?: (draw: Draw) => void): { ctx: CanvasRenderingContext
       },
     },
   ) as CanvasRenderingContext2D;
-  return { ctx, draws, calls };
+  return { ctx, draws, calls, arcStarts };
 }
 
 /** Draws onto offscreen canvases (bakes, and the Hive Carrier's turned hull), each with the canvas it lands on. */
@@ -95,6 +102,7 @@ describe('createBossPass', () => {
   let baker: SpriteBaker;
   let draws: Draw[];
   let calls: string[];
+  let arcStarts: number[];
   let pass: BossPass;
 
   beforeEach(() => {
@@ -104,6 +112,7 @@ describe('createBossPass', () => {
     const fake = fakeContext();
     draws = fake.draws;
     calls = fake.calls;
+    arcStarts = fake.arcStarts;
     const pen = createFieldPen(fake.ctx);
     pen.aim(1, 0, 0);
     pass = createBossPass(fake.ctx, pen, baker, DRIFT);
@@ -671,6 +680,15 @@ describe('createBossPass', () => {
       calls.length = 0;
       pass.draw(leviathan(), 1, LOOK);
       expect(calls).not.toContain('arc');
+    });
+
+    it('leaves the ring open where the view says the coil planned it, wherever the head is drawn', () => {
+      const threat = { attack: 'coil', windup: 0.9, kind: 'ring', reach: 34, speed: 0, ring: { radius: 220, around: 'aim' } } as const;
+      for (const opening of [0.4, -2]) {
+        arcStarts.length = 0;
+        pass.draw(leviathan({ windup: 'coil', threat, opening }), 1, LOOK);
+        expect(arcStarts[0]).toBeCloseTo(opening + COIL_OPENING / 2, 9);
+      }
     });
   });
 

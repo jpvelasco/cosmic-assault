@@ -58,6 +58,11 @@ export interface BossView {
    * to. An attack aimed at the ship fires, dashes or coils at it, and the bots read it; one point, moved in place.
    */
   readonly aim: Point;
+  /**
+   * For a ring threat round the aim that leaves a way in, the bearing from the aim of the middle of its opening, set as
+   * its windup begins by the behaviour that plans it; 0 for any other.
+   */
+  opening: number;
 }
 
 /** What an attack sees and may change. Refilled in place every step. */

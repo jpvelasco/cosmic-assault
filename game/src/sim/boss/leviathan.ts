@@ -328,13 +328,16 @@ class Leviathan implements BossBehaviour {
     this.phase = nearestPhase(this.field, this.side, this.headX, this.headY, spot);
   }
 
-  /** Plans the coil as its windup begins: about the view's aim, from where the head holds, against where the ship is. */
-  private openCoil(boss: Readonly<BossView>, ship: Readonly<Point>): void {
+  /**
+   * Plans the coil as its windup begins: about the view's aim, from where the head holds, against where the ship is; and
+   * shows its opening on the view, for the ring's telegraph.
+   */
+  private openCoil(boss: BossView, ship: Readonly<Point>): void {
     const rx = this.headX - boss.aim.x;
     const ry = this.headY - boss.aim.y;
     spot.x = this.headX;
     spot.y = this.headY;
-    planCoil(spot, boss.aim, ship, rx * Math.sin(boss.facing) - ry * Math.cos(boss.facing), this.coilPlan);
+    boss.opening = planCoil(spot, boss.aim, ship, rx * Math.sin(boss.facing) - ry * Math.cos(boss.facing), this.coilPlan).opening;
   }
 
   /** Runs the head round the ring as its plan says (`coilPoint`). */

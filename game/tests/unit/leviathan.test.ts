@@ -411,6 +411,8 @@ describe('Leviathan attacks', () => {
     const centre = { x: rigged.arena.ship.x, y: rigged.arena.ship.y };
     const opening = Math.atan2(rigged.r.view.y - centre.y, rigged.r.view.x - centre.x);
     expect(rigged.r.view.threat).toMatchObject({ kind: 'ring', reach: DEF.radius, ring: { radius: COIL_RADIUS, around: 'aim' } });
+    // The view shows the opening it planned, for the ring's telegraph to draw.
+    expect(rigged.r.view.opening).toBeCloseTo(opening, 6);
     untilActive(rigged);
     const bearings: number[] = [];
     const radii: number[] = [];
