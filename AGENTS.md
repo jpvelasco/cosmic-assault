@@ -122,11 +122,11 @@
     renderer. Its look in `render/boss/` implements `BossDrawer` (`drawer.ts`):
     a glow and a `body`, with optional underglow, `advance`, `handle` and
     `reset`; the boss pass draws what every boss shares (windup rings,
-    shockwave, hit flash, and a dive's aim line) and looks the drawer up by boss id. A drawer bakes its
-    sprites by key and allocates nothing per frame. Cover a new boss with unit
-    tests for its behaviour and drawer, a bot kill-rate case in
-    `game/tests/balance/`, and an e2e spec that fights it through the bridge's
-    `boss` state and `damageBoss`.
+    shockwave, hit flash, and a dive's aim line) and looks the drawer up by
+    boss id. A drawer bakes its sprites by key and allocates nothing per frame.
+    Cover a new boss with unit tests for its behaviour and drawer, a bot
+    kill-rate case in `game/tests/balance/`, and an e2e spec that fights it
+    through the bridge's `boss` state and `damageBoss`.
   - Ship controls (input, thrust, fire, turn, the volley and the frame loop)
     are tested with real input, never with bridge shortcuts: change any of them
     only with `e2e/keyboard.spec.ts` (every thrust, fire and turn chord, in both

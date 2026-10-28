@@ -407,8 +407,8 @@ export class Pilot {
     }
     this.lastElapsed = view.elapsed;
     const threat = this.strikeThreat;
-    const windingUp = boss !== null && boss.windup !== null;
-    this.shoveIn = windingUp && threat?.kind === 'shove' ? Math.max(0, this.strikeAt + threat.windup - view.elapsed + this.strikeLag) / scale : Infinity;
+    const bossWindingUp = boss !== null && boss.windup !== null;
+    this.shoveIn = bossWindingUp && threat?.kind === 'shove' ? Math.max(0, this.strikeAt + threat.windup - view.elapsed + this.strikeLag) / scale : Infinity;
   }
 
   /**
