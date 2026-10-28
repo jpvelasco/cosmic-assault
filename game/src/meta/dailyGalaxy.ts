@@ -57,10 +57,13 @@ function twistFor(date: string, rolled: DailyTwist, reroll: number): DailyTwist 
   return others[Math.floor(reroll * others.length)] ?? rolled;
 }
 
-/** The anchors a twist can play on: from its least Dimension, fielding every kind it scales. */
-function anchorsFor(twist: DailyTwist): GalaxyDef[] {
+/** The anchors a twist can play on: from its least Dimension, fielding every kind it scales. Throws, naming `date`, on none. */
+function anchorsFor(twist: DailyTwist, date: string): GalaxyDef[] {
   const scaled = Object.keys(twist.rampScale) as ThreatKind[];
-  return DAILY_ANCHORS.map(galaxyById).filter((g) => g.dimension >= twist.minDimension && scaled.every((kind) => g.kinds[kind].max > 0));
+  const anchors = DAILY_ANCHORS.map(galaxyById).filter((g) => g.dimension >= twist.minDimension && scaled.every((kind) => g.kinds[kind].max > 0));
+  if (anchors.length > 0) return anchors;
+  const fielding = scaled.length === 0 ? '' : ` that fields ${scaled.join(' and ')}`;
+  throw new Error(`No Daily anchor suits the ${twist.name} twist that ${date} plays: add one of Dimension ${String(twist.minDimension)} or later${fielding} to DAILY_ANCHORS in content/daily.ts`);
 }
 
 /** `kinds` with each ramp the twist scales `times` as likely at its base and its max, the max no higher than its cap. */
@@ -75,14 +78,18 @@ function scaledRamps(kinds: GalaxyDef['kinds'], twist: DailyTwist): GalaxyDef['k
   return out;
 }
 
-/** The hazard a Daily schedules, if any: the twist's set piece, or by `wellDraw` a plain gravity well, each from its Dimension on. */
+/** The hazard a Daily schedules, if any: the twist's set piece, or by `wellDraw` a plain gravity well from its Dimension on. */
 function hazardFor(twist: DailyTwist, anchor: GalaxyDef, wellDraw: number, intensityDraw: number): GalaxyEvent | null {
   const { setPiece } = twist;
-  if (setPiece !== null) {
-    const intensity = STORM_INTENSITIES[Math.floor(intensityDraw * STORM_INTENSITIES.length)] ?? 1;
-    return anchor.dimension >= HAZARD_RULES[setPiece].from ? { at: 0, type: setPiece, intensity } : null;
-  }
+  if (setPiece !== null) return { at: 0, type: setPiece, intensity: STORM_INTENSITIES[Math.floor(intensityDraw * STORM_INTENSITIES.length)] ?? 1 };
   return anchor.dimension >= HAZARD_RULES.gravityWell.from && wellDraw < DAILY_WELL_CHANCE ? { at: 0, type: 'gravityWell', intensity: 1 } : null;
+}
+
+/** What keeps `def` from being `twist`'s Daily: a broken content rule, or a set piece left without a time. */
+function dailyProblems(def: GalaxyDef, twist: DailyTwist): string[] {
+  const { setPiece } = twist;
+  const unplaced = setPiece !== null && !def.events.some((e) => e.type === setPiece);
+  return [...galaxyProblems(def), ...(unplaced ? [`the ${twist.name} twist's ${setPiece} finds no time on the grid`] : [])];
 }
 
 /** `items` in an order shuffled by `rng`. */
@@ -132,13 +139,14 @@ function targetFor(anchor: GalaxyDef, twist: DailyTwist, spread: number): number
  * The Daily Galaxy of `date` (`YYYY-MM-DD`): the same for everyone who plays that date, from the date alone. It is a
  * survival galaxy built on an anchor from The Drift or Ion Reach, whose id, Dimension, index, length and ramps it keeps,
  * in a look of its own, with its own showers and hazard and one twist; the twist never repeats two days running. Throws
- * on a date that is not a calendar date, and on a Daily that would break a content rule, naming the date.
+ * on a date that is not a calendar date, and, naming the date, on a Daily that would break a content rule or leave its
+ * twist's set piece out.
  */
 export function dailyGalaxy(date: string): DailyGalaxy {
   assertCalendarDate(date);
   const rng = dailyStream(date);
   const twist = twistFor(date, rollTwist(rng), rng.next());
-  const anchor = rng.pick(anchorsFor(twist));
+  const anchor = rng.pick(anchorsFor(twist, date));
   const look = rng.pick(DAILY_LOOKS);
   const showerCount = rng.pick(DAILY_SHOWER_COUNTS) * twist.showerFactor;
   const hazard = hazardFor(twist, anchor, rng.next(), rng.next());
@@ -148,7 +156,7 @@ export function dailyGalaxy(date: string): DailyGalaxy {
   const wanted = [...Array<GalaxyEvent>(showerCount).fill(shower), ...(hazard === null ? [] : [hazard])];
   const base: GalaxyDef = { ...anchor, kinds: scaledRamps(anchor.kinds, twist), events: [], pickups: poolFor(anchor.dimension), featured: [], ...look, label: DAILY_LABEL };
   const def: GalaxyDef = { ...base, events: placed(base, shuffled(wanted, rng), start) };
-  const problems = galaxyProblems(def);
-  if (problems.length > 0) throw new Error(`The Daily Galaxy for ${date} breaks the content rules (${problems.join('; ')}): fix the Daily tables in content/daily.ts`);
+  const problems = dailyProblems(def, twist);
+  if (problems.length > 0) throw new Error(`The Daily Galaxy for ${date} cannot be built (${problems.join('; ')}): fix the Daily tables in content/daily.ts`);
   return { date, seed: dailySeed(date), def, twist: twist.id, target: targetFor(anchor, twist, spread) };
 }

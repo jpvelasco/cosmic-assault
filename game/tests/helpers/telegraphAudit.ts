@@ -1,7 +1,7 @@
 import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { GUNSHIP, MINE, PHASER } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
-import { DANGER_ZONE, HAZARD_RULES, stormWells, WARP_RIFT } from '../../src/content/hazards';
+import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, FoeKind, GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
@@ -13,16 +13,24 @@ import type { Timed } from './bossArena';
 const SHOWN: Readonly<Partial<Record<HazardType, (intensity: GalaxyEvent['intensity']) => number>>> = {
   dangerZone: (intensity) => Math.min(intensity, DANGER_ZONE.maxZones),
   warpRift: (intensity) => Math.min(intensity, WARP_RIFT.maxPairs),
-  gravityStorm: stormWells,
 };
 
 /**
- * The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two, and for a gravity
- * storm each of its wells; none for a shower.
+ * The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two; none for a
+ * shower. A gravity storm places as many wells as the field leaves room for, so only its run can tell:
+ * `hazardsShownIn` counts them.
  */
 export const hazardsShown = (e: GalaxyEvent): HazardType[] => {
   if (e.type === 'meteorShower') return [];
+  if (e.type === 'gravityStorm') throw new Error(`the gravityStorm at ${String(e.at)} s shows the wells its run placed: count them with hazardsShownIn(log)`);
   return Array<HazardType>(SHOWN[e.type]?.(e.intensity) ?? 1).fill(e.type);
+};
+
+/** The hazards an event shows in the run `log` records: as `hazardsShown`, and for a gravity storm each well it warned of. */
+export const hazardsShownIn = (log: readonly Timed[]) => (e: GalaxyEvent): HazardType[] => {
+  if (e.type !== 'gravityStorm') return hazardsShown(e);
+  const wells = log.filter(({ event }) => event.type === 'wellWarning' && event.kind === 'gravityStorm' && event.at === e.at).length;
+  return Array<HazardType>(wells).fill(e.type);
 };
 
 /** A bot's run of a galaxy, every event timed, and the field it played on. */

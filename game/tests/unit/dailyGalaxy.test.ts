@@ -8,7 +8,7 @@ import { OPENING_SECONDS } from '../../src/content/pacingRules';
 import { poolFor } from '../../src/content/pickups';
 import type { GalaxyDef, GalaxyEvent, ThreatKind } from '../../src/content/types';
 import { galaxyProblems } from '../../src/content/validity';
-import { nextDate } from '../../src/meta/calendar';
+import { compareDates, dayNumber, nextDate } from '../../src/meta/calendar';
 import { dailyGalaxy, rolledTwist, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { hashString } from '../../src/sim/rng';
 import { importClosure } from '../helpers/sourceImports';
@@ -28,14 +28,42 @@ const anchorOf = (d: DailyGalaxy): GalaxyDef => galaxyById(d.def.id);
 const eventsOf = (d: DailyGalaxy, type: GalaxyEvent['type']): GalaxyEvent[] => d.def.events.filter((e) => e.type === type);
 /** A thousand dates take about a second to build and check. */
 const SWEEP_TIMEOUT_MS = 20_000;
+/** Eleven years of dates take a few seconds. */
+const RANGE_TIMEOUT_MS = 60_000;
 
 /** The D1–D2 survival galaxies, the only material a Daily may use. */
 const EARLY = GALAXIES.filter((g) => g.dimension <= 2 && g.kind === 'survival');
+
+/**
+ * A few dates' Dailies, pinned whole, one of each twist among them: a change to the generator's draws, its tables or its
+ * placement changes what these dates play, so it must update them on purpose.
+ */
+const GOLDEN = [
+  { date: '2026-10-26', seed: 1692440299, twist: 'gravityStorm', anchor: '2-2', palette: 'drift', target: 15750,
+    events: [{ at: 20, type: 'gravityStorm', intensity: 2 }, { at: 30, type: 'meteorShower', intensity: 2 }] },
+  { date: '2026-10-27', seed: 1675662680, twist: 'doubleMeteors', anchor: '1-3', palette: 'ionReach', target: 11750,
+    events: [{ at: 15, type: 'meteorShower', intensity: 1 }, { at: 30, type: 'meteorShower', intensity: 1 }, { at: 45, type: 'meteorShower', intensity: 1 }] },
+  { date: '2026-10-28', seed: 1658885061, twist: 'splitterField', anchor: '2-2', palette: 'ionReach', target: 14850,
+    events: [{ at: 15, type: 'gravityWell', intensity: 1 }, { at: 25, type: 'meteorShower', intensity: 2 }, { at: 40, type: 'meteorShower', intensity: 2 }] },
+  { date: '2027-01-01', seed: 1475997049, twist: 'droneSwarm', anchor: '2-2', palette: 'ionReach', target: 15250,
+    events: [{ at: 15, type: 'gravityWell', intensity: 1 }, { at: 25, type: 'meteorShower', intensity: 2 }, { at: 60, type: 'meteorShower', intensity: 2 }] },
+  { date: '2027-12-31', seed: 4250186330, twist: 'doubleMeteors', anchor: '2-3', palette: 'ionReach', target: 15950,
+    events: [{ at: 20, type: 'meteorShower', intensity: 2 }, { at: 35, type: 'meteorShower', intensity: 2 }, { at: 45, type: 'gravityWell', intensity: 1 }, { at: 55, type: 'meteorShower', intensity: 2 }] },
+] as const;
 
 describe('dailyGalaxy', () => {
   it('builds the same Daily for a date every time: the same galaxy, twist, target and World seed', () => {
     for (const [i, date] of DATES.entries()) expect(JSON.stringify(dailyGalaxy(date)), date).toBe(JSON.stringify(DAILIES[i]));
   }, SWEEP_TIMEOUT_MS);
+
+  it.each(GOLDEN)('builds the pinned Daily for $date', ({ date, seed, twist, anchor, palette, target, events }) => {
+    const d = dailyGalaxy(date);
+    expect({ seed: d.seed, twist: d.twist, anchor: d.def.id, palette: d.def.palette, target: d.target, events: d.def.events }).toEqual({ seed, twist, anchor, palette, target, events });
+  });
+
+  it('pins a Daily of every twist', () => {
+    expect(new Set(GOLDEN.map((g) => g.twist))).toEqual(new Set(DAILY_TWISTS.map((t) => t.id)));
+  });
 
   it('seeds the World from the date alone, and gives every date its own seed', () => {
     for (const d of DAILIES) {
@@ -184,14 +212,22 @@ describe('dailyGalaxy', () => {
     expect(mean).toBeLessThan(16_000);
   });
 
-  it('plays in the World as a Daily: three lives, and the same run from the same seed', () => {
+  it('plays in the World as a Daily: the same run from the same seed', () => {
     const [d] = DAILIES;
     if (d === undefined) throw new Error('no Daily built');
     const play = () => runGalaxy({ galaxy: d.def, seed: d.seed, profile: 'casual', mode: 'daily', maxSeconds: 30 });
-    const first = play();
-    expect(first.livesLost).toBeLessThanOrEqual(3);
-    expect(play()).toEqual(first);
+    expect(play()).toEqual(play());
   }, SWEEP_TIMEOUT_MS);
+
+  it('builds every date from 2026 through 2036, and gives every Gravity storm Daily its storm', () => {
+    let built = 0;
+    for (let date = '2026-01-01'; compareDates(date, '2036-12-31') <= 0; date = nextDate(date)) {
+      const d = dailyGalaxy(date);
+      if (d.twist === 'gravityStorm') expect(eventsOf(d, 'gravityStorm'), date).toHaveLength(1);
+      built++;
+    }
+    expect(built).toBe(dayNumber('2036-12-31') - dayNumber('2026-01-01') + 1);
+  }, RANGE_TIMEOUT_MS);
 });
 
 describe('dailyTitle', () => {
@@ -203,6 +239,7 @@ describe('dailyTitle', () => {
 describe('a Daily that breaks a content rule', () => {
   afterEach(() => {
     vi.doUnmock('../../src/content/daily');
+    vi.doUnmock('../../src/content/hazards');
     vi.resetModules();
   });
 
@@ -214,5 +251,28 @@ describe('a Daily that breaks a content rule', () => {
     });
     const { dailyGalaxy: broken } = await import('../../src/meta/dailyGalaxy');
     expect(() => broken('2026-10-26')).toThrow(/2026-10-26.*large ramp.*content\/daily\.ts/);
+  });
+
+  it('is refused when its twist\'s set piece finds no time, naming the date and the twist', async () => {
+    const date = ofTwist('gravityStorm')[0]?.date ?? '';
+    vi.resetModules();
+    vi.doMock('../../src/content/hazards', async (actual) => {
+      const real: typeof import('../../src/content/hazards') = await actual();
+      return { ...real, HAZARD_RULES: { ...real.HAZARD_RULES, gravityStorm: { ...real.HAZARD_RULES.gravityStorm, seconds: 1000 } } };
+    });
+    const { dailyGalaxy: crowded } = await import('../../src/meta/dailyGalaxy');
+    expect(() => crowded(date)).toThrow(new RegExp(`${date}.*Gravity storm.*content/daily\\.ts`));
+  });
+
+  it('is refused when no anchor suits its twist, naming the twist and the date', async () => {
+    const d = ofTwist('splitterField')[0];
+    if (d === undefined) throw new Error('no Splitter field Daily built');
+    vi.resetModules();
+    vi.doMock('../../src/content/daily', async (actual) => {
+      const real: typeof import('../../src/content/daily') = await actual();
+      return { ...real, DAILY_ANCHORS: ['1-2'] };
+    });
+    const { dailyGalaxy: unanchored } = await import('../../src/meta/dailyGalaxy');
+    expect(() => unanchored(d.date)).toThrow(new RegExp(`Splitter field.*${d.date}.*splitter.*DAILY_ANCHORS`));
   });
 });

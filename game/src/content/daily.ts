@@ -28,7 +28,7 @@ export interface DailyTwist {
 
 /** Every twist, in the order the generator rolls them. (The scales and target scales are tuning values.) */
 export const DAILY_TWISTS: readonly DailyTwist[] = [
-  { id: 'doubleMeteors', name: 'Double meteors', blurb: 'Twice the meteor showers', minDimension: 1, rampScale: {}, showerFactor: 2, setPiece: null, targetScale: 1.15 },
+  { id: 'doubleMeteors', name: 'Double meteors', blurb: 'More meteor showers', minDimension: 1, rampScale: {}, showerFactor: 2, setPiece: null, targetScale: 1.15 },
   { id: 'gravityStorm', name: 'Gravity storm', blurb: 'Several gravity wells open at once', minDimension: 2, rampScale: {}, showerFactor: 1, setPiece: 'gravityStorm', targetScale: 1.1 },
   { id: 'droneSwarm', name: 'Drone swarm', blurb: 'Drones come more often', minDimension: 2, rampScale: { drone: { times: 1.5, cap: 0.6 } }, showerFactor: 1, setPiece: null, targetScale: 1.15 },
   { id: 'splitterField', name: 'Splitter field', blurb: 'Splitter rocks come more often', minDimension: 1, rampScale: { splitter: { times: 1.6, cap: 0.6 } }, showerFactor: 1, setPiece: null, targetScale: 1.1 },

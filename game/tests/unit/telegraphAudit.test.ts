@@ -15,7 +15,7 @@ import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { HAZARD_FACTORIES } from '../../src/sim/hazards/hazardField';
 import { playExpert } from '../helpers/eventDigest';
 import type { Timed } from '../helpers/bossArena';
-import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, hazardsShown, type AttackPair, type FightStep } from '../helpers/telegraphAudit';
+import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, hazardsShown, hazardsShownIn, type AttackPair, type FightStep } from '../helpers/telegraphAudit';
 
 const SEEDS = [1, 2, 3];
 /** Every galaxy that schedules a hazard, with the hazards it shows. */
@@ -55,14 +55,23 @@ describe('auditTelegraphs', () => {
     }
   }, PLAY_TIMEOUT_MS);
 
-  it('counts the hazards an event shows: one per zone, rift pair or storm well, none for a shower', () => {
+  it('counts the hazards an event shows: one per zone or rift pair, none for a shower', () => {
     const shown = (type: GalaxyEvent['type'], intensity: GalaxyEvent['intensity']): number => hazardsShown({ at: 30, type, intensity }).length;
     expect(shown('meteorShower', 2)).toBe(0);
     expect(shown('gravityWell', 2)).toBe(1);
     expect([1, 2, 3].map((i) => shown('dangerZone', i as GalaxyEvent['intensity']))).toEqual([1, 2, 2]);
     expect([1, 2, 3].map((i) => shown('warpRift', i as GalaxyEvent['intensity']))).toEqual([1, 2, 2]);
-    expect([1, 2, 3].map((i) => shown('gravityStorm', i as GalaxyEvent['intensity']))).toEqual([3, 4, 4]);
-    expect(hazardsShown({ at: 30, type: 'gravityStorm', intensity: 1 })).toEqual(['gravityStorm', 'gravityStorm', 'gravityStorm']);
+  });
+
+  it('counts a storm\'s wells as its run placed them, by the warnings that name its time, and asks for the run without one', () => {
+    const storm: GalaxyEvent = { at: 30, type: 'gravityStorm', intensity: 2 };
+    expect(() => hazardsShown(storm)).toThrow(/gravityStorm at 30 s.*hazardsShownIn/);
+    const warned = (id: number, kind: 'gravityStorm' | 'gravityWell', start: number): Timed => at(start - 3, { type: 'wellWarning', id, kind, x: 0, y: 0, at: start });
+    const log = [warned(1, 'gravityStorm', 30), warned(2, 'gravityStorm', 30), warned(3, 'gravityStorm', 50), warned(4, 'gravityWell', 30)];
+    expect(hazardsShownIn(log)(storm)).toEqual(['gravityStorm', 'gravityStorm']);
+    expect(hazardsShownIn(log)({ at: 50, type: 'gravityStorm', intensity: 1 })).toEqual(['gravityStorm']);
+    expect(hazardsShownIn([])(storm)).toEqual([]);
+    expect(hazardsShownIn(log)({ at: 30, type: 'dangerZone', intensity: 2 })).toEqual(['dangerZone', 'dangerZone']);
   });
 
   it('pairs a warning and its activation by id, not by order', () => {
