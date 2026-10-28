@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DRIFT } from '../../src/render/palette';
+import { NOT_PRECACHED } from '../../vite/precache';
 
 const PUBLIC = new URL('../../public/', import.meta.url);
 const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
@@ -40,6 +41,18 @@ describe('the app icons', () => {
     ['icons/apple-touch-icon.png', 180],
   ])('%s is %i px square', (path, size) => {
     expect(pngSize(path)).toEqual({ width: size, height: size });
+  });
+});
+
+/** The most bytes the icons every visit's cache carries may take: those the worker precaches, all but the 512 px ones. */
+const PRECACHED_ICON_BYTES = 200 * 1024;
+
+describe('the precached icons', () => {
+  it(`take ${String(PRECACHED_ICON_BYTES / 1024)} KB at most`, () => {
+    const precached = readdirSync(new URL('icons/', PUBLIC)).map((name) => `icons/${name}`).filter((path) => !NOT_PRECACHED.includes(path));
+    expect(precached.length).toBeGreaterThan(0);
+    const bytes = precached.reduce((sum, path) => sum + statSync(new URL(path, PUBLIC)).size, 0);
+    expect(bytes, precached.join(', ')).toBeLessThanOrEqual(PRECACHED_ICON_BYTES);
   });
 });
 
