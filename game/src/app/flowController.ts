@@ -1,4 +1,5 @@
 import { galaxyIdOf, type GalaxyId } from '../content/types';
+import { bestsBefore, NO_BESTS, type BestsBefore } from '../meta/bests';
 import { forfeitRankRun, isUnlocked } from '../meta/progress';
 import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
 import type { SimEvent } from '../sim/events';
@@ -145,18 +146,18 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
   }
 
   /**
-   * The galaxy in play's best score as saved now, before its clear is written, for the results card's "New best!": null
-   * for a galaxy never cleared, and for a debug run (a store that never writes), whose clears are never saved.
+   * The records as saved now, before a clear or game over is written, for its "New best!". A debug run (a store that
+   * never writes) keeps none, so it never beats one.
    */
-  const bestBefore = (): number | null => (state.galaxy === null || !store.writes ? null : (store.save.galaxies[state.galaxy]?.bestScore ?? null));
+  const bests = (): BestsBefore => (store.writes ? bestsBefore(store.save, state.galaxy) : NO_BESTS);
 
   function handle(events: readonly SimEvent[], world: Pick<World, 'lives' | 'weaponTier'>): void {
     for (const event of events) {
       if (event.type === 'galaxyCleared') {
         const { score, bonus, deaths, stars } = event;
-        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, weaponTier: world.weaponTier, bestBefore: bestBefore() });
+        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, weaponTier: world.weaponTier, bests: bests() });
       } else if (event.type === 'gameOver') {
-        dispatch({ kind: 'die', score: event.score, weaponTier: world.weaponTier });
+        dispatch({ kind: 'die', score: event.score, weaponTier: world.weaponTier, bests: bests() });
       } else if (event.type === 'shipHit') {
         // The tier is read after the whole step. A core taken on the hit's own step (needing a pickup at the respawn
         // point) leaves it one above what the death did; that rare case is accepted.

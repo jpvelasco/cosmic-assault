@@ -1,5 +1,6 @@
 import { galaxyById, nextGalaxyId } from '../content/galaxies';
 import type { Dimension, GalaxyId, WeaponTier } from '../content/types';
+import { newBest, type BestsBefore, type NewBest } from '../meta/bests';
 import { abandonRankRun, endRankRun, forfeitRankRun, loseRankRun, rankEntry, recordClear, setRankRun } from '../meta/progress';
 import { afterClear, afterGameOver, afterHit, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
@@ -36,8 +37,13 @@ export interface FlowState {
   readonly galaxy: GalaxyId | null;
   /** In Rank, the run as carried into `galaxy`; on results, as carried into the next galaxy. Null outside Rank. */
   readonly rankRun: RankRun | null;
-  /** The last clear: its report, the score it leaves the run on (in Rank, the run's total), and whether it beat the galaxy's best. */
+  /** The last clear: its report and the score it leaves the run on (in Rank, the run's total). */
   readonly result: ClearResult | null;
+  /**
+   * The record the last end card's run beat, or null. Set on results, on Rank complete and on a Rank game over; a Free
+   * game over beats nothing. Every run starts with none.
+   */
+  readonly newBest: NewBest | null;
   /** Counts the runs started; a change means the app must build a new World for `galaxy`. */
   readonly runs: number;
 }
@@ -45,8 +51,6 @@ export interface FlowState {
 export interface ClearResult {
   readonly report: ClearReport;
   readonly total: number;
-  /** The galaxy had a best saved before this clear, and the clear beat it (without Rank's multiplier). A first clear is no new best. */
-  readonly newBest: boolean;
 }
 
 export type FlowAction =
@@ -69,13 +73,12 @@ export type FlowAction =
   /** The ship was hit and plays on with `livesLeft` and the `weaponTier` the hit left: in Rank the run keeps them, so leaving now forfeits from them. */
   | { readonly kind: 'hit'; readonly livesLeft: number; readonly weaponTier: WeaponTier }
   /**
-   * The galaxy was cleared with `livesLeft` lives and the ship on `weaponTier`, which a Rank run carries on.
-   * `bestBefore` is its best score as saved before this clear: null when it had none, or when the run is a debug
-   * run, which keeps no record to beat.
+   * The galaxy was cleared with `livesLeft` lives and the ship on `weaponTier`, which a Rank run carries on. `bests` are
+   * the records as saved before this clear (`NO_BESTS` for a debug run).
    */
-  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly weaponTier: WeaponTier; readonly bestBefore: number | null }
-  /** The last life went, with `score` won in this galaxy and the ship left on `weaponTier`. */
-  | { readonly kind: 'die'; readonly score: number; readonly weaponTier: WeaponTier }
+  | { readonly kind: 'clear'; readonly report: ClearReport; readonly livesLeft: number; readonly weaponTier: WeaponTier; readonly bests: BestsBefore }
+  /** The last life went, with `score` won in this galaxy and the ship left on `weaponTier`; `bests` as for `clear`. */
+  | { readonly kind: 'die'; readonly score: number; readonly weaponTier: WeaponTier; readonly bests: BestsBefore }
   /** Enter, or pad A, on an end screen: its first button. */
   | { readonly kind: 'confirm' }
   | { readonly kind: 'next' }
@@ -86,7 +89,7 @@ export type FlowAction =
   /** Esc, pad B or a Back button: one screen back. */
   | { readonly kind: 'back' };
 
-export const INITIAL_FLOW: FlowState = { screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, result: null, runs: 0 };
+export const INITIAL_FLOW: FlowState = { screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, result: null, newBest: null, runs: 0 };
 
 const dimensionOf = (id: GalaxyId): Dimension => galaxyById(id).dimension;
 
@@ -96,12 +99,12 @@ export function freeNext(state: FlowState): GalaxyId | null {
 }
 
 function playFree(state: FlowState, id: GalaxyId): FlowState {
-  return { ...state, screen: 'playing', mode: 'free', galaxy: id, dimension: dimensionOf(id), rankRun: null, result: null, runs: state.runs + 1 };
+  return { ...state, screen: 'playing', mode: 'free', galaxy: id, dimension: dimensionOf(id), rankRun: null, result: null, newBest: null, runs: state.runs + 1 };
 }
 
 /** Plays `run.next`; the run is marked as in its galaxy, so leaving it unfinished forfeits. */
 function playRank(state: FlowState, run: RankRun): FlowState {
-  return { ...state, screen: 'playing', mode: 'rank', galaxy: run.next, rankRun: { ...run, inGalaxy: true }, result: null, runs: state.runs + 1 };
+  return { ...state, screen: 'playing', mode: 'rank', galaxy: run.next, rankRun: { ...run, inGalaxy: true }, result: null, newBest: null, runs: state.runs + 1 };
 }
 
 /** The title, with nothing chosen; `runs` keeps counting. */
@@ -111,19 +114,30 @@ function toMap(state: FlowState): FlowState {
   return { ...state, screen: 'map', mode: 'free', dimension: state.galaxy === null ? state.dimension : dimensionOf(state.galaxy) };
 }
 
-/** What the clear `report` of the galaxy in play counts toward that galaxy's best. */
+/** The Rank run's entry, at `total`, beating the board: the run's record. */
+const runBest = (bests: BestsBefore, total: number): NewBest | null => newBest(bests, { kind: 'rankRun', score: total });
+
+/** What the clear `report` of the galaxy in play counts toward that galaxy's best: its score without Rank's multiplier. */
 const bestScoreOf = ({ galaxy, mode }: FlowState, report: ClearReport): number =>
   galaxy === null ? report.score : galaxyBestScore(report, dimensionOf(galaxy), mode ?? 'free');
 
-function cleared(state: FlowState, { report, livesLeft, weaponTier, bestBefore }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
+function cleared(state: FlowState, { report, livesLeft, weaponTier, bests }: Extract<FlowAction, { kind: 'clear' }>): FlowState {
   const { rankRun, galaxy } = state;
   if (galaxy === null) return state;
-  const newBest = bestBefore !== null && bestScoreOf(state, report) > bestBefore;
-  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score, newBest } };
+  const galaxyBest = newBest(bests, { kind: 'galaxy', score: bestScoreOf(state, report) });
+  if (state.mode !== 'rank' || rankRun === null) return { ...state, screen: 'results', result: { report, total: report.score }, newBest: galaxyBest };
   const total = rankRun.score + report.score;
   const next = afterClear(rankRun, galaxyById(galaxy), total, livesLeft, weaponTier);
-  const result = { report, total, newBest };
-  return next === 'complete' ? { ...state, screen: 'rankComplete', rankRun: null, result } : { ...state, screen: 'results', rankRun: next, result };
+  const result = { report, total };
+  if (next === 'complete') return { ...state, screen: 'rankComplete', rankRun: null, result, newBest: runBest(bests, total) ?? galaxyBest };
+  return { ...state, screen: 'results', rankRun: next, result, newBest: galaxyBest };
+}
+
+/** A Rank game over posts the run's total as its entry, so that total is what it may beat; a Free game over beats nothing. */
+function died(state: FlowState, { score, weaponTier, bests }: Extract<FlowAction, { kind: 'die' }>): FlowState {
+  const { rankRun } = state;
+  const record = state.mode === 'rank' && rankRun !== null ? runBest(bests, rankRun.score + score) : null;
+  return { ...state, screen: 'gameOver', rankRun: lostAt(rankRun, weaponTier), newBest: record };
 }
 
 /** Where an end screen's action leads in Free play; the state itself when the card does not offer it. */
@@ -199,7 +213,7 @@ function runMove(state: FlowState, action: FlowAction): FlowState {
     case 'clear':
       return screen === 'playing' ? cleared(state, action) : state;
     case 'die':
-      return screen === 'playing' ? { ...state, screen: 'gameOver', rankRun: lostAt(state.rankRun, action.weaponTier) } : state;
+      return screen === 'playing' ? died(state, action) : state;
     case 'hit':
       return hit(state, action.livesLeft, action.weaponTier);
     default:

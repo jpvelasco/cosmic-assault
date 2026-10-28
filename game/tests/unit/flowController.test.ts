@@ -146,22 +146,22 @@ describe('createFlowController: events', () => {
       flow.command({ kind: 'openDimension', dimension: 1 });
       flow.command({ kind: 'openGalaxy', id: '1-1' });
       playUntilEnd(flow, '1-1');
-      return flow.state.result;
+      return flow.state;
     };
     // A first clear has no best to beat.
     const first = cleared({});
-    expect(first?.newBest).toBe(false);
-    const score = first?.report.score ?? 0;
-    expect(cleared({ '1-1': { bestScore: score - 1, stars: 1 } })?.newBest).toBe(true);
+    expect(first.newBest).toBeNull();
+    const score = first.result?.report.score ?? 0;
+    expect(cleared({ '1-1': { bestScore: score - 1, stars: 1 } }).newBest).toEqual({ kind: 'galaxy', score });
     // The idle replay scores the same again: equal is no new best.
-    expect(cleared({ '1-1': { bestScore: score, stars: 1 } })?.newBest).toBe(false);
+    expect(cleared({ '1-1': { bestScore: score, stars: 1 } }).newBest).toBeNull();
   });
 
   it('never calls a debug run a new best: its store never writes, so it keeps no record to beat', () => {
     const { flow } = setup({ save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1', writes: false });
     flow.command({ kind: 'start' });
     playUntilEnd(flow, '1-1');
-    expect(flow.state.result?.newBest).toBe(false);
+    expect(flow.state.newBest).toBeNull();
   });
 
   it('Resume Rank works from mode select too', () => {

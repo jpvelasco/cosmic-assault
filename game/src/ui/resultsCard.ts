@@ -1,6 +1,7 @@
 import { freeNext, type FlowState } from '../app/flow';
 import { galaxyById, galaxyLabel } from '../content/galaxies';
-import { clearBonuses, dimensionMultiplier, galaxyBestScore, galaxyPoints } from '../sim/scoring';
+import type { NewBest } from '../meta/bests';
+import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
 import { button, cardPanel, element, PRIMARY, starRow, withTestId, type Act } from './dom';
 
 export interface ResultsState {
@@ -34,13 +35,12 @@ function line(): { el: HTMLElement; set(label: string, amount: string): void } {
 }
 
 /**
- * The "New best!" badge's text, or '' when the clear set none. In Rank it names the number that was recorded, the
- * galaxy's best at Free play scale, which is not the multiplied score the card shows beside it.
+ * The "New best!" badge's text, or '' when the run beat no record. It names the recorded number whenever that differs
+ * from the `shown` score, as a Rank galaxy's best (at Free play scale) does beside the multiplied total.
  */
-export function newBestLabel({ galaxy, mode, result }: Pick<FlowState, 'galaxy' | 'mode' | 'result'>): string {
-  if (result === null || !result.newBest) return '';
-  if (mode !== 'rank' || galaxy === null) return 'New best!';
-  return `New best! ${String(galaxyBestScore(result.report, galaxyById(galaxy).dimension, mode))}`;
+export function newBestText(newBest: NewBest | null, shown: number): string {
+  if (newBest === null) return '';
+  return newBest.score === shown ? 'New best!' : `New best! ${String(newBest.score)}`;
 }
 
 /**
@@ -110,7 +110,7 @@ export function createResultsCard(act: Act): ResultsCard {
       stars.el.hidden = !won;
       stars.set(won ? result.report.stars : 0);
       score.textContent = `Score ${String(value)}`;
-      newBest.textContent = won ? newBestLabel(flow) : '';
+      newBest.textContent = newBestText(flow.newBest, value);
       newBest.hidden = newBest.textContent === '';
       setLines(flow, value);
       hint.textContent = screen === 'gameOver' ? restartHint : '';
