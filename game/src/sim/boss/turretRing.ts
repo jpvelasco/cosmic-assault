@@ -31,7 +31,10 @@ export function nearestParts(parts: readonly Readonly<BossPart>[], x: number, y:
       const part = parts[i] as Readonly<BossPart>;
       if (part.hp <= 0 || out.includes(i)) continue;
       const distance = Math.hypot(part.x - x, part.y - y);
-      if (distance < bestDistance) [best, bestDistance] = [i, distance];
+      if (distance < bestDistance) {
+        best = i;
+        bestDistance = distance;
+      }
     }
     if (best < 0) break;
     out.push(best);
