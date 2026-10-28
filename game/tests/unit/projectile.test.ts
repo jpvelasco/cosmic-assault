@@ -19,6 +19,16 @@ describe('projectileFromShot', () => {
     expect(p).toEqual({ id: 0, x: 1, y: 2, vx: 3, vy: 4, px: 1, py: 2, life: PROJECTILE.lifespan, pierce: 0, homing: false, struck: [] });
     expect(p.life).toBe(1.2);
   });
+
+  it('gives only a piercing shot a struck list of its own: every other shares one empty list, which nothing can add to', () => {
+    const plain = [projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }), projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 })];
+    expect(plain[0]?.struck).toBe(plain[1]?.struck);
+    expect(Object.isFrozen(plain[0]?.struck)).toBe(true);
+    const piercing = [1, 2].map(() => projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 3));
+    expect(piercing[0]?.struck).not.toBe(piercing[1]?.struck);
+    piercing[0]?.struck.push(7);
+    expect(piercing[1]?.struck).toEqual([]);
+  });
 });
 
 describe('stepProjectile', () => {

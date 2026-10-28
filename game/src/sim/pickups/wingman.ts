@@ -10,6 +10,9 @@ export function wingmanPoint(at: Readonly<Pick<Ship, 'x' | 'y' | 'angle'>>, out:
   out.y = at.y - Math.cos(at.angle) * WINGMAN.offset;
 }
 
+/** Where the Wingman's shot starts; one point, reused. */
+const from = { x: 0, y: 0 };
+
 /**
  * The Wingman's shot for the volley `ship` has just fired: from the drone, `WINGMAN.offset` off the ship's left wing,
  * straight along the ship's heading at a ship shot's speed, inheriting the ship's velocity as the ship's own shots do.
@@ -17,7 +20,6 @@ export function wingmanPoint(at: Readonly<Pick<Ship, 'x' | 'y' | 'angle'>>, out:
  */
 export function wingmanShot(ship: Readonly<Ship>): Shot {
   const { angle } = ship;
-  const from = { x: 0, y: 0 };
   wingmanPoint(ship, from);
   return {
     x: from.x,

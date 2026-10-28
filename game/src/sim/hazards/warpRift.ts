@@ -152,8 +152,8 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
    */
   carry(bodies: Bodies, out: SimEvent[]): void {
     const { field } = this;
-    if (field === null) return;
-    for (const [id, until] of this.rested) if (until <= this.elapsed) this.rested.delete(id);
+    if (field === null || !this.anyOpen()) return;
+    if (this.rested.size > 0) for (const [id, until] of this.rested) if (until <= this.elapsed) this.rested.delete(id);
     const { ship } = bodies;
     const shipJumped = this.carryBody(field, ship, PLAYER.radius, SHIP_KEY, true, out);
     for (const rock of bodies.rocks) this.carryOther(field, ship, rock, rock.radius, rock.id, shipJumped, true, out);
@@ -165,6 +165,12 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
     }
     if (!shipJumped || bodies.bolts === null) return;
     for (const bolt of bodies.bolts.list) this.grace(field, ship, bolt, bolt.radius, MIN_WINDUP_SECONDS);
+  }
+
+  /** Whether a pair is open: with none, nothing jumps, and the rests left to run wait for the next. */
+  private anyOpen(): boolean {
+    for (const pair of this.schedule.live) if (pair.stage === 'active') return true;
+    return false;
   }
 
   /**
