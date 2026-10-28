@@ -398,10 +398,12 @@ describe('Leviathan attacks', () => {
     const radii: number[] = [];
     runFor(rigStepper(rigged), rigged.arena, COIL_SECONDS, () => {
       const { view } = rigged.r;
+      if (view.active === 'coil') expect(view.opening, 'the opening while the coil runs').toBeCloseTo(opening, 6);
       bearings.push(turnBetween(opening, Math.atan2(view.y - centre.y, view.x - centre.x)));
       radii.push(distance(view, centre));
     });
     expect(rigged.r.view.active).toBeNull();
+    expect(rigged.r.view.opening, 'the opening once the coil is over').toBe(0);
     // Circling: on the ring. It comes in through the opening, and once round out of it keeps out of it until it turns
     // out through it.
     const circling = bearings.map((b, i) => ({ b, r: radii[i] ?? 0 })).filter((s) => Math.abs(s.r - COIL_RADIUS) < SLACK);

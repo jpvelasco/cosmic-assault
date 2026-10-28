@@ -60,7 +60,7 @@ export interface BossView {
   readonly aim: Point;
   /**
    * For a ring threat round the aim that leaves a way in, the bearing from the aim of the middle of its opening, set as
-   * its windup begins by the behaviour that plans it; 0 for any other.
+   * its windup begins by the behaviour that plans it and back to 0 once the attack is over; 0 for any other.
    */
   opening: number;
 }

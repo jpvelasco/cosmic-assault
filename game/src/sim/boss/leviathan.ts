@@ -224,6 +224,8 @@ class Leviathan implements BossBehaviour {
 
   step(ctx: AttackContext): void {
     const { boss } = ctx;
+    // The ring's opening is the coil's alone: 0 again once the coil is over.
+    if (boss.windup !== 'coil' && boss.active !== 'coil') boss.opening = 0;
     const field = ctx.arena.field();
     if (field.width !== this.field.width || field.height !== this.field.height) this.refit(boss, field);
     if (boss.state === 'intro') boss.facing = this.arrivalFacing;
