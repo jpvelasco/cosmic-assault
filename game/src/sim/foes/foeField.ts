@@ -6,16 +6,20 @@ import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
-import { rescalePose } from '../wrap';
+import { overlapsAcrossWrap, rescalePose } from '../wrap';
+import type { Bolts } from './bolts';
 import { DRONE } from './drone';
 import { FoePool, type Foe, type FoeBehaviour, type FoeWorld } from './foe';
+import { GUNSHIP_BEHAVIOUR } from './gunship';
+import { MINE_BEHAVIOUR } from './mine';
 import { SPLITTER } from './splitter';
 
 /** The most foes on the field at once; a spawn beyond it is dropped. A boss's drones share the pool. */
 export const FOE_CAPACITY = 64;
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
 
-const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = { splitter: SPLITTER, drone: DRONE };
+const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = { splitter: SPLITTER, drone: DRONE, gunship: GUNSHIP_BEHAVIOUR, mine: MINE_BEHAVIOUR };
+const NONE_STRUCK: readonly number[] = Object.freeze([]);
 
 /** What the galaxy run adds to a foe's death. */
 export interface FoeHooks {
@@ -33,17 +37,20 @@ export interface FoeHooks {
 export class FoeField implements FoeWorld, BossFoes {
   private readonly pool = new FoePool(FOE_CAPACITY);
   private readonly hash = new SpatialHash(HASH_CELL_SIZE);
-  /** The ids of the live foes a boss launched. */
-  private readonly bossIds = new Set<number>();
   /** The circle the running query is for; the visit function reads it, so a query allocates nothing. */
   private queryX = 0;
   private queryY = 0;
   private queryRadius = 0;
+  /** The ids the running query passes over: the foes a piercing shot has already struck. */
+  private querySkip: readonly number[] = NONE_STRUCK;
   private found: Foe | null = null;
   private foundIndex = -1;
+  /** The blasts set off this step, as circles; the slots are kept for reuse, so a step of blasts allocates nothing new. */
+  private readonly blasts: { x: number; y: number; r: number }[] = [];
+  private blastCount = 0;
   private readonly visit = (index: number): void => {
     const foe = this.pool.live[index];
-    if (foe !== undefined && foe.hp > 0 && index > this.foundIndex && circlesOverlap(this.queryX, this.queryY, this.queryRadius, foe.x, foe.y, foe.radius)) {
+    if (foe !== undefined && foe.hp > 0 && index > this.foundIndex && circlesOverlap(this.queryX, this.queryY, this.queryRadius, foe.x, foe.y, foe.radius) && !this.querySkip.includes(foe.id)) {
       this.found = foe;
       this.foundIndex = index;
     }
@@ -54,6 +61,8 @@ export class FoeField implements FoeWorld, BossFoes {
     /** The 'foes' stream. */
     readonly rng: Rng,
     private readonly hooks: FoeHooks,
+    /** The galaxy's hostile bolts, which gunships fire; a field without them may hold no gunship. */
+    readonly bolts: Bolts | null = null,
   ) {}
 
   /** The foes on the field; live, and mutated in place. */
@@ -68,7 +77,9 @@ export class FoeField implements FoeWorld, BossFoes {
 
   /** How many of the foes a boss launched are alive. */
   get launched(): number {
-    return this.bossIds.size;
+    let count = 0;
+    for (const foe of this.pool.live) if (foe.fromAttack && foe.hp > 0) count++;
+    return count;
   }
 
   acquire(kind: FoeKind): Foe | null {
@@ -98,14 +109,26 @@ export class FoeField implements FoeWorld, BossFoes {
     foe.rotation = heading;
     foe.vx = Math.cos(heading) * speed;
     foe.vy = Math.sin(heading) * speed;
-    this.bossIds.add(foe.id);
+    foe.fromAttack = true;
     this.commit(foe);
     return true;
   }
 
-  /** Moves every foe and indexes it for the collisions that follow. */
+  detonate(foe: Foe, radius: number): void {
+    const slot = this.blasts[this.blastCount] ?? { x: 0, y: 0, r: 0 };
+    this.blasts[this.blastCount++] = slot;
+    slot.x = foe.x;
+    slot.y = foe.y;
+    slot.r = radius;
+    this.arena.events.push({ type: 'mineBlast', id: foe.id, x: foe.x, y: foe.y, radius });
+    foe.hp = 0;
+    this.destroy(foe, 0, false);
+  }
+
+  /** Moves every foe and indexes it for the collisions that follow. The last step's blasts are spent. */
   step(dt: number): void {
     const field = this.arena.field();
+    this.blastCount = 0;
     this.hash.clear();
     const { live } = this.pool;
     for (let i = 0; i < live.length; i++) {
@@ -123,20 +146,25 @@ export class FoeField implements FoeWorld, BossFoes {
     this.pool.sweep();
   }
 
-  /** A shot at (x, y) has reached a foe, if it overlaps one; true means the shot is spent. It deals 1 damage. */
-  hit(x: number, y: number, radius: number): boolean {
-    const foe = this.overlapping(x, y, radius);
-    if (foe === null) return false;
+  /** A shot at (x, y) has reached a foe not in `struck`, if it overlaps one: it deals 1 damage. Returns the foe's id, or -1 for none. */
+  hit(x: number, y: number, radius: number, struck: readonly number[] = NONE_STRUCK): number {
+    const foe = this.overlapping(x, y, radius, struck);
+    if (foe === null) return -1;
     foe.hp -= 1;
     if (foe.hp > 0) {
       this.arena.events.push({ type: 'foeHit', id: foe.id, x: foe.x, y: foe.y, hp: foe.hp });
-      return true;
+      return foe.id;
     }
-    const points = this.hooks.score(FOES[foe.kind].points);
-    this.arena.award(points);
-    this.destroy(foe, points);
+    this.kill(foe);
     this.hooks.killed(foe.x, foe.y);
-    return true;
+    return foe.id;
+  }
+
+  /** A blast of `radius` at (x, y): every foe it reaches across the wrap is destroyed for score, leaving nothing behind and dropping nothing. */
+  blast(x: number, y: number, radius: number): void {
+    const field = this.arena.field();
+    for (const foe of this.pool.live) if (foe.hp > 0 && overlapsAcrossWrap(field, x, y, radius, foe.x, foe.y, foe.radius)) this.kill(foe, false);
+    this.pool.sweep();
   }
 
   /** The ship at (x, y) has run into a foe, if it overlaps one; true means it did. The foe is destroyed for 0 points. */
@@ -148,11 +176,24 @@ export class FoeField implements FoeWorld, BossFoes {
     return true;
   }
 
+  /**
+   * True when the ship at (x, y) has run into a foe, which is destroyed for 0 points (`ram`), or is caught in a blast set
+   * off this step, measured across the wrap.
+   */
+  strikes(x: number, y: number, radius: number): boolean {
+    if (this.ram(x, y, radius)) return true;
+    const field = this.arena.field();
+    for (let i = 0; i < this.blastCount; i++) {
+      const blast = this.blasts[i] as { x: number; y: number; r: number };
+      if (overlapsAcrossWrap(field, blast.x, blast.y, blast.r, x, y, radius)) return true;
+    }
+    return false;
+  }
+
   /** Clears every foe for 0 points, with no fragments: the galaxy is over. */
   clear(): void {
     for (const foe of this.pool.live) this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points: 0 });
     this.pool.clear();
-    this.bossIds.clear();
   }
 
   /** Stretches every foe's place to the new field, like the World's other entities. */
@@ -160,17 +201,25 @@ export class FoeField implements FoeWorld, BossFoes {
     for (const foe of this.pool.live) rescalePose(foe, old, field);
   }
 
-  private destroy(foe: Foe, points: number): void {
-    this.bossIds.delete(foe.id);
-    this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points });
-    BEHAVIOURS[foe.kind].destroyed?.(foe, this);
+  /** Destroys `foe` for its points through the combo, with its remains (a splitter's fragments) unless `remains` is false. */
+  private kill(foe: Foe, remains = true): void {
+    foe.hp = 0;
+    const points = this.hooks.score(FOES[foe.kind].points);
+    this.arena.award(points);
+    this.destroy(foe, points, remains);
   }
 
-  /** The last-arrived live foe overlapping the circle, or null. */
-  private overlapping(x: number, y: number, radius: number): Foe | null {
+  private destroy(foe: Foe, points: number, remains = true): void {
+    this.arena.events.push({ type: 'foeDestroyed', id: foe.id, kind: foe.kind, x: foe.x, y: foe.y, points });
+    if (remains) BEHAVIOURS[foe.kind].destroyed?.(foe, this);
+  }
+
+  /** The last-arrived live foe overlapping the circle and not in `skip`, or null. */
+  private overlapping(x: number, y: number, radius: number, skip: readonly number[] = NONE_STRUCK): Foe | null {
     this.queryX = x;
     this.queryY = y;
     this.queryRadius = radius;
+    this.querySkip = skip;
     this.found = null;
     this.foundIndex = -1;
     this.hash.forEachCandidate(x, y, radius, this.visit);

@@ -55,6 +55,50 @@ describe('chooseKind', () => {
   });
 });
 
+describe('chooseKind with featured kinds', () => {
+  const D3: readonly PickupId[] = [...POOL, 'piercingBeam', 'homingMissiles'];
+  const FEATURED: readonly PickupId[] = ['piercingBeam', 'homingMissiles'];
+
+  it('doubles the weight of each featured kind, splitting the roll by the doubled weights', () => {
+    const weights = D3.map((id) => PICKUPS[id].weight * (FEATURED.includes(id) ? 2 : 1));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let from = 0;
+    D3.forEach((id, i) => {
+      const share = (weights[i] as number) / total;
+      expect(chooseKind(D3, scripted(from + share / 2), PLAIN, FEATURED), id).toBe(id);
+      from += share;
+    });
+  });
+
+  it('gives the featured kinds twice their share over many rolls', () => {
+    const share = (featured: readonly PickupId[]): number => {
+      const rng = createRng(3);
+      let hits = 0;
+      for (let i = 0; i < 20_000; i++) if (chooseKind(D3, rng, PLAIN, featured) === 'piercingBeam') hits++;
+      return hits / 20_000;
+    };
+    const total = D3.reduce((sum, id) => sum + PICKUPS[id].weight, 0);
+    const piercing = PICKUPS.piercingBeam.weight;
+    expect(share([])).toBeCloseTo(piercing / total, 1);
+    expect(share(FEATURED)).toBeCloseTo((2 * piercing) / (total + piercing + PICKUPS.homingMissiles.weight), 1);
+  });
+
+  it('drops a featured kind at its doubled weight from the field too', () => {
+    const plain = new PickupField(D3, 0, scripted(0, 0.97));
+    const featured = new PickupField(D3, 0, scripted(0, 0.97), FEATURED);
+    plain.roll(0, 0, PLAIN, []);
+    featured.roll(0, 0, PLAIN, []);
+    expect(plain.list[0]?.kind).toBe('homingMissiles');
+    expect(featured.list[0]?.kind).toBe('homingMissiles');
+    const low = new PickupField(D3, 0, scripted(0, 0.75), FEATURED);
+    low.roll(0, 0, PLAIN, []);
+    expect(low.list[0]?.kind).toBe('piercingBeam');
+    const unfeatured = new PickupField(D3, 0, scripted(0, 0.75));
+    unfeatured.roll(0, 0, PLAIN, []);
+    expect(unfeatured.list[0]?.kind).not.toBe('piercingBeam');
+  });
+});
+
 describe('chooseKind at the top weapon tier', () => {
   const TOP: DropContext = { lastLife: false, weaponTier: 3 };
 

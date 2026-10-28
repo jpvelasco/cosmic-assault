@@ -1,6 +1,5 @@
-import { clamp } from '../../content/curves';
 import type { AsteroidSize } from '../asteroid';
-import { rockRing } from './attacks';
+import { dashAttack, rockRing } from './attacks';
 import type { AttackContext, BossBehaviour, BossPhase } from './behaviour';
 
 /** Rocks in a ring, by phase. */
@@ -16,22 +15,11 @@ function shardRing(ctx: AttackContext): void {
   rockRing(ctx, RING_COUNTS[ctx.boss.phase], SHARD_SIZE, SHARD_SPEED);
 }
 
-/** Dashes in a straight line to where the ship was when the windup began, stopping short of the field's edge. */
-function lunge(ctx: AttackContext): void {
-  const { boss } = ctx;
-  const { width, height } = ctx.arena.field();
-  const progress = Math.min(1, (ctx.age + ctx.dt) / LUNGE_SECONDS);
-  const toX = clamp(ctx.aimX, boss.radius, width - boss.radius);
-  const toY = clamp(ctx.aimY, boss.radius, height - boss.radius);
-  boss.x = ctx.fromX + (toX - ctx.fromX) * progress;
-  boss.y = ctx.fromY + (toY - ctx.fromY) * progress;
-}
-
-/** M4's placeholder boss: a slow-drifting core that rings itself with shards and lunges at the ship. */
+/** M4's placeholder boss: a slow-drifting core that rings itself with shards and lunges (the shared dash) at the ship. */
 export const SENTINEL = {
   driftSpeed: 20,
   attacks: {
     shardRing: { windup: 0.6, active: 0, run: shardRing },
-    lunge: { windup: 0.5, active: LUNGE_SECONDS, run: lunge },
+    lunge: dashAttack(0.5, LUNGE_SECONDS),
   },
 } as const satisfies BossBehaviour;

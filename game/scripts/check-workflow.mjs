@@ -47,6 +47,7 @@ const checks = [
     'ci.yml: continue-on-error is not allowed in the game/legacy jobs; a failing test must block deploy — remove it'],
   ...[
     ['npm test', 'tests gate deploy'],
+    ['npm run test:digests', 'the expert D1–D2 digests gate merges, not only the non-required balance report'],
     ['npm run check:no-bridge', 'a release build carrying the test bridge cannot ship'],
     ['npm run build:e2e', 'the e2e tests have an e2e build to drive'],
     ['npm run test:e2e', 'tests gate deploy'],

@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER, VOLLEY, WEAPON_SPREAD } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
-import { weaponFor, type TimedFlags } from '../../src/sim/pickups/volley';
-import { createShip, stepShip, type Barrel } from '../../src/sim/ship';
+import { shotRulesFor, weaponFor, type TimedFlags } from '../../src/sim/pickups/volley';
+import { createShip, stepShip, type Barrel, type Weapon } from '../../src/sim/ship';
+import { PlayerShots, type ShotRules } from '../../src/sim/shots';
 import type { WeaponTier } from '../../src/content/types';
 
-const NONE: TimedFlags = { doubleShot: false, rapidFire: false, spreadLaser: false };
+const NONE: TimedFlags = { doubleShot: false, rapidFire: false, spreadLaser: false, piercingBeam: false, homingMissiles: false, wingman: false };
 const TIERS: readonly WeaponTier[] = [0, 1, 2, 3];
 const FIELD = { width: 1280, height: 720 };
+
+/** The projectiles one pull of the trigger makes through the sim's own firing path: `stepShip`'s volley, then `PlayerShots.fire`. */
+function triggerShots(weapon: Weapon, rules: ShotRules): number {
+  const ship = createShip(640, 360);
+  const shots = new PlayerShots([], () => 0);
+  shots.fire(stepShip(ship, { ...NO_CONTROLS, fire: true }, 1 / 120, FIELD, weapon), ship, rules);
+  return shots.list.length;
+}
 
 const angles = (barrels: readonly Barrel[]): number[] => barrels.map((b) => b.angle);
 const sortedBy = (barrels: readonly Barrel[]): string[] => barrels.map((b) => `${String(b.angle)}@${String(b.lateral)}`).sort();
@@ -80,32 +89,58 @@ describe('weaponFor', () => {
     expect(weaponFor(3, { ...NONE, spreadLaser: true }).barrels.length).toBeLessThan(weaponFor(3, { ...NONE, spreadLaser: true, doubleShot: true }).barrels.length);
   });
 
-  it('holds three invariants for every tier and every combination of timed kinds: at most 8 shots, each active kind changes the weapon, and adding a kind never loses a shot', () => {
-    const KINDS = ['doubleShot', 'rapidFire', 'spreadLaser'] as const;
-    const flagsOf = (mask: number): TimedFlags => ({ doubleShot: (mask & 1) !== 0, rapidFire: (mask & 2) !== 0, spreadLaser: (mask & 4) !== 0 });
+  it('holds the volley invariants for every tier and every combination of the kinds that change fire: the ship fires at most 8, a trigger at most 9, each active kind changes what fires, and adding a kind never loses a shot', () => {
+    const KINDS = ['doubleShot', 'rapidFire', 'spreadLaser', 'piercingBeam', 'homingMissiles', 'wingman'] as const;
+    /** The kinds that add a shot to each trigger; the rest change how the shots fly, not how many there are. */
+    const ADDING: readonly (typeof KINDS)[number][] = ['doubleShot', 'spreadLaser', 'wingman'];
+    const flagsOf = (mask: number): TimedFlags => Object.fromEntries(KINDS.map((kind, bit) => [kind, (mask & (1 << bit)) !== 0])) as unknown as TimedFlags;
+    const fired = (tier: WeaponTier, flags: TimedFlags) => ({ weapon: weaponFor(tier, flags), rules: shotRulesFor(flags) });
+    let combinations = 0;
     for (const tier of TIERS)
-      for (let mask = 0; mask < 8; mask++) {
+      for (let mask = 0; mask < 1 << KINDS.length; mask++) {
+        combinations++;
         const flags = flagsOf(mask);
-        const full = weaponFor(tier, flags);
+        const full = fired(tier, flags);
+        const count = triggerShots(full.weapon, full.rules);
         const where = `tier ${String(tier)} mask ${String(mask)}`;
-        expect(full.barrels.length, where).toBeLessThanOrEqual(VOLLEY.maxShots);
+        expect(full.weapon.barrels.length, where).toBeLessThanOrEqual(VOLLEY.maxShots);
+        expect(count, where).toBeLessThanOrEqual(VOLLEY.maxPerTrigger);
         for (const kind of KINDS) {
-          if (flags[kind]) expect(weaponFor(tier, { ...flags, [kind]: false }), `${where} without ${kind}`).not.toEqual(full);
+          if (flags[kind]) expect(fired(tier, { ...flags, [kind]: false }), `${where} without ${kind}`).not.toEqual(full);
           else {
-            const added = weaponFor(tier, { ...flags, [kind]: true }).barrels.length;
-            // Rapid Fire speeds the volley up rather than widening it; the shot-adding kinds must add shots.
-            if (kind === 'rapidFire') expect(added, `${where} adding ${kind}`).toBe(full.barrels.length);
-            else expect(added, `${where} adding ${kind}`).toBeGreaterThan(full.barrels.length);
+            const more = fired(tier, { ...flags, [kind]: true });
+            const added = triggerShots(more.weapon, more.rules);
+            if (ADDING.includes(kind)) expect(added, `${where} adding ${kind}`).toBeGreaterThan(count);
+            else expect(added, `${where} adding ${kind}`).toBe(count);
           }
         }
       }
+    expect(combinations).toBe(4 * 64);
+  });
+
+  it('reaches the ceilings only with everything at once: 8 from the ship at tier 3 with Double Shot and Spread Laser, and the Wingman\'s ninth', () => {
+    expect(VOLLEY.maxPerTrigger).toBe(9);
+    const all = { doubleShot: true, rapidFire: true, spreadLaser: true, piercingBeam: true, homingMissiles: true, wingman: true };
+    expect(triggerShots(weaponFor(3, all), shotRulesFor(all))).toBe(9);
+    expect(weaponFor(3, all).barrels).toHaveLength(8);
+  });
+
+  it('sets the shot rules from the running kinds: 3 pierces, every third shot homing, and the Wingman', () => {
+    expect(shotRulesFor(NONE)).toEqual({ pierce: 0, homingEvery: 0, wingman: false });
+    expect(shotRulesFor({ ...NONE, piercingBeam: true })).toEqual({ pierce: 3, homingEvery: 0, wingman: false });
+    expect(shotRulesFor({ ...NONE, homingMissiles: true })).toEqual({ pierce: 0, homingEvery: 3, wingman: false });
+    expect(shotRulesFor({ ...NONE, wingman: true })).toEqual({ pierce: 0, homingEvery: 0, wingman: true });
+  });
+
+  it('leaves the ship\'s weapon alone for the kinds that change only the shots: piercing, homing and the Wingman', () => {
+    for (const tier of TIERS) expect(weaponFor(tier, { ...NONE, piercingBeam: true, homingMissiles: true, wingman: true }), String(tier)).toEqual(weaponFor(tier, NONE));
   });
 
   it('keeps every volley mirror-symmetric, so it never leans', () => {
     for (const tier of TIERS)
       for (const doubleShot of [false, true])
         for (const spreadLaser of [false, true]) {
-          const { barrels } = weaponFor(tier, { doubleShot, spreadLaser, rapidFire: true });
+          const { barrels } = weaponFor(tier, { ...NONE, doubleShot, spreadLaser, rapidFire: true });
           expect(sortedBy(barrels), `${String(tier)} ${String(doubleShot)} ${String(spreadLaser)}`).toEqual(sortedBy(barrels.map((b) => ({ angle: -b.angle, lateral: -b.lateral }))));
         }
   });

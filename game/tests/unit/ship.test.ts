@@ -7,7 +7,7 @@ import { createShip, respawnShip, stepShip, thrustCompensation, type Ship } from
 import { weaponFor } from '../../src/sim/pickups/volley';
 import { wrapPosition } from '../../src/sim/wrap';
 
-const NO_EFFECTS = { doubleShot: false, rapidFire: false, spreadLaser: false };
+const NO_EFFECTS = { doubleShot: false, rapidFire: false, spreadLaser: false, piercingBeam: false, homingMissiles: false, wingman: false };
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = 1 / 60;

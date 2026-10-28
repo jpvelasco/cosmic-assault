@@ -2,6 +2,7 @@ import { test as base, expect, type Page } from '@playwright/test';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
 import type { GalaxyId, PickupId } from '../src/content/types';
 import { SAVE_KEY, type SaveData } from '../src/meta/save';
+import { STEP_SECONDS } from '../src/sim/config';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /**
@@ -156,6 +157,22 @@ export function gameState(page: Page): Promise<CosmicAssaultTestState> {
     if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
     return api.getState();
   });
+}
+
+/** Shots in the next volley: steps until the ship fires, then returns how many shots that one step added. The fire key must be held. */
+export function shotsPerVolley(page: Page): Promise<number> {
+  return page.evaluate((step) => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    // A volley comes every 0.32 s at most, so 0.5 s of steps always holds one.
+    for (let waited = 0; waited < 0.5; waited += step) {
+      const before = api.getState().events.shot ?? 0;
+      api.fastForward(step);
+      const added = (api.getState().events.shot ?? 0) - before;
+      if (added > 0) return added;
+    }
+    throw new Error('The ship fired nothing in 0.5 s with fire held; hold the fire key before counting a volley');
+  }, STEP_SECONDS);
 }
 
 /** Drops a pickup onto the ship at the next step (see `grantPickup` in src/testApi.d.ts); step once to collect it. */

@@ -16,7 +16,11 @@ type ContentEvent =
   | 'foeDestroyed'
   | 'wellWarning'
   | 'wellStart'
-  | 'wellEnd';
+  | 'wellEnd'
+  | 'foeWindup'
+  | 'mineArmed'
+  | 'mineBlast'
+  | 'zoneWarning';
 
 /** One sounding event of each content type (a drone arriving, a foe killed for points); the Record makes a new one fail to compile here. */
 const CONTENT_EVENTS: Readonly<Record<ContentEvent, SimEvent>> = {
@@ -28,16 +32,20 @@ const CONTENT_EVENTS: Readonly<Record<ContentEvent, SimEvent>> = {
   foeSpawned: { type: 'foeSpawned', id: 1, kind: 'drone', x: 0, y: 0 },
   foeHit: { type: 'foeHit', id: 1, x: 0, y: 0, hp: 1 },
   foeDestroyed: { type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 100 },
-  wellWarning: { type: 'wellWarning', x: 0, y: 0, at: 30 },
-  wellStart: { type: 'wellStart', id: 1 },
-  wellEnd: { type: 'wellEnd', id: 1 },
+  wellWarning: { type: 'wellWarning', id: 1, kind: 'gravityWell', x: 0, y: 0, at: 30 },
+  wellStart: { type: 'wellStart', id: 1, kind: 'gravityWell' },
+  wellEnd: { type: 'wellEnd', id: 1, kind: 'gravityWell' },
+  foeWindup: { type: 'foeWindup', id: 1, x: 0, y: 0, angle: 0 },
+  mineArmed: { type: 'mineArmed', id: 1, x: 0, y: 0 },
+  mineBlast: { type: 'mineBlast', id: 1, x: 0, y: 0, radius: 80 },
+  zoneWarning: { type: 'zoneWarning', id: 1, x: 0, y: 0, w: 150, h: 150 },
 };
 
 const destroyed = (size: AsteroidSize, points = 20): SimEvent => ({ type: 'asteroidDestroyed', id: 1, x: 0, y: 0, size, points });
 const nameOf = (event: SimEvent): string | null => sfxFor(event)?.name ?? null;
 
 /** One event of every type the galaxies and bosses added that makes a sound; the Record makes a new event type fail to compile here. */
-const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | ContentEvent>, SimEvent>> = {
+const GALAXY_EVENTS: Readonly<Record<Exclude<SimEvent['type'], 'shot' | 'asteroidDestroyed' | 'asteroidLeft' | 'shipHit' | 'gameOver' | 'bossHit' | 'showerEnd' | 'galaxyCleared' | 'blast' | 'boltFired' | 'zoneStart' | 'zoneEnd' | ContentEvent>, SimEvent>> = {
   galaxyStart: { type: 'galaxyStart', id: '1-1' },
   showerWarning: { type: 'showerWarning', angle: 0, at: 50 },
   showerStart: { type: 'showerStart' },
@@ -107,6 +115,8 @@ describe('sfxFor', () => {
   it('gives each foe kind its own death, and a drone kill a different one from a splitter breaking', () => {
     expect(nameOf({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 100 })).toBe('splitterBreak');
     expect(nameOf({ type: 'foeDestroyed', id: 2, kind: 'drone', x: 0, y: 0, points: 100 })).toBe('droneDown');
+    expect(nameOf({ type: 'foeDestroyed', id: 3, kind: 'gunship', x: 0, y: 0, points: 250 })).toBe('gunshipDown');
+    expect(nameOf({ type: 'foeDestroyed', id: 4, kind: 'mine', x: 0, y: 0, points: 150 })).toBe('mineDown');
     expect(nameOf({ type: 'foeHit', id: 1, x: 0, y: 0, hp: 1 })).toBe('foeCrack');
   });
 
@@ -115,8 +125,8 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'splitter', x: 0, y: 0 })).toBeNull();
   });
 
-  it('caps the swarm buzz and deflections at one a frame and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1 });
+  it('caps the swarm buzz, deflections and boss bolts at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, bolt: 2, bossBolt: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
@@ -125,9 +135,15 @@ describe('sfxFor', () => {
   });
 
   it('gives a gravity well a warning, an opening and a closing of its own', () => {
-    expect(nameOf({ type: 'wellWarning', x: 0, y: 0, at: 30 })).toBe('wellWarn');
-    expect(nameOf({ type: 'wellStart', id: 1 })).toBe('wellOpen');
-    expect(nameOf({ type: 'wellEnd', id: 1 })).toBe('wellClose');
+    expect(nameOf({ type: 'wellWarning', id: 1, kind: 'gravityWell', x: 0, y: 0, at: 30 })).toBe('wellWarn');
+    expect(nameOf({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toBe('wellOpen');
+    expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toBe('wellClose');
+  });
+
+  it('keeps a repulsion field silent until it has sounds of its own: it never borrows the well\'s', () => {
+    expect(sfxFor({ type: 'wellWarning', id: 1, kind: 'repulsionField', x: 0, y: 0, at: 30 })).toBeNull();
+    expect(sfxFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
+    expect(sfxFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
   });
 
   it('gives the pickups a drop, a collect, an expiry, an effect running out and the Shield breaking', () => {
@@ -143,6 +159,34 @@ describe('sfxFor', () => {
   it('chimes for a combo only as the multiplier rises, not when it breaks back to 1', () => {
     for (const multiplier of [2, 3, 4, 5]) expect(nameOf({ type: 'combo', multiplier })).toBe('combo');
     expect(sfxFor({ type: 'combo', multiplier: 1 })).toBeNull();
+  });
+
+  it('keeps a blast silent until it has a sound of its own: what it destroys still booms', () => {
+    expect(nameOf({ type: 'blast', kind: 'nova', x: 0, y: 0, radius: 520 })).toBeNull();
+  });
+
+  it('ticks as a gunship winds up, zaps as a foe fires a bolt, chirps as a mine arms, booms as it blasts, and stings as a zone warns', () => {
+    expect(nameOf(CONTENT_EVENTS.foeWindup)).toBe('windupTick');
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'gunship', owner: 3, x: 0, y: 0, angle: 0 })).toBe('bolt');
+    // A boss's bolt never plays the foes' zap: a boss voices its own.
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'boss', owner: 0, x: 0, y: 0, angle: 0 })).not.toBe('bolt');
+    expect(nameOf(CONTENT_EVENTS.mineArmed)).toBe('mineArm');
+    expect(nameOf(CONTENT_EVENTS.mineBlast)).toBe('mineBlast');
+    expect(nameOf(CONTENT_EVENTS.zoneWarning)).toBe('zoneWarn');
+    // A zone's start and end are heard as its hum: see humFor.
+    expect(sfxFor({ type: 'zoneStart', id: 1 })).toBeNull();
+    expect(sfxFor({ type: 'zoneEnd', id: 1 })).toBeNull();
+  });
+
+  it('caps the bolt zap at two a frame, as gunships fire together', () => {
+    expect(PER_FRAME_CAPS.bolt).toBe(2);
+  });
+
+  it('gives each source of bolt its own voice: a boss\'s its quieter zap, a foe\'s the zap', () => {
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'boss', owner: 0, x: 0, y: 0, angle: 0 })).toBe('bossBolt');
+    expect(nameOf({ type: 'boltFired', id: 1, source: 'gunship', owner: 3, x: 0, y: 0, angle: 0 })).toBe('bolt');
+    const taken = new Set([...Object.values(GALAXY_EVENTS), ...Object.values(CONTENT_EVENTS)].map(nameOf));
+    expect(taken.has('bossBolt')).toBe(false);
   });
 
   it('whooshes softly as a shower starts, and keeps its end and a meteor leaving silent', () => {
@@ -190,12 +234,22 @@ describe('screenCue', () => {
 
 describe('humFor', () => {
   it('starts the gravity well hum as a well starts pulling and stops it as it lets go', () => {
-    expect(humFor({ type: 'wellStart', id: 1 })).toBe(true);
-    expect(humFor({ type: 'wellEnd', id: 1 })).toBe(false);
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toEqual({ hum: 'well', on: true });
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toEqual({ hum: 'well', on: false });
   });
 
-  it('stops it when the galaxy ends with the well still pulling, and when a new one starts', () => {
-    for (const event of [{ type: 'warpOut' }, { type: 'gameOver', score: 0 }, { type: 'galaxyStart', id: '2-4' }] as const) expect(humFor(event)).toBe(false);
+  it('runs a danger zone\'s hum of its own while it is lethal, so its end never cuts a well\'s', () => {
+    expect(humFor({ type: 'zoneStart', id: 1 })).toEqual({ hum: 'zone', on: true });
+    expect(humFor({ type: 'zoneEnd', id: 1 })).toEqual({ hum: 'zone', on: false });
+  });
+
+  it('leaves the hum be for a repulsion field, so its end never cuts a well\'s hum', () => {
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'repulsionField' })).toBeNull();
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'repulsionField' })).toBeNull();
+  });
+
+  it('stops every hum when the galaxy ends with a hazard still on, and when a new one starts', () => {
+    for (const event of [{ type: 'warpOut' }, { type: 'gameOver', score: 0 }, { type: 'galaxyStart', id: '2-4' }] as const) expect(humFor(event)).toBe('silence');
   });
 
   it('leaves it be for every other event', () => {

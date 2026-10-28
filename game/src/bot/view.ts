@@ -1,8 +1,9 @@
 import type { BossView } from '../sim/boss/behaviour';
 import type { Controls } from '../sim/controls';
 import type { Field } from '../sim/field';
+import type { Bolt } from '../sim/foes/bolts';
 import type { Foe } from '../sim/foes/foe';
-import type { WellState } from '../sim/hazards/gravityWell';
+import type { HazardState } from '../sim/hazards/hazard';
 import type { Pickup } from '../sim/pickups/pickups';
 import type { Asteroid } from '../sim/asteroid';
 import type { Ship } from '../sim/ship';
@@ -19,9 +20,10 @@ export interface BotView {
   ship: Readonly<Ship>;
   asteroids: readonly Readonly<Asteroid>[];
   foes: readonly Readonly<Foe>[];
+  bolts: readonly Readonly<Bolt>[];
   pickups: readonly Readonly<Pickup>[];
   boss: Readonly<BossView> | null;
-  well: Readonly<WellState> | null;
+  hazards: readonly Readonly<HazardState>[];
 }
 
 /** A bot: it reads the view and answers with the controls for the next step. The returned object may be reused. */
@@ -30,7 +32,7 @@ export interface Bot {
 }
 
 /** The World's getters a bot reads, and nothing it could change the run with. */
-export type WorldReadout = Pick<World, 'field' | 'status' | 'elapsed' | 'ship' | 'asteroids' | 'foes' | 'pickups' | 'boss' | 'well'>;
+export type WorldReadout = Pick<World, 'field' | 'status' | 'elapsed' | 'ship' | 'asteroids' | 'foes' | 'bolts' | 'pickups' | 'boss' | 'hazards'>;
 
 /** Refills `view` from `world`, without touching it. */
 export function readView(world: WorldReadout, view: BotView): BotView {
@@ -40,14 +42,15 @@ export function readView(world: WorldReadout, view: BotView): BotView {
   view.ship = world.ship;
   view.asteroids = world.asteroids;
   view.foes = world.foes;
+  view.bolts = world.bolts;
   view.pickups = world.pickups;
   view.boss = world.boss;
-  view.well = world.well;
+  view.hazards = world.hazards;
   return view;
 }
 
 /** A view of `world` as it stands; refill it with `readView` after every step. */
 export function createView(world: WorldReadout): BotView {
-  const { field, status, elapsed, ship, asteroids, foes, pickups, boss, well } = world;
-  return { field, status, elapsed, ship, asteroids, foes, pickups, boss, well };
+  const { field, status, elapsed, ship, asteroids, foes, bolts, pickups, boss, hazards } = world;
+  return { field, status, elapsed, ship, asteroids, foes, bolts, pickups, boss, hazards };
 }

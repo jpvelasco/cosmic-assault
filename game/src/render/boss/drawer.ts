@@ -1,4 +1,5 @@
-import type { BossView } from '../../sim/boss/behaviour';
+import type { BossPart, BossView, Point } from '../../sim/boss/behaviour';
+import type { Field } from '../../sim/field';
 import type { SimEvent } from '../../sim/events';
 import type { FieldPen } from '../fieldPen';
 import type { Palette } from '../palette';
@@ -11,6 +12,8 @@ export interface BossLook {
   readonly still: boolean;
   readonly aimX: number;
   readonly aimY: number;
+  /** The field the boss is drawn on. */
+  readonly field: Field;
 }
 
 /** Where and how the boss pass draws a boss's body this frame; one object, refilled in place. */
@@ -26,6 +29,8 @@ export interface BossFrame {
   alpha: number;
   /** Whether the core shows its white silhouette, in the first moments of a hit's flash. */
   tinted: boolean;
+  /** Seconds of the boss's own time the windup under way has run; 0 between attacks. */
+  windupAge: number;
   look: BossLook;
 }
 
@@ -73,6 +78,13 @@ export function coreSprite({ baker }: DrawerKit, key: string, half: number, pain
 /** Blits `coreSprite` at the pen's place. */
 export function blitCore(kit: DrawerKit, key: string, half: number, paint: (c: CanvasRenderingContext2D) => void, tinted: boolean): void {
   kit.pen.blit(coreSprite(kit, key, half, paint, tinted));
+}
+
+/** Writes into `out`, and returns, where `part` sits from the core's interpolated centre (cx, cy), `frame.alpha` of the way from its previous pose. */
+export function partOffset(part: Readonly<BossPart>, frame: Readonly<BossFrame>, cx: number, cy: number, out: Point): Readonly<Point> {
+  out.x = part.px + (part.x - part.px) * frame.alpha - cx;
+  out.y = part.py + (part.y - part.py) * frame.alpha - cy;
+  return out;
 }
 
 /** Room around a core's rim for its stroke. */

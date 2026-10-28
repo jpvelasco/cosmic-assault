@@ -14,6 +14,9 @@ export function turnBetween(from: number, to: number): number {
  */
 export const smoothstep = (t: number, scale = 1): number => scale * t * t * (3 - 2 * t);
 
+/** Eases out from 0 to 1 over the first half of `t`'s 0 to 1 and back to 0 over the second, `smoothstep` each way. */
+export const outAndBack = (t: number): number => (t < 0.5 ? smoothstep(t * 2) : 1 - smoothstep(t * 2 - 1));
+
 /** Absorbs float residue from summing dt steps, so a time boundary fires on the step it is reached. */
 export const TIME_EPSILON = 1e-9;
 

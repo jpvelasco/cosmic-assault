@@ -120,3 +120,18 @@ describe('a release build', () => {
     expect(hooks).toEqual({});
   });
 });
+
+describe('the e2e boss damage', () => {
+  it('lands every blow where it does harm: on the shards while they shield the core, then on the core', () => {
+    const world = new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById('1-6'), mode: 'free' } });
+    const { hooks, step } = hooksFor(world);
+    while (world.boss?.state !== 'fighting') step();
+    const boss = world.boss;
+    const health = (): number => boss.hp + boss.parts.reduce((sum, part) => sum + part.hp, 0);
+    const before = { health: health(), core: boss.hp };
+    hooks.e2eDamageBoss?.(boss.parts.length);
+    expect(before.health - health()).toBe(boss.parts.length);
+    expect(boss.vulnerable).toBe(true);
+    expect(boss.hp).toBeLessThan(before.core);
+  });
+});

@@ -115,3 +115,29 @@ test.describe(`the Hive Carrier in ${CARRIER_GALAXY}`, () => {
     await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
   });
 });
+
+/** The Warden's galaxy. Its case leans on no seed: five lives carry the idle ship through the approach whatever hits it. */
+const WARDEN_GALAXY = '3-6';
+
+test.describe(`the Warden in ${WARDEN_GALAXY}`, () => {
+  test('arrives inside its ring of 14 turrets with its core open, and its defeat records the clear', async ({ page }) => {
+    await openGame(page, { galaxy: WARDEN_GALAXY, lives: 5 });
+    await page.keyboard.press('Space');
+    await expectMode(page, 'playing');
+
+    await fastForward(page, TO_BOSS_FIGHT_SECONDS);
+    const warden = await bossOf(page);
+    expect(warden).toMatchObject({ id: 'warden', state: 'fighting', vulnerable: true, liveParts: 14, hp: 76, maxHp: 76 });
+    // Its core can always be hurt, so a blow lands on the core, not on a turret.
+    await damageBoss(page, 1);
+    expect(await bossOf(page)).toMatchObject({ hp: 75, liveParts: 14 });
+
+    await damageBoss(page, KILL_SHOTS);
+    // The killing blow ends the galaxy on the next step.
+    await fastForward(page, STEP_SECONDS);
+    const { screen, galaxy, save } = await gameState(page);
+    expect({ screen, galaxy }).toEqual({ screen: 'results', galaxy: WARDEN_GALAXY });
+    await expect(page.getByRole('heading', { name: 'Galaxy cleared' })).toBeVisible();
+    expect(save.galaxies[WARDEN_GALAXY]?.stars).toBeGreaterThan(0);
+  });
+});

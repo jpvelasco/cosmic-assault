@@ -1,4 +1,4 @@
-import type { AttackId, BossId } from '../content/types';
+import type { AttackId, BossId, PaletteId } from '../content/types';
 import type { BossState, BossView } from '../sim/boss/behaviour';
 import { DYING_SECONDS } from '../sim/boss/bossRunner';
 import type { SimEvent } from '../sim/events';
@@ -7,6 +7,7 @@ import { radial, type BossDrawer, type BossFrame, type BossLook, type DrawerFact
 import { hiveCarrierDrawer } from './boss/hiveCarrier';
 import { monolithDrawer } from './boss/monolith';
 import { sentinelDrawer } from './boss/sentinel';
+import { wardenDrawer } from './boss/warden';
 import { mix, rgba } from './color';
 import type { FieldPen } from './fieldPen';
 import { HIT_FLASH_SECONDS } from './hitFlash';
@@ -22,8 +23,11 @@ export const BOSS_FLASH_SECONDS = 0.12;
 export interface BossPass {
   /** A `bossHit` flashes the core; the boss's drawer hears every event too (a `bossPartHit` flashes the part it struck). */
   handle(events: readonly SimEvent[]): void;
-  /** Advances the flash, the clocks of the boss's state, windup and attack, and its drawer, by `dt` seconds of real time. */
-  advance(dt: number, boss: Readonly<BossView> | null): void;
+  /**
+   * Advances the flash, the clocks of the boss's state and attack, and its drawer, by `dt` seconds of real time, and the
+   * windup's clock by the boss's own time, which runs at `timeScale` of real time (Time Warp slows it).
+   */
+  advance(dt: number, boss: Readonly<BossView> | null, timeScale?: number): void;
   /**
    * Draws the boss `alpha` of the way from its previous position: glow, windup ring or shockwave, its drawer's body, and
    * hit flash. Expects the field pen aimed for the frame and `source-over`, which it leaves as it found them, with alpha 1.
@@ -36,7 +40,7 @@ export interface BossPass {
 }
 
 /** Each boss's look. */
-const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer };
+const DRAWERS: Readonly<Record<BossId, DrawerFactory>> = { sentinel: sentinelDrawer, monolith: monolithDrawer, hiveCarrier: hiveCarrierDrawer, warden: wardenDrawer };
 
 const WHITE = '#ffffff';
 /** The core shows white while the flash is above this, the share of BOSS_FLASH_SECONDS left after HIT_FLASH_SECONDS. */
@@ -75,7 +79,7 @@ function paintRing(ctx: CanvasRenderingContext2D, r: number, color: string): voi
 }
 
 /** Every attack, once: the `satisfies` makes a new one fail to compile until it is listed. */
-const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0 } as const satisfies Record<AttackId, 0>;
+const ATTACK_ID_SET = { shardRing: 0, lunge: 0, shardVolley: 0, quake: 0, pulse: 0, launch: 0, broadside: 0, retreat: 0, turretVolley: 0, lockOn: 0, spin: 0, ringPulse: 0 } as const satisfies Record<AttackId, 0>;
 const ATTACK_IDS = Object.keys(ATTACK_ID_SET) as AttackId[];
 
 /** A record of `make(id)` for every attack. */
@@ -84,7 +88,7 @@ function perAttack<T>(make: (id: AttackId) => T): Record<AttackId, T> {
 }
 
 /** The cache keys of the windup rings at `radius`, made once per radius so drawing builds no strings. */
-const ringKeys = (radius: number): Record<AttackId, string> => perAttack((id) => `boss|ring|${id}|${String(radius)}`);
+const ringKeys = (radius: number, palette: PaletteId): Record<AttackId, string> => perAttack((id) => `boss|${palette}|ring|${id}|${String(radius)}`);
 
 /**
  * Draws the boss from baked sprites (no `shadowBlur`): what every boss shares (a glow, a closing ring while an attack
@@ -106,14 +110,18 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
     launch: palette.accent[0],
     broadside: palette.ring,
     retreat: palette.accent[2],
+    turretVolley: palette.accent[0],
+    lockOn: palette.ring,
+    spin: palette.spark,
+    ringPulse: palette.accent[2],
   };
   /** The radius the rings are keyed and painted for; a boss keeps one, so they are made once a fight. */
   let radius = 0;
-  let rings = ringKeys(radius);
+  let rings = ringKeys(radius, palette.id);
   const ringPainters = perAttack((attack) => (c: CanvasRenderingContext2D): void => {
     paintRing(c, radius, ringColors[attack]);
   });
-  const frame: BossFrame = { x: 0, y: 0, size: 1, shown: 1, alpha: 1, tinted: false, look: { glow: 1, still: false, aimX: 0, aimY: 0 } };
+  const frame: BossFrame = { x: 0, y: 0, size: 1, shown: 1, alpha: 1, tinted: false, windupAge: 0, look: { glow: 1, still: false, aimX: 0, aimY: 0, field: { width: 0, height: 0 } } };
   let flash = 0;
   let state: BossState | null = null;
   let stateClock = 0;
@@ -154,7 +162,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
         for (const drawer of allDrawers) drawer.handle?.(event);
       }
     },
-    advance(dt, boss) {
+    advance(dt, boss, timeScale = 1) {
       flash = Math.max(0, flash - dt / BOSS_FLASH_SECONDS);
       if (boss === null) {
         state = null;
@@ -164,7 +172,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       }
       stateClock = boss.state === state ? stateClock + dt : 0;
       state = boss.state;
-      windupClock = boss.windup === windup ? windupClock + dt : 0;
+      windupClock = boss.windup === windup ? windupClock + dt * timeScale : 0;
       windup = boss.windup;
       activeClock = boss.active === active ? activeClock + dt : 0;
       active = boss.active;
@@ -176,7 +184,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       const r = boss.radius;
       if (r !== radius) {
         radius = r;
-        rings = ringKeys(r);
+        rings = ringKeys(r, palette.id);
       }
       const shown = presence(boss.state);
       const dying = boss.state === 'dying' && boss.state === state ? stateClock / DYING_SECONDS : 0;
@@ -186,6 +194,7 @@ export function createBossPass(ctx: CanvasRenderingContext2D, pen: FieldPen, bak
       frame.shown = shown;
       frame.alpha = alpha;
       frame.tinted = flash > TINT_ABOVE;
+      frame.windupAge = boss.windup !== null && boss.windup === windup ? windupClock : 0;
       frame.look = look;
       ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = GLOW_ALPHA * look.glow * shown;

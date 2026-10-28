@@ -489,8 +489,8 @@ describe('sound effects', () => {
 });
 
 describe('the gravity well hum', () => {
-  const START: SimEvent = { type: 'wellStart', id: 1 };
-  const END: SimEvent = { type: 'wellEnd', id: 1 };
+  const START: SimEvent = { type: 'wellStart', id: 1, kind: 'gravityWell' };
+  const END: SimEvent = { type: 'wellEnd', id: 1, kind: 'gravityWell' };
   /** The hum's oscillators: the only ones in these tests started with no stop scheduled. */
   const looping = (): FakeNode[] => nodesOf('oscillator').filter((n) => n.stop.mock.calls.length === 0);
   const playingEngine = (): AudioEngine => {
@@ -589,6 +589,21 @@ describe('the gravity well hum', () => {
     const hum = looping();
     e.dispose();
     for (const osc of hum) expect(osc.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a danger zone's hum beside a well's: each starts and stops on its own events", () => {
+    const e = playingEngine();
+    e.handle([START]);
+    const well = looping();
+    e.handle([{ type: 'zoneStart', id: 2 }]);
+    const both = looping();
+    expect(both.length).toBeGreaterThan(well.length);
+    const zone = both.filter((n) => !well.includes(n));
+    e.handle([{ type: 'zoneEnd', id: 2 }]);
+    expect(looping()).toEqual(well);
+    for (const osc of zone) expect(osc.stop).toHaveBeenCalledTimes(1);
+    e.handle([{ type: 'zoneStart', id: 3 }, { type: 'warpOut' }]);
+    expect(looping()).toEqual([]);
   });
 
   it('builds no hum before the context runs, and starts it once it does', () => {
@@ -938,7 +953,9 @@ describe('music themes', () => {
       ['1-1', 'drift'],
       ['2-1', 'ionReach'],
       ['2-5', 'ionReach'],
-      ['3-2', 'drift'],
+      ['3-2', 'crimsonNebula'],
+      ['4-1', 'voidRift'],
+      ['5-3', 'singularity'],
     ] as const)('takes galaxy %s\'s theme, %s, as it starts', (id, theme) => {
       const e = engine();
       e.handle([start(id)]);
@@ -955,6 +972,18 @@ describe('music themes', () => {
       expect(e.theme).toBe('ionReach');
       e.handle([start('1-6'), INTRO]);
       expect(e.theme).toBe('driftBoss');
+    });
+
+    it.each([
+      ['3-6', 'crimsonNebula'],
+      ['4-6', 'voidRift'],
+      ['5-6', 'singularity'],
+    ] as const)('plays %s\'s boss variant of %s from its intro', (id, theme) => {
+      const e = engine();
+      e.handle([start(id)]);
+      expect(e.theme).toBe(theme);
+      e.handle([INTRO]);
+      expect(e.theme).toBe(`${theme}Boss`);
     });
 
     it('keeps the boss variant through a pause, and plays the last-played Dimension\'s plain theme on every menu', () => {

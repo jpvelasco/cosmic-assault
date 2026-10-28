@@ -5,9 +5,7 @@ import { idleIntent } from '../../src/bot/hands';
 import { createView, readView, type BotView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId } from '../../src/content/types';
-import { MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
 import type { BossView } from '../../src/sim/boss/behaviour';
-import { VOLLEY_REACH } from '../../src/sim/boss/monolith';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Foe } from '../../src/sim/foes/foe';
@@ -18,8 +16,9 @@ import { World } from '../../src/sim/world';
 import type { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import type { Ship } from '../../src/sim/ship';
-import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
-import { SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock } from '../helpers/botScene';
+import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { flyingBolt, SCENE_FIELD, SCENE_SHIP, sceneView, stage, stillRock, threatOf } from '../helpers/botScene';
+import { foeAt } from '../helpers/foeAt';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const WOBBLE_LIMIT = 0.25;
@@ -67,9 +66,9 @@ function dodgeRate(seed: number, windup: AttackId | null, place: (view: BotView,
   return dodged / trials;
 }
 
-/** A drone `id` 100 units to the ship's right, flying straight at it. */
-const oncoming = (id: number): Foe =>
-  ({ id, kind: 'drone', x: SCENE_SHIP.x + 100, y: SCENE_SHIP.y, vx: -110, vy: 0, px: SCENE_SHIP.x + 101, py: SCENE_SHIP.y, rotation: Math.PI, protation: Math.PI, spin: 0, radius: 12, hp: 1 });
+/** A drone `id` 100 units to the ship's right, flying straight at it; `fromAttack` marks it a boss attack's. */
+const oncoming = (id: number, fromAttack: boolean): Foe =>
+  foeAt('drone', SCENE_SHIP.x + 100, SCENE_SHIP.y, { id, vx: -110, px: SCENE_SHIP.x + 101, rotation: Math.PI, protation: Math.PI, fromAttack });
 
 /** About how long a volley's shards take, once thrown, to pass where the ship was as the windup began. */
 const VOLLEY_ARRIVES = 0.6;
@@ -91,7 +90,7 @@ function escapes(windup: number, seed: number): boolean {
     if (!winding) view.boss = { ...(view.boss as BossView), active: 'shardVolley' };
     world.step(STEP_SECONDS, bot.decide(view));
   }
-  return Math.hypot(world.ship.x - SCENE_SHIP.x, world.ship.y - SCENE_SHIP.y) > VOLLEY_REACH + PLAYER.radius;
+  return Math.hypot(world.ship.x - SCENE_SHIP.x, world.ship.y - SCENE_SHIP.y) > threatOf('shardVolley').reach + PLAYER.radius;
 }
 
 describe("the casual bot's handicaps", () => {
@@ -166,13 +165,13 @@ describe("the casual bot's handicaps", () => {
   });
 
   it('dodges the drones a telegraphed launch sends out at the launch\'s 85%, and other drones at the episode\'s 60%', () => {
-    // The launch winds up with nothing yet in reach; its wave appears as it runs, while the boss rests.
-    const wave = (view: BotView, id: number): void => {
+    // The launch winds up with nothing yet in reach; its wave appears, marked as the launch's, as it runs, while the boss rests.
+    const wave = (fromAttack: boolean) => (view: BotView, id: number): void => {
       windUp(view, null);
-      view.foes = [oncoming(id)];
+      view.foes = [oncoming(id, fromAttack)];
     };
-    expect(Math.abs(dodgeRate(13, 'launch', wave) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
-    expect(Math.abs(dodgeRate(13, null, wave) - DODGE_CHANCE)).toBeLessThan(0.05);
+    expect(Math.abs(dodgeRate(13, 'launch', wave(true)) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+    expect(Math.abs(dodgeRate(13, null, wave(false)) - DODGE_CHANCE)).toBeLessThan(0.05);
   });
 
   it('judges the rocks a telegraphed attack sends out on the attack\'s 85% roll', () => {
@@ -182,6 +181,15 @@ describe("the casual bot's handicaps", () => {
       view.asteroids = [flyingRock(id, SMALL_BOSS.at.x, SMALL_BOSS.at.y + SMALL_BOSS.radius + 15, Math.PI / 2, true)];
     });
     expect(Math.abs(rate - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+  });
+
+  it("judges the bolts a telegraphed attack fires on the attack's 85% roll, and other bolts on the episode's 60%", () => {
+    const volley = (fromAttack: boolean) => (view: BotView, id: number): void => {
+      windUp(view, null);
+      view.bolts = [flyingBolt(id, SCENE_SHIP.x + 110, SCENE_SHIP.y, Math.PI, fromAttack)];
+    };
+    expect(Math.abs(dodgeRate(19, 'quake', volley(true)) - TELEGRAPH_DODGE_CHANCE)).toBeLessThan(0.04);
+    expect(Math.abs(dodgeRate(19, null, volley(false)) - DODGE_CHANCE)).toBeLessThan(0.05);
   });
 
   it('judges a rock that comes unannounced on the episode\'s 60% roll, even while an attack winds up', () => {
@@ -212,7 +220,7 @@ describe("the casual bot's handicaps", () => {
       if (boss?.vulnerable === true && world.elapsed > fight + 10) {
         const floor = world.elapsed > fight + 20 ? boss.maxHp / 3 - 1 : (2 * boss.maxHp) / 3 - 1;
         const target = boss.target;
-        if (target !== null && boss.hp > Math.max(2, floor)) run.hitBoss(target.x, target.y, 1);
+        if (target !== null && boss.hp > Math.max(2, floor)) run.bosses.hitBoss(target.x, target.y, 1);
       }
       Object.assign(world.ship as Ship, { invulnerable: true, invulnerableFor: 1 });
       world.step(STEP_SECONDS, NO_CONTROLS);

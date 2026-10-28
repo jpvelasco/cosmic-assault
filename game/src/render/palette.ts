@@ -29,6 +29,8 @@ export interface Palette {
   readonly ring: string;
   readonly hud: string;
   readonly accent: readonly [string, string, string];
+  /** What is hostile and telegraphed: bolts, a gunship's aim line, a mine's arm ring, a danger zone. */
+  readonly hostile: string;
   /** The stars and the dust in the sky. */
   readonly star: string;
 }
@@ -58,17 +60,18 @@ export const DRIFT: Palette = {
   ring: '#ffd36b',
   hud: '#ffc6ee',
   accent: ['#22d3ff', '#a855f7', '#ff4fd8'],
+  hostile: '#22d3ff',
   star: '#fff4ff',
 };
 
 /**
- * Dimension 2: an electric cyan sky, teal and violet nebula, cooler rocks. The ship stays `#39ff14` and the shot keeps
+ * Dimension 2: a deep cyan sky (its brightest stop stays dark enough for the pink shot to read on it), teal and violet nebula, cooler rocks. The ship stays `#39ff14` and the shot keeps
  * its white core. The accents lead with magenta and violet, since drones and wells are drawn in them and a cyan foe
  * would vanish against this sky.
  */
 export const ION_REACH: Palette = {
   id: 'ionReach',
-  skyStops: ['#041c40', '#066b93', '#10c4d4'],
+  skyStops: ['#041c40', '#06638c', '#08728e'],
   nebula: [
     { x: 0.2, y: 0.3, r: 220 / 300, color: '#00e5d4', alpha: 0.3 },
     { x: 0.4, y: 0.1, r: 160 / 300, color: '#2f8bff', alpha: 0.22 },
@@ -80,16 +83,105 @@ export const ION_REACH: Palette = {
   rockGlow: '#7af0ff',
   ship: DRIFT.ship,
   cockpit: DRIFT.cockpit,
-  shot: '#ff3df0',
+  shot: '#ffb0fa',
   shotCore: '#ffffff',
   spark: '#e2fcff',
   ring: '#ffe566',
   hud: '#d6f6ff',
-  accent: ['#ff3df0', '#9a5cff', '#00f0ff'],
+  accent: ['#ffb0fa', '#9a5cff', '#00f0ff'],
+  hostile: '#ffb0fa',
   star: '#e8fdff',
 };
 
-const PALETTES: Readonly<Record<PaletteId, Palette>> = { drift: DRIFT, ionReach: ION_REACH };
+/**
+ * Dimension 3: a deep red sky, red, orange and amber nebula, warm stone rocks. The cyan shot and the yellow foes are the
+ * cool and hot accents the red sky sets off; what is hostile (bolts, aim lines, arm rings, danger zones) is a hot
+ * magenta, apart from both and from the reds behind it.
+ */
+export const CRIMSON_NEBULA: Palette = {
+  id: 'crimsonNebula',
+  skyStops: ['#2b0610', '#4a0d1c', '#1c0a14'],
+  nebula: [
+    { x: 0.2, y: 0.3, r: 220 / 300, color: '#ff2f3f', alpha: 0.34 },
+    { x: 0.4, y: 0.1, r: 160 / 300, color: '#ff8a2a', alpha: 0.24 },
+    { x: 0.85, y: 0.8, r: 230 / 300, color: '#ffb347', alpha: 0.2 },
+    { x: 0.6, y: 0.55, r: 160 / 300, color: '#c4165a', alpha: 0.26 },
+  ],
+  rock: ['#f6d2bc', '#a85d52', '#3a1420'],
+  rockRim: rgba('#ffffff', 0.3),
+  rockGlow: '#ff7a45',
+  ship: DRIFT.ship,
+  cockpit: DRIFT.cockpit,
+  shot: '#5cf2ff',
+  shotCore: '#ffffff',
+  spark: '#ffe2c2',
+  ring: '#ffb347',
+  hud: '#ffd2c2',
+  accent: ['#ffe14f', '#ff7a45', '#5cf2ff'],
+  hostile: '#ff58e6',
+  star: '#fff0e4',
+};
+
+/** Dimension 4: a deep violet sky, violet, magenta and blue nebula, amethyst rocks. A gold shot and rose foes. */
+export const VOID_RIFT: Palette = {
+  id: 'voidRift',
+  skyStops: ['#12052e', '#25094d', '#0a0420'],
+  nebula: [
+    { x: 0.2, y: 0.3, r: 220 / 300, color: '#8a3dff', alpha: 0.34 },
+    { x: 0.4, y: 0.1, r: 160 / 300, color: '#e03dc8', alpha: 0.22 },
+    { x: 0.85, y: 0.8, r: 230 / 300, color: '#3a6bff', alpha: 0.28 },
+    { x: 0.6, y: 0.55, r: 160 / 300, color: '#b04dff', alpha: 0.22 },
+  ],
+  rock: ['#d8c6fa', '#7456bd', '#2a1650'],
+  rockRim: rgba('#ffffff', 0.3),
+  rockGlow: '#b07cff',
+  ship: DRIFT.ship,
+  cockpit: DRIFT.cockpit,
+  shot: '#ffd36b',
+  shotCore: '#ffffff',
+  spark: '#f0e0ff',
+  ring: '#ffd36b',
+  hud: '#e2d2ff',
+  accent: ['#ff4f7a', '#b07cff', '#4fe0ff'],
+  hostile: '#ff4f7a',
+  star: '#f4ecff',
+};
+
+/**
+ * Dimension 5: a near-black sky with gold and ember nebula, bright bone-gold rocks so they stay legible on the black. A
+ * cyan shot and crimson-pink foes.
+ */
+export const SINGULARITY: Palette = {
+  id: 'singularity',
+  skyStops: ['#0a0804', '#1a1408', '#050403'],
+  nebula: [
+    { x: 0.18, y: 0.3, r: 150 / 300, color: '#ffb300', alpha: 0.26 },
+    { x: 0.42, y: 0.08, r: 110 / 300, color: '#ff6a1a', alpha: 0.16 },
+    { x: 0.86, y: 0.78, r: 160 / 300, color: '#ffc21a', alpha: 0.2 },
+    { x: 0.62, y: 0.55, r: 100 / 300, color: '#ff4a2a', alpha: 0.12 },
+  ],
+  rock: ['#f6e8c0', '#9c8656', '#3a2e16'],
+  rockRim: rgba('#ffffff', 0.34),
+  rockGlow: '#ffc94a',
+  ship: DRIFT.ship,
+  cockpit: DRIFT.cockpit,
+  shot: '#4fd8ff',
+  shotCore: '#ffffff',
+  spark: '#fff0c0',
+  ring: '#ffc94a',
+  hud: '#ffe9b0',
+  accent: ['#ff3d6e', '#ffc94a', '#4fd8ff'],
+  hostile: '#ff3d6e',
+  star: '#fff6dc',
+};
+
+const PALETTES: Readonly<Record<PaletteId, Palette>> = {
+  drift: DRIFT,
+  ionReach: ION_REACH,
+  crimsonNebula: CRIMSON_NEBULA,
+  voidRift: VOID_RIFT,
+  singularity: SINGULARITY,
+};
 
 /** Every palette a galaxy can name. */
 export const PALETTE_IDS = Object.keys(PALETTES) as readonly PaletteId[];

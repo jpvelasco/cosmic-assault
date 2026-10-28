@@ -11,11 +11,16 @@ export interface BossDef {
   readonly phases: readonly (readonly AttackId[])[];
   /** Seconds it rests between attacks in each phase, shrinking. */
   readonly rest: readonly [number, number, number];
+  /**
+   * HP the core loses each time one of its parts breaks, shielded or not (M6-R9): it can move the boss to its next phase,
+   * but never kills it, which takes a blow on the core. None if absent.
+   */
+  readonly partBreakDamage?: number;
 }
 
 const HP_PER_DIMENSION = 6;
 
-/** The boss roster: the Monolith guards 1-★ and the Hive Carrier 2-★, and M4's Sentinel stands in for the bosses still to come. */
+/** The boss roster: the Monolith guards 1-★, the Hive Carrier 2-★ and the Warden 3-★, and M4's Sentinel stands in for the bosses still to come. */
 export const BOSSES: Readonly<Record<BossId, BossDef>> = {
   monolith: {
     id: 'monolith',
@@ -33,6 +38,15 @@ export const BOSSES: Readonly<Record<BossId, BossDef>> = {
     radius: 100,
     phases: [['launch', 'broadside'], ['launch', 'retreat', 'broadside'], ['launch', 'broadside', 'launch', 'retreat']],
     rest: [2.5, 2.0, 1.6],
+  },
+  warden: {
+    id: 'warden',
+    name: 'Warden',
+    // `bossHp` adds two Dimensions' share in 3-★, the only galaxy it guards: 76.
+    hp: 64,
+    radius: 48,
+    phases: [['turretVolley', 'lockOn'], ['turretVolley', 'spin', 'lockOn'], ['ringPulse', 'turretVolley', 'spin', 'lockOn']],
+    rest: [2.0, 1.5, 1.0],
   },
   sentinel: {
     id: 'sentinel',

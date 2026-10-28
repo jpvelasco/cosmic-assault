@@ -1,4 +1,5 @@
-import { FOES } from '../content/foes';
+import { clamp } from '../content/curves';
+import { FOES, GUNSHIP, MINE } from '../content/foes';
 import type { FoeKind } from '../content/types';
 import type { Field } from '../sim/field';
 import type { Foe } from '../sim/foes/foe';
@@ -6,12 +7,17 @@ import { TAU } from '../sim/math';
 import { mix, rgba } from './color';
 import { HIT_FLASH_SECONDS, type FoeFlash } from './hitFlash';
 import { interpolatePose } from './interp';
+import type { FieldPen } from './fieldPen';
 import type { Palette } from './palette';
 import { createZoom, type SceneLook, type Stamp } from './scene';
 import { addStops, paintGlow, strokePath, tracePath, type Point, type SpriteBaker } from './sprites';
 
 export interface FoePass {
-  /** The foes, `alpha` of the way from their previous pose: a glow under each, then its body. */
+  /**
+   * The foes, `alpha` of the way from their previous pose: under them every mine's arm ring (and, once armed, its blast
+   * reach filling as the fuse burns) and every winding-up gunship's aim line to where it will fire; then a glow under
+   * each, then its body.
+   */
   drawFoes(foes: readonly Readonly<Foe>[], alpha: number, field: Field, look: SceneLook): void;
   /** The white silhouettes of foes just hurt, fading over their flash. */
   drawFlashes(flashes: readonly Readonly<FoeFlash>[], field: Field): void;
@@ -22,7 +28,7 @@ const BLACK = '#000000';
 /** Room around the art for its rim stroke and baked engine glow, in field units. */
 const SPRITE_PAD = 3;
 /** The glow under a foe: its diameter as a multiple of the radius, and its alpha at full quality. */
-const GLOW_SCALE: Readonly<Record<FoeKind, number>> = { splitter: 2.8, drone: 3.4 };
+const GLOW_SCALE: Readonly<Record<FoeKind, number>> = { splitter: 2.8, drone: 3.4, gunship: 1.6, mine: 2.6 };
 const GLOW_ALPHA = 0.4;
 /** The drone's engine flickers this fast, between these shares of its glow. */
 const ENGINE_HZ = 9;
@@ -48,9 +54,43 @@ const DRONE_HULL: readonly Point[] = [
 ];
 const DRONE_ENGINE: Point = { x: -8, y: 0 };
 
+/** The gunship's hull, nose along +x: a broad wedge with a notched tail, its turret forward of its middle. */
+const GUNSHIP_HULL: readonly Point[] = [
+  { x: 21, y: 0 },
+  { x: -13, y: 16 },
+  { x: -8, y: 6 },
+  { x: -12, y: 0 },
+  { x: -8, y: -6 },
+  { x: -13, y: -16 },
+];
+const GUNSHIP_TURRET: Point = { x: 5, y: 0 };
+/** While it winds up its turret glow swells to this many times its size and pulses this fast. */
+const CHARGE_SWELL = 1.8;
+const CHARGE_HZ = 8;
+
+/** The mine's spikes, and how far out they reach and its body sits, in field units. */
+const MINE_SPIKES = 8;
+const MINE_SPIKE_REACH = 14;
+const MINE_BODY = 9;
+/** Its arm ring's dashes: how many round it, and how fast it turns (rad/s). Armed, it blinks this fast. */
+const RING_DASHES = 24;
+const RING_SPIN = 0.35;
+const ARMED_HZ = 6;
+/** The aim line's dash and gap, in field units, how fast it marches toward the aim, and its width. */
+const AIM_DASH: readonly number[] = [10, 7];
+const NO_DASH: readonly number[] = [];
+const AIM_MARCH = 60;
+const AIM_WIDTH = 2;
+
 /** The sprite cache keys of the foes in `palette`, made once so drawing builds no strings. A splitter has a cracked look at 1 HP. */
 export function foeKeys(palette: Palette): Readonly<Record<FoeKind | 'crackedSplitter', string>> {
-  return { splitter: `foe|${palette.id}|splitter`, crackedSplitter: `foe|${palette.id}|splitter|cracked`, drone: `foe|${palette.id}|drone` };
+  const key = (art: string): string => `foe|${palette.id}|${art}`;
+  return { splitter: key('splitter'), crackedSplitter: key('splitter|cracked'), drone: key('drone'), gunship: key('gunship'), mine: key('mine') };
+}
+
+/** The sprite cache keys of a mine's arm ring and its blast reach in `palette`, drawn at their true size on every device. */
+export function mineMarkKeys(palette: Palette): Readonly<{ ring: string; blast: string }> {
+  return { ring: `foe|${palette.id}|mine|ring`, blast: `foe|${palette.id}|mine|blast` };
 }
 
 function traceSeams(ctx: CanvasRenderingContext2D, r: number): void {
@@ -117,14 +157,92 @@ function paintDrone(ctx: CanvasRenderingContext2D, p: Palette): void {
   ctx.fill();
 }
 
+/** The gunship: a glossy wedge in the first accent, a dark spine, and a turret in the hostile hue whose glow is drawn live. */
+function paintGunship(ctx: CanvasRenderingContext2D, p: Palette): void {
+  const hull = p.accent[0];
+  ctx.lineJoin = 'round';
+  tracePath(ctx, GUNSHIP_HULL);
+  ctx.fillStyle = addStops(ctx.createLinearGradient(0, 16, 0, -16), [mix(hull, BLACK, 0.65), mix(hull, BLACK, 0.2), mix(hull, WHITE, 0.45)], [0, 0.5, 1]);
+  ctx.fill();
+  strokePath(ctx, rgba(WHITE, 0.65), 1.1);
+  ctx.beginPath();
+  ctx.moveTo(-10, 0);
+  ctx.lineTo(GUNSHIP_TURRET.x, 0);
+  strokePath(ctx, rgba(mix(hull, BLACK, 0.75), 0.7), 2.2);
+  ctx.beginPath();
+  ctx.moveTo(GUNSHIP_TURRET.x, 0);
+  ctx.lineTo(19, 0);
+  strokePath(ctx, mix(p.hostile, BLACK, 0.35), 2.6);
+  ctx.beginPath();
+  ctx.arc(GUNSHIP_TURRET.x, GUNSHIP_TURRET.y, 4.6, 0, TAU);
+  ctx.fillStyle = addStops(ctx.createRadialGradient(GUNSHIP_TURRET.x - 1, -1, 0, GUNSHIP_TURRET.x, 0, 4.6), [WHITE, p.hostile, mix(p.hostile, BLACK, 0.5)], [0, 0.45, 1]);
+  ctx.fill();
+}
+
+/** The mine: a dark orb in the second accent bristling with spikes, a hostile light at its heart. */
+function paintMine(ctx: CanvasRenderingContext2D, p: Palette): void {
+  const shell = p.accent[1];
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < MINE_SPIKES * 2; i++) {
+    const angle = (i / (MINE_SPIKES * 2)) * TAU;
+    const reach = i % 2 === 0 ? MINE_SPIKE_REACH : MINE_BODY * 0.92;
+    ctx.lineTo(Math.cos(angle) * reach, Math.sin(angle) * reach);
+  }
+  ctx.closePath();
+  ctx.fillStyle = mix(shell, BLACK, 0.35);
+  ctx.fill();
+  strokePath(ctx, rgba(WHITE, 0.5), 0.9);
+  ctx.beginPath();
+  ctx.arc(0, 0, MINE_BODY, 0, TAU);
+  ctx.fillStyle = addStops(ctx.createRadialGradient(-3, -3.5, 0.5, 0, 0, MINE_BODY), [mix(shell, WHITE, 0.5), shell, mix(shell, BLACK, 0.6)], [0, 0.45, 1]);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, 0, 3.2, 0, TAU);
+  ctx.fillStyle = addStops(ctx.createRadialGradient(-0.6, -0.6, 0, 0, 0, 3.2), [WHITE, p.hostile, mix(p.hostile, BLACK, 0.4)], [0, 0.5, 1]);
+  ctx.fill();
+}
+
+/** A mine's arm ring at its true radius: dashes in the hostile hue over a faint band, so it reads by shape and colour. */
+function paintArmRing(ctx: CanvasRenderingContext2D, p: Palette): void {
+  const r = MINE.armRadius;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  strokePath(ctx, rgba(p.hostile, 0.12), 6);
+  ctx.lineCap = 'round';
+  const dash = TAU / RING_DASHES;
+  for (let i = 0; i < RING_DASHES; i++) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, i * dash, i * dash + dash * 0.55);
+    strokePath(ctx, rgba(p.hostile, 0.85), 2);
+  }
+}
+
+/** An armed mine's blast reach, at its true radius: a hostile disc brightening toward its rim. */
+function paintBlastReach(ctx: CanvasRenderingContext2D, p: Palette): void {
+  const r = MINE.blastRadius;
+  const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+  gradient.addColorStop(0, rgba(p.hostile, 0.08));
+  gradient.addColorStop(0.8, rgba(p.hostile, 0.3));
+  gradient.addColorStop(1, rgba(p.hostile, 0.55));
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+  strokePath(ctx, rgba(mix(p.hostile, WHITE, 0.4), 0.9), 2);
+}
+
 /**
  * Draws the foes from baked glossy sprites (no `shadowBlur`): a cracked splitter rock with glowing seams that open up
- * at 1 HP, and a chevron drone turned to its heading with a flickering engine glow. Keys and painters are made once
- * and sprites are baked at the layout's visual scale, so a frame of drawing allocates nothing.
+ * at 1 HP, a chevron drone turned to its heading with a flickering engine glow, a wedge gunship whose turret glows and
+ * swells as it winds up, and a spiked mine. A mine's arm ring and blast reach are drawn at their true size on every
+ * device, since they are what the ship must keep out of. Keys and painters are made once and sprites are baked at the
+ * layout's visual scale, so a frame of drawing allocates nothing.
  */
-export function createFoePass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker: SpriteBaker, palette: Palette): FoePass {
+export function createFoePass(ctx: CanvasRenderingContext2D, pen: FieldPen, stamp: Stamp, baker: SpriteBaker, palette: Palette): FoePass {
   const keys = foeKeys(palette);
-  const glowColors: Readonly<Record<FoeKind, string>> = { splitter: palette.accent[2], drone: palette.accent[0] };
+  const marks = mineMarkKeys(palette);
+  const glowColors: Readonly<Record<FoeKind, string>> = { splitter: palette.accent[2], drone: palette.accent[0], gunship: palette.hostile, mine: palette.hostile };
   const zoom = createZoom();
   const painters = {
     splitter: zoom.wrap((c) => {
@@ -136,12 +254,68 @@ export function createFoePass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker
     drone: zoom.wrap((c) => {
       paintDrone(c, palette);
     }),
+    gunship: zoom.wrap((c) => {
+      paintGunship(c, palette);
+    }),
+    mine: zoom.wrap((c) => {
+      paintMine(c, palette);
+    }),
+  };
+  const paintRing = (c: CanvasRenderingContext2D): void => {
+    paintArmRing(c, palette);
+  };
+  const paintBlast = (c: CanvasRenderingContext2D): void => {
+    paintBlastReach(c, palette);
   };
   const pose = { x: 0, y: 0, angle: 0 };
-  const halves: Readonly<Record<FoeKind, number>> = { splitter: FOES.splitter.radius * 1.05 + SPRITE_PAD, drone: 15 + SPRITE_PAD };
+  const halves: Readonly<Record<FoeKind, number>> = { splitter: FOES.splitter.radius * 1.05 + SPRITE_PAD, drone: 15 + SPRITE_PAD, gunship: 22 + SPRITE_PAD, mine: MINE_SPIKE_REACH + SPRITE_PAD };
+  const aimColor = palette.hostile;
 
-  function look(foe: Readonly<Foe>): 'splitter' | 'crackedSplitter' | 'drone' {
+  function look(foe: Readonly<Foe>): FoeKind | 'crackedSplitter' {
     return foe.kind === 'splitter' && foe.hp < FOES.splitter.hp ? 'crackedSplitter' : foe.kind;
+  }
+
+  /** How far through its windup (a gunship) or fuse (a mine) a charging foe is, 0 to 1. */
+  function charge(foe: Readonly<Foe>): number {
+    return clamp(1 - foe.timer / (foe.kind === 'mine' ? MINE.fuse : GUNSHIP.windup), 0, 1);
+  }
+
+  /** Every mine's arm ring, filled with its blast reach once armed; then every winding-up gunship's aim line. */
+  function drawMarks(foes: readonly Readonly<Foe>[], alpha: number, field: Field, { time, still }: SceneLook): void {
+    for (const foe of foes) {
+      if (foe.hp <= 0 || foe.kind !== 'mine') continue;
+      interpolatePose(foe.px, foe.py, foe.protation, foe.x, foe.y, foe.rotation, alpha, field, pose);
+      const turn = still ? 0 : time * RING_SPIN;
+      if (foe.charging) {
+        const blink = still ? 1 : 0.6 + 0.4 * Math.sin(time * TAU * ARMED_HZ);
+        ctx.globalAlpha = (0.35 + 0.65 * charge(foe)) * blink;
+        stamp(baker.custom(marks.blast, MINE.blastRadius + SPRITE_PAD, paintBlast), pose.x, pose.y, 1, 0, MINE.blastRadius, field);
+      }
+      ctx.globalAlpha = foe.charging ? 1 : 0.7;
+      stamp(baker.custom(marks.ring, MINE.armRadius + SPRITE_PAD, paintRing), pose.x, pose.y, Math.cos(turn), Math.sin(turn), MINE.armRadius, field);
+    }
+    ctx.globalAlpha = 1;
+    drawAimLines(foes, alpha, field, time, still);
+  }
+
+  function drawAimLines(foes: readonly Readonly<Foe>[], alpha: number, field: Field, time: number, still: boolean): void {
+    pen.field();
+    ctx.strokeStyle = aimColor;
+    ctx.lineWidth = AIM_WIDTH;
+    ctx.setLineDash(AIM_DASH);
+    ctx.lineDashOffset = still ? 0 : -time * AIM_MARCH;
+    for (const foe of foes) {
+      if (foe.hp <= 0 || foe.kind !== 'gunship' || !foe.charging) continue;
+      interpolatePose(foe.px, foe.py, foe.protation, foe.x, foe.y, foe.rotation, alpha, field, pose);
+      ctx.globalAlpha = 0.35 + 0.6 * charge(foe);
+      ctx.beginPath();
+      ctx.moveTo(pose.x, pose.y);
+      ctx.lineTo(foe.aimX, foe.aimY);
+      ctx.stroke();
+    }
+    ctx.setLineDash(NO_DASH);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 1;
   }
 
   function drawGlows(foes: readonly Readonly<Foe>[], alpha: number, field: Field, { glow, time, still }: SceneLook): void {
@@ -152,14 +326,26 @@ export function createFoePass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker
       const reach = foe.radius * zoom.value * GLOW_SCALE[foe.kind];
       let { x, y } = pose;
       let strength = GLOW_ALPHA;
-      if (foe.kind === 'drone') {
+      /** The glow's baked diameter, and the share of it drawn. */
+      let diameter = reach;
+      let size = 1;
+      if (foe.kind === 'gunship') {
+        // The glow sits on the turret, and swells and pulses as it winds up.
+        x += Math.cos(pose.angle) * GUNSHIP_TURRET.x * zoom.value;
+        y += Math.sin(pose.angle) * GUNSHIP_TURRET.x * zoom.value;
+        if (foe.charging) {
+          diameter = reach * CHARGE_SWELL;
+          size = (1 + (CHARGE_SWELL - 1) * charge(foe)) / CHARGE_SWELL;
+          strength = Math.min(1, 2 * strength * (still ? 1 : 0.8 + 0.2 * Math.sin(time * TAU * CHARGE_HZ)));
+        }
+      } else if (foe.kind === 'drone') {
         // The glow sits on the engine, behind the drone, and flickers with it.
         x += Math.cos(pose.angle) * DRONE_ENGINE.x * zoom.value;
         y += Math.sin(pose.angle) * DRONE_ENGINE.x * zoom.value;
         if (!still) strength *= 0.75 + 0.25 * Math.sin((time * ENGINE_HZ + foe.id * 0.37) * TAU);
       }
       ctx.globalAlpha = strength * glow;
-      stamp(baker.glow(glowColors[foe.kind], reach), x, y, 1, 0, reach / 2, field);
+      stamp(baker.glow(glowColors[foe.kind], diameter), x, y, size, 0, (diameter * size) / 2, field);
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
@@ -168,6 +354,7 @@ export function createFoePass(ctx: CanvasRenderingContext2D, stamp: Stamp, baker
   return {
     drawFoes(foes, alpha, field, scene) {
       zoom.value = scene.visual.rock;
+      drawMarks(foes, alpha, field, scene);
       drawGlows(foes, alpha, field, scene);
       for (const foe of foes) {
         // Spent this step and not yet swept: its burst is the picture now.

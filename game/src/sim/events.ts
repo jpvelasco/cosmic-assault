@@ -1,6 +1,7 @@
-import type { TimedPickupId } from '../content/pickups';
-import type { AttackId, BossId, FoeKind, GalaxyId, PickupId } from '../content/types';
+import type { BlastKind, TimedPickupId } from '../content/pickups';
+import type { AttackId, BossId, FoeKind, ForceKind, GalaxyId, PickupId } from '../content/types';
 import type { AsteroidSize } from './asteroid';
+import type { BoltSource } from './foes/bolts';
 import type { Stars } from './scoring';
 
 /** Plain facts from one `World.step`, for the renderer and audio to react to. */
@@ -58,16 +59,31 @@ export type SimEvent =
   | { type: 'effectEnded'; kind: TimedPickupId }
   /** The Shield took a hit for the ship: no life lost, and the ship is invulnerable for a moment. */
   | { type: 'shieldBroken' }
+  /** A Field Bomb or a Nova went off at (x, y), reaching `radius`: its kills and boss hits follow as their own events. */
+  | { type: 'blast'; kind: BlastKind; x: number; y: number; radius: number }
+  /** A hostile bolt `id` was fired from (x, y) along bearing `angle`, by a boss or a foe of that kind (foe `owner`; 0 for a boss). */
+  | { type: 'boltFired'; id: number; source: BoltSource; owner: number; x: number; y: number; angle: number }
   /** A foe has entered, at (x, y). */
   | { type: 'foeSpawned'; id: number; kind: FoeKind; x: number; y: number }
   /** A shot hurt a foe at (x, y) and left it alive with `hp`. The killing blow is `foeDestroyed` instead. */
   | { type: 'foeHit'; id: number; x: number; y: number; hp: number }
   /** A foe is gone at (x, y): killed for `points`, or, for 0, rammed by the ship or cleared by the warp. */
   | { type: 'foeDestroyed'; id: number; kind: FoeKind; x: number; y: number; points: number }
-  /** A gravity well will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
-  | { type: 'wellWarning'; x: number; y: number; at: number }
-  | { type: 'wellStart'; id: number }
-  | { type: 'wellEnd'; id: number };
+  /** Gunship `id` at (x, y) is winding up a shot along bearing `angle`, at where the ship is now: no bolt until the windup ends. */
+  | { type: 'foeWindup'; id: number; x: number; y: number; angle: number }
+  /** The ship touched mine `id`'s arm ring at (x, y): it blasts once its fuse has burnt down. */
+  | { type: 'mineArmed'; id: number; x: number; y: number }
+  /** Mine `id` went off at (x, y), striking a ship within `radius`; it is destroyed with it. */
+  | { type: 'mineBlast'; id: number; x: number; y: number; radius: number }
+  /** Danger zone `id`, the `w` by `h` rectangle centred on (x, y), is drawn as a warning from now: harmless until `zoneStart`. */
+  | { type: 'zoneWarning'; id: number; x: number; y: number; w: number; h: number }
+  /** Danger zone `id` is active: touching it is a hit. */
+  | { type: 'zoneStart'; id: number }
+  | { type: 'zoneEnd'; id: number }
+  /** Force field `id` of `kind` (a gravity well or a repulsion field) will start at `at` seconds into the galaxy, drawn at (x, y) from now. */
+  | { type: 'wellWarning'; id: number; kind: ForceKind; x: number; y: number; at: number }
+  | { type: 'wellStart'; id: number; kind: ForceKind }
+  | { type: 'wellEnd'; id: number; kind: ForceKind };
 
 /** A rock the warp cleared: destroyed for 0 points, which no kill scores. Its feedback is the warp's, not a kill's. */
 export function isWarpClear(event: SimEvent): boolean {

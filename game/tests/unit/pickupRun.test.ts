@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
+import { noEffects } from '../../src/content/pickups';
 import type { GalaxyDef, GalaxyId, PickupId, WeaponTier } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
-import { bossTarget } from '../../src/sim/boss/bossRunner';
+import { bossTarget } from '../../src/sim/boss/bossRules';
 import { PICKUP, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -147,7 +148,7 @@ describe('a kill drops a pickup', () => {
     const w = galaxyWorld({ seed: seedDropping('shield'), galaxy: calm('1-6') });
     const log = play(w, 23);
     const target = () => (w.boss === null ? null : bossTarget(w.boss));
-    for (let t = target(); t !== null; t = target()) w['run']?.hitBoss(t.x, t.y, 1);
+    for (let t = target(); t !== null; t = target()) w['run']?.bosses.hitBoss(t.x, t.y, 1);
     log.push(...play(w, 3));
     expect(w.boss?.hp).toBe(0);
     expect(ofType(log, 'bossDown')).toHaveLength(1);
@@ -234,7 +235,7 @@ describe('collecting a pickup', () => {
     const log = play(w, 1, FIRE);
     expect(ofType(log, 'shot')).not.toHaveLength(0);
     expect(ofType(log, 'shot').length % 2).toBe(0);
-    expect(w.effects).toEqual({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
+    expect(w.effects).toEqual(noEffects());
   });
 
   it('caps the weapon tier at 3', () => {
@@ -407,7 +408,7 @@ describe('losing a life', () => {
     const w = hitWorld(['doubleShot', 'rapidFire', 'spreadLaser']);
     const events = stepUntil(w, NO_CONTROLS, (e) => e.some((x) => x.type === 'shipHit'));
     expect(ofType(events, 'effectEnded').map((e) => e.kind)).toEqual(['doubleShot', 'rapidFire', 'spreadLaser']);
-    expect(w.effects).toEqual({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
+    expect(w.effects).toEqual(noEffects());
     const shots = ofType(w.step(STEP_SECONDS, FIRE), 'shot');
     expect(shots).toHaveLength(1);
   });
@@ -462,10 +463,18 @@ describe('the starting weapon tier', () => {
   });
 });
 
+describe('a Dimension\'s opening galaxy', () => {
+  it('hands its featured pickups to its drops, and a later galaxy features none', () => {
+    const opening = galaxyWorld({ galaxy: calm('3-1') });
+    expect(opening['run']?.['pickupField']['featured']).toEqual(['piercingBeam', 'homingMissiles']);
+    expect(galaxyWorld({ galaxy: calm('3-2') })['run']?.['pickupField']['featured']).toEqual([]);
+  });
+});
+
 describe('the pickups a world exposes', () => {
   it('has none, no tier and no effects outside a galaxy', () => {
     const w = new World({ seed: 1, field: FIELD });
     expect([w.pickups, w.weaponTier, w.shield]).toEqual([[], 0, false]);
-    expect(w.effects).toEqual({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
+    expect(w.effects).toEqual(noEffects());
   });
 });

@@ -1,6 +1,6 @@
 import type { JSHandle, Page } from '@playwright/test';
 import { PLAYER } from '../src/sim/config';
-import { expect, expectMode, gameState, openGame, shipState, speed, test } from './fixtures';
+import { expect, expectMode, gameState, grantPickup, openGame, shipState, shotsPerVolley, speed, test } from './fixtures';
 
 /** Starts a run with Space, then releases it so the start-key latch lets Space fire again. */
 async function startWithSpace(page: Page): Promise<void> {
@@ -165,6 +165,29 @@ for (const [thrust, fire, left, right] of [
     expect(rightTurn.turned).toBeGreaterThan(0.8);
   });
 }
+
+/** The shots one trigger fires while `keys` are held, counted through the bridge's shot events. */
+async function volleyHolding(page: Page, keys: readonly string[]): Promise<number> {
+  for (const key of keys) await page.keyboard.down(key);
+  const shots = await shotsPerVolley(page);
+  for (const key of [...keys].reverse()) await page.keyboard.up(key);
+  return shots;
+}
+
+test('with the Wingman beside it, a thrust, fire and turn chord still turns both ways and each trigger fires one more shot', async ({ page }) => {
+  const held = ['ArrowUp', 'Space', 'ArrowLeft'] as const;
+  const alone = await volleyHolding(page, held);
+  await grantPickup(page, 'wingman');
+  await expect.poll(async () => (await gameState(page)).effects.wingman ?? 0).toBeGreaterThan(0);
+  expect(await volleyHolding(page, held)).toBeGreaterThan(alone);
+  expect(await volleyHolding(page, ['ArrowUp', 'KeyZ', 'ArrowRight'])).toBeGreaterThan(alone);
+
+  const leftTurn = await chord(page, held, 400);
+  expect(leftTurn.thrusting).toBe(true);
+  expect(leftTurn.turned).toBeLessThan(-0.8);
+  const rightTurn = await chord(page, ['ArrowUp', 'KeyZ', 'ArrowRight'], 400);
+  expect(rightTurn.turned).toBeGreaterThan(0.8);
+});
 
 test('the title names the fire keys that avoid key ghosting', async ({ page }) => {
   await openGame(page);

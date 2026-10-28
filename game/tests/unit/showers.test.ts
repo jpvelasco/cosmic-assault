@@ -4,7 +4,7 @@ import type { GalaxyEvent } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import { REFERENCE_AREA } from '../../src/sim/galaxy/director';
-import { showerSeconds } from '../../src/content/curves';
+import { eventsOfType, showerSeconds } from '../../src/content/curves';
 import { EDGE_BEARINGS, SHOWER_WARNING_SECONDS, showerCap, showerRate, Showers, type ShowerState } from '../../src/sim/galaxy/showers';
 import { createRng } from '../../src/sim/rng';
 
@@ -59,7 +59,7 @@ describe('shower timing', () => {
   it('runs every shower of a two-shower galaxy in turn', () => {
     const g = galaxyById('3-4');
     const { events } = trace(g.events, 1, g.duration);
-    expect(events.filter((e) => e.type === 'showerStart').map((e) => Math.round(e.elapsed))).toEqual(g.events.map((e) => e.at));
+    expect(events.filter((e) => e.type === 'showerStart').map((e) => Math.round(e.elapsed))).toEqual(eventsOfType(g.events, 'meteorShower').map((e) => e.at));
     expect(events.filter((e) => e.type === 'showerEnd')).toHaveLength(2);
   });
 
@@ -151,7 +151,7 @@ describe('Showers.stop', () => {
   it('ends the warning or shower at once, quietly, and runs no more', () => {
     const showers = new Showers(galaxyById('3-4').events, createRng(1));
     const out: SimEvent[] = [];
-    const first = galaxyById('3-4').events[0]?.at ?? 0;
+    const first = eventsOfType(galaxyById('3-4').events, 'meteorShower')[0]?.at ?? 0;
     showers.step(first, STEP_SECONDS, AREA, 0, out);
     expect(showers.state?.stage).toBe('active');
     showers.stop();

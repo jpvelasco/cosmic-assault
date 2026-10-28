@@ -56,13 +56,13 @@ interface CosmicAssaultTestState {
   readonly pickups: readonly { readonly id: number; readonly kind: import('./content/types').PickupId; readonly x: number; readonly y: number; readonly expiresIn: number }[];
   /** The foes on the field; empty outside a galaxy run. */
   readonly foes: readonly { readonly id: number; readonly kind: import('./content/types').FoeKind; readonly x: number; readonly y: number }[];
-  /** The gravity well being telegraphed or pulling (at most one), with the seconds until it starts or ends; empty when there is none. */
-  readonly wells: readonly { readonly id: number; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number }[];
+  /** The hazards being telegraphed or active (a gravity well ...), with the seconds until each turns hostile or ends; empty when there are none. */
+  readonly hazards: readonly { readonly id: number; readonly type: import('./content/types').HazardType; readonly stage: 'warning' | 'active'; readonly x: number; readonly y: number; readonly intensity: 1 | 2 | 3; readonly remaining: number }[];
   /** The boss once its approach is over; null before then and outside a boss galaxy. */
   readonly boss: CosmicAssaultTestBoss | null;
   /** How many sim events of each type the run in play has produced (a shot fired, a boss shot deflected, a hangar opened ...), from its first step. */
   readonly events: Readonly<Partial<Record<import('./sim/events').SimEvent['type'], number>>>;
-  /** The timed effects running (doubleShot, rapidFire, spreadLaser, shield), each with its seconds left; one that is off is absent. */
+  /** The timed effects running, each with its seconds left; one that is off is absent. */
   readonly effects: Readonly<Partial<Record<import('./content/pickups').TimedPickupId, number>>>;
   /** The weapon tier, 0–3; 0 outside a run. */
   readonly weaponTier: import('./content/types').WeaponTier;

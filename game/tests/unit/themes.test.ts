@@ -12,7 +12,8 @@ const notesOf = (theme: MusicTheme, voice: PatternNote['voice']): PatternNote[] 
 
 describe('the theme table', () => {
   it('holds a theme and a boss variant for each music theme, keyed by its own id', () => {
-    expect([...THEME_IDS].sort()).toEqual(['driftBoss', 'drift', 'ionReach', 'ionReachBoss'].sort());
+    const bases = ['drift', 'ionReach', 'crimsonNebula', 'voidRift', 'singularity'] as const;
+    expect([...THEME_IDS].sort()).toEqual([...bases, ...bases.map((id) => `${id}Boss`)].sort());
     for (const id of THEME_IDS) expect(THEMES[id].id).toBe(id);
   });
 
@@ -23,6 +24,7 @@ describe('the theme table', () => {
     }
     expect(bossThemeOf('drift')).toBe('driftBoss');
     expect(bossThemeOf('ionReach')).toBe('ionReachBoss');
+    expect(bossThemeOf('singularity')).toBe('singularityBoss');
   });
 });
 
@@ -125,9 +127,73 @@ describe('Ion Reach', () => {
   });
 });
 
+const HARMONIC_MINOR = [0, 2, 3, 5, 7, 8, 11];
+const PHRYGIAN_DOMINANT = [0, 1, 4, 5, 7, 8, 10];
+const NATURAL_MINOR = [0, 2, 3, 5, 7, 8, 10];
+
+describe('Crimson Nebula', () => {
+  const theme = THEMES.crimsonNebula;
+
+  it('is a tense minor-feel loop around 116 bpm in D Phrygian dominant', () => {
+    expect(theme.bpm).toBe(116);
+    expect(theme.key).toEqual({ tonic: 2, scale: PHRYGIAN_DOMINANT });
+  });
+
+  it('pulses in eighth notes over a driving bass', () => {
+    expect(notesOf(theme, 'arp')[0]?.duration).toBe(0.5);
+    expect(notesOf(theme, 'bass').length).toBeGreaterThan(notesOf(THEMES.drift, 'bass').length);
+  });
+});
+
+describe('Void Rift', () => {
+  const theme = THEMES.voidRift;
+  const span = (midis: number[]): number => Math.max(...midis) - Math.min(...midis);
+
+  it('is an eerie, sparse loop around 100 bpm in B flat minor', () => {
+    expect(theme.bpm).toBe(100);
+    expect(theme.key).toEqual({ tonic: 10, scale: NATURAL_MINOR });
+  });
+
+  it('is sparser than the Drift, with a wider pad', () => {
+    const drift = THEMES.drift;
+    expect(notesOf(theme, 'arp').length).toBeLessThan(notesOf(drift, 'arp').length);
+    expect(notesOf(theme, 'bass').length).toBeLessThan(notesOf(drift, 'bass').length);
+    expect(notesOf(theme, 'hat').length).toBeLessThan(notesOf(drift, 'hat').length);
+    for (const chord of theme.chords.keys()) {
+      const pads = (t: MusicTheme): number[] => notesOf(t, 'pad').filter((n) => barOf(n) === chord).map((n) => n.midi);
+      expect(span(pads(theme)), `bar ${String(chord)}`).toBeGreaterThan(span(pads(drift)));
+    }
+  });
+});
+
+describe('Singularity', () => {
+  const theme = THEMES.singularity;
+
+  it('is a driving loop around 124 bpm in E harmonic minor, faster than every other base theme', () => {
+    expect(theme.bpm).toBe(124);
+    expect(theme.key).toEqual({ tonic: 4, scale: HARMONIC_MINOR });
+    for (const other of ['drift', 'ionReach', 'crimsonNebula', 'voidRift'] as const) expect(theme.bpm).toBeGreaterThan(THEMES[other].bpm);
+  });
+
+  it('runs a sixteenth-note arpeggio with a leading harmonic-minor dominant: the B chord', () => {
+    expect(notesOf(theme, 'arp')[0]?.duration).toBe(0.25);
+    expect(theme.chords.at(-1)?.bass).toBe(35);
+  });
+});
+
+describe('the five themes', () => {
+  it('differ in tempo, key or scale from one another', () => {
+    const fingerprints = (['drift', 'ionReach', 'crimsonNebula', 'voidRift', 'singularity'] as const).map((id) => JSON.stringify([THEMES[id].bpm, THEMES[id].key]));
+    expect(new Set(fingerprints).size).toBe(5);
+  });
+});
+
 describe.each([
   ['drift', 'driftBoss'],
   ['ionReach', 'ionReachBoss'],
+  ['crimsonNebula', 'crimsonNebulaBoss'],
+  ['voidRift', 'voidRiftBoss'],
+  ['singularity', 'singularityBoss'],
 ] as const)('%s and its boss variant %s', (baseId, bossId) => {
   const base = THEMES[baseId];
   const boss = THEMES[bossId];

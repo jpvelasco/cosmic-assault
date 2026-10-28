@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BOSS_FLASH_SECONDS, createBossPass, type BossPass } from '../../src/render/bossPass';
 import { createFieldPen } from '../../src/render/fieldPen';
-import { DRIFT } from '../../src/render/palette';
+import { DRIFT, SINGULARITY, VOID_RIFT, type Palette } from '../../src/render/palette';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
+import { BOSSES } from '../../src/content/bosses';
+import type { BossId } from '../../src/content/types';
+import { WARDEN_RING } from '../../src/sim/boss/warden';
 import { bossView } from '../helpers/bossView';
 
 interface Draw {
@@ -70,7 +73,17 @@ const fakeCanvas = (): unknown => {
 };
 
 const boss = (over: Partial<BossView> = {}): BossView => bossView({ y: 200, px: 600, ...over });
-const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600 };
+
+/** The Warden's 14 turrets about (640, `cy`), still, slot 0 (its first gap) at bearing `turn`, the ring at `radius`. */
+function wardenRing(turn = 0, radius = WARDEN_RING.radius, cy = 200): BossPart[] {
+  const slots = Array.from({ length: WARDEN_RING.slots }, (_, slot) => slot).filter((slot) => !WARDEN_RING.gaps.includes(slot));
+  return slots.map((slot) => {
+    const a = turn + (slot * 2 * Math.PI) / WARDEN_RING.slots;
+    const [x, y] = [640 + Math.cos(a) * radius, cy + Math.sin(a) * radius];
+    return { x, y, px: x, py: y, radius: 16, hp: 3, maxHp: 3 };
+  });
+}
+const LOOK = { glow: 1, still: false, aimX: 640, aimY: 600, field: { width: 1280, height: 720 } };
 
 describe('createBossPass', () => {
   let baker: SpriteBaker;
@@ -98,7 +111,7 @@ describe('createBossPass', () => {
     const custom = vi.spyOn(baker, 'custom');
     pass.draw(boss(), 0.5, LOOK);
     expect(draws.length).toBeGreaterThan(0);
-    expect(custom.mock.calls.map(([key]) => key)).toContain('boss|core|70');
+    expect(custom.mock.calls.map(([key]) => key)).toContain('boss|drift|core|70');
     // Halfway from x 600 to 640.
     expect(draws.some(({ e, f }) => e === 620 && f === 200)).toBe(true);
   });
@@ -106,11 +119,32 @@ describe('createBossPass', () => {
   it('rings the core with a glow while an attack winds up, coloured by the attack', () => {
     const custom = vi.spyOn(baker, 'custom');
     pass.draw(boss(), 1, LOOK);
-    expect(custom.mock.calls.some(([key]) => key.startsWith('boss|ring|'))).toBe(false);
+    expect(custom.mock.calls.some(([key]) => key.startsWith('boss|drift|ring|'))).toBe(false);
     pass.draw(boss({ windup: 'shardRing' }), 1, LOOK);
     pass.draw(boss({ windup: 'lunge' }), 1, LOOK);
-    const rings = custom.mock.calls.map(([key]) => key).filter((key) => key.startsWith('boss|ring|'));
+    const rings = custom.mock.calls.map(([key]) => key).filter((key) => key.startsWith('boss|drift|ring|'));
     expect(new Set(rings).size).toBe(2);
+  });
+
+  it('keys every baked boss sprite by palette, so no two palettes share one', () => {
+    const keysIn = (palette: Palette): string[] => {
+      const fake = fakeContext();
+      const pen = createFieldPen(fake.ctx);
+      pen.aim(1, 0, 0);
+      const custom = vi.spyOn(baker, 'custom');
+      custom.mockClear();
+      const drawing = createBossPass(fake.ctx, pen, baker, palette);
+      for (const id of Object.keys(BOSSES) as BossId[]) {
+        drawing.draw(boss({ id, windup: 'lunge', parts: id === 'warden' ? wardenRing() : [] }), 1, LOOK);
+      }
+      return [...new Set(custom.mock.calls.map(([key]) => key))];
+    };
+    const [drift, rift, hole] = [DRIFT, VOID_RIFT, SINGULARITY].map(keysIn) as [string[], string[], string[]];
+    expect(drift.length).toBeGreaterThan(3);
+    for (const [palette, keys] of [[DRIFT, drift], [VOID_RIFT, rift], [SINGULARITY, hole]] as const) {
+      for (const key of keys) expect(key.startsWith(`boss|${palette.id}|`), key).toBe(true);
+    }
+    expect(new Set([...drift, ...rift, ...hole]).size).toBe(drift.length + rift.length + hole.length);
   });
 
   it('flashes on a hit, for a moment', () => {
@@ -125,8 +159,8 @@ describe('createBossPass', () => {
 
   it('draws the core as its white silhouette for the first 60 ms after a hit, then in colour again', () => {
     pass.draw(boss(), 1, LOOK);
-    const core = baker.custom('boss|core|70', 0, () => undefined).canvas;
-    const white = baker.white('boss|core|70')?.canvas;
+    const core = baker.custom('boss|drift|core|70', 0, () => undefined).canvas;
+    const white = baker.white('boss|drift|core|70')?.canvas;
     expect(white).toBeDefined();
     draws.length = 0;
     pass.handle([{ type: 'bossHit', x: 640, y: 200, hp: 19 }]);
@@ -163,13 +197,13 @@ describe('createBossPass', () => {
     const winding = boss({ windup: 'shardRing' });
     pass.advance(0.01, winding);
     pass.draw(winding, 1, LOOK);
-    const early = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    const early = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
     pass.advance(0.3, winding);
     pass.draw(winding, 1, LOOK);
-    const later = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    const later = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
     pass.advance(0.4, winding);
     pass.draw(winding, 1, LOOK);
-    const closed = drawOf('boss|ring|shardRing|70', custom)?.a ?? 0;
+    const closed = drawOf('boss|drift|ring|shardRing|70', custom)?.a ?? 0;
     expect(early).toBeGreaterThan(later);
     expect(later).toBeGreaterThan(closed);
     expect(closed).toBeCloseTo(1);
@@ -184,7 +218,7 @@ describe('createBossPass', () => {
     for (const dt of [0.01, 0.1, 0.2]) {
       pass.advance(dt, winding);
       pass.draw(winding, 1, still);
-      const ring = drawOf('boss|ring|lunge|70', custom);
+      const ring = drawOf('boss|drift|ring|lunge|70', custom);
       sizes.push(ring?.a ?? 0);
       alphas.push(ring?.alpha ?? 0);
     }
@@ -198,11 +232,11 @@ describe('createBossPass', () => {
     pass.advance(0.01, dying);
     pass.advance(0.5, dying);
     pass.draw(dying, 1, LOOK);
-    const early = drawOf('boss|core|70', custom);
+    const early = drawOf('boss|drift|core|70', custom);
     const earlyWhite = draws.filter((d) => d.alpha > 0 && d.image !== early?.image).length;
     pass.advance(1, dying);
     pass.draw(dying, 1, LOOK);
-    const late = drawOf('boss|core|70', custom);
+    const late = drawOf('boss|drift|core|70', custom);
     expect(late?.alpha).toBeLessThan(early?.alpha ?? 0);
     expect(late?.a).toBeGreaterThan(early?.a ?? Infinity);
     expect(earlyWhite).toBeGreaterThan(0);
@@ -218,21 +252,21 @@ describe('createBossPass', () => {
       const custom = vi.spyOn(baker, 'custom');
       pass.draw(monolith(), 1, LOOK);
       const keys = keysOf(custom);
-      expect(keys).toEqual(expect.arrayContaining(['boss|monolith|core|90', 'boss|monolith|fissures|90', 'boss|monolith|shard|15', 'boss|monolith|shardCracked|15']));
-      expect(keys.filter((k) => k === 'boss|monolith|shard|15')).toHaveLength(1);
-      expect(keys.filter((k) => k === 'boss|monolith|shardCracked|15')).toHaveLength(1);
-      expect(keys.some((k) => String(k).startsWith('boss|eye|'))).toBe(false);
-      expect(keys).not.toContain('boss|core|90');
+      expect(keys).toEqual(expect.arrayContaining(['boss|drift|monolith|core|90', 'boss|drift|monolith|fissures|90', 'boss|drift|monolith|shard|15', 'boss|drift|monolith|shardCracked|15']));
+      expect(keys.filter((k) => k === 'boss|drift|monolith|shard|15')).toHaveLength(1);
+      expect(keys.filter((k) => k === 'boss|drift|monolith|shardCracked|15')).toHaveLength(1);
+      expect(keys.some((k) => String(k).startsWith('boss|drift|eye|'))).toBe(false);
+      expect(keys).not.toContain('boss|drift|core|90');
     });
 
     it('lights its fissures brighter, and adds a glow, once its core is exposed', () => {
       const custom = vi.spyOn(baker, 'custom');
       const glow = vi.spyOn(baker, 'glow');
       pass.draw(monolith(), 1, LOOK);
-      const shielded = drawOf('boss|monolith|fissures|90', custom)?.alpha ?? 1;
+      const shielded = drawOf('boss|drift|monolith|fissures|90', custom)?.alpha ?? 1;
       const shieldedGlows = glow.mock.calls.length;
       pass.draw(monolith({ vulnerable: true }), 1, LOOK);
-      const exposed = drawOf('boss|monolith|fissures|90', custom)?.alpha ?? 0;
+      const exposed = drawOf('boss|drift|monolith|fissures|90', custom)?.alpha ?? 0;
       expect(exposed).toBeGreaterThan(shielded + 0.3);
       expect(glow.mock.calls.length - shieldedGlows).toBeGreaterThan(shieldedGlows);
     });
@@ -240,10 +274,10 @@ describe('createBossPass', () => {
     it('flashes a shard white when a shot cracks it', () => {
       const white = vi.spyOn(baker, 'white');
       pass.draw(monolith(), 1, LOOK);
-      expect(white.mock.calls.map(([key]) => key)).not.toContain('boss|monolith|shard|15');
+      expect(white.mock.calls.map(([key]) => key)).not.toContain('boss|drift|monolith|shard|15');
       pass.handle([{ type: 'bossPartHit', part: 0, x: 600, y: 330, hp: 1 }]);
       pass.draw(monolith(), 1, LOOK);
-      expect(white.mock.calls.map(([key]) => key)).toContain('boss|monolith|shard|15');
+      expect(white.mock.calls.map(([key]) => key)).toContain('boss|drift|monolith|shard|15');
       pass.advance(0.2, monolith());
       white.mockClear();
       pass.draw(monolith(), 1, LOOK);
@@ -257,10 +291,10 @@ describe('createBossPass', () => {
       const regrown = monolith({ parts: [shard(600)] });
       pass.advance(0.05, regrown);
       pass.draw(regrown, 1, LOOK);
-      const early = drawOf('boss|monolith|shard|15', custom)?.scale ?? 0;
+      const early = drawOf('boss|drift|monolith|shard|15', custom)?.scale ?? 0;
       pass.advance(1, regrown);
       pass.draw(regrown, 1, LOOK);
-      const later = drawOf('boss|monolith|shard|15', custom)?.scale ?? 0;
+      const later = drawOf('boss|drift|monolith|shard|15', custom)?.scale ?? 0;
       expect(early).toBeLessThan(later * 0.7);
       expect(later).toBeCloseTo(1, 6);
     });
@@ -271,7 +305,7 @@ describe('createBossPass', () => {
       pass.advance(0.01, arriving);
       pass.advance(0.1, arriving);
       pass.draw(arriving, 1, LOOK);
-      const early = drawOf('boss|monolith|shard|15', custom);
+      const early = drawOf('boss|drift|monolith|shard|15', custom);
       expect(early?.scale ?? 1).toBeLessThan(0.9);
       expect(Math.hypot((early?.e ?? 0) - 640, (early?.f ?? 0) - 200)).toBeLessThan(Math.hypot(740 - 640, 330 - 200) * 0.9);
     });
@@ -283,7 +317,7 @@ describe('createBossPass', () => {
       const next = monolith({ parts: [shard(600)] });
       pass.advance(0.01, next);
       pass.draw(next, 1, LOOK);
-      expect(drawOf('boss|monolith|shard|15', custom)?.scale).toBeCloseTo(1, 6);
+      expect(drawOf('boss|drift|monolith|shard|15', custom)?.scale).toBeCloseTo(1, 6);
     });
 
     it('rings its windups in the attack\'s colour, and sends a shockwave out as it pulses', () => {
@@ -291,15 +325,15 @@ describe('createBossPass', () => {
       pass.draw(monolith({ windup: 'shardVolley' }), 1, LOOK);
       pass.draw(monolith({ windup: 'quake' }), 1, LOOK);
       pass.draw(monolith({ windup: 'pulse' }), 1, LOOK);
-      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|ring|shardVolley|90', 'boss|ring|quake|90', 'boss|ring|pulse|90']));
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|shardVolley|90', 'boss|drift|ring|quake|90', 'boss|drift|ring|pulse|90']));
       custom.mockClear();
       const pulsing = monolith({ active: 'pulse' });
       pass.advance(0.01, pulsing);
       pass.draw(pulsing, 1, LOOK);
-      const near = drawOf('boss|ring|pulse|90', custom)?.a ?? 0;
+      const near = drawOf('boss|drift|ring|pulse|90', custom)?.a ?? 0;
       pass.advance(0.2, pulsing);
       pass.draw(pulsing, 1, LOOK);
-      const far = drawOf('boss|ring|pulse|90', custom)?.a ?? 0;
+      const far = drawOf('boss|drift|ring|pulse|90', custom)?.a ?? 0;
       expect(near).toBeGreaterThan(0);
       expect(far).toBeGreaterThan(near);
     });
@@ -312,10 +346,10 @@ describe('createBossPass', () => {
     /** The bearing a draw is turned to, from its transform, as |cos|: 0 straight down the field. */
     const turn = (d: Draw | undefined): number => Math.abs((d?.a ?? Number.NaN) / (d?.scale ?? Number.NaN));
 
-    const HULL = 'boss|hiveCarrier|hull|100';
-    const SHUT = 'boss|hiveCarrier|hullShut|100';
-    const DOORS = ['boss|hiveCarrier|door|1|100', 'boss|hiveCarrier|door|-1|100'] as const;
-    const BAY = 'boss|hiveCarrier|bay|100';
+    const HULL = 'boss|drift|hiveCarrier|hull|100';
+    const SHUT = 'boss|drift|hiveCarrier|hullShut|100';
+    const DOORS = ['boss|drift|hiveCarrier|door|1|100', 'boss|drift|hiveCarrier|door|-1|100'] as const;
+    const BAY = 'boss|drift|hiveCarrier|bay|100';
     const area = (d: Draw | undefined): number => {
       const image = d?.image as { width: number; height: number } | undefined;
       return (image?.width ?? Number.NaN) * (image?.height ?? Number.NaN);
@@ -334,7 +368,7 @@ describe('createBossPass', () => {
       pass.draw(carrier(), 1, LOOK);
       const keys = keysOf(custom);
       expect(keys).toEqual([SHUT]);
-      expect(keys).not.toContain('boss|core|100');
+      expect(keys).not.toContain('boss|drift|core|100');
       const { turned, shown } = hullDraws(SHUT, custom);
       expect(turn(turned)).toBeCloseTo(0, 9);
       expect(shown).toHaveLength(1);
@@ -432,7 +466,132 @@ describe('createBossPass', () => {
     it('rings its launch, broadside and retreat windups', () => {
       const custom = vi.spyOn(baker, 'custom');
       for (const windup of ['launch', 'broadside', 'retreat'] as const) pass.draw(carrier({ windup }), 1, LOOK);
-      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|ring|launch|100', 'boss|ring|broadside|100', 'boss|ring|retreat|100']));
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|launch|100', 'boss|drift|ring|broadside|100', 'boss|drift|ring|retreat|100']));
+    });
+  });
+
+  describe('the Warden', () => {
+    const warden = (over: Partial<BossView> = {}): BossView => boss({ id: 'warden', radius: 48, hp: 76, maxHp: 76, px: 640, parts: wardenRing(), ...over });
+    const keysOf = (spy: { readonly mock: { readonly calls: readonly (readonly unknown[])[] } }): unknown[] => spy.mock.calls.map(([key]) => key);
+    const TRACK = 'boss|drift|warden|track|120';
+    const TURRETS = ['boss|drift|warden|turret|0|16', 'boss|drift|warden|turret|1|16', 'boss|drift|warden|turret|2|16'] as const;
+    /** The canvases of the sprites `spy` returned. */
+    const canvases = (spy: Parameters<typeof drawOf>[1]): Set<unknown> => new Set(spy.mock.results.map((r) => (r.value as { canvas: unknown }).canvas));
+    /** The glows drawn at the ring's turrets' muzzles, past the ring's radius, from draw `from` on. */
+    const muzzles = (spy: Parameters<typeof drawOf>[1], from = 0): Draw[] => {
+      const glows = canvases(spy);
+      return draws.slice(from).filter((d) => glows.has(d.image) && Math.hypot(d.e - 640, d.f - 200) > 125);
+    };
+
+    it('draws its core, eye and track, and a turret for each live part, cracked by the blows it has taken', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const parts = wardenRing();
+      Object.assign(parts[0] as BossPart, { hp: 2 });
+      Object.assign(parts[1] as BossPart, { hp: 1 });
+      Object.assign(parts[2] as BossPart, { hp: 0 });
+      pass.draw(warden({ parts }), 1, LOOK);
+      const keys = keysOf(custom);
+      expect(keys).toEqual(expect.arrayContaining(['boss|drift|warden|core|48', 'boss|drift|warden|eye|48', TRACK, ...TURRETS]));
+      expect(keys.filter((k) => k === TURRETS[0])).toHaveLength(11);
+      expect(keys.filter((k) => k === TURRETS[1])).toHaveLength(1);
+      expect(keys.filter((k) => k === TURRETS[2])).toHaveLength(1);
+      expect(keys).not.toContain('boss|drift|core|48');
+    });
+
+    it('turns its track with the ring, its first gap one slot behind turret 0, and stretches it with a pulse', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      pass.draw(warden({ parts: wardenRing(0.4) }), 1, LOOK);
+      const track = drawOf(TRACK, custom);
+      expect(Math.atan2(Math.sqrt(Math.max(0, (track?.scale ?? 0) ** 2 - (track?.a ?? 0) ** 2)), track?.a ?? 0)).toBeCloseTo(0.4, 6);
+      expect(track?.scale).toBeCloseTo(1, 6);
+      pass.draw(warden({ parts: wardenRing(0.4, 220) }), 1, LOOK);
+      expect(drawOf(TRACK, custom)?.scale).toBeCloseTo(220 / 120, 6);
+    });
+
+    it('flashes a turret white when a shot hurts it, and grows a turret back in', () => {
+      const white = vi.spyOn(baker, 'white');
+      pass.handle([{ type: 'bossPartHit', part: 3, x: 0, y: 0, hp: 2 }]);
+      pass.draw(warden(), 1, LOOK);
+      expect(white.mock.calls.map(([key]) => key)).toContain(TURRETS[0]);
+      const custom = vi.spyOn(baker, 'custom');
+      const broken = wardenRing();
+      Object.assign(broken[5] as BossPart, { hp: 0 });
+      pass.advance(0.01, warden({ parts: broken }));
+      pass.advance(0.05, warden());
+      const from = draws.length;
+      pass.draw(warden(), 1, LOOK);
+      const whole = drawOf(TURRETS[0], custom)?.image;
+      const scales = draws.slice(from).filter((d) => d.image === whole).map((d) => d.scale);
+      expect(scales).toHaveLength(14);
+      expect(Math.min(...scales)).toBeLessThan(0.7);
+      expect(Math.max(...scales)).toBeCloseTo(1, 6);
+    });
+
+    it('charges every live turret\'s muzzle as a volley winds up, brighter as it nears', () => {
+      const glow = vi.spyOn(baker, 'glow');
+      const winding = warden({ windup: 'turretVolley', threat: { attack: 'turretVolley', windup: 0.6, kind: 'none', reach: 0, speed: 0 } });
+      pass.advance(0.01, winding);
+      pass.advance(0.1, winding);
+      pass.draw(winding, 1, { ...LOOK, still: true });
+      const early = muzzles(glow);
+      expect(early).toHaveLength(14);
+      const from = draws.length;
+      pass.advance(0.4, winding);
+      pass.draw(winding, 1, { ...LOOK, still: true });
+      const later = muzzles(glow, from);
+      expect(early[0]?.alpha ?? 0).toBeGreaterThan(0);
+      expect(later[0]?.alpha ?? 0).toBeGreaterThan((early[0]?.alpha ?? 1) * 1.5);
+    });
+
+    it('brightens its warnings with the boss\'s own time, so a slowed windup brightens as slowly', () => {
+      const glow = vi.spyOn(baker, 'glow');
+      const winding = warden({ windup: 'turretVolley', threat: { attack: 'turretVolley', windup: 0.6, kind: 'none', reach: 0, speed: 0 } });
+      const alphaAfter = (seconds: number, timeScale: number): number => {
+        pass.reset();
+        pass.advance(0.01, warden(), timeScale);
+        pass.advance(0.001, winding, timeScale);
+        pass.advance(seconds, winding, timeScale);
+        const from = draws.length;
+        pass.draw(winding, 1, { ...LOOK, still: true });
+        return muzzles(glow, from)[0]?.alpha ?? 0;
+      };
+      expect(alphaAfter(0.4, 0.5)).toBeCloseTo(alphaAfter(0.2, 1), 2);
+      expect(alphaAfter(0.4, 0.5)).toBeLessThan(alphaAfter(0.4, 1));
+    });
+
+    it('lights the two turrets nearest the ship, and marks where the lock-on will fire, which stays put as the ship moves', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      const glow = vi.spyOn(baker, 'glow');
+      const locking = warden({ windup: 'lockOn', aim: { x: 640, y: 600 } });
+      pass.draw(locking, 1, { ...LOOK, aimX: 640, aimY: 600 });
+      expect(muzzles(glow)).toHaveLength(2);
+      const reticle = drawOf('boss|drift|warden|reticle', custom);
+      expect([reticle?.e, reticle?.f]).toEqual([640, 600]);
+      pass.draw(locking, 1, { ...LOOK, aimX: 900, aimY: 500 });
+      const after = drawOf('boss|drift|warden|reticle', custom);
+      expect([after?.e, after?.f]).toEqual([640, 600]);
+    });
+
+    it('rings the space a pulse will sweep with a ghost ring, and lights the track through a spin', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      // Mid-field the ghost shows the full 220; 200 below the top, the pulse stops short of the wall, and so does the ghost.
+      pass.draw(warden({ windup: 'ringPulse', y: 400, py: 400, parts: wardenRing(0, 120, 400) }), 1, LOOK);
+      expect(drawOf('boss|drift|warden|ghost|220', custom)?.scale).toBeCloseTo(1, 6);
+      pass.draw(warden({ windup: 'ringPulse' }), 1, LOOK);
+      expect(drawOf('boss|drift|warden|ghost|220', custom)?.scale).toBeCloseTo((200 - 16) / 220, 6);
+      pass.draw(warden({ windup: 'spin' }), 1, LOOK);
+      pass.draw(warden({ active: 'spin' }), 1, LOOK);
+      expect(keysOf(custom).filter((k) => k === 'boss|drift|warden|spinBand|120')).toHaveLength(2);
+      custom.mockClear();
+      pass.draw(warden(), 1, LOOK);
+      expect(keysOf(custom)).not.toContain('boss|drift|warden|ghost|220');
+      expect(keysOf(custom)).not.toContain('boss|drift|warden|spinBand|120');
+    });
+
+    it('rings each of its windups in a colour of its own', () => {
+      const custom = vi.spyOn(baker, 'custom');
+      for (const windup of ['turretVolley', 'lockOn', 'spin', 'ringPulse'] as const) pass.draw(warden({ windup }), 1, LOOK);
+      expect(keysOf(custom)).toEqual(expect.arrayContaining(['boss|drift|ring|turretVolley|48', 'boss|drift|ring|lockOn|48', 'boss|drift|ring|spin|48', 'boss|drift|ring|ringPulse|48']));
     });
   });
 

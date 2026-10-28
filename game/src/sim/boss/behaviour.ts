@@ -1,6 +1,7 @@
 import type { AttackId, BossId, FoeKind } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
+import type { Bolts } from '../foes/bolts';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 
@@ -25,6 +26,8 @@ export interface BossPart {
   radius: number;
   hp: number;
   maxHp: number;
+  /** True while its behaviour armours it, so a blow on it is deflected; set by the runner with the view's target. */
+  armoured?: boolean;
 }
 
 /** What the renderer sees of a boss: one object, updated in place by `BossRunner.step`. */
@@ -52,6 +55,10 @@ export interface BossView {
   facing: number;
   /** Where a shot does harm now, or null if nowhere does; refreshed after every step, part broken and resize. Read it through `bossTarget`. */
   target: Readonly<Point> | null;
+  /** The attack winding up or running, as the bots read it, else null; the same object each time that attack comes round. */
+  threat: Readonly<BossThreat> | null;
+  /** Where the ship was as the latest windup began, which an attack aimed at it fires at; one point, moved in place. */
+  readonly aim: Point;
 }
 
 /** What an attack sees and may change. Refilled in place every step. */
@@ -59,6 +66,8 @@ export interface AttackContext {
   arena: Arena;
   readonly rng: Rng;
   readonly rockSpeed: number;
+  /** The galaxy's hostile bolts, for an attack that fires them; null where there are none to fire. */
+  readonly bolts: Bolts | null;
   /** The boss; an attack may move its core. */
   readonly boss: BossView;
   /** This step's length. */
@@ -79,6 +88,42 @@ export interface AttackContext {
   shoveY: number;
 }
 
+/**
+ * How an attack threatens the ship beyond the rocks, foes and bolts it sends out, which carry `fromAttack` once made, or
+ * where what it will send out flies, declared for its windup: data, so a bot reads any boss's attack without knowing
+ * the boss.
+ */
+export type AttackThreat =
+  /**
+   * It sends the core, or its parts, down the lane from the core to where the ship was as its windup began, or fires
+   * bolts that converge on that point, reaching `reach` either side of that line; 'core' reaches the core's radius.
+   */
+  | { readonly kind: 'lane'; readonly reach: number | 'core' }
+  /** As it goes active it shoves the ship straight away from the core, `speed` at the core's rim and fading to none `reach` beyond it: `radialShove`. */
+  | { readonly kind: 'shove'; readonly speed: number; readonly reach: number }
+  /**
+   * It sweeps a ring of `radius` about the core, or about where the ship was as its windup began ('aim'), reaching
+   * `reach` either side of the ring: a ring of parts easing out, a body coiling round the ship.
+   */
+  | { readonly kind: 'ring'; readonly radius: number; readonly reach: number; readonly around: RingCentre };
+
+/** What a ring threat is centred on: the core, or where the ship was as the windup began. */
+export type RingCentre = 'core' | 'aim';
+
+/** An attack as the bots read it: its windup, in the boss's time, and its threat resolved for the boss that makes it. */
+export interface BossThreat {
+  readonly attack: AttackId;
+  readonly windup: number;
+  /** 'none' for an attack whose only harm is what it sends out. */
+  readonly kind: AttackThreat['kind'] | 'none';
+  /** How far either side of its lane or ring, or past the core's rim, it reaches; 0 for none. */
+  readonly reach: number;
+  /** A shove's speed at the core's rim; 0 for any other. */
+  readonly speed: number;
+  /** A ring's radius and centre; absent for any other. */
+  readonly ring?: Readonly<{ radius: number; around: RingCentre }>;
+}
+
 export interface AttackSpec {
   /** Seconds of telegraph, at least `MIN_WINDUP_SECONDS`. The attack does nothing until it ends. */
   readonly windup: number;
@@ -86,6 +131,8 @@ export interface AttackSpec {
   readonly active: number;
   /** Called every step of the active time. */
   run(ctx: AttackContext): void;
+  /** How it threatens the ship beyond what it sends out; nothing more, if absent. */
+  readonly threat?: AttackThreat;
 }
 
 /** The events announcing a boss's core open to harm and closed to it again. */
@@ -102,7 +149,10 @@ export interface BossBehaviour {
   readonly driftSpeed: number;
   /** Its parts, which the runner shows on the view, steps the previous poses of, rescales and strikes. None if absent. */
   readonly parts?: readonly BossPart[];
-  /** How far from the core's centre the boss reaches, parts included; its drift keeps that much inside the field. The core radius if absent. */
+  /**
+   * How far the core keeps from the walls as it drifts, and from a respawning ship; the core radius if absent. A live
+   * part that trails beyond it, a serpent's tail say, is kept inside the field and clear of the ship by its own radius.
+   */
   readonly reach?: number;
   /** Where in `field` it arrives; `bossHome` if absent. */
   home?(field: Field): Readonly<Point>;
@@ -112,11 +162,16 @@ export interface BossBehaviour {
   step?(ctx: AttackContext): void;
   /** Whether a blow on the core can hurt it now; always, if absent. Asked after every step and every part broken. */
   vulnerable?(boss: Readonly<BossView>): boolean;
+  /**
+   * Whether a blow on part `index` hurts it now; always, if absent. An armoured part deflects the blow, which spends a
+   * shot. Asked for every hit on a part, and after every step and every part broken.
+   */
+  partVulnerable?(index: number): boolean;
   /** Whether a blow landing at (x, y) hurts the core while it can be hurt; anywhere does, if absent. Elsewhere it deflects. */
   hurtsAt?(boss: Readonly<BossView>, x: number, y: number): boolean;
   /**
    * Where a shot does harm now, or null if nowhere does, asked right after `vulnerable`. If absent, the core while it
-   * can be hurt, else its first live part.
+   * can be hurt, else its first live part that is not armoured.
    */
   target?(boss: Readonly<BossView>): Readonly<Point> | null;
 }
@@ -138,6 +193,8 @@ export interface BossSetup {
   readonly field: Field;
   /** The galaxy's foes, for a boss that launches its own; absent where there are none to launch into. */
   readonly foes?: BossFoes;
+  /** The galaxy's hostile bolts, for a boss that fires them; absent where there are none to fire. */
+  readonly bolts?: Bolts;
 }
 
 /** Makes a fight's behaviour, which may keep state of its own, from the fight's setup. */

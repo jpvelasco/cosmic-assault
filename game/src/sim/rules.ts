@@ -5,7 +5,9 @@ import type { Field } from './field';
 import { TIME_EPSILON } from './math';
 import type { Rng } from './rng';
 import type { GalaxyMode } from './scoring';
-import type { Ship } from './ship';
+import { respawnShip, type Ship } from './ship';
+import type { ShotRules } from './shots';
+import { placePose } from './wrap';
 
 export const MIN_PRACTICE_LEVEL = 1;
 export const MAX_PRACTICE_LEVEL = 7;
@@ -43,6 +45,8 @@ export interface Arena {
   lives(): number;
   nextId(): number;
   award(points: number): void;
+  /** Scores `rock`, destroyed in play, through the ruleset's `scoreKill` and reports it; the caller takes it off the field. */
+  scoreRock(rock: Readonly<Asteroid>): void;
   setStatus(status: 'warping' | 'cleared'): void;
 }
 
@@ -65,10 +69,27 @@ export interface Spawner {
   scoreKill(base: number): number;
   /** The ship has just lost a life. */
   shipLost?(): void;
-  /** The ship has just respawned at the field's centre, still invulnerable; a ruleset may move it somewhere safer. */
-  respawned?(ship: Ship): void;
+  /**
+   * Where the ship comes back once `respawnShip` has put it at the field's centre, invulnerable: somewhere safer, or
+   * null to stay there. The World moves its previous pose there too, so it is not drawn sweeping across the field.
+   */
+  respawnPoint?(): Readonly<{ x: number; y: number }> | null;
   /** A shot has just broken `rock`, after the kill is scored. */
   rockKilled?(rock: Readonly<Asteroid>): void;
+  /** What the player's shots carry this step (pierces, homing, the Wingman); none without the hook or for null. */
+  shotRules?(): ShotRules | null;
+  /**
+   * The share of real time the rocks run at this step (the ruleset scales its own foes and boss alike): 1 without the
+   * hook. The ship, its shots, the pickups, the hazards and the clock always run in real time.
+   */
+  enemyTimeScale?(): number;
+}
+
+/** Brings a lost ship back: at the field's centre, invulnerable, then wherever `rules` would rather have it. */
+export function respawn(ship: Ship, field: Field, rules: Spawner): void {
+  respawnShip(ship, field);
+  const spot = rules.respawnPoint?.() ?? null;
+  if (spot !== null) placePose(ship, spot);
 }
 
 /** Today's practice: a timed spawn, a minimum on the field, rock sizes and speeds by level. */

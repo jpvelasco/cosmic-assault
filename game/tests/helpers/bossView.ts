@@ -7,5 +7,5 @@ import type { BossView } from '../../src/sim/boss/behaviour';
  */
 export function bossView(over: Partial<BossView> = {}): BossView {
   const { x = 640, y = 100 } = over;
-  return { id: 'sentinel', x, y, px: x, py: y, radius: 70, hp: 20, maxHp: 20, phase: 1, state: 'fighting', windup: null, active: null, vulnerable: true, parts: [], facing: Math.PI / 2, target: null, ...over };
+  return { id: 'sentinel', x, y, px: x, py: y, radius: 70, hp: 20, maxHp: 20, phase: 1, state: 'fighting', windup: null, active: null, vulnerable: true, parts: [], facing: Math.PI / 2, target: null, threat: null, aim: { x: 640, y: 600 }, ...over };
 }

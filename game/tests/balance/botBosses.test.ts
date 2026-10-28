@@ -4,7 +4,7 @@ import { galaxyById } from '../../src/content/galaxies';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import type { GalaxyId } from '../../src/content/types';
 import { recordRun, replayControls } from '../helpers/botReplay';
-import { BOT_RUN_TIMEOUT_MS, botRuns } from '../helpers/botRuns';
+import { BOT_RUN_TIMEOUT_MS, BOT_SEEDS } from '../helpers/botRuns';
 
 /** A boss must fall within this long of its arrival. */
 const LIMIT_SECONDS = 120;
@@ -16,8 +16,9 @@ const killedInTime = (results: readonly RunResult[]): number =>
 // The Monolith's and the Hive Carrier's kill rates, and their lives taken off an idle ship, are pinned over 40 seeds
 // with the rest of their galaxies' targets (galaxy-1-6.test.ts, galaxy-2-6.test.ts).
 describe('the expert bot against the Sentinel', { timeout: BOT_RUN_TIMEOUT_MS }, () => {
-  it('kills it on 3-6 within 120 s of its arrival on at least 9 seeds in 10', () => {
-    expect(killedInTime(botRuns('3-6', 'expert', FIGHT_SECONDS))).toBeGreaterThanOrEqual(9);
+  it('kills it on 3-6\'s field, which the Warden now guards, within 120 s of its arrival on at least 9 seeds in 10', () => {
+    const galaxy = { ...galaxyById('3-6'), boss: 'sentinel' as const };
+    expect(killedInTime(BOT_SEEDS.map((seed) => runGalaxy({ galaxy, seed, profile: 'expert', maxSeconds: FIGHT_SECONDS })))).toBeGreaterThanOrEqual(9);
   });
 });
 

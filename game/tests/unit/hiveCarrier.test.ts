@@ -3,9 +3,12 @@ import { bossHp, BOSSES } from '../../src/content/bosses';
 import { DRONE_SEPARATION } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
-import { bossTarget, BossRunner, MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
+import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { bossTarget } from '../../src/sim/boss/bossRules';
+import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { BossSetup, BossView } from '../../src/sim/boss/behaviour';
-import { CRUISE_SPEED, createHiveCarrier, DRONE_CAP, HANGAR_HALF_ARC, HANGAR_OPEN_SECONDS, HIVE_HOME_SHARE, launchSlot, LAUNCH_WAVES, TURN_RATE } from '../../src/sim/boss/hiveCarrier';
+import { launchSlot } from '../../src/sim/boss/attacks';
+import { CRUISE_SPEED, createHiveCarrier, DRONE_CAP, HANGAR_HALF_ARC, HANGAR_OPEN_SECONDS, HIVE_HOME_SHARE, LAUNCH_WAVES, TURN_RATE } from '../../src/sim/boss/hiveCarrier';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
@@ -103,7 +106,7 @@ describe('the Hive Carrier definition', () => {
   it('guards 2-★, while the later Dimensions keep the Sentinel for now', () => {
     expect(galaxyById('2-6').boss).toBe('hiveCarrier');
     expect(bossHp(DEF, 2)).toBe(28);
-    for (const id of ['3-6', '4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
+    for (const id of ['4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
   });
 
   it('needs the galaxy\'s foes to launch its drones into, and says so', () => {

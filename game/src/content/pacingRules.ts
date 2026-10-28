@@ -8,6 +8,8 @@ export const SURGE_SECONDS = 20;
 export const BOSS_APPROACH_SECONDS = 20;
 /** How long a boss's arrival lasts, unhurt and harmless, before it fights. */
 export const BOSS_INTRO_SECONDS = 2;
+/** The shortest telegraph any hostile attack may have, boss or foe: players need this long to see it coming. */
+export const MIN_WINDUP_SECONDS = 0.35;
 
 /** When a survival galaxy's lull starts: it ends as the surge begins, 20 s before the duration. */
 export const lullStart = (galaxy: Pick<GalaxyDef, 'duration'>): number => galaxy.duration - SURGE_SECONDS - LULL_SECONDS;

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { AttackId, GalaxyDef, GalaxyId } from '../../src/content/types';
-import { bossTarget, BossRunner, MAX_SHOVE_SPEED, MIN_WINDUP_SECONDS } from '../../src/sim/boss/bossRunner';
+import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
+import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
 import { createMonolith, EXPOSED_AT, ORBIT_RADIUS, ORBIT_SPEED, REGROW_CAP, REGROW_SECONDS, SHARD_COUNTS, SHARD_HP, SHARD_RADIUS } from '../../src/sim/boss/monolith';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -74,7 +76,7 @@ describe('the Monolith definition', () => {
 
   it('guards 1-★, while the later Dimensions keep the Sentinel for now', () => {
     expect(galaxyById('1-6').boss).toBe('monolith');
-    for (const id of ['3-6', '4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
+    for (const id of ['4-6', '5-6'] as const) expect(galaxyById(id).boss).toBe('sentinel');
   });
 });
 

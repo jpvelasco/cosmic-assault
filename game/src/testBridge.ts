@@ -15,12 +15,6 @@ function runningEffects({ effects }: World): CosmicAssaultTestState['effects'] {
   return Object.fromEntries(Object.entries(effects).filter(([, seconds]) => seconds > 0));
 }
 
-/** The gravity well being telegraphed or pulling, as a list of zero or one. */
-function wellsOf(world: World | null): CosmicAssaultTestState['wells'] {
-  const well = world?.well;
-  return well === null || well === undefined ? [] : [{ id: well.id, stage: well.stage, x: well.x, y: well.y, intensity: well.intensity, remaining: well.remaining }];
-}
-
 /** The boss of the galaxy in play as plain data, or null before it arrives. */
 function bossOf(world: World | null): CosmicAssaultTestState['boss'] {
   const boss = world?.boss;
@@ -56,7 +50,7 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
     projectileCount: world?.projectiles.length ?? 0,
     pickups: world?.pickups.map(({ id, kind, x, y, expiresIn }) => ({ id, kind, x, y, expiresIn })) ?? [],
     foes: world?.foes.map(({ id, kind, x, y }) => ({ id, kind, x, y })) ?? [],
-    wells: wellsOf(world),
+    hazards: world?.hazards.map(({ id, type, stage, x, y, intensity, remaining }) => ({ id, type, stage, x, y, intensity, remaining })) ?? [],
     boss: bossOf(world),
     events: { ...hooks.e2eEventCounts },
     effects: world === null ? {} : runningEffects(world),

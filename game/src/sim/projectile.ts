@@ -17,13 +17,20 @@ export interface Projectile {
   px: number;
   py: number;
   life: number;
+  /** How many more rocks and foes it passes through; 0 for a shot that the next one stops. */
+  pierce: number;
+  /** Whether it turns toward the nearest target ahead (Homing Missiles). */
+  readonly homing: boolean;
+  /** The ids of the rocks and foes it has struck and passed through, so it never strikes one twice. */
+  readonly struck: number[];
 }
 
 /** Absorbs float residue from summing many dt steps so a full lifespan always expires. */
 const LIFE_EPSILON = 1e-9;
 
-export function projectileFromShot(shot: Shot, id = 0): Projectile {
-  return { id, x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, px: shot.x, py: shot.y, life: PROJECTILE.lifespan };
+/** A projectile flying from `shot`; by default it neither pierces nor homes, as every shot did before the M6 pickups. */
+export function projectileFromShot(shot: Shot, id = 0, pierce = 0, homing = false): Projectile {
+  return { id, x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, px: shot.x, py: shot.y, life: PROJECTILE.lifespan, pierce, homing, struck: [] };
 }
 
 /** Moves, ages, then wraps like the live game; returns false once the projectile has expired. */

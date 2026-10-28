@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { foeKeys } from '../../src/render/foePass';
-import { DRIFT, ION_REACH } from '../../src/render/palette';
+import { DRIFT, ION_REACH, PALETTE_IDS, paletteFor, type Palette } from '../../src/render/palette';
 import {
   craterLayout,
   createSpriteBaker,
   shapeFingerprint,
+  type SpriteBaker,
   snapFlameLength,
   snapGlowDiameter,
 } from '../../src/render/sprites';
@@ -230,6 +231,38 @@ describe('createSpriteBaker', () => {
     expect(baker.shot(ION_REACH)).not.toBe(baker.shot(DRIFT));
     expect(baker.flame(ION_REACH, 16)).not.toBe(baker.flame(DRIFT, 16));
     expect(baker.ship(ION_REACH)).toBe(baker.ship(ION_REACH));
+  });
+
+  it('paints the shot and the asteroid in each palette\'s own colours', () => {
+    const painted: string[] = [];
+    const recording = new Proxy(
+      {},
+      {
+        get: (_target, name) => (name === 'createLinearGradient' || name === 'createRadialGradient' ? () => ({ addColorStop: (_at: number, color: string) => painted.push(color) }) : () => undefined),
+        set: (_target, name, value) => {
+          if (name === 'fillStyle' || name === 'strokeStyle') painted.push(String(value));
+          return true;
+        },
+      },
+    );
+    vi.stubGlobal('document', { createElement: (): FakeCanvas => ({ width: 0, height: 0, getContext: () => recording }) });
+    const all = PALETTE_IDS.map(paletteFor);
+    const a = rock(5);
+    const bakes: Record<string, (baker: SpriteBaker, p: Palette) => unknown> = {
+      shot: (baker, p) => baker.shot(p),
+      asteroid: (baker, p) => baker.asteroid(a, p),
+    };
+    for (const [name, bake] of Object.entries(bakes)) {
+      const colorSets = all.map((p) => {
+        const baker = createSpriteBaker();
+        baker.setScale(1, 1);
+        painted.length = 0;
+        bake(baker, p);
+        return JSON.stringify([...new Set(painted)].sort());
+      });
+      expect(painted.length, name).toBeGreaterThan(0);
+      expect(new Set(colorSets).size, name).toBe(all.length);
+    }
   });
 
   it('keys the foe sprites by palette too', () => {

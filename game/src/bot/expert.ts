@@ -1,15 +1,19 @@
 import { clamp } from '../content/curves';
+import { MINE } from '../content/foes';
 import type { AttackId } from '../content/types';
-import type { BossView, Point } from '../sim/boss/behaviour';
-import { MAX_SHOVE_SPEED } from '../sim/boss/bossRunner';
-import { MONOLITH_WINDUPS, pulseShove, VOLLEY_REACH } from '../sim/boss/monolith';
+import { radialShove } from '../sim/boss/attacks';
+import type { BossThreat, BossView, Point } from '../sim/boss/behaviour';
+import { MAX_SHOVE_SPEED } from '../sim/boss/bossRules';
 import { PLAYER, STEP_SECONDS, STICK } from '../sim/config';
-import { wellAcceleration } from '../sim/hazards/gravityWell';
+import type { Foe } from '../sim/foes/foe';
+import { zoneClearance } from '../sim/hazards/dangerZone';
+import type { HazardState, ZoneState } from '../sim/hazards/hazard';
+import { shipPullAt, type ShipPull } from '../sim/hazards/shipPull';
 import { nudge, TAU, turnBetween } from '../sim/math';
 import type { Rng } from '../sim/rng';
-import { wrapDelta } from '../sim/wrap';
+import { wrapDelta, wrappedDistance } from '../sim/wrap';
 import { copyIntent, Hands, idleIntent, type Intent } from './hands';
-import { chooseTarget, leadHeading, wrappedDistance, type Target } from './targeting';
+import { chooseTarget, leadHeading, type Target } from './targeting';
 import type { Bot, BotView } from './view';
 
 /** How far ahead the pilot looks for a collision. */
@@ -42,6 +46,10 @@ const CORE_MARGIN = 40;
  * it counts them as touching: the gaps in a broadside's line and a quake's ring are usable.
  */
 const BOSS_ROCK_ALLOWANCE = 35;
+/** How far clear of a mine's arm ring it keeps, so it never arms one. */
+const ARM_CLEARANCE = 20;
+/** It keeps out of a danger zone that is active, or that will be within this many seconds. */
+const ZONE_LEAD_SECONDS = 1;
 /** It goes for a pickup this near that will not expire on the way. */
 const PICKUP_REACH = 450;
 const PICKUP_MIN_SECONDS = 1;
@@ -53,14 +61,8 @@ const THINK_STEPS = 2;
 const COAST_DRAG = PLAYER.dragPerFrame60;
 const THRUST_DRAG = Math.min(COAST_DRAG + STICK.maxDragReliefFactor * (1 - COAST_DRAG), STICK.maxDrag);
 const IDLE: Readonly<Intent> = Object.freeze(idleIntent());
-/**
- * Attacks that send the core, or its parts, at where the ship was as their windup began, and how far either side of
- * that line they reach: the pilot keeps out of the lane while the attack lasts.
- */
-const LANE_REACH: Readonly<Partial<Record<AttackId, (boss: Readonly<BossView>) => number>>> = {
-  lunge: (boss) => boss.radius,
-  shardVolley: () => VOLLEY_REACH,
-};
+/** The fewest circles a ring threat is laid out as, however wide each is. */
+const RING_MIN_CIRCLES = 8;
 /** Out of this range of a boss's core, across the field, the pilot closes in, to this far out from it the way it faces. */
 const ENGAGE_RANGE = 420;
 const STANDOFF = 300;
@@ -74,6 +76,16 @@ function onField(things: readonly Readonly<{ id: number; hp?: number }>[], id: n
   for (const thing of things) if (thing.id === id) return thing.hp === undefined || thing.hp > 0;
   return false;
 }
+
+/** How near a foe it must not come: a mine's arm ring and the clearance it keeps from it, a splitter's spray margin, else its body. */
+function foeReach(foe: Readonly<Foe>): number {
+  if (foe.kind === 'mine') return MINE.armRadius + ARM_CLEARANCE;
+  return foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0);
+}
+
+/** Whether `hazard` is a danger zone to keep out of now: active, or starting within `ZONE_LEAD_SECONDS`. */
+const zoneToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<ZoneState> =>
+  hazard.type === 'dangerZone' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
 
 /** Whether a splitter is near enough ahead of the nose that breaking it would spray its fragments at the ship. */
 function splitterAhead(view: Readonly<BotView>): boolean {
@@ -122,9 +134,13 @@ export class Pilot {
   private readonly reach: number[] = [];
   /** A boss's bodies and its strike lane: worth keeping out of even while the ship cannot be hurt. */
   private readonly solid: boolean[] = [];
+  /** Whether a threat is measured across the wrap; a bolt, which never wraps, is measured straight across the field. */
+  private readonly wraps: boolean[] = [];
   /** For a threat a telegraphed attack made, whether that attack was to be dodged; null for any other threat. */
   private readonly rolled: (boolean | null)[] = [];
   private count = 0;
+  /** The danger zones to keep out of, judged by their rectangles rather than as circles; refilled per judgement. */
+  private readonly zones: Readonly<ZoneState>[] = [];
   /** Seconds until the ship can be hurt by anything but a solid threat. */
   private harmlessFor = 0;
   /** What the last `predict` found: the least clearance, slack included, and the mean of each sample's capped least. */
@@ -135,7 +151,7 @@ export class Pilot {
   /** Where the ship would be at each sample, relative to now. */
   private readonly sx = new Float64Array(SAMPLES + 1);
   private readonly sy = new Float64Array(SAMPLES + 1);
-  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0, wraps: true };
+  private readonly target: Target = { x: 0, y: 0, vx: 0, vy: 0, wraps: true, weakPoint: false };
   private readonly last = idleIntent();
   private inDanger = false;
   /** Whether it dodges in the danger episode under way, and in the boss attack under way. */
@@ -149,8 +165,9 @@ export class Pilot {
   private wobble = 0;
   private nextWobbleAt = 0;
   private steps = 0;
-  /** The boss's current attack, and when and where the ship was as its windup began; null between attacks. */
+  /** The boss's current attack and its threat, and when and where the ship was as its windup began; null between attacks. */
   private strike: AttackId | null = null;
+  private strikeThreat: Readonly<BossThreat> | null = null;
   private strikeAt = 0;
   private strikeX = 0;
   private strikeY = 0;
@@ -159,6 +176,8 @@ export class Pilot {
   /** The predicted ship's velocity, and a shove on it; reused. */
   private readonly motion = { vx: 0, vy: 0 };
   private readonly shove: Point = { x: 0, y: 0 };
+  /** The hazards' predicted pull on the ship, refilled per prediction. */
+  private readonly pull: ShipPull = { x: 0, y: 0 };
 
   constructor(options: PilotOptions) {
     this.rng = options.rng;
@@ -288,8 +307,8 @@ export class Pilot {
   }
 
   /**
-   * Notes a boss attack as its windup begins, with when and where the ship is then, and rolls whether to dodge it; and
-   * forgets it once the attack is over; and while a pulse winds up, when its shove will land.
+   * Notes a boss attack as its windup begins, with its threat and when and where the ship is then, and rolls whether to
+   * dodge it; and forgets it once the attack is over; and while an attack that shoves winds up, when its shove will land.
    */
   private trackStrike(view: Readonly<BotView>): void {
     // First, while the attack that ran last step is still remembered: an attack with no active time (a launch, a quake,
@@ -298,27 +317,30 @@ export class Pilot {
     const boss = view.boss;
     const attack = boss === null ? null : (boss.windup ?? boss.active);
     if (attack === null) {
-      this.strike = null;
+      this.strike = this.strikeThreat = null;
     } else if (this.strike === null) {
       this.strike = attack;
+      this.strikeThreat = boss?.threat ?? null;
       this.strikeAt = view.elapsed;
       this.strikeX = view.ship.x;
       this.strikeY = view.ship.y;
       this.dodgingStrike = this.roll(this.telegraphDodgeChance);
     }
-    this.shoveIn = boss?.windup === 'pulse' ? Math.max(0, this.strikeAt + MONOLITH_WINDUPS.pulse - view.elapsed) : Infinity;
+    const threat = this.strikeThreat;
+    const windingUp = boss !== null && boss.windup !== null;
+    this.shoveIn = windingUp && threat?.kind === 'shove' ? Math.max(0, this.strikeAt + threat.windup - view.elapsed) : Infinity;
   }
 
   /**
    * Forgets the attacks' rocks and drones that have left the field, and notes the new ones the attack under way sends
-   * out, with its roll: a launch's drones, and the rocks the sim marks as an attack's (never their fragments).
+   * out, with its roll: the foes and rocks the sim marks as an attack's as it makes them (never a rock's fragments).
    */
   private trackSpawns(view: Readonly<BotView>): void {
     const { spawnIds, spawnDodging } = this;
     let kept = 0;
     for (let i = 0; i < spawnIds.length; i++) {
       const id = spawnIds[i] ?? 0;
-      if (!onField(view.foes, id) && !onField(view.asteroids, id)) continue;
+      if (!onField(view.foes, id) && !onField(view.asteroids, id) && !onField(view.bolts, id)) continue;
       spawnIds[kept] = id;
       spawnDodging[kept++] = spawnDodging[i] ?? true;
     }
@@ -327,12 +349,17 @@ export class Pilot {
     for (const foe of view.foes) {
       if (foe.id <= this.idMark) continue;
       mark = Math.max(mark, foe.id);
-      if (this.strike === 'launch' && foe.kind === 'drone') this.noteSpawn(foe.id);
+      if (foe.fromAttack) this.noteSpawn(foe.id);
     }
     for (const rock of view.asteroids) {
       if (rock.id <= this.idMark) continue;
       mark = Math.max(mark, rock.id);
       if (rock.fromAttack === true) this.noteSpawn(rock.id);
+    }
+    for (const bolt of view.bolts) {
+      if (bolt.id <= this.idMark) continue;
+      mark = Math.max(mark, bolt.id);
+      if (bolt.fromAttack) this.noteSpawn(bolt.id);
     }
     this.idMark = mark;
   }
@@ -357,14 +384,31 @@ export class Pilot {
       const allowance = boss !== null && rock.transient === true ? BOSS_ROCK_ALLOWANCE : 0;
       this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false, this.attackRoll(rock.id), allowance);
     }
-    for (const foe of view.foes) {
-      if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0), false, this.attackRoll(foe.id));
-    }
+    for (const foe of view.foes) if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foeReach(foe), false, this.attackRoll(foe.id));
+    // Bolts pass out of the field and never wrap: one is judged where it really flies, not across the seam.
+    for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id), 0, false);
+    this.zones.length = 0;
+    for (const hazard of view.hazards) if (zoneToAvoid(hazard)) this.zones.push(hazard);
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
     for (const part of boss.parts) if (part.hp > 0) this.addBody(view, part, part.radius);
-    const laneReach = this.strike === null ? undefined : LANE_REACH[this.strike];
-    if (laneReach !== undefined) this.addLane(view, boss, laneReach(boss));
+    const threat = this.strikeThreat;
+    if (threat?.kind === 'lane') this.addLane(view, boss, threat.reach);
+    else if (threat?.ring !== undefined) this.addRing(view, boss, threat.ring, threat.reach);
+  }
+
+  /**
+   * A ring of `ring.radius` about the core, or about where the ship was as the windup began, as circles `reach` across
+   * no more than a reach apart: a telegraphed attack may sweep the boss's parts, or its body, round it.
+   */
+  private addRing(view: Readonly<BotView>, boss: Readonly<BossView>, ring: NonNullable<BossThreat['ring']>, reach: number): void {
+    const cx = ring.around === 'core' ? boss.x : this.strikeX;
+    const cy = ring.around === 'core' ? boss.y : this.strikeY;
+    const circles = Math.max(RING_MIN_CIRCLES, Math.ceil((TAU * ring.radius) / reach));
+    for (let i = 0; i < circles; i++) {
+      const angle = (i * TAU) / circles;
+      this.addThreat(view, cx + Math.cos(angle) * ring.radius, cy + Math.sin(angle) * ring.radius, 0, 0, reach, true, this.dodgingStrike);
+    }
   }
 
   /**
@@ -387,11 +431,14 @@ export class Pilot {
     this.addThreat(view, body.x, body.y, (body.x - body.px) / STEP_SECONDS, (body.y - body.py) / STEP_SECONDS, radius, true, this.strike === null ? null : this.dodgingStrike);
   }
 
-  /** Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. */
-  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null, allowance = 0): void {
+  /**
+   * Lists a threat, unless it is too far away to come within `CLEAR_ENOUGH` of the ship over the look-ahead. One that
+   * `wraps` is measured across the wrap; one that does not (a bolt), straight across the field.
+   */
+  private addThreat(view: Readonly<BotView>, x: number, y: number, vx: number, vy: number, radius: number, solid: boolean, rolled: boolean | null = null, allowance = 0, wraps = true): void {
     const { ship, field } = view;
-    const dx = wrapDelta(x - ship.x, field.width);
-    const dy = wrapDelta(y - ship.y, field.height);
+    const dx = wraps ? wrapDelta(x - ship.x, field.width) : x - ship.x;
+    const dy = wraps ? wrapDelta(y - ship.y, field.height) : y - ship.y;
     const closing = (Math.hypot(vx, vy) + PLAYER.maxSpeed) * LOOK_AHEAD_SECONDS;
     // The allowance comes off the distance at which it counts as touching the ship.
     const touching = radius - allowance;
@@ -403,6 +450,7 @@ export class Pilot {
     this.tvy[i] = vy;
     this.reach[i] = touching + PLAYER.radius;
     this.solid[i] = solid;
+    this.wraps[i] = wraps;
     this.rolled[i] = rolled;
   }
 
@@ -414,7 +462,7 @@ export class Pilot {
   private predict(view: Readonly<BotView>, heading: number | null): void {
     this.predictShip(view, heading);
     const { width, height } = view.field;
-    const { tx, ty, tvx, tvy, reach, solid, sx, sy } = this;
+    const { tx, ty, tvx, tvy, reach, solid, wraps, sx, sy } = this;
     let least = Infinity;
     let total = 0;
     let nearest = -1;
@@ -425,12 +473,21 @@ export class Pilot {
       let who = -1;
       for (let i = 0; i < this.count; i++) {
         if (harmless && solid[i] !== true) continue;
-        const dx = wrapDelta((tx[i] ?? 0) + (tvx[i] ?? 0) * t - (sx[k] ?? 0), width);
-        const dy = wrapDelta((ty[i] ?? 0) + (tvy[i] ?? 0) * t - (sy[k] ?? 0), height);
-        const clearance = Math.hypot(dx, dy) - (reach[i] ?? 0);
+        const dx = (tx[i] ?? 0) + (tvx[i] ?? 0) * t - (sx[k] ?? 0);
+        const dy = (ty[i] ?? 0) + (tvy[i] ?? 0) * t - (sy[k] ?? 0);
+        const clearance = (wraps[i] === false ? Math.hypot(dx, dy) : Math.hypot(wrapDelta(dx, width), wrapDelta(dy, height))) - (reach[i] ?? 0);
         if (clearance < sample) {
           sample = clearance;
           who = i;
+        }
+      }
+      if (!harmless) {
+        for (const zone of this.zones) {
+          const clearance = zoneClearance(view.field, zone, view.ship.x + (sx[k] ?? 0), view.ship.y + (sy[k] ?? 0)) - PLAYER.radius;
+          if (clearance < sample) {
+            sample = clearance;
+            who = -1;
+          }
         }
       }
       if (sample + k * SLACK_PER_SAMPLE < least) {
@@ -445,30 +502,26 @@ export class Pilot {
   }
 
   /**
-   * Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap, a well's pull
-   * and a boss's coming shove.
+   * Fills the ship's predicted offsets: a coarse copy of its physics, with drag, thrust, the speed cap, the force
+   * fields' pull and a boss's coming shove.
    */
   private predictShip(view: Readonly<BotView>, heading: number | null): void {
-    const { ship, well, boss } = view;
+    const { ship, hazards, boss } = view;
     const drag = Math.pow(heading === null ? COAST_DRAG : THRUST_DRAG, 60 * SAMPLE_SECONDS);
     let ax = heading === null ? 0 : Math.cos(heading) * PLAYER.thrust;
     let ay = heading === null ? 0 : Math.sin(heading) * PLAYER.thrust;
-    if (well?.stage === 'active') {
-      const dx = well.x - ship.x;
-      const dy = well.y - ship.y;
-      const distance = Math.hypot(dx, dy);
-      const pull = distance === 0 ? 0 : wellAcceleration(distance, well.intensity) / distance;
-      ax += dx * pull;
-      ay += dy * pull;
-    }
-    const { motion, shove } = this;
+    // The hazards' pull, summed and capped exactly as the sim applies it, as an acceleration.
+    const pull = shipPullAt(hazards, ship.x, ship.y, 1, this.pull);
+    ax += pull.x;
+    ay += pull.y;
+    const { motion, shove, strikeThreat: push } = this;
     motion.vx = ship.vx;
     motion.vy = ship.vy;
     let x = 0;
     let y = 0;
     for (let k = 1; k <= SAMPLES; k++) {
-      if (boss !== null && this.shoveIn < k * SAMPLE_SECONDS && this.shoveIn >= (k - 1) * SAMPLE_SECONDS) {
-        pulseShove(boss, ship.x + x, ship.y + y, shove);
+      if (boss !== null && push !== null && this.shoveIn < k * SAMPLE_SECONDS && this.shoveIn >= (k - 1) * SAMPLE_SECONDS) {
+        radialShove(boss, push.speed, push.reach, ship.x + x, ship.y + y, shove);
         nudge(motion, shove.x, shove.y, MAX_SHOVE_SPEED);
       }
       let vx = motion.vx * drag + ax * SAMPLE_SECONDS;

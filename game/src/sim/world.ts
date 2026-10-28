@@ -1,23 +1,27 @@
-import type { TimedPickupId } from '../content/pickups';
+import { noEffects, type TimedPickupId } from '../content/pickups';
 import type { GalaxyDef, WeaponTier } from '../content/types';
 import { createAsteroid, splitAsteroid, stepAsteroid, type Asteroid } from './asteroid';
 import type { BossView } from './boss/behaviour';
+import { bossTarget } from './boss/bossRules';
 import { circlesOverlap, SpatialHash } from './collision';
-import { ASTEROID, PLAYER, PROJECTILE } from './config';
+import { ASTEROID, PLAYER } from './config';
 import type { Controls } from './controls';
 import type { SimEvent } from './events';
 import type { Field } from './field';
-import { GalaxyRun, galaxyStreams } from './galaxy/galaxyRun';
+import { GalaxyRun } from './galaxy/galaxyRun';
+import { galaxyStreams } from './galaxy/streams';
 import type { Phase } from './galaxy/pacing';
 import type { ShowerState } from './galaxy/showers';
+import type { Bolt } from './foes/bolts';
 import type { Foe } from './foes/foe';
-import type { WellState } from './hazards/gravityWell';
+import type { HazardState } from './hazards/hazard';
 import type { Pickup } from './pickups/pickups';
-import { projectileFromShot, stepProjectile, type Projectile } from './projectile';
+import type { Projectile } from './projectile';
 import { createRng, deriveSeed, type Rng } from './rng';
-import { MIN_PRACTICE_LEVEL, PracticeSpawner, type Arena, type Spawner } from './rules';
-import { makeInvulnerable, respawnShip, stepShip, type Ship, type Shot } from './ship';
+import { MIN_PRACTICE_LEVEL, PracticeSpawner, respawn, type Arena, type Spawner } from './rules';
+import { makeInvulnerable, stepShip, type Ship } from './ship';
 import { removeFlagged, resetFlags } from './flagged';
+import { PlayerShots, type ShotTargets } from './shots';
 import { rescalePose } from './wrap';
 import { assertAsteroidPlacement, assertField, placeShip, resolveOptions, type WorldOptions } from './worldOptions';
 
@@ -42,9 +46,9 @@ export function hasEnded(status: WorldStatus): boolean {
 }
 
 const HASH_CELL_SIZE = ASTEROID.radii[0] * 2;
-const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = Object.freeze({ doubleShot: 0, rapidFire: 0, spreadLaser: 0, shield: 0 });
-const NO_PICKUPS: readonly Pickup[] = Object.freeze([]);
-const NO_FOES: readonly Foe[] = Object.freeze([]);
+const NO_EFFECTS: Readonly<Record<TimedPickupId, number>> = Object.freeze(noEffects());
+/** What a practice run lists for the pickups, foes and hazards it never has. */
+const NONE: readonly never[] = Object.freeze([]);
 
 function assertDt(dt: number): void {
   if (!(dt > 0 && Number.isFinite(dt))) {
@@ -66,7 +70,7 @@ function assertDt(dt: number): void {
  * - 'boss': a boss fight's drift and attacks;
  * - 'pickups': whether a kill drops a pickup, and which;
  * - 'foes': foe behaviour once spawned: where they enter, how they head and where their fragments fly;
- * - 'hazards': where gravity wells sit.
+ * - 'hazards': where gravity wells sit; every other hazard type draws from its own 'hazards:<type>'.
  */
 export class World {
   private readonly level: number;
@@ -79,13 +83,24 @@ export class World {
   private currentField: Field;
   private readonly shipState: Ship;
   private readonly asteroidList: Asteroid[] = [];
-  private readonly projectileList: Projectile[] = [];
   private readonly events: SimEvent[] = [];
+  private readonly shots = new PlayerShots(this.events, () => this.nextId());
+  /** What the player's shots seek and strike: the rocks here, the foes and the boss through the galaxy run. */
+  private readonly targets: ShotTargets = {
+    rocks: this.asteroidList,
+    foes: () => this.run?.foeList ?? NONE,
+    aim: () => {
+      const boss = this.run?.boss ?? null;
+      return boss === null ? null : bossTarget(boss);
+    },
+    hitBoss: (x, y, radius) => this.run?.bosses.hitBoss(x, y, radius) === true,
+    hitFoe: (x, y, radius, struck) => this.run?.hitFoe(x, y, radius, struck) ?? -1,
+    hitRock: (x, y, radius) => this.breakRock(x, y, radius),
+  };
   private readonly hash = new SpatialHash(HASH_CELL_SIZE);
   /** Asteroid indices broken this step, in the order they broke. */
   private readonly broken: number[] = [];
   private readonly brokenFlags: boolean[] = [];
-  private readonly spentFlags: boolean[] = [];
   private readonly children: Asteroid[] = [];
   /** Last id handed out; asteroids and projectiles share it. Consumes no RNG. */
   private lastId = 0;
@@ -143,7 +158,7 @@ export class World {
 
   /** Live view, mutated in place by `step()`; copy it if you keep it across steps. */
   get projectiles(): readonly Readonly<Projectile>[] {
-    return this.projectileList;
+    return this.shots.list;
   }
 
   get score(): number {
@@ -222,17 +237,22 @@ export class World {
 
   /** The pickups on the field; a live view, and always empty in practice. */
   get pickups(): readonly Readonly<Pickup>[] {
-    return this.run?.pickups ?? NO_PICKUPS;
+    return this.run?.pickups ?? NONE;
   }
 
   /** The foes on the field; a live view, and always empty in practice. */
   get foes(): readonly Readonly<Foe>[] {
-    return this.run?.foeList ?? NO_FOES;
+    return this.run?.foeList ?? NONE;
   }
 
-  /** The gravity well being telegraphed or pulling; null when there is none, and always in practice. */
-  get well(): Readonly<WellState> | null {
-    return this.run?.well ?? null;
+  /** The hostile bolts on the field; a live view, and always empty in practice. */
+  get bolts(): readonly Readonly<Bolt>[] {
+    return this.run?.boltList ?? NONE;
+  }
+
+  /** The hazards being telegraphed or active; a live view, and always empty in practice. */
+  get hazards(): readonly Readonly<HazardState>[] {
+    return this.run?.hazardStates ?? NONE;
   }
 
   /** The meteor shower being telegraphed or falling, for the HUD warning; a live view. */
@@ -255,13 +275,13 @@ export class World {
     this.rememberPoses();
     this.elapsedValue += dt;
     this.rules.beginStep?.();
-    this.addProjectiles(stepShip(this.shipState, controls, dt, this.currentField, this.run?.loadout.weapon));
+    this.shots.fire(stepShip(this.shipState, controls, dt, this.currentField, this.run?.loadout.weapon), this.shipState, this.rules.shotRules?.() ?? null);
     this.rules.moveOwn?.(dt, this.shipState);
     this.moveEntities(dt);
     this.prepareCollisions();
     const stillPlaying = this.collideShip();
     if (stillPlaying) {
-      this.collideProjectiles();
+      this.shots.collide(this.targets);
     }
     this.breakAsteroids();
     this.rules.afterCollisions?.();
@@ -279,7 +299,7 @@ export class World {
     assertField(field);
     const old = this.currentField;
     this.currentField = field;
-    for (const e of [this.shipState, ...this.asteroidList, ...this.projectileList]) rescalePose(e, old, field);
+    for (const e of [this.shipState, ...this.asteroidList, ...this.shots.list]) rescalePose(e, old, field);
     this.run?.resize(old, field);
   }
 
@@ -308,6 +328,9 @@ export class World {
       award: (points) => {
         this.scoreValue += points;
       },
+      scoreRock: (rock) => {
+        this.scoreRock(rock);
+      },
       setStatus: (status) => {
         this.statusValue = status;
       },
@@ -325,29 +348,16 @@ export class World {
       a.py = a.y;
       a.protation = a.rotation;
     }
-    for (const p of this.projectileList) {
-      p.px = p.x;
-      p.py = p.y;
-    }
+    this.shots.remember();
   }
 
-  private addProjectiles(shots: readonly Shot[]): void {
-    for (const shot of shots) {
-      this.projectileList.push(projectileFromShot(shot, this.nextId()));
-      this.events.push({ type: 'shot', x: shot.x, y: shot.y });
-    }
-  }
-
+  /** The player's shots fly in real time; the rocks at the ruleset's time scale (half, under Time Warp). */
   private moveEntities(dt: number): void {
     const field = this.currentField;
-    const projectiles = this.projectileList;
-    resetFlags(this.spentFlags, projectiles.length);
-    for (let i = 0; i < projectiles.length; i++) {
-      this.spentFlags[i] = !stepProjectile(projectiles[i] as Projectile, dt, field);
-    }
-    removeFlagged(projectiles, this.spentFlags);
+    this.shots.move(dt, field, this.targets);
+    const rockDt = dt * (this.rules.enemyTimeScale?.() ?? 1);
     for (const a of this.asteroidList) {
-      stepAsteroid(a, dt, field);
+      stepAsteroid(a, rockDt, field);
     }
   }
 
@@ -359,7 +369,6 @@ export class World {
       this.hash.insert(i, a.x, a.y, a.radius);
     }
     resetFlags(this.brokenFlags, asteroids.length);
-    resetFlags(this.spentFlags, this.projectileList.length);
     this.broken.length = 0;
   }
 
@@ -406,31 +415,24 @@ export class World {
       this.events.push({ type: 'gameOver', score: this.scoreValue });
       return false;
     }
-    respawnShip(ship, this.currentField);
-    this.rules.respawned?.(ship);
+    respawn(ship, this.currentField, this.rules);
     return true;
   }
 
-  /** Each projectile breaks at most one asteroid, or is spent on a boss' core or a foe, and is removed once (fixes CA-021). */
-  private collideProjectiles(): void {
-    const projectiles = this.projectileList;
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-      const p = projectiles[i] as Projectile;
-      if (this.run?.hitBoss(p.x, p.y, PROJECTILE.radius) === true || this.run?.hitFoe(p.x, p.y, PROJECTILE.radius) === true) {
-        this.spentFlags[i] = true;
-        continue;
-      }
-      const index = this.lastOverlap(p.x, p.y, PROJECTILE.radius);
-      if (index >= 0) {
-        this.spentFlags[i] = true;
-        const a = this.markBroken(index);
-        const points = this.rules.scoreKill(ASTEROID.scores[a.size]);
-        this.scoreValue += points;
-        this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
-        this.rules.rockKilled?.(a);
-      }
-    }
-    removeFlagged(projectiles, this.spentFlags);
+  /** A shot at (x, y) breaks the last-indexed unbroken rock it overlaps, scoring it; returns the rock's id, or -1 (each shot strikes once a step: CA-021). */
+  private breakRock(x: number, y: number, radius: number): number {
+    const index = this.lastOverlap(x, y, radius);
+    if (index < 0) return -1;
+    const a = this.markBroken(index);
+    this.scoreRock(a);
+    this.rules.rockKilled?.(a);
+    return a.id;
+  }
+
+  private scoreRock(a: Readonly<Asteroid>): void {
+    const points = this.rules.scoreKill(ASTEROID.scores[a.size]);
+    this.scoreValue += points;
+    this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
   }
 
   /** Removes broken asteroids and appends their children in break order, like the live splice-and-push. */

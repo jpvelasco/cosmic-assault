@@ -1,10 +1,9 @@
 import { clamp } from '../../content/curves';
-import { FOES } from '../../content/foes';
 import type { AsteroidSize } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
 import { smoothstep, TIME_EPSILON, turnBetween } from '../math';
-import { transientRock } from './attacks';
+import { clearSlot, hullPoint, lane, launchDrones, transientRock } from './attacks';
 import type { AttackContext, AttackSpec, BossBehaviour, BossFoes, BossPhase, BossSetup, BossView, Exposure, Point } from './behaviour';
 
 /** Seconds the hangar stays open after each launch. */
@@ -28,12 +27,6 @@ export const HIVE_HOME_SHARE = 0.15;
 /** A retreat ends this far inside the far wall, past the hull's own radius. */
 const RETREAT_INSET = 40;
 const RETREAT_SECONDS = 3;
-/** Drones leave the hangar mouth this far past the hull, this far apart across it, fanning out by this much each. */
-const LAUNCH_GAP = 6;
-const LAUNCH_SPACING = 36;
-const LAUNCH_FAN = 0.3;
-/** Launch slots along each side of the hull past its wingtips, at the least: room for a wave a ship tucked at a corner leaves short. */
-const END_SLOTS_A_SIDE = 5;
 /** Rocks in a broadside line, by phase, and how far apart along it. */
 const BROADSIDE_ROCKS: Readonly<Record<BossPhase, number>> = { 1: 3, 2: 4, 3: 5 };
 const BROADSIDE_SPACING = 90;
@@ -50,24 +43,8 @@ export type HiveCarrierAttack = keyof typeof WINDUPS;
 
 const HANGAR: Exposure = { opened: 'hangarOpen', closed: 'hangarClose' };
 
-/** Where along a line of `count` things, `spacing` apart and centred, the `i`th sits. */
-const lane = (i: number, count: number, spacing: number): number => (i - (count - 1) / 2) * spacing;
-
-/** Writes into `out` the point `ahead` out from the boss's centre the way it faces and `across` to its side, and returns it. */
-function hullPoint(boss: Readonly<BossView>, ahead: number, across: number, out: Point): Readonly<Point> {
-  const ux = Math.cos(boss.facing);
-  const uy = Math.sin(boss.facing);
-  out.x = boss.x + ux * ahead - uy * across;
-  out.y = boss.y + uy * ahead + ux * across;
-  return out;
-}
-
-/** Where the next drone or rock forms; one point, reused. */
+/** Where the next broadside rock forms; one point, reused. */
 const spot: Point = { x: 0, y: 0 };
-
-/** Whether something may form at `at`: inside `field`, and at least `clearance` from `ship`. */
-const clearSlot = ({ x, y }: Readonly<Point>, field: Field, ship: Readonly<Point>, clearance: number): boolean =>
-  x >= 0 && x <= field.width && y >= 0 && y <= field.height && Math.hypot(x - ship.x, y - ship.y) >= clearance;
 
 /**
  * The Hive Carrier, Dimension 2's boss: a carrier hull cruising along a row high in the field, turning its hangar
@@ -136,42 +113,11 @@ class HiveCarrier implements BossBehaviour {
     else if (boss.x === max) this.direction = -1;
   }
 
-  /**
-   * Opens the hangar, and sends out the phase's wave of drones, as many as the cap leaves room for. A slot outside the
-   * field or within the safe radius of the ship stays empty, and its drone leaves from the next clear slot instead: the
-   * wave's other hangar slots, then the hull's ends, so a ship parked in front of the hangar still meets a full wave.
-   */
+  /** Opens the hangar, and sends out the phase's wave of drones through it, as many as the cap leaves room for (`launchDrones`). */
   private launch(ctx: AttackContext): void {
-    const { boss, arena } = ctx;
-    this.closesAt = arena.elapsed() + HANGAR_OPEN_SECONDS;
-    const count = Math.min(LAUNCH_WAVES[boss.phase], DRONE_CAP - this.foes.launched);
-    let launched = 0;
-    const slots = count + 2 * Math.max(count, END_SLOTS_A_SIDE);
-    for (let slot = 0; launched < count && slot < slots; slot++) {
-      const heading = launchSlot(boss, slot, count, spot);
-      if (!clearSlot(spot, arena.field(), arena.ship, ASTEROID.safeRadius)) continue;
-      if (!this.foes.launch('drone', spot.x, spot.y, heading)) return;
-      launched++;
-    }
+    this.closesAt = ctx.arena.elapsed() + HANGAR_OPEN_SECONDS;
+    launchDrones(ctx, this.foes, LAUNCH_WAVES[ctx.boss.phase], DRONE_CAP);
   }
-}
-
-/**
- * Writes into `out` where launch slot `slot` of a `count`-drone wave is, and returns the heading its drone leaves on.
- * The first `count` slots fan out across the hangar mouth; the rest line the hull's long axis out from its wingtips,
- * alternating sides, and send their drones straight ahead. `launch` gives each side `max(count, END_SLOTS_A_SIDE)`, so either
- * side alone has room for a whole wave, and a ship tucked at a corner cannot leave a small wave short.
- */
-export function launchSlot(boss: Readonly<BossView>, slot: number, count: number, out: Point): number {
-  const mouth = boss.radius + FOES.drone.radius + LAUNCH_GAP;
-  if (slot < count) {
-    hullPoint(boss, mouth, lane(slot, count, LAUNCH_SPACING), out);
-    return boss.facing + lane(slot, count, LAUNCH_FAN);
-  }
-  const end = slot - count;
-  const side = end % 2 === 0 ? -1 : 1;
-  hullPoint(boss, 0, side * (mouth + Math.floor(end / 2) * LAUNCH_SPACING), out);
-  return boss.facing;
 }
 
 /** Fires a line of pass-through rocks across its hangar, all flying the way it faces, none formed off the field or on top of the ship. */

@@ -1,19 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BOSSES, type BossDef } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
-import { bossTarget, BossRunner, DYING_SECONDS, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRunner';
+import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
+import { BossRunner, DYING_SECONDS } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { SENTINEL } from '../../src/sim/boss/sentinel';
-import { STEP_SECONDS } from '../../src/sim/config';
+import { BLAST, STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { TAU } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
+import { comboMultiplier } from '../../src/sim/scoring';
 import { createShip } from '../../src/sim/ship';
+import { PlayerShots, type ShotTargets } from '../../src/sim/shots';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, ofType, runFor, stubArena, timedOfType, type StubArena } from '../helpers/bossArena';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const DEF: BossDef = BOSSES.sentinel;
@@ -254,7 +257,7 @@ describe('GalaxyRun with a boss that has parts', () => {
   function probeRun(shove = 0): { arena: StubArena; run: GalaxyRun } {
     const arena = stubArena();
     const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [] };
-    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: createRng(5) }, arena, 0, probes(shove));
+    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, probes(shove));
     return { arena, run };
   }
 
@@ -276,10 +279,10 @@ describe('GalaxyRun with a boss that has parts', () => {
   it('spends a shot on a part, reporting the hit and then the break, before the core behind it', () => {
     const { arena, run, boss } = galaxyRun();
     const part = boss.parts[0] as BossPart;
-    expect(run.hitBoss(part.x, part.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(part.x, part.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossPartHit', part: 0, x: part.x, y: part.y, hp: 1 }]);
     arena.events.length = 0;
-    expect(run.hitBoss(part.x, part.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(part.x, part.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossPartBroken', part: 0, x: part.x, y: part.y }]);
     expect(boss.hp).toBe(boss.maxHp);
   });
@@ -291,14 +294,14 @@ describe('GalaxyRun with a boss that has parts', () => {
     const at = { x: boss.x + 89, y: boss.y };
     expect(Math.hypot(at.x - part.x, at.y - part.y)).toBeLessThan(PART_RADIUS + 3);
     expect(boss.radius + 3).toBeGreaterThan(89);
-    expect(run.hitBoss(at.x, at.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(at.x, at.y, 3)).toBe(true);
     expect(arena.events.map((e) => e.type)).toEqual(['bossPartHit']);
     expect(part.hp).toBe(1);
   });
 
   it('spends a shot on a shielded core with a deflection, not a hit', () => {
     const { arena, run, boss } = galaxyRun();
-    expect(run.hitBoss(boss.x, boss.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(boss.x, boss.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossDeflected', x: boss.x, y: boss.y }]);
     expect(boss.hp).toBe(boss.maxHp);
   });
@@ -340,11 +343,81 @@ describe('GalaxyRun with a boss that has parts', () => {
     steps();
     const boss = run.boss;
     if (boss?.active == null) throw new Error('the probe should attack within 30 s');
-    for (let target = bossTarget(boss); target !== null; target = bossTarget(boss)) run.hitBoss(target.x, target.y, 1);
+    for (let target = bossTarget(boss); target !== null; target = bossTarget(boss)) run.bosses.hitBoss(target.x, target.y, 1);
     expect(boss.state).toBe('dying');
     steps();
     expect(arena.ship.vx).toBe(0);
     expect(arena.events.map((e) => e.type)).toContain('warpOut');
+  });
+  it('stops a piercing shot on a part and on the shielded core, whatever pierces it has left', () => {
+    const { arena, run, boss } = galaxyRun();
+    const shots = new PlayerShots(arena.events, () => 9000);
+    const targets: ShotTargets = { rocks: [], foes: () => [], aim: () => null, hitBoss: (x, y, r) => run.bosses.hitBoss(x, y, r), hitFoe: () => -1, hitRock: () => -1 };
+    const part = boss.parts[0] as BossPart;
+    for (const at of [part, boss]) shots.fire([{ x: at.x, y: at.y, vx: 0, vy: 0 }], arena.ship, { pierce: 3, homingEvery: 0, wingman: false });
+    shots.collide(targets);
+    expect(shots.list).toEqual([]);
+    expect(part.hp).toBe(1);
+    expect(ofType(arena.events, 'bossDeflected')).toHaveLength(1);
+  });
+
+  describe('a blast', () => {
+    /** The probe fighting, the ship `below` units under its core, and the parts named broken first. */
+    function blastRig(below: number, broken: readonly number[] = []) {
+      const rig = galaxyRun();
+      const runner = rig.run.bosses.runner;
+      if (runner === null) throw new Error('no boss');
+      for (const i of broken) runner.hitPart(i, 2);
+      rig.arena.events.length = 0;
+      rig.arena.ship.x = rig.boss.x;
+      rig.arena.ship.y = rig.boss.y + below;
+      return { ...rig, blast: (kind: 'fieldBomb' | 'nova') => { rig.run['takePickup'](kind); } };
+    }
+
+    it('takes 1 off each live part a Field Bomb reaches, and nothing off a shielded core', () => {
+      const { arena, boss, blast } = blastRig(150);
+      blast('fieldBomb');
+      // Parts 0-2 lie within 220 of the blast (plus their radius); part 3, above the core, does not.
+      expect(boss.parts.map((p) => p.hp)).toEqual([1, 1, 1, 2]);
+      expect(ofType(arena.events, 'bossPartHit').map((e) => e.part)).toEqual([0, 1, 2]);
+      expect(ofType(arena.events, 'bossHit')).toEqual([]);
+      expect(ofType(arena.events, 'bossDeflected')).toEqual([]);
+      expect(boss.hp).toBe(boss.maxHp);
+    });
+
+    it('takes 2 off a vulnerable core a Field Bomb reaches, striking the rim facing the blast', () => {
+      const { arena, boss, blast } = blastRig(150, [0, 1, 2]);
+      expect(boss.vulnerable).toBe(true);
+      blast('fieldBomb');
+      expect(boss.hp).toBe(boss.maxHp - BLAST.fieldBomb.coreDamage);
+      expect(ofType(arena.events, 'bossHit')).toEqual([{ type: 'bossHit', x: boss.x, y: boss.y + boss.radius, hp: boss.maxHp - 2 }]);
+      expect(BLAST.fieldBomb).toEqual({ radius: 220, coreDamage: 2, partDamage: 1 });
+    });
+
+    it('takes 2 off every part a Nova reaches, then 4 off the core their breaking exposed', () => {
+      const { arena, boss, blast } = blastRig(150);
+      blast('nova');
+      expect(boss.parts.map((p) => p.hp)).toEqual([0, 0, 0, 0]);
+      expect(ofType(arena.events, 'bossPartBroken')).toHaveLength(4);
+      expect(boss.hp).toBe(boss.maxHp - 4);
+      expect(BLAST.nova).toEqual({ radius: 520, coreDamage: 4, partDamage: 2 });
+    });
+
+    it('leaves a boss out of its reach alone', () => {
+      const { arena, boss, blast } = blastRig(400, [0, 1, 2]);
+      blast('fieldBomb');
+      expect(arena.events.map((e) => e.type)).toEqual(['blast']);
+      expect(boss.hp).toBe(boss.maxHp);
+    });
+
+    it('scores the boss kill it lands, as a shot\'s would', () => {
+      const { arena, boss, blast } = blastRig(150, [0, 1, 2]);
+      boss.hp = 2;
+      const award = vi.spyOn(arena, 'award');
+      blast('fieldBomb');
+      expect(boss.state).toBe('dying');
+      expect(award).toHaveBeenCalledWith(1000 * comboMultiplier(1));
+    });
   });
 });
 
@@ -356,7 +429,7 @@ describe('a World with the Monolith', () => {
     const run = (world as unknown as { run: GalaxyRun }).run;
     const part = boss?.parts[0];
     if (boss?.state !== 'fighting' || part === undefined) throw new Error('the Monolith should be fighting 22.1 s in');
-    while (part.hp > 1) run.hitBoss(part.x, part.y, 1);
+    while (part.hp > 1) run.bosses.hitBoss(part.x, part.y, 1);
     expect(part.hp).toBe(1);
     const shots = world.projectiles as Projectile[];
     for (let i = 0; i < 2; i++) shots.push(projectileFromShot({ x: part.x, y: part.y, vx: 0, vy: 0 }, 9000 + i));

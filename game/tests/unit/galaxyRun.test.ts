@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { eventsOfType } from '../../src/content/curves';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
 import type { AsteroidSize } from '../../src/sim/asteroid';
@@ -126,7 +127,7 @@ describe('a galaxy run on resize', () => {
     resized.resize(wide);
     const native = new World({ seed: 8, field: wide, rules: { kind: 'galaxy', galaxy: galaxyById('3-3'), mode: 'rank' }, startLives: 5 });
     const log = eventsOf(play(native, 40));
-    expect(ofType(log, 'asteroidDestroyed').length + native.asteroids.length).toBeGreaterThan(8);
+    expect(ofType(log, 'asteroidDestroyed').length + native.asteroids.length + ofType(log, 'foeSpawned').length).toBeGreaterThan(8);
     expect(eventsOf(play(resized, 40))).toEqual(log);
   });
 });
@@ -341,7 +342,10 @@ describe('meteors pass through', () => {
   });
 
   it('keeps a 3-5 run within its budget plus the shower cap through both showers, and pins the peak', () => {
-    const g = galaxyById('3-5');
+    // The drop pool, the kinds and the schedule are held at the ones 3-5 had when the peak was pinned (rocks alone, and
+    // showers), so the run pins the director, not which pickups fall or what Crimson Nebula brought in since.
+    const pinned = galaxyById('3-5');
+    const g = { ...pinned, pickups: galaxyById('2-5').pickups, kinds: galaxyById('1-1').kinds, events: eventsOfType(pinned.events, 'meteorShower') };
     const area = FIELD.width * FIELD.height;
     const peakBudget = Math.max(...Array.from({ length: g.duration * 10 }, (_, i) => fieldBudget(g, i / 10, 1, area)));
     const meteorCap = Math.floor(showerCap(3, area));

@@ -3,7 +3,8 @@ import { BOSSES } from '../../src/content/bosses';
 import { FOES } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
-import { bossTarget, BossRunner } from '../../src/sim/boss/bossRunner';
+import { bossTarget } from '../../src/sim/boss/bossRules';
+import { BossRunner } from '../../src/sim/boss/bossRunner';
 import type { AttackSpec, BossBehaviour, BossFactory, BossSetup, BossView } from '../../src/sim/boss/behaviour';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { FOE_CAPACITY, FoeField } from '../../src/sim/foes/foeField';
@@ -141,7 +142,7 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
   function fight(make: (setup: BossSetup) => BossBehaviour): { arena: StubArena; run: GalaxyRun; boss: BossView } {
     const arena = stubArena();
     const galaxy = { ...galaxyById('1-6'), kinds: MUTED_KINDS, events: [], boss: 'sentinel' as const };
-    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: createRng(5) }, arena, 0, standIns(make));
+    const run = new GalaxyRun(galaxy, 'free', { director: createRng(1), boss: createRng(2), pickups: createRng(3), foes: createRng(4), hazards: () => createRng(5) }, arena, 0, standIns(make));
     for (let i = 0; i < Math.round(22.1 / STEP_SECONDS); i++) {
       arena.events.length = 0;
       arena.tick();
@@ -161,10 +162,10 @@ describe('a galaxy run with a boss that has a weak point and launches foes', () 
     run.step(STEP_SECONDS);
     arena.events.length = 0;
     const hull = { x: boss.x - boss.radius, y: boss.y };
-    expect(run.hitBoss(hull.x, hull.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(hull.x, hull.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossDeflected', ...hull }]);
     arena.events.length = 0;
-    expect(run.hitBoss(boss.x + boss.radius, boss.y, 3)).toBe(true);
+    expect(run.bosses.hitBoss(boss.x + boss.radius, boss.y, 3)).toBe(true);
     expect(arena.events).toEqual([{ type: 'bossHit', x: boss.x + boss.radius, y: boss.y, hp: boss.maxHp - 1 }]);
   });
 
@@ -207,7 +208,7 @@ describe('FoeField launching a boss\'s foes', () => {
     foes.launch('drone', 500, 300, 0);
     expect(foes.launched).toBe(2);
     foes.step(STEP_SECONDS);
-    expect(foes.hit(foes.list[3]?.x ?? 0, foes.list[3]?.y ?? 0, 1)).toBe(true);
+    expect(foes.hit(foes.list[3]?.x ?? 0, foes.list[3]?.y ?? 0, 1)).toBe(foes.list[3]?.id);
     foes.sweep();
     expect(foes.launched).toBe(1);
     foes.step(STEP_SECONDS);

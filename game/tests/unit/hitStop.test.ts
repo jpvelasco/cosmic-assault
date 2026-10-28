@@ -24,7 +24,7 @@ describe('hitStopFor', () => {
     expect(hitStopFor({ type: 'foeHit', id: 1, x: 0, y: 0, hp: 1 })).toBe(0);
     expect(hitStopFor({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 100 })).toBe(0);
     expect(hitStopFor({ type: 'foeDestroyed', id: 2, kind: 'drone', x: 0, y: 0, points: 100 })).toBe(0);
-    expect(hitStopFor({ type: 'wellStart', id: 1 })).toBe(0);
+    expect(hitStopFor({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toBe(0);
   });
 
   it('freezes 80 ms as a boss core is laid bare, and not for its parts cracking, breaking or shots glancing off', () => {

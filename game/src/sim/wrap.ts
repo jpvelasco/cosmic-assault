@@ -15,6 +15,12 @@ export interface Pose {
   py: number;
 }
 
+/** Puts `body` at `spot` with its place a step ago there too, so it is drawn there and not sweeping across to it. */
+export function placePose(body: Pose, spot: Readonly<{ x: number; y: number }>): void {
+  body.x = body.px = spot.x;
+  body.y = body.py = spot.y;
+}
+
 /** Stretches `body`'s place and its place a step ago from field `old` to `field`, keeping their fractions of the wrap band. */
 export function rescalePose(body: Pose, old: Field, field: Field): void {
   body.x = rescale(body.x, old.width, field.width);
@@ -44,4 +50,16 @@ export function wrapDelta(delta: number, size: number, margin: number = WRAP_MAR
   const period = size + 2 * margin;
   if (delta > period / 2) return delta - period;
   return delta < -period / 2 ? delta + period : delta;
+}
+
+/** The distance from `from` to `to`, measured across the wrap band as `wrapDelta` measures it. */
+export const wrappedDistance = (from: Readonly<{ x: number; y: number }>, to: Readonly<{ x: number; y: number }>, field: Field): number =>
+  Math.hypot(wrapDelta(to.x - from.x, field.width), wrapDelta(to.y - from.y, field.height));
+
+/** Whether two circles overlap, their offset measured across the wrap band as `wrapDelta` measures it. */
+export function overlapsAcrossWrap(field: Field, ax: number, ay: number, ar: number, bx: number, by: number, br: number): boolean {
+  const dx = wrapDelta(bx - ax, field.width);
+  const dy = wrapDelta(by - ay, field.height);
+  const reach = ar + br;
+  return dx * dx + dy * dy < reach * reach;
 }

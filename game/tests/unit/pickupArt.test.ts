@@ -51,6 +51,18 @@ describe('drawGlyph', () => {
     }
   });
 
+  it('draws Crimson Nebula\'s two by shape and stroke alike: a lance through a ring, and a dart at the end of its curving trail', () => {
+    for (const kind of ['piercingBeam', 'homingMissiles'] as const) {
+      const { ctx, calls } = recordingContext();
+      drawGlyph(ctx, kind, 0, 0, 10, PICKUP_COLORS[kind]);
+      expect(calls.filter((name) => name === 'stroke'), kind).toHaveLength(1);
+      expect(calls.filter((name) => name === 'fill'), kind).toHaveLength(1);
+    }
+    const { ctx, calls } = recordingContext();
+    drawGlyph(ctx, 'homingMissiles', 0, 0, 10, PICKUP_COLORS.homingMissiles);
+    expect(calls).toContain('quadraticCurveTo');
+  });
+
   it('gives every pickup a colour of its own', () => {
     expect(new Set(PICKUP_IDS.map((kind) => PICKUP_COLORS[kind])).size).toBe(PICKUP_IDS.length);
   });

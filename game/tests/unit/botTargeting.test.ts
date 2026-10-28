@@ -11,10 +11,9 @@ import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { bossView } from '../helpers/bossView';
 import { SCENE_FIELD, sceneView, stillRock } from '../helpers/botScene';
+import { foeAt } from '../helpers/foeAt';
 
-function foe(kind: FoeKind, x: number, y: number): Foe {
-  return { id: 0, kind, x, y, vx: 0, vy: 0, px: x, py: y, rotation: 0, protation: 0, spin: 0, radius: 12, hp: 1 };
-}
+const foe = (kind: FoeKind, x: number, y: number): Foe => foeAt(kind, x, y, { radius: 12, hp: 1 });
 
 function part(x: number, y: number, hp: number): BossPart {
   return { x, y, px: x, py: y, radius: 15, hp, maxHp: 2 };
@@ -25,7 +24,7 @@ function boss(target: Point | null, state: BossView['state'] = 'fighting', parts
   return bossView({ state, vulnerable: target !== null, parts, target });
 }
 
-const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0, wraps: true });
+const target = (): Target => ({ x: 0, y: 0, vx: 0, vy: 0, wraps: true, weakPoint: false });
 
 function chosen(view: BotView): Target | null {
   const out = target();
@@ -64,6 +63,51 @@ describe('bot targeting', () => {
     expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
   });
 
+  it('passes over an armoured part for the nearest one a shot can hurt', () => {
+    const view = sceneView();
+    const parts = [part(300, 100, 2), { ...part(700, 220, 2), armoured: true }];
+    view.boss = boss(null, 'fighting', parts);
+    expect(chosen(view)).toMatchObject({ x: 300, y: 100 });
+  });
+
+  it('goes for an open core only along a clear line: a part in the way with HP to spare sends it to the nearest part a shot can hurt', () => {
+    const view = sceneView();
+    // The ship at (640, 360); the core straight above it, and a turret on the line between, 100 above the ship.
+    const blocker = part(640, 260, 3);
+    const aside = part(900, 200, 3);
+    view.boss = boss({ x: 640, y: 100 }, 'fighting', [blocker, aside]);
+    expect(chosen(view)).toMatchObject({ x: 640, y: 260 });
+    // Off the line, the part no longer blocks: the core again.
+    blocker.x = 760;
+    expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
+    // A part beyond the core, or a broken one on the line, never blocks.
+    view.boss = boss({ x: 640, y: 100 }, 'fighting', [part(640, 40, 3), part(640, 260, 0)]);
+    expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
+  });
+
+  it('shoots through a part in the line that one shot breaks, since that shot clears the way', () => {
+    const view = sceneView();
+    view.boss = boss({ x: 640, y: 100 }, 'fighting', [part(640, 260, 1), part(400, 200, 3)]);
+    expect(chosen(view)).toMatchObject({ x: 640, y: 100 });
+  });
+
+  it('passes an armoured part on the line too, for the nearest part a shot can hurt', () => {
+    const view = sceneView();
+    view.boss = boss({ x: 640, y: 100 }, 'fighting', [{ ...part(640, 260, 3), armoured: true }, part(400, 200, 3)]);
+    expect(chosen(view)).toMatchObject({ x: 400, y: 200 });
+  });
+
+  it('leads a weak point that is a part by the part\'s own motion, not the core\'s', () => {
+    const view = sceneView();
+    const tail = { ...part(900, 200, 3), px: 900 - 0.5, py: 200 };
+    view.boss = { ...boss(null, 'fighting', [tail]), vulnerable: true, target: tail, px: 640, py: 100 - 1 };
+    expect(chosen(view)).toMatchObject({ x: 900, y: 200 });
+    const out = target();
+    chooseTarget(view, out);
+    expect(out.vx).toBeCloseTo(0.5 / STEP_SECONDS, 6);
+    expect(out.vy).toBeCloseTo(0, 9);
+  });
+
   it("leads a boss's weak point by its core's motion", () => {
     const view = sceneView();
     view.boss = { ...boss({ x: 640, y: 185 }), px: 640 - 40 * STEP_SECONDS };
@@ -81,11 +125,11 @@ describe('bot targeting', () => {
 
   it('leads a crossing target so a shot meets it, and aims across the wrap', () => {
     const view = sceneView();
-    const crossing = { x: 640 + 450, y: 360, vx: 0, vy: 225, wraps: true };
+    const crossing = { x: 640 + 450, y: 360, vx: 0, vy: 225, wraps: true, weakPoint: false };
     const heading = leadHeading(view, crossing);
     const t = 450 / (PLAYER.projectileSpeed * Math.cos(heading));
     expect(Math.sin(heading) * PLAYER.projectileSpeed * t).toBeCloseTo(225 * t, 6);
-    const acrossEdge = { x: 20, y: 360, vx: 0, vy: 0, wraps: true };
+    const acrossEdge = { x: 20, y: 360, vx: 0, vy: 0, wraps: true, weakPoint: false };
     view.ship = { ...view.ship, x: 1260 };
     expect(leadHeading(view, acrossEdge)).toBeCloseTo(0, 9);
   });

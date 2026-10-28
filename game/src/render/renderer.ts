@@ -2,11 +2,13 @@ import type { PaletteId } from '../content/types';
 import type { Asteroid } from '../sim/asteroid';
 import type { SimEvent } from '../sim/events';
 import { isPositiveFiniteSize, type Field } from '../sim/field';
+import { enemyTimeScale } from '../sim/pickups/effects';
 import { createRng, deriveSeed } from '../sim/rng';
 import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
 import { createFieldPen } from './fieldPen';
+import { createBoltPass } from './boltPass';
 import { createFoePass } from './foePass';
 import { createHazardPass } from './hazardPass';
 import { createHitFlash, HIT_FLASH_SECONDS } from './hitFlash';
@@ -116,7 +118,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   const pen = createFieldPen(ctx);
   const particlePass = createParticlePass(ctx, pen, baker, particles);
   const hud = createHud(palette);
-  const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0 };
+  const bossLook = { glow: 1, still: false, aimX: 0, aimY: 0, field: { width: 0, height: 0 } };
   const scene: { -readonly [K in keyof SceneLook]: SceneLook[K] } = { glow: 1, still: false, time: 0, visual: UNIT_VISUAL };
   const copies = new Float64Array(6);
   const pose = { x: 0, y: 0, angle: 0 };
@@ -179,7 +181,8 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   /** The passes whose sprite keys and painters are made once per palette. */
   const passesFor = (p: Palette) => ({
     boss: createBossPass(ctx, pen, baker, p),
-    foe: createFoePass(ctx, stamp, baker, p),
+    bolt: createBoltPass(ctx, stamp, baker, p),
+    foe: createFoePass(ctx, pen, stamp, baker, p),
     hazard: createHazardPass(ctx, stamp, baker, p),
     pickup: createPickupPass(ctx, stamp, baker, p),
   });
@@ -271,6 +274,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     bossLook.still = effects.reducedMotion;
     bossLook.aimX = world.ship.x;
     bossLook.aimY = world.ship.y;
+    bossLook.field = world.field;
     passes.boss.draw(world.boss, alpha, bossLook);
   }
 
@@ -295,13 +299,15 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawRockGlows(world, alpha, field, visual);
     particlePass.drawRings(visual.effect);
     ctx.globalCompositeOperation = 'source-over';
-    passes.hazard.drawWell(world.well, field, scene);
+    passes.hazard.drawHazards(world.hazards, field, scene);
     drawBoss(world, alpha);
     drawRocks(world, alpha, field, visual);
     passes.foe.drawFoes(world.foes, alpha, field, scene);
     drawRockFlashes(field);
     passes.foe.drawFlashes(hitFlash.foes, field);
+    passes.hazard.drawWarnings(world.hazards, field, scene);
     passes.pickup.drawPickups(world.pickups, alpha, field, scene);
+    passes.bolt.drawBolts(world.bolts, alpha, field, scene);
     ctx.globalCompositeOperation = 'lighter';
     drawShots(world, alpha, field);
     drawShip(world, alpha, field, visual);
@@ -353,7 +359,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     hitFlash.step(dt);
     passes.pickup.advance(dt);
     particles.step(dt);
-    passes.boss.advance(dt, world.boss);
+    passes.boss.advance(dt, world.boss, enemyTimeScale(world.effects));
   }
 
   function freeRun(): void {

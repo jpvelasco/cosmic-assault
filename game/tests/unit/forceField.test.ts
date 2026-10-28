@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { eventSeconds } from '../../src/content/curves';
+import { eventSeconds, eventsOfType } from '../../src/content/curves';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SECONDS, WELL_SPEED_CAP, WELL_STRENGTH, WELL_TELEGRAPH_SECONDS } from '../../src/content/hazards';
+import { HAZARD_RULES, WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH } from '../../src/content/hazards';
 import { lullStart, LULL_SECONDS } from '../../src/content/pacingRules';
 import type { FoeKind, GalaxyDef, GalaxyEvent } from '../../src/content/types';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -9,7 +9,9 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { FoePool, type Foe } from '../../src/sim/foes/foe';
-import { wellAcceleration, Wells, type Pullable } from '../../src/sim/hazards/gravityWell';
+import { ForceField, wellAcceleration } from '../../src/sim/hazards/forceField';
+import type { HazardState, Pullable } from '../../src/sim/hazards/hazard';
+import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
 import { createRng } from '../../src/sim/rng';
 import { rescale } from '../../src/sim/wrap';
 import { World } from '../../src/sim/world';
@@ -28,9 +30,20 @@ function foeAt(pool: FoePool, kind: FoeKind, x: number, y: number): Foe {
   return Object.assign(foe, { x, y });
 }
 
-function wells(events: readonly GalaxyEvent[], seed = 1): { wells: Wells; ids: () => number } {
+const WELL_TELEGRAPH_SECONDS = HAZARD_RULES.gravityWell.telegraph;
+const WELL_SECONDS = HAZARD_RULES.gravityWell.seconds;
+
+function forceField(events: readonly GalaxyEvent[], seed = 1, kind: 'gravityWell' | 'repulsionField' = 'gravityWell'): ForceField {
   let last = 0;
-  return { wells: new Wells(events, createRng(seed), () => ++last), ids: () => last };
+  return new ForceField(kind, kind === 'gravityWell' ? 1 : -1, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [] });
+}
+
+const stateOf = (w: ForceField): HazardState | null => w.states[0] ?? null;
+
+/** Pulls `rocks` and `foes` one step, and returns the field's pull on a ship at `ship`, as the hazard field applies it. */
+function pull(w: ForceField, dt: number, rocks: readonly Pullable[], foes: readonly Foe[] = [], ship: Pullable = body(-1e6, -1e6)): ShipPull {
+  w.pull(dt, { rocks, foes });
+  return shipPullAt(w.states, ship.x, ship.y, dt, { x: 0, y: 0 });
 }
 
 interface Beat {
@@ -39,7 +52,7 @@ interface Beat {
 }
 
 /** Steps a schedule through `seconds` at the fixed step, logging each event with the elapsed time of its step. */
-function trace(w: Wells, seconds: number): Beat[] {
+function trace(w: ForceField, seconds: number): Beat[] {
   const out: SimEvent[] = [];
   const log: Beat[] = [];
   for (let i = 1; i <= Math.round(seconds / DT); i++) {
@@ -86,39 +99,39 @@ describe('wellAcceleration', () => {
   });
 });
 
-describe('Wells schedule', () => {
+describe('ForceField schedule', () => {
   it('draws a well 2 s ahead, then starts it on time and ends it 14 s later, with matching ids', () => {
-    const { wells: w } = wells([well(WELL_AT)]);
+    const w = forceField([well(WELL_AT)]);
     const log = trace(w, 40);
     expect(log.map((b) => b.event.type)).toEqual(['wellWarning', 'wellStart', 'wellEnd']);
     const [warning, start, end] = log;
     expect(warning?.elapsed).toBeCloseTo(WELL_AT - WELL_TELEGRAPH_SECONDS, 1);
-    expect(warning?.event).toMatchObject({ type: 'wellWarning', at: WELL_AT });
+    expect(warning?.event).toMatchObject({ type: 'wellWarning', id: 1, kind: 'gravityWell', at: WELL_AT });
     expect(start?.elapsed).toBeCloseTo(WELL_AT, 1);
     expect(end?.elapsed).toBeCloseTo(WELL_AT + WELL_SECONDS, 1);
     expect(WELL_TELEGRAPH_SECONDS).toBe(2);
     expect(WELL_SECONDS).toBe(14);
-    expect(start?.event).toMatchObject({ id: 1 });
-    expect(end?.event).toMatchObject({ id: 1 });
+    expect(start?.event).toEqual({ type: 'wellStart', id: 1, kind: 'gravityWell' });
+    expect(end?.event).toEqual({ type: 'wellEnd', id: 1, kind: 'gravityWell' });
   });
 
   it('does not pull during its warning, and draws it where it will be', () => {
-    const { wells: w } = wells([well(WELL_AT)]);
+    const w = forceField([well(WELL_AT)]);
     const log = trace(w, WELL_AT - 1);
-    expect(w.state).toMatchObject({ stage: 'warning' });
+    expect(stateOf(w)).toMatchObject({ stage: 'warning' });
     const warning = log[0]?.event;
     expect(warning).toMatchObject({ type: 'wellWarning' });
     if (warning?.type !== 'wellWarning') return;
-    expect(w.state).toMatchObject({ x: warning.x, y: warning.y });
-    const ship = body(warning.x + 100, warning.y);
-    w.pull(DT, ship, [], []);
-    expect(ship.vx).toBe(0);
-    expect(w.state?.remaining).toBeCloseTo(1, 1);
+    expect(stateOf(w)).toMatchObject({ x: warning.x, y: warning.y });
+    const rock = body(warning.x + 100, warning.y);
+    expect(pull(w, DT, [rock], [], body(warning.x - 100, warning.y))).toEqual({ x: 0, y: 0 });
+    expect(rock.vx).toBe(0);
+    expect(stateOf(w)?.remaining).toBeCloseTo(1, 1);
   });
 
   it('places the well inside the field, clear of its edges, from the hazards stream alone', () => {
     for (let seed = 1; seed <= 50; seed++) {
-      const log = trace(wells([well(WELL_AT)], seed).wells, 19);
+      const log = trace(forceField([well(WELL_AT)], seed), 19);
       const warning = log[0]?.event;
       if (warning?.type !== 'wellWarning') throw new Error('expected a warning');
       expect(warning.x).toBeGreaterThanOrEqual(FIELD.width * 0.25);
@@ -126,35 +139,35 @@ describe('Wells schedule', () => {
       expect(warning.y).toBeGreaterThanOrEqual(FIELD.height * 0.25);
       expect(warning.y).toBeLessThanOrEqual(FIELD.height * 0.75);
     }
-    const place = (seed: number): SimEvent | undefined => trace(wells([well(WELL_AT)], seed).wells, 19)[0]?.event;
+    const place = (seed: number): SimEvent | undefined => trace(forceField([well(WELL_AT)], seed), 19)[0]?.event;
     expect(place(4)).toEqual(place(4));
     expect(place(4)).not.toEqual(place(5));
   });
 
   it('runs a galaxy\'s wells in turn and ignores its showers', () => {
     const events: GalaxyEvent[] = [{ at: 10, type: 'meteorShower', intensity: 1 }, well(25), well(45)];
-    const log = trace(wells(events).wells, 70);
+    const log = trace(forceField(events), 70);
     expect(log.map((b) => b.event.type)).toEqual(['wellWarning', 'wellStart', 'wellEnd', 'wellWarning', 'wellStart', 'wellEnd']);
   });
 
   it('stops at once and silently when the galaxy ends', () => {
-    const { wells: w } = wells([well(WELL_AT), well(60)]);
+    const w = forceField([well(WELL_AT), well(60)]);
     trace(w, WELL_AT + 3);
-    expect(w.state).toMatchObject({ stage: 'active' });
+    expect(stateOf(w)).toMatchObject({ stage: 'active' });
     w.stop();
-    expect(w.state).toBeNull();
+    expect(stateOf(w)).toBeNull();
     const out: SimEvent[] = [];
     w.step(60, FIELD, out);
     expect(out).toEqual([]);
-    const ship = body(10, 10);
-    w.pull(DT, ship, [], []);
-    expect(ship.vx).toBe(0);
+    const rock = body(10, 10);
+    expect(pull(w, DT, [rock], [], body(20, 20))).toEqual({ x: 0, y: 0 });
+    expect(rock.vx).toBe(0);
   });
 
   it('never lets a well fall in the lull: every well of every galaxy has ended by the time the lull starts', () => {
     let checked = 0;
     for (const g of GALAXIES) {
-      const log = trace(wells(g.events).wells, g.duration);
+      const log = trace(forceField(g.events), g.duration);
       for (const { event, elapsed } of log) {
         if (event.type !== 'wellStart' && event.type !== 'wellEnd') continue;
         checked++;
@@ -167,9 +180,9 @@ describe('Wells schedule', () => {
   });
 });
 
-describe('Wells pull', () => {
+describe('ForceField pull', () => {
   function active(intensity: GalaxyEvent['intensity'] = 2) {
-    const { wells: w } = wells([well(WELL_AT, intensity)]);
+    const w = forceField([well(WELL_AT, intensity)]);
     const log = trace(w, WELL_AT + 0.5);
     const warning = log[0]?.event;
     if (warning?.type !== 'wellWarning') throw new Error('expected a warning');
@@ -179,31 +192,33 @@ describe('Wells pull', () => {
   it('nudges a still body toward the well by exactly a x dt', () => {
     const { w, x, y } = active(1);
     const rock = body(x + 200, y);
-    w.pull(DT, rock, [], []);
+    pull(w, DT, [rock]);
     expect(rock.vx).toBeCloseTo(-wellAcceleration(200, 1) * DT, 12);
     expect(rock.vy).toBeCloseTo(0, 12);
     const below = body(x, y - 100);
-    w.pull(DT, below, [], []);
+    pull(w, DT, [below]);
     expect(below.vy).toBeCloseTo(wellAcceleration(100, 1) * DT, 12);
   });
 
   it('caps the nudge at 140 units/s^2 even in a strong well, right on top of it', () => {
     const { w, x, y } = active(3);
     const close = body(x + 5, y + 5);
-    w.pull(1, close, [], []);
+    pull(w, 1, [close]);
     expect(Math.hypot(close.vx, close.vy)).toBeLessThanOrEqual(WELL_MAX_ACCEL + 1e-9);
     expect(Math.hypot(close.vx, close.vy)).toBeCloseTo(140, 9);
   });
 
-  it('pulls the ship, every rock and a splitter, but not a drone', () => {
+  it('pulls every rock and a splitter, but not a drone, and adds the ship\'s pull to the accumulator without moving it', () => {
     const { w, x, y } = active(1);
     const ship = body(x + 150, y);
     const rocks = [body(x, y + 150), body(x - 150, y)];
     const pool = new FoePool(2);
     const splitter = foeAt(pool, 'splitter', x, y - 150);
     const drone = foeAt(pool, 'drone', x + 150, y + 150);
-    w.pull(DT, ship, rocks, [splitter, drone]);
-    expect(ship.vx).toBeLessThan(0);
+    const shipPull = pull(w, DT, rocks, [splitter, drone], ship);
+    expect(shipPull.x).toBeCloseTo(-wellAcceleration(150, 1) * DT, 12);
+    expect(shipPull.y).toBeCloseTo(0, 12);
+    expect(ship).toMatchObject({ vx: 0, vy: 0 });
     expect(rocks[0]?.vy).toBeLessThan(0);
     expect(rocks[1]?.vx).toBeGreaterThan(0);
     expect(splitter.vy).toBeGreaterThan(0);
@@ -213,17 +228,17 @@ describe('Wells pull', () => {
   it('lets a pull speed a body up to 300 and no further, but never slows a body that is already faster', () => {
     const { w, x, y } = active(3);
     const rock = body(x + 100, y, -299.9, 0);
-    for (let i = 0; i < 100; i++) w.pull(DT, rock, [], []);
+    for (let i = 0; i < 100; i++) pull(w, DT, [rock]);
     expect(Math.hypot(rock.vx, rock.vy)).toBeLessThanOrEqual(WELL_SPEED_CAP + 1e-9);
     const fast = body(x + 100, y, -340, 0);
-    w.pull(DT, fast, [], []);
+    pull(w, DT, [fast]);
     expect(Math.hypot(fast.vx, fast.vy)).toBeCloseTo(340, 9);
   });
 
   it('skips a body exactly at the centre rather than dividing by zero', () => {
     const { w, x, y } = active(2);
     const rock = body(x, y, 3, 4);
-    w.pull(DT, rock, [], []);
+    expect(pull(w, DT, [rock], [], body(x, y))).toEqual({ x: 0, y: 0 });
     expect(rock).toMatchObject({ vx: 3, vy: 4 });
   });
 });
@@ -251,16 +266,16 @@ describe('a well in a World', () => {
     return seen;
   }
 
-  it('shows the warning in `well`, then pulls the idle ship toward it', () => {
+  it('shows the warning in `hazards`, then pulls the idle ship toward it', () => {
     const w = world();
     const seen = until(w, (events) => events.some((e) => e.type === 'wellWarning'));
-    expect(seen.at(-1)).toMatchObject({ type: 'wellWarning', at: WELL_AT });
-    expect(w.well).toMatchObject({ stage: 'warning' });
-    const centre = w.well;
-    if (centre === null) throw new Error('expected a well');
+    expect(seen.at(-1)).toMatchObject({ type: 'wellWarning', kind: 'gravityWell', at: WELL_AT });
+    expect(w.hazards[0]).toMatchObject({ stage: 'warning' });
+    const centre = w.hazards[0];
+    if (centre === undefined) throw new Error('expected a well');
     const before = { x: w.ship.x, y: w.ship.y };
     until(w, (events) => events.some((e) => e.type === 'wellStart'));
-    expect(w.well).toMatchObject({ stage: 'active' });
+    expect(w.hazards[0]).toMatchObject({ stage: 'active' });
     // The idle ship has not moved: it only drifts once pulled.
     expect(w.ship.x).toBeCloseTo(before.x, 6);
     for (let i = 0; i < 2 * 120; i++) w.step(DT, NO_CONTROLS);
@@ -272,8 +287,8 @@ describe('a well in a World', () => {
   it('pulls a rock toward the well too, through the same hazard path', () => {
     const w = world({ rocks: [{ x: 640, y: 100 }] });
     until(w, (events) => events.some((e) => e.type === 'wellStart'));
-    const centre = w.well;
-    if (centre === null) throw new Error('expected a well');
+    const centre = w.hazards[0];
+    if (centre === undefined) throw new Error('expected a well');
     const rock = w.asteroids[0];
     if (rock === undefined) throw new Error('expected the rock');
     const start = { x: rock.x, y: rock.y };
@@ -286,7 +301,7 @@ describe('a well in a World', () => {
     const w = world();
     const seen = until(w, (events) => events.some((e) => e.type === 'wellEnd'));
     expect(seen.filter((e) => e.type === 'wellStart')).toHaveLength(1);
-    expect(w.well).toBeNull();
+    expect(w.hazards).toEqual([]);
     expect(w.elapsed).toBeCloseTo(WELL_AT + WELL_SECONDS, 1);
   });
 
@@ -296,21 +311,21 @@ describe('a well in a World', () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const w = new World({ seed, field: wide, rules: { kind: 'galaxy', galaxy: calm, mode: 'free' }, initialShip: { x: 100, y: 100, angle: 0 } });
       until(w, (events) => events.some((e) => e.type === 'wellStart'));
-      // `well` is a live view: copy it before the resize moves it.
-      const before = w.well === null ? null : { ...w.well };
-      if (before === null) throw new Error('expected a well');
+      // `hazards` is a live view: copy it before the resize moves it.
+      const before = w.hazards[0] === undefined ? undefined : { ...w.hazards[0] };
+      if (before === undefined) throw new Error('expected a well');
       w.resize(narrow);
-      expect(w.well?.x).toBeCloseTo(rescale(before.x, wide.width, narrow.width), 9);
-      expect(w.well?.y).toBeCloseTo(before.y, 9);
-      expect(w.well?.x).toBeGreaterThanOrEqual(0);
-      expect(w.well?.x).toBeLessThanOrEqual(narrow.width);
-      expect(w.well).toMatchObject({ id: before.id, stage: 'active' });
+      expect(w.hazards[0]?.x).toBeCloseTo(rescale(before.x, wide.width, narrow.width), 9);
+      expect(w.hazards[0]?.y).toBeCloseTo(before.y, 9);
+      expect(w.hazards[0]?.x).toBeGreaterThanOrEqual(0);
+      expect(w.hazards[0]?.x).toBeLessThanOrEqual(narrow.width);
+      expect(w.hazards[0]).toMatchObject({ id: before.id, stage: 'active' });
     }
   });
 
   it('reports no well in practice', () => {
     const w = new World({ seed: 1, field: FIELD, rules: { kind: 'practice', level: 1 } });
-    expect(w.well).toBeNull();
+    expect(w.hazards).toEqual([]);
     expect(w.foes).toEqual([]);
   });
 
@@ -319,6 +334,63 @@ describe('a well in a World', () => {
     const seen = until(w, (events) => events.some((e) => e.type === 'warpOut'));
     expect(seen.some((e) => e.type === 'wellStart')).toBe(true);
     expect(seen.some((e) => e.type === 'wellEnd')).toBe(false);
-    expect(w.well).toBeNull();
+    expect(w.hazards).toEqual([]);
+  });
+});
+
+describe('a repulsion field', () => {
+  const field = (at = WELL_AT, intensity: GalaxyEvent['intensity'] = 2): ForceField => forceField([{ at, type: 'repulsionField', intensity }], 1, 'repulsionField');
+
+  /** The field `seconds` in, and where it sits. */
+  function placed(w: ForceField, seconds: number): { x: number; y: number } {
+    trace(w, seconds);
+    const state = stateOf(w);
+    if (state === null) throw new Error('expected a repulsion field');
+    return state;
+  }
+
+  it('is a well of the opposite sign: it pushes each body away exactly as hard as a well pulls it in', () => {
+    const repel = field();
+    const attract = forceField([well(WELL_AT)], 1);
+    const at = placed(repel, WELL_AT + 0.5);
+    expect(placed(attract, WELL_AT + 0.5)).toMatchObject({ x: at.x, y: at.y });
+    for (const [dx, dy] of [[200, 0], [-30, 80], [5, 5], [600, -300]] as const) {
+      const pushed = body(at.x + dx, at.y + dy);
+      const pulled = body(at.x + dx, at.y + dy);
+      const shipPushed = pull(repel, DT, [pushed], [], body(at.x - dx, at.y - dy));
+      const shipPulled = pull(attract, DT, [pulled], [], body(at.x - dx, at.y - dy));
+      // Exact negation: each sum is exactly 0 (comparing with -x would tell 0 from -0).
+      expect([pushed.vx + pulled.vx, pushed.vy + pulled.vy, shipPushed.x + shipPulled.x, shipPushed.y + shipPulled.y]).toEqual([0, 0, 0, 0]);
+      expect(Math.abs(pushed.vx) + Math.abs(pushed.vy)).toBeGreaterThan(0);
+      expect(pushed.vx * dx + pushed.vy * dy).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps the well\'s caps: 140 units/s² and a push to 300 units/s at most', () => {
+    const w = field(WELL_AT, 3);
+    const at = placed(w, WELL_AT + 0.5);
+    const close = body(at.x + 5, at.y + 5);
+    pull(w, 1, [close]);
+    expect(Math.hypot(close.vx, close.vy)).toBeCloseTo(WELL_MAX_ACCEL, 9);
+    const rock = body(at.x + 100, at.y, 299.9, 0);
+    for (let i = 0; i < 100; i++) pull(w, DT, [rock]);
+    expect(Math.hypot(rock.vx, rock.vy)).toBeLessThanOrEqual(WELL_SPEED_CAP + 1e-9);
+  });
+
+  it('runs its own schedule and tells its events apart by kind', () => {
+    const log = trace(field(), 40);
+    expect(log.map((b) => b.event)).toEqual([
+      expect.objectContaining({ type: 'wellWarning', id: 1, kind: 'repulsionField', at: WELL_AT }),
+      { type: 'wellStart', id: 1, kind: 'repulsionField' },
+      { type: 'wellEnd', id: 1, kind: 'repulsionField' },
+    ]);
+    expect(log[1]?.elapsed).toBeCloseTo(WELL_AT, 1);
+    expect(log[2]?.elapsed).toBeCloseTo(WELL_AT + HAZARD_RULES.repulsionField.seconds, 1);
+  });
+
+  it('reports its state as a repulsion field', () => {
+    const w = field();
+    trace(w, WELL_AT - 1);
+    expect(stateOf(w)).toMatchObject({ type: 'repulsionField', stage: 'warning', intensity: 2 });
   });
 });

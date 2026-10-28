@@ -16,7 +16,7 @@ function stepFor(p: Projectile, steps: number): boolean {
 describe('projectileFromShot', () => {
   it('copies the shot and starts with the full lifespan', () => {
     const p = projectileFromShot({ x: 1, y: 2, vx: 3, vy: 4 });
-    expect(p).toEqual({ id: 0, x: 1, y: 2, vx: 3, vy: 4, px: 1, py: 2, life: PROJECTILE.lifespan });
+    expect(p).toEqual({ id: 0, x: 1, y: 2, vx: 3, vy: 4, px: 1, py: 2, life: PROJECTILE.lifespan, pierce: 0, homing: false, struck: [] });
     expect(p.life).toBe(1.2);
   });
 });

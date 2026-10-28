@@ -1,4 +1,4 @@
-import { STEP_SECONDS } from '../../src/sim/config';
+import { ASTEROID, STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { createRng } from '../../src/sim/rng';
@@ -29,6 +29,9 @@ export function stubArena(ship: Ship = createShip(BOSS_FIELD.width / 2, 600), fi
     lives: () => 3,
     nextId: () => ++lastId,
     award: () => undefined,
+    scoreRock(rock) {
+      this.events.push({ type: 'asteroidDestroyed', id: rock.id, x: rock.x, y: rock.y, size: rock.size, points: ASTEROID.scores[rock.size] });
+    },
     setStatus: () => undefined,
     tick: () => {
       elapsed += STEP_SECONDS;

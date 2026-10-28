@@ -7,88 +7,26 @@ import type { Field } from '../field';
 import { nudge, TAU, TIME_EPSILON, type Moving } from '../math';
 import type { Arena } from '../rules';
 import { rescale, rescalePose } from '../wrap';
-import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossView, Exposure, Point } from './behaviour';
+import type { AttackContext, AttackSpec, BossBehaviour, BossPart, BossPhase, BossSetup, BossState, BossThreat, BossView, Exposure } from './behaviour';
+import { assertAttacks, assertDamage, bossHome, bossThreat, coreOrPart, MAX_SHOVE_SPEED, phaseFor } from './bossRules';
 
-/** The shortest telegraph an attack may have: players need this long to see it coming. */
-export const MIN_WINDUP_SECONDS = 0.35;
 /** How long a beaten boss takes to die; the renderer fades it over this. */
 export const DYING_SECONDS = 2;
-/** Where a boss arrives, as a share of the field height from the top. */
-const HOME_HEIGHT_SHARE = 0.28;
-/** The most speed a boss's shove leaves the ship with, in units per second; a ship already faster only keeps from gaining. */
-export const MAX_SHOVE_SPEED = 300;
-
 /** What a blow on the core did: nothing outside the fight ('blocked') or while it is shielded ('deflected'). */
 export type HitResult = 'blocked' | 'deflected' | 'hit' | 'killed';
-/** What a blow on a part did: nothing outside the fight ('blocked'), or it took HP off the part, perhaps the last. */
-export type PartHitResult = 'blocked' | 'hit' | 'broken';
+/** What a blow on a part did: nothing outside the fight ('blocked') or on an armoured part ('deflected'), or it took HP off the part, perhaps the last. */
+export type PartHitResult = 'blocked' | 'deflected' | 'hit' | 'broken';
 
-/** How far inside the field's edges a ship respawns clear of a boss. */
-export const RESPAWN_INSET = 60;
-/**
- * The lowest a ship respawns in a boss galaxy, as a share of the field height: above the band the HUD's boss bar sits
- * in along the bottom (render/hud.ts), on every screen.
- */
-export const RESPAWN_LOWEST_SHARE = 0.8;
+/** A part's extent within this of the reach is the reach: an orbit's float residue, not a part trailing beyond it. */
+const REACH_SLACK = 1e-6;
 
-/**
- * Where a ship can respawn at least `clearance` from a core at `core`: low in the middle, at `RESPAWN_LOWEST_SHARE` of
- * the height, or if the core has drifted too near it, the corner farthest from the core, as low or as near the top.
- */
-export function clearSpot(core: Readonly<Point>, clearance: number, field: Field): Point {
-  const [left, right, top, bottom] = [RESPAWN_INSET, field.width - RESPAWN_INSET, RESPAWN_INSET, field.height * RESPAWN_LOWEST_SHARE];
-  const spot = { x: field.width / 2, y: bottom };
-  if (Math.hypot(spot.x - core.x, spot.y - core.y) >= clearance) return spot;
-  spot.x = Math.abs(core.x - left) > Math.abs(core.x - right) ? left : right;
-  spot.y = Math.abs(core.y - top) > Math.abs(core.y - bottom) ? top : bottom;
-  return spot;
-}
-
-/** Where a boss arrives in `field`. */
-export function bossHome(field: Field): Readonly<Point> {
-  return { x: field.width / 2, y: field.height * HOME_HEIGHT_SHARE };
-}
-
-function phaseFor(hp: number, maxHp: number): BossPhase {
-  if (hp * 3 <= maxHp) return 3;
-  return hp * 3 <= maxHp * 2 ? 2 : 1;
-}
-
-/** Where a shot does harm now: wherever the boss's behaviour says, by default the core if it can be hurt, else a live part; nowhere outside the fight. */
-export function bossTarget(view: Readonly<BossView>): Readonly<Point> | null {
-  return view.state === 'fighting' ? view.target : null;
-}
-
-/** Where a shot harms a boss whose behaviour does not say: the core if it can be hurt, else its first live part. */
-function coreOrPart(view: Readonly<BossView>): Readonly<Point> | null {
-  if (view.vulnerable) return view;
-  for (const part of view.parts) if (part.hp > 0) return part;
-  return null;
-}
+/** `extent`, if it lies beyond `reach` by more than float residue, else `reach`. */
+const beyond = (reach: number, extent: number): number => (extent > reach + REACH_SLACK ? extent : reach);
 
 /** How a boss announces its core opening and closing, unless its behaviour says otherwise. */
 const CORE_EXPOSURE: Exposure = { opened: 'bossExposed', closed: 'bossShielded' };
 /** Where a boss faces until its behaviour turns it: down the field, toward the ship's side. */
 const FACING_DOWN = Math.PI / 2;
-
-function assertAttacks(def: BossDef, behaviour: BossBehaviour): void {
-  def.phases.forEach((list, i) => {
-    for (const id of list) {
-      if (behaviour.attacks[id] === undefined) throw new RangeError(`${def.id}'s phase ${String(i + 1)} names attack ${id}, which its behaviour lacks: add ${id} to the behaviour's attacks, or drop it from the phase`);
-    }
-  });
-  for (const [id, spec] of Object.entries(behaviour.attacks)) {
-    if (!(spec.windup >= MIN_WINDUP_SECONDS)) {
-      throw new RangeError(`attack ${id} has a windup of ${String(spec.windup)} s, under the ${String(MIN_WINDUP_SECONDS)} s minimum: give it a telegraph of at least ${String(MIN_WINDUP_SECONDS)} s`);
-    }
-  }
-}
-
-function assertDamage(damage: number): void {
-  if (!(damage > 0 && Number.isFinite(damage))) {
-    throw new RangeError(`boss damage must be a positive finite damage (got ${String(damage)}): pass 1 for a shot`);
-  }
-}
 
 /**
  * A phased boss fight: a 2 s intro, then rests and attacks (each a telegraphed windup, then its active time)
@@ -113,6 +51,8 @@ export class BossRunner {
   private announced: BossPhase = 1;
   /** The vulnerability last announced, with `bossExposed` or `bossShielded`. */
   private shownVulnerable: boolean;
+  /** Each attack's threat, resolved once, so showing one on the view allocates nothing. */
+  private readonly threats: ReadonlyMap<AttackId, BossThreat>;
 
   constructor(
     private readonly def: BossDef,
@@ -120,6 +60,7 @@ export class BossRunner {
     private readonly setup: BossSetup,
   ) {
     assertAttacks(def, behaviour);
+    this.threats = new Map(Object.entries(behaviour.attacks).map(([id, spec]) => [id as AttackId, bossThreat(id as AttackId, spec, def.radius)]));
     const home = behaviour.home?.(setup.field) ?? bossHome(setup.field);
     this.view = {
       id: def.id,
@@ -138,6 +79,8 @@ export class BossRunner {
       parts: behaviour.parts ?? [],
       facing: FACING_DOWN,
       target: null,
+      threat: null,
+      aim: { x: home.x, y: home.y },
     };
     const heading = setup.rng.range(0, TAU);
     this.dx = Math.cos(heading) * behaviour.driftSpeed;
@@ -157,20 +100,22 @@ export class BossRunner {
     return this.view.state;
   }
 
-  /** How far from the core's centre the boss reaches, its parts included. */
+  /** How far the core keeps from the walls, and from a respawning ship: its behaviour's reach, else its radius. Live parts beyond it count too. */
   get reach(): number {
     return this.behaviour.reach ?? this.view.radius;
   }
 
-  /** Stretches the core, its parts, its target and the points an attack under way aims at, to the new field like every other entity. */
+  /** Stretches the core, its parts, its target, the windup's aim and the points an attack under way starts from, to the new field like every other entity. */
   resize(old: Field, field: Field): void {
     const { view, context } = this;
     for (const body of [view, ...view.parts]) rescalePose(body, old, field);
     this.refresh();
+    view.aim.x = rescale(view.aim.x, old.width, field.width);
+    view.aim.y = rescale(view.aim.y, old.height, field.height);
     if (context === null) return;
-    context.aimX = rescale(context.aimX, old.width, field.width);
+    context.aimX = view.aim.x;
+    context.aimY = view.aim.y;
     context.fromX = rescale(context.fromX, old.width, field.width);
-    context.aimY = rescale(context.aimY, old.height, field.height);
     context.fromY = rescale(context.fromY, old.height, field.height);
   }
 
@@ -204,32 +149,41 @@ export class BossRunner {
     const view = this.view;
     if (view.state !== 'fighting') return 'blocked';
     if (!view.vulnerable || this.behaviour.hurtsAt?.(view, x, y) === false) return 'deflected';
-    view.hp = Math.max(0, view.hp - damage);
-    if (view.hp === 0) {
-      this.enter('dying');
-      return 'killed';
-    }
-    const phase = phaseFor(view.hp, view.maxHp);
-    if (phase > view.phase) {
-      view.phase = phase;
-      this.cursor = 0;
-    }
-    return 'hit';
+    if (!this.lose(damage, 0)) return 'hit';
+    this.enter('dying');
+    return 'killed';
   }
 
   /**
    * Takes `damage` off part `index`, which must be live, and returns what came of it: 'blocked' outside the fight,
-   * 'broken' for the blow that empties it. A break that exposes the core takes effect at once; the next `step` announces it.
+   * 'deflected' while its behaviour armours it, 'broken' for the blow that empties it. A break takes the definition's
+   * `partBreakDamage` off the core, never its last HP, and one that exposes the core takes effect at once; the next
+   * `step` announces either.
    */
   hitPart(index: number, damage: number): PartHitResult {
     assertDamage(damage);
     const part = this.view.parts[index];
     if (part === undefined || part.hp <= 0) throw new RangeError(`no live part ${String(index)} to hit: pass an index from partAt`);
     if (this.view.state !== 'fighting') return 'blocked';
+    if (this.behaviour.partVulnerable?.(index) === false) return 'deflected';
     part.hp = Math.max(0, part.hp - damage);
     if (part.hp > 0) return 'hit';
+    if (this.def.partBreakDamage !== undefined) this.lose(this.def.partBreakDamage, 1);
     this.refresh();
     return 'broken';
+  }
+
+  /** Takes `damage` off the core's HP, leaving it at least `floor`, and moves it on to the phase that leaves it in; true if it is emptied. */
+  private lose(damage: number, floor: number): boolean {
+    const view = this.view;
+    view.hp = Math.max(floor, view.hp - damage);
+    if (view.hp === 0) return true;
+    const phase = phaseFor(view.hp, view.maxHp);
+    if (phase > view.phase) {
+      view.phase = phase;
+      this.cursor = 0;
+    }
+    return false;
   }
 
   /** Applies, on the hazard path, the shove the last attack asked for, then forgets it; a boss beaten meanwhile shoves nothing. */
@@ -269,14 +223,36 @@ export class BossRunner {
       case 'down':
     }
     if (view.state === 'down') return;
-    this.behaviour.step?.(ctx);
+    this.stepBehaviour(ctx, arena);
     this.announceVulnerability(arena);
   }
 
-  /** Asks the behaviour whether the core can be hurt now and where a shot does harm, shows both on the view, and returns the first. */
+  /**
+   * Runs the behaviour's own step, which may move the boss and its parts but make no attack output: no rocks, bolts,
+   * drones or shove, which only an attack's run makes, once its windup is over. Throws if it does.
+   */
+  private stepBehaviour(ctx: AttackContext, arena: Arena): void {
+    const { behaviour } = this;
+    if (behaviour.step === undefined) return;
+    const made = this.output(arena);
+    const { shoveX, shoveY } = ctx;
+    behaviour.step(ctx);
+    if (this.output(arena) > made || ctx.shoveX !== shoveX || ctx.shoveY !== shoveY) {
+      throw new RangeError(`${this.def.id}'s behaviour step made attack output (rocks, bolts, drones or a shove), which no windup telegraphs: make it in an attack's run instead`);
+    }
+  }
+
+  /** How much attack output is on the field: rocks, bolts and the boss's own drones. */
+  private output(arena: Arena): number {
+    return arena.asteroids.length + (this.setup.bolts?.list.length ?? 0) + (this.setup.foes?.launched ?? 0);
+  }
+
+  /** Asks the behaviour whether the core can be hurt now, which parts it armours and where a shot does harm, shows them on the view, and returns the first. */
   private refresh(): boolean {
     const { view, behaviour } = this;
     view.vulnerable = behaviour.vulnerable?.(view) ?? true;
+    const { parts } = view;
+    for (let i = 0; i < parts.length; i++) (parts[i] as BossPart).armoured = behaviour.partVulnerable?.(i) === false;
     view.target = behaviour.target === undefined ? coreOrPart(view) : behaviour.target(view);
     return view.vulnerable;
   }
@@ -309,6 +285,7 @@ export class BossRunner {
   private rest(): void {
     this.view.windup = null;
     this.view.active = null;
+    this.view.threat = null;
     this.attackId = null;
     this.stage = 'rest';
     this.clock = 0;
@@ -351,9 +328,10 @@ export class BossRunner {
     this.stage = 'windup';
     this.clock = 0;
     view.windup = attack;
+    view.threat = this.threats.get(attack) ?? null;
     const ctx = this.contextFor(arena);
-    ctx.aimX = arena.ship.x;
-    ctx.aimY = arena.ship.y;
+    ctx.aimX = view.aim.x = arena.ship.x;
+    ctx.aimY = view.aim.y = arena.ship.y;
     arena.events.push({ type: 'bossWindup', attack, x: view.x, y: view.y });
   }
 
@@ -378,21 +356,29 @@ export class BossRunner {
   }
 
   private contextFor(arena: Arena): AttackContext {
-    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, boss: this.view, dt: 0, age: 0, aimX: 0, aimY: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
+    this.context ??= { arena, rng: this.setup.rng, rockSpeed: this.setup.rockSpeed, bolts: this.setup.bolts ?? null, boss: this.view, dt: 0, age: 0, aimX: 0, aimY: 0, fromX: 0, fromY: 0, shoveX: 0, shoveY: 0 };
     this.context.arena = arena;
     return this.context;
   }
 
   /** Moves the core along its heading, bouncing it off the walls so the whole boss, parts and all, stays inside the field. */
   private drift(dt: number, field: Field): void {
-    const { view } = this;
-    const { reach } = this;
-    const [maxX, maxY] = [field.width - reach, field.height - reach];
-    view.x = clamp(view.x + this.dx * dt, reach, maxX);
-    view.y = clamp(view.y + this.dy * dt, reach, maxY);
-    if (view.x === reach) this.dx = Math.abs(this.dx);
+    const { view, reach } = this;
+    // How far the boss extends each way from its core: its reach, or further where a live part trails beyond it.
+    let [left, right, up, down] = [reach, reach, reach, reach];
+    for (const part of view.parts) {
+      if (part.hp <= 0) continue;
+      left = beyond(left, view.x - part.x + part.radius);
+      right = beyond(right, part.x - view.x + part.radius);
+      up = beyond(up, view.y - part.y + part.radius);
+      down = beyond(down, part.y - view.y + part.radius);
+    }
+    const [maxX, maxY] = [field.width - right, field.height - down];
+    view.x = clamp(view.x + this.dx * dt, left, maxX);
+    view.y = clamp(view.y + this.dy * dt, up, maxY);
+    if (view.x === left) this.dx = Math.abs(this.dx);
     else if (view.x === maxX) this.dx = -Math.abs(this.dx);
-    if (view.y === reach) this.dy = Math.abs(this.dy);
+    if (view.y === up) this.dy = Math.abs(this.dy);
     else if (view.y === maxY) this.dy = -Math.abs(this.dy);
   }
 }
