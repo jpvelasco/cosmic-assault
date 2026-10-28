@@ -92,10 +92,10 @@ jobs:
           path: game/dist/
           if-no-files-found: error
 
-  # Report only: a frame-time reading under a 4x CPU slowdown. It is not a required check and
-  # deploy does not need it.
+  # Frame times under a 4x CPU slowdown, held to the ceilings in game/e2e/perfThresholds.ts. Deploy needs it, so a
+  # frame-time regression cannot ship, but it is not a required check: a pull request may merge before it passes.
   perf:
-    name: Performance report (non-blocking)
+    name: Performance (gates deploy)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -129,7 +129,7 @@ jobs:
       - name: Build for end-to-end tests
         run: npm run build:e2e
 
-      - name: Performance report
+      - name: Performance
         run: npm run test:perf
         env:
           CI: true
@@ -241,7 +241,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    needs: [game, legacy]
+    needs: [game, legacy, perf]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10

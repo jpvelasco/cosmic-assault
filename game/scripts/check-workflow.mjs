@@ -17,7 +17,7 @@ function jobBlock(id) {
   return lines.slice(start + 1, end === -1 ? undefined : end);
 }
 
-const jobs = Object.fromEntries(['game', 'legacy', 'balance-dimension', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
+const jobs = Object.fromEntries(['game', 'legacy', 'perf', 'balance-dimension', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
 const anyLine = (id, test) => jobs[id]?.some((line) => test(line.trim())) ?? false;
 const hasLine = (id, entry) => anyLine(id, (line) => line === entry);
@@ -37,8 +37,8 @@ const problems = Object.entries(jobs)
   .map(([id]) => `ci.yml: missing job ${id}:; add a top-level job with id ${id} under jobs:`);
 
 const checks = [
-  [hasJobKey('deploy', 'needs: [game, legacy]'),
-    'ci.yml: deploy must declare needs: [game, legacy] (job level) so it only runs after both test jobs pass, and never waits for the non-required balance or perf jobs'],
+  [hasJobKey('deploy', 'needs: [game, legacy, perf]'),
+    'ci.yml: deploy must declare needs: [game, legacy, perf] (job level) so it only runs after both test jobs and the frame-time ceilings pass, and never waits for the report-only balance jobs'],
   [hasJobKey('deploy', "if: github.event_name == 'push' && github.ref == 'refs/heads/main'"),
     "ci.yml: deploy must declare if: github.event_name == 'push' && github.ref == 'refs/heads/main' (job level) so only pushes to main publish"],
   [hasLine('deploy', 'run: diff -r website _site --exclude next'),
@@ -47,8 +47,8 @@ const checks = [
     'ci.yml: game must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
   [hasLine('legacy', 'node-version-file: .nvmrc'),
     'ci.yml: legacy must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
-  [!['game', 'legacy'].some((id) => anyLine(id, (line) => line.includes('continue-on-error:'))),
-    'ci.yml: continue-on-error is not allowed in the game/legacy jobs; a failing test must block deploy — remove it'],
+  [!['game', 'legacy', 'perf'].some((id) => anyLine(id, (line) => line.includes('continue-on-error:'))),
+    'ci.yml: continue-on-error is not allowed in the game/legacy/perf jobs; a failing test must block deploy — remove it'],
   ...[
     ['npm test', 'tests gate deploy'],
     ['npm run test:digests', 'the expert D1–D2 digests gate merges, not only the non-required balance report'],
@@ -61,6 +61,16 @@ const checks = [
     'ci.yml: in the game job, npm run build:e2e must come before npm run test:e2e; move the build:e2e step above the e2e tests so they drive a fresh e2e build'],
   [inOrder('game', 'npm run build', 'npm run check:no-bridge'),
     'ci.yml: in the game job, npm run check:no-bridge must come after npm run build; move it below the release build step so it scans the fresh dist/'],
+  ...[
+    ['npm run build', 'Playwright has the release build it serves beside the e2e one'],
+    ['npm run build:e2e', 'the perf spec has an e2e build to drive'],
+    ['npm run test:perf', 'a frame-time regression blocks deploy'],
+  ].map(([cmd, reason]) => [hasLine('perf', `run: ${cmd}`),
+    `ci.yml: the perf job must run "${cmd}"; restore the step so ${reason}`]),
+  [inOrder('perf', 'npm run build:e2e', 'npm run test:perf'),
+    'ci.yml: in the perf job, npm run build:e2e must come before npm run test:perf; move the build:e2e step above it so it drives a fresh e2e build'],
+  [hasLine('perf', 'node-version-file: .nvmrc'),
+    'ci.yml: perf must set up Node with node-version-file: .nvmrc; do not hard-code a Node version'],
   [anyLine('legacy', (line) => line.startsWith('run: npx playwright test')),
     'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
   [hasLine('balance-dimension', `run: npm run test:balance -- ${BALANCE_SHARD}`),

@@ -3,16 +3,12 @@ import { dirname } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { GalaxyId } from '../src/content/types';
 import { expect, fastForward, gameState, openGame, restartFrameStats, test } from './fixtures';
+import { PERF_CEILINGS, type PerfScene } from './perfThresholds';
 import { CARRIER_GALAXY, PERF_FIGHT_HOLD_SECONDS, PERF_FIGHT_LIVES, PERF_GALAXY, PERF_HOLD_SECONDS, PERF_SETTLE_SECONDS, seedFor, TO_BOSS_FIGHT_SECONDS, type ClaimId } from './seeds';
 
 const CPU_SLOWDOWN = 4;
-/** The target for a throttled phone-class CPU; recorded in perf.json, not asserted in M2. */
+/** The target for a throttled phone-class CPU; recorded in perf.json, not asserted: the ceilings in perfThresholds.ts are. */
 const BUDGET_P95_MS = 33;
-/**
- * A catastrophic-regression guard, not a target. Headless software raster puts p95 near the
- * 3-vsync (50 ms) boundary even when nothing is wrong, so a tighter ceiling is just noise.
- */
-const SANITY_P95_MS = 100;
 const REPORT_PATH = 'test-results/perf.json';
 
 /**
@@ -21,7 +17,7 @@ const REPORT_PATH = 'test-results/perf.json';
  * down to it first.
  */
 interface PerfCase {
-  readonly name: string;
+  readonly name: PerfScene;
   readonly galaxy: GalaxyId;
   readonly claim: ClaimId;
   readonly skipSeconds: number;
@@ -30,7 +26,11 @@ interface PerfCase {
 }
 
 const CASES: readonly PerfCase[] = [
-  // A galaxy opens on an empty field, so the hold runs long enough for it to fill.
+  // A galaxy opens on an empty field, so the hold runs long enough for it to fill. Over this hold, with the ship firing
+  // and turning, 60 seeds of each Dimension 3 to 5 survival galaxy average 2.5 (5-5) to 4.4 (4-3) rocks, foes and bolts
+  // on the field; the 'busy-field' seed averages 5.7, as busy as the busiest of them, ends with 14 rocks, and sees a warp
+  // rift open. 5-5, the last, is the sparsest: its black hole swallows rocks from 12 s on.
+  // So a later galaxy would measure less, not more.
   { name: 'field', galaxy: PERF_GALAXY, claim: 'busy-field', skipSeconds: 0, holdSeconds: PERF_HOLD_SECONDS },
   // Every measured frame is the Hive Carrier's fight: drones, broadside rocks and the hangar opening and shutting.
   { name: 'bossFight', galaxy: CARRIER_GALAXY, claim: 'carrier-fight', skipSeconds: TO_BOSS_FIGHT_SECONDS, holdSeconds: PERF_FIGHT_HOLD_SECONDS, lives: PERF_FIGHT_LIVES },
@@ -68,7 +68,7 @@ async function hold(page: Page, { galaxy, claim, skipSeconds, holdSeconds, lives
 }
 
 for (const perfCase of CASES) {
-  test(`frame time under a 4x CPU slowdown, ${perfCase.name} in ${perfCase.galaxy} (report only)`, async ({ page }) => {
+  test(`frame time under a 4x CPU slowdown, ${perfCase.name} in ${perfCase.galaxy}, within its calibrated ceilings`, async ({ page }) => {
     test.setTimeout((perfCase.holdSeconds + PERF_SETTLE_SECONDS) * 1000 + 40000);
     const { frameStats, quality, mode, asteroidCount, foes, boss } = await hold(page, perfCase);
     const report = {
@@ -81,13 +81,17 @@ for (const perfCase of CASES) {
       foesAtEnd: foes.length,
       bossAtEnd: boss === null ? null : { state: boss.state, phase: boss.phase, hp: boss.hp },
       withinBudget: frameStats.p95 <= BUDGET_P95_MS,
+      ceiling: PERF_CEILINGS[perfCase.name],
       ...frameStats,
       finalQuality: quality,
     };
     reports[perfCase.name] = report;
     console.log(`perf ${perfCase.name}: ${JSON.stringify(report)}`);
 
+    const ceiling = PERF_CEILINGS[perfCase.name];
     expect(frameStats.count, 'measured frames (a run past its 3 s warm-up)').toBeGreaterThan(0);
-    expect(frameStats.p95, `p95 frame ms vs the ${String(SANITY_P95_MS)} ms sanity ceiling`).toBeLessThan(SANITY_P95_MS);
+    expect(mode, 'the scene ends in play: a game over would measure the end card').toBe('playing');
+    expect(frameStats.p95, `p95 frame ms vs the ${String(ceiling.p95Ms)} ms ceiling (e2e/perfThresholds.ts)`).toBeLessThanOrEqual(ceiling.p95Ms);
+    expect(frameStats.longFrames, `long frames vs the ceiling of ${String(ceiling.longFrames)} (e2e/perfThresholds.ts)`).toBeLessThanOrEqual(ceiling.longFrames);
   });
 }

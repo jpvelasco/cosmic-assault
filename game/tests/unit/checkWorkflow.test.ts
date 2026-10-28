@@ -36,7 +36,7 @@ function replaceOnce(text: string, from: string, to: string): string {
 const moveBefore = (text: string, step: string, anchor: string) =>
   replaceOnce(replaceOnce(text, step, ''), anchor, `${step}${anchor}`);
 
-const needsLine = '    needs: [game, legacy]\n';
+const needsLine = '    needs: [game, legacy, perf]\n';
 const ifLine = "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n";
 const diffLine = '        run: diff -r website _site --exclude next\n';
 const nodeVersionLine = '          node-version-file: .nvmrc\n';
@@ -48,6 +48,14 @@ const noBridgeStep = '        run: npm run check:no-bridge\n';
 const buildE2eStep = '        run: npm run build:e2e\n';
 const legacyRun = '        run: npx playwright test --project=chromium-desktop --reporter=html,list\n';
 const balanceStep = '        run: npm run test:balance -- d${{ matrix.dimension }}-\n';
+const perfStep = '        run: npm run test:perf\n';
+/** The perf job's own steps, from its header to the balance shards' header. */
+const perfJob = (t: string) => t.slice(t.indexOf('  perf:\n'), t.indexOf('  balance-dimension:\n'));
+/** `t` with `from` replaced by `to` inside the perf job only; throws if the perf job lacks it. */
+const inPerf = (t: string, from: string, to: string) => {
+  const job = perfJob(t);
+  return t.replace(job, () => replaceOnce(job, from, to));
+};
 const matrixLine = '        dimension: [1, 2, 3, 4, 5]\n';
 const rollUpNeeds = '    needs: [balance-dimension]\n';
 const rollUpAlways = '    if: always()\n';
@@ -57,7 +65,7 @@ const balanceNode = (t: string) => t.indexOf(nodeVersionLine, t.indexOf('  balan
 const comment = (line: string) => `    # ${line.trim()}\n`;
 
 const failingCases: [name: string, mutate: (text: string) => string, message: string, websiteDirs?: string[], balanceFiles?: string[]][] = [
-  ['commented-out needs', (t) => replaceOnce(t, needsLine, comment(needsLine)), 'deploy must declare needs: [game, legacy]'],
+  ['commented-out needs', (t) => replaceOnce(t, needsLine, comment(needsLine)), 'deploy must declare needs: [game, legacy, perf]'],
   [
     'if moved to step level',
     (t) => replaceOnce(replaceOnce(t, ifLine, ''), '      - name: Stage live site\n', `      - name: Stage live site\n    ${ifLine}`),
@@ -78,12 +86,12 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   [
     'continue-on-error in legacy',
     (t) => replaceOnce(t, '  legacy:\n', '  legacy:\n    continue-on-error: true\n'),
-    'continue-on-error is not allowed in the game/legacy jobs',
+    'continue-on-error is not allowed in the game/legacy/perf jobs',
   ],
   [
     'continue-on-error in game step',
     (t) => replaceOnce(t, unitStep, `${unitStep}        continue-on-error: true\n`),
-    'continue-on-error is not allowed in the game/legacy jobs',
+    'continue-on-error is not allowed in the game/legacy/perf jobs',
   ],
   ['deleted unit test step', (t) => replaceOnce(t, unitStep, ''), 'the game job must run "npm test"'],
   ['deleted expert digest step', (t) => replaceOnce(t, digestStep, ''), 'the game job must run "npm run test:digests"'],
@@ -95,7 +103,7 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   [
     'expert digests left to continue on error',
     (t) => replaceOnce(t, digestStep, `${digestStep}        continue-on-error: true\n`),
-    'continue-on-error is not allowed in the game/legacy jobs',
+    'continue-on-error is not allowed in the game/legacy/perf jobs',
   ],
   ['deleted e2e step', (t) => replaceOnce(t, e2eStep, ''), 'the game job must run "npm run test:e2e"'],
   ['deleted no-bridge check', (t) => replaceOnce(t, noBridgeStep, ''), 'the game job must run "npm run check:no-bridge"'],
@@ -135,7 +143,23 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ['a Dimension without its targets file', (t) => t, 'd3-targets.test.ts is missing', [], TARGET_FILES.filter((f) => !f.startsWith('d3-'))],
   ['a balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'pace.test.ts', 'targets.ts']],
   ['a balance test named for a Dimension past the fifth', (t) => t, 'game/tests/balance/d6-pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'd6-pace.test.ts']],
-  ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, balance]\n'), 'never waits for the non-required balance or perf jobs'],
+  ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, perf, balance]\n'), 'never waits for the report-only balance jobs'],
+  ['deploy not waiting for perf', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy]\n'), 'deploy must declare needs: [game, legacy, perf]'],
+  [
+    'removed perf job',
+    (t) => t.slice(0, t.indexOf('  perf:\n')) + t.slice(t.indexOf('  balance-dimension:\n')),
+    'missing job perf:',
+  ],
+  ['deleted perf run', (t) => replaceOnce(t, perfStep, ''), 'the perf job must run "npm run test:perf"'],
+  ['perf left to continue on error', (t) => replaceOnce(t, perfStep, `${perfStep}        continue-on-error: true\n`), 'continue-on-error is not allowed in the game/legacy/perf jobs'],
+  ['perf without its e2e build', (t) => inPerf(t, buildE2eStep, ''), 'the perf job must run "npm run build:e2e"'],
+  ['perf without its release build', (t) => inPerf(t, buildStep, ''), 'the perf job must run "npm run build"'],
+  [
+    'perf e2e build after the perf run',
+    (t) => inPerf(inPerf(t, buildE2eStep, ''), perfStep, `${perfStep}${buildE2eStep}`),
+    'npm run build:e2e must come before npm run test:perf',
+  ],
+  ['perf without node-version-file', (t) => inPerf(t, nodeVersionLine, ''), 'perf must set up Node with node-version-file: .nvmrc'],
   ['website/assets/next directory', (t) => t, 'website/assets/next is named "next"', ['assets/next']],
 ];
 
@@ -146,8 +170,9 @@ describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(status).toBe(0);
   });
 
-  it.each(['perf', 'balance'])('accepts the report-only %s job, which deploy does not wait for', (job) => {
-    expect(realText).toMatch(new RegExp(`^ {2}${job}:$`, 'm'));
+  it('accepts the report-only balance job, which deploy does not wait for, and the perf job, which it does', () => {
+    expect(realText).toMatch(/^ {2}balance:$/m);
+    expect(realText).toMatch(/^ {2}perf:$/m);
     expect(realText).toContain(needsLine);
     const { status, output } = runGuard(realWorkflow);
     expect(output).toContain('workflow ok');
