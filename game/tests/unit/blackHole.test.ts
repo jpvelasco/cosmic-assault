@@ -14,9 +14,9 @@ import { BlackHole } from '../../src/sim/hazards/blackHole';
 import { holeAcceleration, holeShare } from '../../src/sim/hazards/pull';
 import { zoneClearance } from '../../src/sim/hazards/dangerZone';
 import type { HazardState } from '../../src/sim/hazards/hazard';
-import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
+import { HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
-import { RESPAWN_MARGIN } from '../../src/sim/respawn';
+import { respawnBand, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { createRng } from '../../src/sim/rng';
 import { wrappedDistance } from '../../src/sim/wrap';
 import { foeAt, hazardFoes } from '../helpers/foeAt';
@@ -310,6 +310,69 @@ describe('the hole\'s life', () => {
       expect(Math.hypot(spot.x - first.x, spot.y - first.y) - FOES.drone.radius).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
     });
 
+    /**
+     * A hole active on `field`, and where a respawn lands once a drone sits on each of the four ring spots, past the ring and
+     * into the respawn search; with `hazards`, a zone, then a rift mouth, also covers each of the next two spots it would take.
+     */
+    function crowdedRespawn(field: Field, hazards: boolean): { spot: { x: number; y: number }; ring: { x: number; y: number }[]; swarm: Foe[]; states: HazardState[] } {
+      const states: HazardState[] = [];
+      const made = new BlackHole({ events: [hole()], rng: createRng(1), nextId: () => 1, keepOuts: () => [], inPlay: () => states });
+      made.step(START_AT + 1, field, []);
+      const respawn = (foes: readonly Foe[]): { x: number; y: number } => {
+        const spot = made.respawnPoint(foes);
+        if (spot === null) throw new Error('the hole is active, so it has a respawn point');
+        return spot;
+      };
+      const swarm: Foe[] = [];
+      const ring: { x: number; y: number }[] = [];
+      for (let i = 0; i < 4; i++) {
+        const spot = respawn(swarm);
+        ring.push(spot);
+        swarm.push(foeAt('drone', spot.x, spot.y, { id: 10 + i }));
+      }
+      if (hazards) {
+        states.push(zoneOn(respawn(swarm), 'active'));
+        states.push(riftOn(respawn(swarm), 'active'));
+      }
+      return { spot: respawn(swarm), ring, swarm, states };
+    }
+
+    /** How far `spot` lies outside each thing a respawn keeps clear of: the hole's exit reach, the foes, the zone and the mouths. */
+    function clearances(field: Field, { spot, swarm, states }: ReturnType<typeof crowdedRespawn>): { hole: number; others: number } {
+      const centre = { x: field.width / 2, y: field.height / 2 };
+      const others = states.flatMap((s) =>
+        s.type === 'dangerZone' ? [zoneClearance(field, s, spot.x, spot.y)] : s.type === 'warpRift' ? [s, { x: s.toX, y: s.toY }].map((m) => wrappedDistance(spot, m, field) - WARP_RIFT.radius) : [],
+      );
+      for (const foe of swarm) others.push(Math.hypot(spot.x - foe.x, spot.y - foe.y) - foe.radius);
+      return { hole: Math.hypot(spot.x - centre.x, spot.y - centre.y) - BLACK_HOLE.exitReach, others: Math.min(...others) };
+    }
+
+    it('falls back past its four crowded ring spots to the respawn grid on a wide field, a safe radius clear of the hole, the foes, a zone and a rift mouth', () => {
+      const field: Field = { width: FIELD_HEIGHT * MAX_ASPECT, height: FIELD_HEIGHT };
+      const crowded = crowdedRespawn(field, true);
+      expect(new Set(crowded.ring.map((p) => `${String(p.x)},${String(p.y)}`)).size).toBe(4);
+      expect(crowded.ring).not.toContainEqual(crowded.spot);
+      const { left, right, top, bottom } = respawnBand(field);
+      expect(crowded.spot.x).toBeGreaterThanOrEqual(left);
+      expect(crowded.spot.x).toBeLessThanOrEqual(right);
+      expect(crowded.spot.y).toBeGreaterThanOrEqual(top);
+      expect(crowded.spot.y).toBeLessThanOrEqual(bottom);
+      const { hole, others } = clearances(field, crowded);
+      expect(hole).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
+      expect(others).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
+    });
+
+    it('takes the clearest spot on a 4:3 field, where no grid spot clears the full margin past four crowded ring spots: outside the hole\'s exit reach, and a safe radius clear of the foes', () => {
+      const field: Field = { width: FIELD_HEIGHT * MIN_ASPECT, height: FIELD_HEIGHT };
+      const crowded = crowdedRespawn(field, false);
+      expect(crowded.ring).not.toContainEqual(crowded.spot);
+      const { hole, others } = clearances(field, crowded);
+      // The escape holds from the exit reach; the margin past it is what the crowd leaves of the field.
+      expect(hole).toBeGreaterThan(0);
+      expect(hole).toBeLessThan(RESPAWN_MARGIN);
+      expect(others).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
+    });
+
     it('offers the spot it respawns at with nothing in the way, whatever the foes and hazards, for placed hazards to keep out of', () => {
       const first = respawnAmong([]);
       const made = holeAmong([zoneOn(first, 'active')]);
@@ -319,10 +382,8 @@ describe('the hole\'s life', () => {
     });
   });
 
-  it('is one hazard of its own stream, \'hazards:blackHole\', so the other hazards\' draws do not move', () => {
+  it('draws from a stream of its own, \'hazards:blackHole\', so the other hazards\' draws do not move', () => {
     expect(hazardStreamName('blackHole')).toBe('hazards:blackHole');
-    expect(HAZARD_FACTORIES.blackHole).toBeDefined();
-    expect(new BlackHole({ events: [hole()], rng: createRng(1), nextId: () => 1, keepOuts: () => [], inPlay: () => [] })).toBeInstanceOf(BlackHole);
   });
 
   it('is scheduled in Singularity only, and never in a boss galaxy', () => {

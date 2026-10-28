@@ -232,6 +232,17 @@ describe('warp rift passage', () => {
     expect(r.hazards.strikes(pair.x, pair.y, PLAYER.radius)).toBe(false);
   });
 
+  it('leaves a phaser warning of its blink where it is, so it blinks to the spot it showed, and carries one that is not warning', () => {
+    const r = rig({ seed: 8 });
+    stepTo(r, FIELD_169, 22);
+    const [pair] = riftStates(r);
+    if (pair === undefined) throw new Error('a rift should be open');
+    const warning = foeAt('phaser', pair.x, pair.y, { id: 502, charging: true, aimX: 100, aimY: 100 });
+    const roaming = foeAt('phaser', pair.toX, pair.toY, { id: 503 });
+    r.hazards.move(DT, r.ship, [], hazardFoes(warning, roaming), []);
+    expect(warning).toMatchObject({ x: pair.x, y: pair.y, aimX: 100, aimY: 100 });
+    expect(dist(roaming, { x: pair.x, y: pair.y })).toBeGreaterThanOrEqual(R + FOES.phaser.radius);
+  });
 });
 
 describe('warp rift chaining', () => {
