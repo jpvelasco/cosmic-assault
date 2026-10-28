@@ -335,7 +335,7 @@ describe('drone', () => {
   describe.each([
     ['4:3', FIELD_43],
     ['21:9', FIELD_219],
-  ])('spawn safety at %s (Review Focus 3)', (_name, field) => {
+  ])('a drone group spawned round a ship anywhere in the %s field, the wrap margin included', (_name, field) => {
     /** A grid of ship places across the field and the wrap margin round it, with every seed in a range. */
     const ships: (readonly [number, number])[] = [];
     for (let i = 0; i <= 12; i++) for (let j = 0; j <= 8; j++) ships.push([-WRAP_MARGIN + (i / 12) * (field.width + 2 * WRAP_MARGIN), -WRAP_MARGIN + (j / 8) * (field.height + 2 * WRAP_MARGIN)]);
