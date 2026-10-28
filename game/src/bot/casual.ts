@@ -25,7 +25,7 @@ const TELEGRAPH_DODGE_CHANCE = 0.85;
  * "yes" dodges them all. Rolling every step would dodge nearly always.
  *
  * A boss attack is rolled for once, as its windup begins, and that roll decides for what the attack threatens with:
- * its lane and the boss's bodies while it lasts, and the rocks and drones it sends out. Rocks and drones that come
+ * its lane and the boss's bodies while it lasts, and the rocks, drones and bolts it sends out. Rocks and foes that come
  * unannounced, even mid-attack, keep the episode's roll. A foe's attack is rolled for the same way as its windup begins:
  * a gunship aiming, a mine armed, a phaser warning; the roll covers the foe while it winds up and the bolt a gunship
  * fires as it ends. The dodge still waits out the 0.3 s delay, so a short windup can land a hit that a long one would not.

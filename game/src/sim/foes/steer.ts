@@ -7,7 +7,7 @@ import type { Ship } from '../ship';
 import { wrapDelta, wrapPosition } from '../wrap';
 import type { Foe } from './foe';
 
-// How the foes that fly themselves (drones, gunships) enter, seek and keep apart.
+// How the foes that fly themselves (drones, gunships, phasers) enter, seek and keep apart.
 
 /** How a kind of foe keeps apart from its own: a neighbour within `radius` pushes it away, up to `weight` times its seek. */
 export interface Separation {
