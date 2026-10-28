@@ -42,9 +42,9 @@ export function hangarChoices<T extends string>(
   return ids.map((id) => ({ id, name: specs[id].name, stars: specs[id].stars, locked: !unlocked.includes(id), checked: id === drawn }));
 }
 
-/** What a locked choice says about itself, for the card and for screen readers; an unlocked one says nothing more. */
-export function lockedNote({ stars, locked }: Pick<HangarChoice<string>, 'stars' | 'locked'>): string {
-  return locked ? `Locked · ★ ${String(stars)}` : '';
+/** The star cost a locked choice shows; an unlocked one shows none. */
+export function lockedCost({ stars, locked }: Pick<HangarChoice<string>, 'stars' | 'locked'>): string {
+  return locked ? `★ ${String(stars)}` : '';
 }
 
 /** The preview's size in CSS px, and how many device px a field unit takes in it. */
@@ -116,7 +116,7 @@ function choiceGroup<T extends string>(legend: string, name: string, onPick: (id
   const el = element('fieldset', 'hangar-group');
   el.append(element('legend', 'label', legend));
   const row = element('div', 'segments hangar-group__row');
-  const options = new Map<T, { label: HTMLElement; radio: HTMLInputElement; note: HTMLElement }>();
+  const options = new Map<T, { label: HTMLElement; radio: HTMLInputElement; note: HTMLElement; cost: HTMLElement }>();
   el.append(row);
   return {
     el,
@@ -134,16 +134,20 @@ function choiceGroup<T extends string>(legend: string, name: string, onPick: (id
           });
           const label = element('label', 'segment hangar-option');
           const text = element('span', 'hangar-option__name', choice.name);
+          // Screen readers hear "Locked" before the cost; the dimmed pill says it to the eye.
           const note = element('span', 'hangar-option__note');
+          const cost = element('span', 'hangar-option__cost');
+          note.append(element('span', 'visually-hidden', 'Locked · '), cost);
           label.append(radio, text, note);
           row.append(label);
-          option = { label, radio, note };
+          option = { label, radio, note, cost };
           options.set(choice.id, option);
         }
         option.radio.disabled = choice.locked;
         option.radio.checked = choice.checked;
         option.label.classList.toggle('hangar-option--locked', choice.locked);
-        option.note.textContent = lockedNote(choice);
+        option.cost.textContent = lockedCost(choice);
+        option.note.hidden = !choice.locked;
       }
     },
   };
@@ -166,7 +170,9 @@ export function createHangarCard(root: HTMLElement, actions: HangarCardActions):
     actions.choose({ trail });
   });
   const back = withTestId(button(PRIMARY_BUTTON, 'Back', actions.back), 'hangar-back');
-  cover.card.append(preview.canvas, stars, skins.el, trails.el, back);
+  const head = element('div', 'hangar-head');
+  head.append(preview.canvas, stars);
+  cover.card.append(head, skins.el, trails.el, back);
 
   return {
     ...cover,

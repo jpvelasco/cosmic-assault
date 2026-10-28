@@ -353,7 +353,7 @@
       .overlay--records .card,
       .overlay--hangar .card {
         box-sizing: border-box;
-        width: min(calc(100vw - 48px), 540px);
+        width: min(calc(100vw - 48px), var(--cover-width, 540px));
         max-height: 100%;
         overflow-y: auto;
       }
@@ -518,31 +518,47 @@
         border-radius: 14px;
         background: color-mix(in srgb, white 5%, transparent);
       }
+      .hangar-head {
+        display: grid;
+        justify-items: center;
+        gap: inherit;
+      }
       .hangar-stars {
         margin: 0;
+      }
+      /* Each group spans the card, its pills in one row of equal widths. */
+      .overlay--hangar .card {
+        --cover-width: 600px;
       }
       .hangar-group {
         display: grid;
         gap: 6px;
+        justify-self: stretch;
         min-width: 0;
         margin: 0;
         padding: 0;
         border: 0;
       }
       .hangar-group__row {
-        flex-wrap: wrap;
-      }
-      .hangar-option {
         display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 6px;
+      }
+      .overlay .hangar-option {
+        display: grid;
+        align-content: center;
+        justify-items: center;
         gap: 2px;
-        flex: 1 1 96px;
-        padding: 6px 8px;
+        padding: 8px 6px;
+        font-size: 0.9rem;
         line-height: 1.2;
       }
       .hangar-option__note {
         font-size: 0.7rem;
         font-weight: 700;
         opacity: 0.8;
+        white-space: nowrap;
         font-variant-numeric: tabular-nums;
       }
       .hangar-option--locked {
@@ -970,29 +986,32 @@
         .overlay--settings .card,
         .overlay--records .card,
         .overlay--hangar .card {
-          width: min(calc(100vw - 32px), 540px);
+          width: min(calc(100vw - 32px), var(--cover-width, 540px));
         }
-        /* The Hangar on a phone on its side: the preview shrinks, and each choice's cost sits beside its name, so the card fits. */
+        /* The Hangar on a phone on its side: a smaller preview beside the star count and tighter pills, so the card fits with Back in view. */
+        .hangar-head {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+        }
         .hangar-preview {
-          width: min(130px, 100%);
+          width: min(90px, 100%);
+          margin: 0;
+        }
+        .hangar-group {
+          gap: 2px;
         }
         .hangar-group__row {
           gap: 4px;
         }
-        .hangar-option {
-          flex: 1 1 0;
-          min-width: 0;
-          justify-items: center;
+        .overlay .hangar-option {
           gap: 0;
-          padding: 6px 4px;
-          border-radius: 14px;
-        }
-        .hangar-option__name {
+          padding: 4px 6px;
           font-size: 0.85rem;
         }
         .hangar-option__note {
           font-size: 0.6rem;
-          text-align: center;
         }
         .settings-list {
           gap: 6px 24px;

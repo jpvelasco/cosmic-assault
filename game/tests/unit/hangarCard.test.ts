@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SKIN_IDS, SKINS, TRAIL_IDS, TRAILS } from '../../src/content/cosmetics';
-import { hangarChoices, lockedNote } from '../../src/ui/hangarCard';
+import { hangarChoices, lockedCost } from '../../src/ui/hangarCard';
 
 describe('hangarChoices', () => {
   it('lists every skin in order, marking the unlocked ones and the one drawn', () => {
@@ -23,12 +23,12 @@ describe('hangarChoices', () => {
   });
 });
 
-describe('lockedNote', () => {
-  it('says a locked choice is locked and what it costs in stars', () => {
-    expect(lockedNote({ stars: 24, locked: true })).toBe('Locked · ★ 24');
+describe('lockedCost', () => {
+  it('shows what a locked choice costs in stars', () => {
+    expect(lockedCost({ stars: 24, locked: true })).toBe('★ 24');
   });
 
-  it('says nothing about an unlocked choice', () => {
-    expect(lockedNote({ stars: 9, locked: false })).toBe('');
+  it('shows nothing on an unlocked choice', () => {
+    expect(lockedCost({ stars: 9, locked: false })).toBe('');
   });
 });
