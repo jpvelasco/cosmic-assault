@@ -1,14 +1,53 @@
+import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { GUNSHIP, MINE, PHASER } from '../../src/content/foes';
-import { HAZARD_RULES } from '../../src/content/hazards';
+import { galaxyById } from '../../src/content/galaxies';
+import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
-import type { AttackId, FoeKind, HazardType } from '../../src/content/types';
+import type { AttackId, FoeKind, GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
+import type { Field } from '../../src/sim/field';
 import type { BossView } from '../../src/sim/boss/behaviour';
 
 /** An event, with the galaxy seconds of the step that made it. */
 export interface TimedEvent {
   readonly elapsed: number;
   readonly event: SimEvent;
+}
+
+/** The hazards an event shows: one, or for a danger zone or a warp rift one per intensity, at most two; none for a shower. */
+export const hazardsShown = (e: GalaxyEvent): HazardType[] => {
+  if (e.type === 'meteorShower') return [];
+  const count = e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : e.type === 'warpRift' ? Math.min(e.intensity, WARP_RIFT.maxPairs) : 1;
+  return Array<HazardType>(count).fill(e.type);
+};
+
+/** A bot's run of a galaxy, every event timed, and the field it played on. */
+export interface PlayedRun {
+  readonly id: GalaxyId;
+  readonly seed: number;
+  readonly result: RunResult;
+  readonly log: readonly TimedEvent[];
+  readonly field: Field;
+}
+
+/** Each of `ids` played by `profile` on each of `seeds`, every event logged with the galaxy seconds of its step. */
+export function playLogged(ids: readonly GalaxyId[], profile: BotProfile, seeds: readonly number[]): PlayedRun[] {
+  return ids.flatMap((id) =>
+    seeds.map((seed) => {
+      const log: TimedEvent[] = [];
+      let field: Field = { width: 0, height: 0 };
+      const result = runGalaxy({
+        galaxy: galaxyById(id),
+        seed,
+        profile,
+        onStep: (world, _controls, events) => {
+          field = world.field;
+          for (const event of events) log.push({ elapsed: world.elapsed, event: { ...event } });
+        },
+      });
+      return { id, seed, result, log, field };
+    }),
+  );
 }
 
 /** A hostile activation and the warning it was paired with by id. */

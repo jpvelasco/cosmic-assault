@@ -1,53 +1,27 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import { FIELD_HEIGHT, MIN_ASPECT } from '../../src/sim/config';
 import type { GalaxyId } from '../../src/content/types';
 import { BOT_SEEDS } from '../helpers/botRuns';
 import { QUARTER_SECOND_STEPS, strobeGaps } from '../helpers/riftStrobe';
-import { auditFoeAttacks, auditTelegraphs, type FoeAttackPair, type TelegraphPair, type TimedEvent } from '../helpers/telegraphAudit';
+import { auditFoeAttacks, auditTelegraphs, type FoeAttackPair, hazardsShown, type PlayedRun, playLogged, type TelegraphPair } from '../helpers/telegraphAudit';
 
 /** Void Rift's survival galaxies, each played on the ten bot seeds. */
 const VOID_RIFT: readonly GalaxyId[] = ['4-1', '4-2', '4-3', '4-4', '4-5'];
 const TIMEOUT_MS = 600_000;
 
-interface Played {
-  readonly id: GalaxyId;
-  readonly seed: number;
-  readonly result: RunResult;
-  readonly log: readonly TimedEvent[];
-}
-
-function play(profile: BotProfile): Played[] {
-  return VOID_RIFT.flatMap((id) =>
-    BOT_SEEDS.map((seed) => {
-      const log: TimedEvent[] = [];
-      const result = runGalaxy({
-        galaxy: galaxyById(id),
-        seed,
-        profile,
-        onStep: (world, _controls, events) => {
-          for (const event of events) log.push({ elapsed: world.elapsed, event: { ...event } });
-        },
-      });
-      return { id, seed, result, log };
-    }),
-  );
-}
-
 describe('Void Rift, played by the bots', { timeout: TIMEOUT_MS }, () => {
-  let expert: Played[] = [];
-  let casual: Played[] = [];
+  let expert: PlayedRun[] = [];
+  let casual: PlayedRun[] = [];
   beforeAll(() => {
-    expert = play('expert');
-    casual = play('casual');
+    expert = playLogged(VOID_RIFT, 'expert', BOT_SEEDS);
+    casual = playLogged(VOID_RIFT, 'casual', BOT_SEEDS);
   }, TIMEOUT_MS);
 
   it('meets every rift and repulsion field its schedule shows on every cleared expert run, 4-2 to 4-5', () => {
     for (const { id, seed, result, log } of expert) {
       if (!result.cleared) continue;
-      // A rift shows a pair per intensity to two; a repulsion field one per event.
-      const expected = galaxyById(id).events.reduce((sum, e) => sum + (e.type === 'warpRift' ? Math.min(e.intensity, 2) : e.type === 'repulsionField' ? 1 : 0), 0);
+      const expected = galaxyById(id).events.flatMap(hazardsShown).filter((type) => type === 'warpRift' || type === 'repulsionField').length;
       expect(auditTelegraphs(log).length, `${id} seed ${String(seed)}`).toBe(expected);
     }
   });

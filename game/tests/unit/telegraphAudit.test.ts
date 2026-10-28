@@ -7,24 +7,18 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { createRng } from '../../src/sim/rng';
 import { World } from '../../src/sim/world';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
-import type { GalaxyEvent, GalaxyId, HazardType } from '../../src/content/types';
+import { HAZARD_RULES } from '../../src/content/hazards';
+import type { GalaxyId, HazardType } from '../../src/content/types';
 import type { SimEvent } from '../../src/sim/events';
 import type { AttackId } from '../../src/content/types';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { HAZARD_FACTORIES } from '../../src/sim/hazards/hazardField';
 import { playExpert } from '../helpers/eventDigest';
-import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, type AttackPair, type FightStep, type TimedEvent } from '../helpers/telegraphAudit';
+import { ATTACK_TELEGRAPHS, auditAttacks, auditFoeAttacks, auditTelegraphs, fightRecorder, HAZARD_TELEGRAPHS, hazardsShown, type AttackPair, type FightStep, type TimedEvent } from '../helpers/telegraphAudit';
 
 const SEEDS = [1, 2, 3];
-/** The hazards an event shows: one, or for a danger zone one per intensity, at most two. */
-const shown = (e: GalaxyEvent): HazardType[] => {
-  if (e.type === 'meteorShower') return [];
-  const pairs = e.type === 'dangerZone' ? Math.min(e.intensity, DANGER_ZONE.maxZones) : e.type === 'warpRift' ? Math.min(e.intensity, WARP_RIFT.maxPairs) : 1;
-  return Array<HazardType>(pairs).fill(e.type);
-};
 /** Every galaxy that schedules a hazard, with the hazards it shows. */
-const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap(shown) })).filter((g) => g.hazards.length > 0);
+const HAZARD_GALAXIES = GALAXIES.map((g) => ({ id: g.id, hazards: g.events.flatMap(hazardsShown) })).filter((g) => g.hazards.length > 0);
 /** Whole galaxies played by the expert take seconds apiece. */
 const PLAY_TIMEOUT_MS = 60_000;
 
