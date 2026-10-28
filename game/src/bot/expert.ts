@@ -90,17 +90,51 @@ function foeReach(foe: Readonly<Foe>): number {
   return foe.radius + (foe.kind === 'splitter' ? SPLITTER_MARGIN : 0);
 }
 
-/** Whether `hazard` is a danger zone to keep out of now: active, or starting within `ZONE_LEAD_SECONDS`. */
-const zoneToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<ZoneState> =>
-  hazard.type === 'dangerZone' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
+/** Whether a hazard is to be kept clear of now: active, or turning hostile within `ZONE_LEAD_SECONDS`. */
+const looming = (hazard: Readonly<HazardState>): boolean => hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS;
 
-/** Whether a warp rift is to be kept clear of now: open, or opening within `ZONE_LEAD_SECONDS`. */
-const riftToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<RiftState> =>
-  hazard.type === 'warpRift' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
+/** Whether `id` is a spawn of an attack still on the field: a foe, a rock or a bolt. */
+const spawnOnField = (view: Readonly<BotView>, id: number): boolean => onField(view.foes, id) || onField(view.asteroids, id) || onField(view.bolts, id);
 
-/** Whether a black hole's horizon is to be kept clear of now: active, or starting within `ZONE_LEAD_SECONDS`. */
-const holeToAvoid = (hazard: Readonly<HazardState>): hazard is Readonly<PointHazardState> =>
-  hazard.type === 'blackHole' && (hazard.stage === 'active' || hazard.remaining <= ZONE_LEAD_SECONDS);
+/** Whether foe `id` is still winding up its attack. */
+function windingUp(view: Readonly<BotView>, id: number): boolean {
+  for (const foe of view.foes) if (foe.id === id && foe.charging && foe.hp > 0) return true;
+  return false;
+}
+
+/** The ids the pilot has rolled a dodge for, each with its roll, in the order it noted them. */
+class Rolls {
+  private readonly ids: number[] = [];
+  private readonly rolls: boolean[] = [];
+
+  note(id: number, roll: boolean): void {
+    this.ids.push(id);
+    this.rolls.push(roll);
+  }
+
+  has(id: number): boolean {
+    return this.ids.includes(id);
+  }
+
+  /** The roll noted for `id`, or null for an id not noted. */
+  rollOf(id: number): boolean | null {
+    const at = this.ids.indexOf(id);
+    return at < 0 ? null : (this.rolls[at] ?? null);
+  }
+
+  /** Forgets every id `keep` no longer holds for in `view`, keeping the rest in order. */
+  keepWhere(view: Readonly<BotView>, keep: (view: Readonly<BotView>, id: number) => boolean): void {
+    const { ids, rolls } = this;
+    let kept = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i] ?? 0;
+      if (!keep(view, id)) continue;
+      ids[kept] = id;
+      rolls[kept++] = rolls[i] ?? true;
+    }
+    ids.length = rolls.length = kept;
+  }
+}
 
 /** The active black hole within `HOLE_FLEE_RANGE` of the ship, if there is one. */
 function holeNear(view: Readonly<BotView>): Readonly<PointHazardState> | null {
@@ -181,13 +215,11 @@ export class Pilot {
   /** Whether it dodges in the danger episode under way, and in the boss attack under way. */
   private dodging = true;
   private dodgingStrike = true;
-  /** The rocks and drones telegraphed attacks sent out, by id, and whether each attack was to be dodged. */
-  private readonly spawnIds: number[] = [];
-  private readonly spawnDodging: boolean[] = [];
+  /** The rocks, foes and bolts telegraphed attacks sent out, by id, and whether each attack was to be dodged. */
+  private readonly spawns = new Rolls();
   /** The foes winding up an attack (a gunship aiming, a mine armed, a phaser warning), by id, and whether each is to be dodged. */
-  private readonly windupIds: number[] = [];
-  private readonly windupDodging: boolean[] = [];
-  /** The highest rock or foe id seen so far: one above it is new. */
+  private readonly windups = new Rolls();
+  /** The highest rock, foe or bolt id seen so far: one above it is new. */
   private idMark = 0;
   private wobble = 0;
   private nextWobbleAt = 0;
@@ -367,19 +399,11 @@ export class Pilot {
   }
 
   /**
-   * Forgets the attacks' rocks and drones that have left the field, and notes the new ones the attack under way sends
-   * out, with its roll: the foes and rocks the sim marks as an attack's as it makes them (never a rock's fragments).
+   * Forgets the attacks' rocks, foes and bolts that have left the field, and notes the new ones the attack under way sends
+   * out, with its roll: the ones the sim marks as an attack's as it makes them (never a rock's fragments).
    */
   private trackSpawns(view: Readonly<BotView>): void {
-    const { spawnIds, spawnDodging } = this;
-    let kept = 0;
-    for (let i = 0; i < spawnIds.length; i++) {
-      const id = spawnIds[i] ?? 0;
-      if (!onField(view.foes, id) && !onField(view.asteroids, id) && !onField(view.bolts, id)) continue;
-      spawnIds[kept] = id;
-      spawnDodging[kept++] = spawnDodging[i] ?? true;
-    }
-    spawnIds.length = spawnDodging.length = kept;
+    this.spawns.keepWhere(view, spawnOnField);
     let mark = this.idMark;
     for (const foe of view.foes) {
       if (foe.id <= this.idMark) continue;
@@ -401,14 +425,13 @@ export class Pilot {
   }
 
   private noteSpawn(id: number, dodging = this.dodgingStrike): void {
-    this.spawnIds.push(id);
-    this.spawnDodging.push(dodging);
+    this.spawns.note(id, dodging);
   }
 
   /** A bolt fired by foe `owner` as its windup ended is judged on that windup's roll; any other foe bolt, on the episode's. */
   private noteFoeBolt(id: number, owner: number): void {
-    const at = this.windupIds.indexOf(owner);
-    if (at >= 0) this.noteSpawn(id, this.windupDodging[at] ?? true);
+    const roll = this.windups.rollOf(owner);
+    if (roll !== null) this.noteSpawn(id, roll);
   }
 
   /**
@@ -417,32 +440,14 @@ export class Pilot {
    * finds the windup's roll.
    */
   private trackFoeWindups(view: Readonly<BotView>): void {
-    const { windupIds, windupDodging } = this;
-    let kept = 0;
-    for (let i = 0; i < windupIds.length; i++) {
-      const id = windupIds[i] ?? 0;
-      if (!view.foes.some((foe) => foe.id === id && foe.charging && foe.hp > 0)) continue;
-      windupIds[kept] = id;
-      windupDodging[kept++] = windupDodging[i] ?? true;
-    }
-    windupIds.length = windupDodging.length = kept;
-    for (const foe of view.foes) {
-      if (!foe.charging || foe.hp <= 0 || windupIds.includes(foe.id)) continue;
-      windupIds.push(foe.id);
-      windupDodging.push(this.roll(this.telegraphDodgeChance));
-    }
+    const { windups } = this;
+    windups.keepWhere(view, windingUp);
+    for (const foe of view.foes) if (foe.charging && foe.hp > 0 && !windups.has(foe.id)) windups.note(foe.id, this.roll(this.telegraphDodgeChance));
   }
 
-  /** The roll of the windup foe `id` is in, or null for a foe not winding up. */
-  private windupRoll(id: number): boolean | null {
-    const at = this.windupIds.indexOf(id);
-    return at < 0 ? null : (this.windupDodging[at] ?? null);
-  }
-
-  /** The roll of the attack that sent out rock or drone `id`, or null for one no attack made. Public so tests can read what a fight tagged. */
+  /** The roll of the attack that sent out rock, foe or bolt `id`, or null for one no attack made. Public so tests can read what a fight tagged. */
   attackRoll(id: number): boolean | null {
-    const at = this.spawnIds.indexOf(id);
-    return at < 0 ? null : (this.spawnDodging[at] ?? null);
+    return this.spawns.rollOf(id);
   }
 
   /** Lists every threat that could come near the ship over the look-ahead, relative to it. */
@@ -454,15 +459,16 @@ export class Pilot {
       const allowance = boss !== null && rock.transient === true ? BOSS_ROCK_ALLOWANCE : 0;
       this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false, this.attackRoll(rock.id), allowance);
     }
-    for (const foe of view.foes) if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foeReach(foe), false, this.attackRoll(foe.id) ?? this.windupRoll(foe.id));
+    for (const foe of view.foes) if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foeReach(foe), false, this.attackRoll(foe.id) ?? this.windups.rollOf(foe.id));
     // Bolts pass out of the field and never wrap: one is judged where it really flies, not across the seam.
     for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id), 0, false);
     this.zones.length = 0;
     for (const hazard of view.hazards) {
-      if (zoneToAvoid(hazard)) this.zones.push(hazard);
-      else if (riftToAvoid(hazard)) this.addMouths(view, hazard);
+      if (!looming(hazard)) continue;
+      if (hazard.type === 'dangerZone') this.zones.push(hazard);
+      else if (hazard.type === 'warpRift') this.addMouths(view, hazard);
       // A hole is on show for over a minute, not a surprise to roll for: it is always dodged.
-      else if (holeToAvoid(hazard)) this.addThreat(view, hazard.x, hazard.y, 0, 0, BLACK_HOLE.horizon + HOLE_CLEARANCE, true, true);
+      else if (hazard.type === 'blackHole') this.addThreat(view, hazard.x, hazard.y, 0, 0, BLACK_HOLE.horizon + HOLE_CLEARANCE, true, true);
     }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
