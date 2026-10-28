@@ -4,6 +4,7 @@ import type { BossFoes } from '../boss/behaviour';
 import { circlesOverlap, SpatialHash } from '../collision';
 import { ASTEROID } from '../config';
 import type { Field } from '../field';
+import { NONE_STRUCK } from '../projectile';
 import type { Rng } from '../rng';
 import type { Arena } from '../rules';
 import { overlapsAcrossWrap, rescalePose } from '../wrap';
@@ -28,7 +29,6 @@ const BEHAVIOURS: Readonly<Record<FoeKind, FoeBehaviour>> = {
   phaser: PHASER_BEHAVIOUR,
   armoured: ARMOURED_BEHAVIOUR,
 };
-const NONE_STRUCK: readonly number[] = Object.freeze([]);
 /** What `hit` returns for a shot an armoured foe turned aside: it is spent, and it struck nothing. */
 export const FOE_DEFLECTED = -2;
 

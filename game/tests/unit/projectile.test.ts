@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PROJECTILE, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import type { Field } from '../../src/sim/field';
-import { projectileFromShot, stepProjectile, type Projectile } from '../../src/sim/projectile';
+import { NONE_STRUCK, projectileFromShot, stepProjectile, type Projectile } from '../../src/sim/projectile';
 
 const FIELD: Field = { width: 1280, height: 720 };
 
@@ -20,14 +20,12 @@ describe('projectileFromShot', () => {
     expect(p.life).toBe(1.2);
   });
 
-  it('gives only a piercing shot a struck list of its own: every other shares one empty list, which nothing can add to', () => {
-    const plain = [projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }), projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 })];
-    expect(plain[0]?.struck).toBe(plain[1]?.struck);
-    expect(Object.isFrozen(plain[0]?.struck)).toBe(true);
-    const piercing = [1, 2].map(() => projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 3));
-    expect(piercing[0]?.struck).not.toBe(piercing[1]?.struck);
-    piercing[0]?.struck.push(7);
-    expect(piercing[1]?.struck).toEqual([]);
+  it('starts every shot, piercing or not, on the one frozen empty struck list', () => {
+    for (const p of [projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }), projectileFromShot({ x: 0, y: 0, vx: 0, vy: 0 }, 0, 3)]) {
+      expect(p.struck).toBe(NONE_STRUCK);
+    }
+    expect(Object.isFrozen(NONE_STRUCK)).toBe(true);
+    expect(NONE_STRUCK).toEqual([]);
   });
 });
 

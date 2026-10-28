@@ -106,7 +106,7 @@ export class PlayerShots {
       if (id < 0) continue;
       if (p.pierce > 0) {
         p.pierce--;
-        p.struck.push(id);
+        p.struck = [...p.struck, id];
       } else {
         spent[i] = true;
       }
