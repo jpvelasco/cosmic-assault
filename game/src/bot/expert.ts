@@ -128,9 +128,10 @@ export interface PilotOptions {
   /** The chance it dodges at all, rolled once as each danger episode starts; at 1 it always dodges and draws nothing. */
   readonly dodgeChance?: number;
   /**
-   * The chance it dodges a boss's telegraphed attack, rolled once as its windup begins; at 1 it always dodges and draws
-   * nothing. The roll decides for what the attack threatens with: its lane and the boss's bodies while it lasts, and the
-   * rocks and drones it sends out for as long as they fly. Everything else is judged on the episode's roll.
+   * The chance it dodges a telegraphed attack, a boss's or a foe's, rolled once as its windup begins; at 1 it always
+   * dodges and draws nothing. The roll decides for what the attack threatens with: its lane and the boss's bodies while
+   * it lasts, a winding-up foe itself, and the rocks, drones and bolts it sends out for as long as they fly. Everything
+   * else is judged on the episode's roll.
    */
   readonly telegraphDodgeChance?: number;
   /** Radians its aim strays either way, redrawn every half second; at 0 it aims true and draws nothing. */
@@ -183,6 +184,9 @@ export class Pilot {
   /** The rocks and drones telegraphed attacks sent out, by id, and whether each attack was to be dodged. */
   private readonly spawnIds: number[] = [];
   private readonly spawnDodging: boolean[] = [];
+  /** The foes winding up an attack (a gunship aiming, a mine armed, a phaser warning), by id, and whether each is to be dodged. */
+  private readonly windupIds: number[] = [];
+  private readonly windupDodging: boolean[] = [];
   /** The highest rock or foe id seen so far: one above it is new. */
   private idMark = 0;
   private wobble = 0;
@@ -212,6 +216,7 @@ export class Pilot {
   /** Writes this step's intent into `out`: a fresh judgement every `THINK_STEPS` steps, the last one held between. */
   plan(view: Readonly<BotView>, out: Intent): Intent {
     this.trackStrike(view);
+    this.trackFoeWindups(view);
     if (this.steps % THINK_STEPS === 0 || view.status !== 'playing') this.think(view, this.last);
     this.steps++;
     copyIntent(this.last, out);
@@ -390,13 +395,48 @@ export class Pilot {
       if (bolt.id <= this.idMark) continue;
       mark = Math.max(mark, bolt.id);
       if (bolt.fromAttack) this.noteSpawn(bolt.id);
+      else if (bolt.source !== 'boss') this.noteFoeBolt(bolt.id, bolt.owner);
     }
     this.idMark = mark;
   }
 
-  private noteSpawn(id: number): void {
+  private noteSpawn(id: number, dodging = this.dodgingStrike): void {
     this.spawnIds.push(id);
-    this.spawnDodging.push(this.dodgingStrike);
+    this.spawnDodging.push(dodging);
+  }
+
+  /** A bolt fired by foe `owner` as its windup ended is judged on that windup's roll; any other foe bolt, on the episode's. */
+  private noteFoeBolt(id: number, owner: number): void {
+    const at = this.windupIds.indexOf(owner);
+    if (at >= 0) this.noteSpawn(id, this.windupDodging[at] ?? true);
+  }
+
+  /**
+   * Rolls whether to dodge each foe's attack as its windup begins, as for a boss's (a telegraph is there to be reacted
+   * to), and forgets the windups that have ended. Run after `trackSpawns`, so a bolt fired as its windup ended still
+   * finds the windup's roll.
+   */
+  private trackFoeWindups(view: Readonly<BotView>): void {
+    const { windupIds, windupDodging } = this;
+    let kept = 0;
+    for (let i = 0; i < windupIds.length; i++) {
+      const id = windupIds[i] ?? 0;
+      if (!view.foes.some((foe) => foe.id === id && foe.charging && foe.hp > 0)) continue;
+      windupIds[kept] = id;
+      windupDodging[kept++] = windupDodging[i] ?? true;
+    }
+    windupIds.length = windupDodging.length = kept;
+    for (const foe of view.foes) {
+      if (!foe.charging || foe.hp <= 0 || windupIds.includes(foe.id)) continue;
+      windupIds.push(foe.id);
+      windupDodging.push(this.roll(this.telegraphDodgeChance));
+    }
+  }
+
+  /** The roll of the windup foe `id` is in, or null for a foe not winding up. */
+  private windupRoll(id: number): boolean | null {
+    const at = this.windupIds.indexOf(id);
+    return at < 0 ? null : (this.windupDodging[at] ?? null);
   }
 
   /** The roll of the attack that sent out rock or drone `id`, or null for one no attack made. Public so tests can read what a fight tagged. */
@@ -414,14 +454,15 @@ export class Pilot {
       const allowance = boss !== null && rock.transient === true ? BOSS_ROCK_ALLOWANCE : 0;
       this.addThreat(view, rock.x, rock.y, rock.vx, rock.vy, rock.radius, false, this.attackRoll(rock.id), allowance);
     }
-    for (const foe of view.foes) if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foeReach(foe), false, this.attackRoll(foe.id));
+    for (const foe of view.foes) if (foe.hp > 0) this.addThreat(view, foe.x, foe.y, foe.vx, foe.vy, foeReach(foe), false, this.attackRoll(foe.id) ?? this.windupRoll(foe.id));
     // Bolts pass out of the field and never wrap: one is judged where it really flies, not across the seam.
     for (const bolt of view.bolts) this.addThreat(view, bolt.x, bolt.y, bolt.vx, bolt.vy, bolt.radius, false, this.attackRoll(bolt.id), 0, false);
     this.zones.length = 0;
     for (const hazard of view.hazards) {
       if (zoneToAvoid(hazard)) this.zones.push(hazard);
       else if (riftToAvoid(hazard)) this.addMouths(view, hazard);
-      else if (holeToAvoid(hazard)) this.addThreat(view, hazard.x, hazard.y, 0, 0, BLACK_HOLE.horizon + HOLE_CLEARANCE, true);
+      // A hole is on show for over a minute, not a surprise to roll for: it is always dodged.
+      else if (holeToAvoid(hazard)) this.addThreat(view, hazard.x, hazard.y, 0, 0, BLACK_HOLE.horizon + HOLE_CLEARANCE, true, true);
     }
     if (boss === null || boss.state === 'dying' || boss.state === 'down') return;
     this.addBody(view, boss, boss.radius + CORE_MARGIN);
@@ -525,13 +566,12 @@ export class Pilot {
           who = i;
         }
       }
-      if (!harmless) {
-        for (const zone of this.zones) {
-          const clearance = zoneClearance(view.field, zone, view.ship.x + (sx[k] ?? 0), view.ship.y + (sy[k] ?? 0)) - PLAYER.radius;
-          if (clearance < sample) {
-            sample = clearance;
-            who = -1;
-          }
+      // A zone is judged even while the ship cannot be hurt: one it drifts into then is still there as that ends.
+      for (const zone of this.zones) {
+        const clearance = zoneClearance(view.field, zone, view.ship.x + (sx[k] ?? 0), view.ship.y + (sy[k] ?? 0)) - PLAYER.radius;
+        if (clearance < sample) {
+          sample = clearance;
+          who = -1;
         }
       }
       if (sample + k * SLACK_PER_SAMPLE < least) {
