@@ -69,12 +69,12 @@ export class TurretRing {
   /** Where a regrowing turret would form; one point, reused. */
   private readonly spot: Point = { x: 0, y: 0 };
 
-  /** Draws the ring's bearing from `setup`'s stream, and puts its turrets in their slots about `home`. */
+  /** Draws the ring's bearing from `setup`'s stream, and puts its turrets in their slots about the boss's home. */
   constructor(
     private readonly options: TurretRingOptions,
     setup: BossSetup,
-    home: Readonly<Point> = bossHome(setup.field),
   ) {
+    const home = bossHome(setup.field);
     this.spin = setup.rng.range(0, TAU);
     this.radius = options.radius;
     this.slotOf = Array.from({ length: options.slots }, (_, slot) => slot).filter((slot) => !options.gaps.includes(slot));

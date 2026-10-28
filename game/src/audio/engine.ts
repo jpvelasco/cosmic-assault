@@ -31,7 +31,7 @@ export interface AudioEngine {
   beginFrame(): void;
   /**
    * Plays the sound for each event that makes one, at its cue's delay (a boss kill's warp waits for the boss), and
-   * starts or stops the hazards' hums (a gravity well's, a danger zone's), each on its own events. The hums play only in
+   * starts or stops the hazards' hums (a gravity well's, a danger zone's, a black hole's), each on its own events. The hums play only in
    * play: pause silences them until play resumes, and any other screen, a mute or dispose stops them. A galaxy's start
    * picks its theme, and a boss's intro its boss variant.
    */
@@ -390,7 +390,7 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
     setMusicLevel,
     setScreen(screen) {
       inPlay = screen === 'playing';
-      // Pause keeps the well and the boss fight in mind for the resume; any other screen leaves the run, and both with it
+      // Pause keeps the hums and the boss fight in mind for the resume; any other screen leaves the run, and both with it
       // (the menus play the plain theme of the last Dimension).
       if (!inPlay && screen !== 'paused') {
         silenceHums();

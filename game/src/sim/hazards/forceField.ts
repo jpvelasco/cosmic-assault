@@ -1,5 +1,5 @@
 import { FOES } from '../../content/foes';
-import { HAZARD_RULES, WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH } from '../../content/hazards';
+import { FORCE_SIGN, HAZARD_RULES, WELL_MAX_ACCEL, WELL_MIN_RADIUS, WELL_SPEED_CAP, WELL_STRENGTH } from '../../content/hazards';
 import type { ForceKind } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
@@ -24,9 +24,9 @@ export function wellAcceleration(distance: number, intensity: number): number {
 
 /**
  * The share of a body's offset (dx, dy) to a force field of `sign` and `intensity`, `distance` away, that is its
- * velocity change over `dt` (or, for the default 1, its acceleration); 0 at the centre itself.
+ * velocity change over `dt` (over 1 s, its acceleration); 0 at the centre itself.
  */
-export function forceShare(sign: 1 | -1, distance: number, intensity: number, dt = 1): number {
+export function forceShare(sign: 1 | -1, distance: number, intensity: number, dt: number): number {
   return distance === 0 ? 0 : (sign * wellAcceleration(distance, intensity) * dt) / distance;
 }
 
@@ -55,7 +55,6 @@ export class ForceField implements Hazard {
 
   constructor(
     private readonly kind: ForceKind,
-    private readonly sign: 1 | -1,
     { events, rng, nextId }: HazardSetup,
   ) {
     this.schedule = new HazardSchedule<Current>(events, HAZARD_RULES[kind].telegraph, {
@@ -107,7 +106,7 @@ export class ForceField implements Hazard {
   private pullBody(well: Current, body: Pullable, dt: number): void {
     const dx = well.x - body.x;
     const dy = well.y - body.y;
-    const push = forceShare(this.sign, Math.hypot(dx, dy), well.intensity, dt);
+    const push = forceShare(FORCE_SIGN[this.kind], Math.hypot(dx, dy), well.intensity, dt);
     if (push !== 0) nudge(body, dx * push, dy * push, WELL_SPEED_CAP);
   }
 }

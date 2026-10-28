@@ -76,15 +76,13 @@ export const PHASER_BEHAVIOUR: FoeBehaviour = {
 
   step(foe, dt, field, world) {
     const { arena, rng, list } = world;
+    if (!foe.charging) steer(foe, arena.ship.x - foe.x, arena.ship.y - foe.y, dt, FLIGHT, field, list);
+    foe.timer -= dt;
+    if (foe.timer > TIME_EPSILON) return;
     if (!foe.charging) {
-      steer(foe, arena.ship.x - foe.x, arena.ship.y - foe.y, dt, FLIGHT, field, list);
-      foe.timer -= dt;
-      if (foe.timer > TIME_EPSILON) return;
       if (!warn(foe, field, world)) foe.timer = cadence(rng);
       return;
     }
-    foe.timer -= dt;
-    if (foe.timer > TIME_EPSILON) return;
     if (crowded(foe, field, arena.ship)) {
       if (!warn(foe, field, world)) {
         foe.charging = false;

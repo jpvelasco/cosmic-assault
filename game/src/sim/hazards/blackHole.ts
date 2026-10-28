@@ -15,10 +15,10 @@ export function holeAcceleration(distance: number, intensity: number): number {
 }
 
 /**
- * The share of a body's offset to a hole of `intensity`, `distance` away, that is its velocity change over `dt` (or, for
- * the default 1, its acceleration); 0 at the centre itself. Multiply it by the offset (toward the hole) to get the change.
+ * The share of a body's offset to a hole of `intensity`, `distance` away, that is its velocity change over `dt` (over
+ * 1 s, its acceleration); 0 at the centre itself. Multiply it by the offset (toward the hole) to get the change.
  */
-export function holeShare(distance: number, intensity: number, dt = 1): number {
+export function holeShare(distance: number, intensity: number, dt: number): number {
   return distance === 0 ? 0 : (holeAcceleration(distance, intensity) * dt) / distance;
 }
 

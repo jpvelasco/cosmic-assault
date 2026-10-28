@@ -92,11 +92,8 @@ export class PlayerShots {
     const r = PROJECTILE.radius;
     for (let i = list.length - 1; i >= 0; i--) {
       const p = list[i] as Projectile;
-      if (targets.swallows?.(p.x, p.y, r) === true) {
-        spent[i] = true;
-        continue;
-      }
-      if (targets.hitBoss(p.x, p.y, r)) {
+      // A shot the horizon swallows is spent before it strikes anything.
+      if (targets.swallows?.(p.x, p.y, r) === true || targets.hitBoss(p.x, p.y, r)) {
         spent[i] = true;
         continue;
       }

@@ -35,7 +35,7 @@ const WELL_SECONDS = HAZARD_RULES.gravityWell.seconds;
 
 function forceField(events: readonly GalaxyEvent[], seed = 1, kind: 'gravityWell' | 'repulsionField' = 'gravityWell'): ForceField {
   let last = 0;
-  return new ForceField(kind, kind === 'gravityWell' ? 1 : -1, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [], inPlay: () => [] });
+  return new ForceField(kind, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [], inPlay: () => [] });
 }
 
 const stateOf = (w: ForceField): HazardState | null => w.states[0] ?? null;

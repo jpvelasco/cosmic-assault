@@ -1,5 +1,5 @@
 import { eventsOfType } from '../../content/curves';
-import { FORCE_SIGN, WELL_SPEED_CAP } from '../../content/hazards';
+import { WELL_SPEED_CAP } from '../../content/hazards';
 import type { GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
@@ -20,8 +20,8 @@ import { WarpRifts } from './warpRift';
 
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
-  gravityWell: (setup) => new ForceField('gravityWell', FORCE_SIGN.gravityWell, setup),
-  repulsionField: (setup) => new ForceField('repulsionField', FORCE_SIGN.repulsionField, setup),
+  gravityWell: (setup) => new ForceField('gravityWell', setup),
+  repulsionField: (setup) => new ForceField('repulsionField', setup),
   dangerZone: (setup) => new DangerZones(setup),
   warpRift: (setup) => new WarpRifts(setup),
   blackHole: (setup) => new BlackHole(setup),

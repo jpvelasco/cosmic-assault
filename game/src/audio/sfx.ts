@@ -239,7 +239,7 @@ function soundOf(event: SimEvent): SfxName | null {
   }
 }
 
-/** The looped hums: a gravity well's while it pulls, a danger zone's while it is lethal. */
+/** The looped hums: a gravity well's while it pulls, a danger zone's while it is lethal, a black hole's while it is active. */
 export const HUM_NAMES = ['well', 'zone', 'hole'] as const;
 export type HumName = (typeof HUM_NAMES)[number];
 
@@ -257,12 +257,13 @@ const HUM_CHANGES = {
 
 /**
  * How `event` changes the looped hums, or null to leave them be. A well's runs from `wellStart` to `wellEnd`, a zone's
- * from `zoneStart` to `zoneEnd`, each on its own, so one ending never cuts the other. A galaxy that ends with one on
+ * from `zoneStart` to `zoneEnd` and a hole's from `holeStart` to `holeEnd`, each on its own, so one ending never cuts
+ * another. A galaxy that ends with one on
  * (warp or game over) ends it with no end event, so those silence every hum, as does a new galaxy starting.
  */
 export function humFor(event: SimEvent): HumChange | null {
   switch (event.type) {
-    // Only a force field with sounds of its own hums: a silent one leaves the hum be.
+    // Only a force field whose sounds hum starts the well's hum: a repulsion field leaves it be.
     case 'wellStart':
       return FORCE_SOUNDS[event.kind].hum ? HUM_CHANGES.wellOn : null;
     case 'wellEnd':
