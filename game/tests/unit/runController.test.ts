@@ -24,7 +24,7 @@ function fakePresence(owner = false): TabPresence {
   return { probe: () => Promise.resolve(owner), own: () => () => undefined, dispose: () => undefined };
 }
 
-function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData, presence = fakePresence()) {
+function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData, presence = fakePresence(), events: StorageEvents = NO_EVENTS) {
   const storage = memoryStorage(save);
   const refresh = vi.fn();
   const screens: Screen[] = [];
@@ -34,7 +34,7 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
     storage,
     overrides: { ...NONE, ...overrides },
     log: new RingLog(),
-    events: NO_EVENTS,
+    events,
     field,
     showScreen: (screen) => screens.push(screen),
     onRunStarted,
@@ -298,6 +298,69 @@ describe('createRunController', () => {
       expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
       expect(run.rankLock).toBe('checking');
       expect(held.waiting()).toBe(1);
+    });
+
+    describe('after another tab writes the save', () => {
+      const notMidGalaxy = setRankRun(defaultSave(), { ...startRank('2026-10-26'), inGalaxy: false });
+      /** The other tab's write: the run is mid-galaxy, one save on. */
+      const otherTabWrote = JSON.stringify({ ...leftMidGalaxy, rankSeq: notMidGalaxy.rankSeq + 1 });
+
+      /** Storage events the test fires by hand, to every listener the controller added. */
+      function storageEvents() {
+        const listeners: ((event: { key: string | null }) => void)[] = [];
+        const events: StorageEvents = {
+          addEventListener: (_type, listener) => {
+            listeners.push(listener);
+          },
+          removeEventListener: () => undefined,
+        };
+        return {
+          events,
+          fire: () => {
+            listeners.forEach((listener) => {
+              listener({ key: SAVE_KEY });
+            });
+          },
+        };
+      }
+
+      it('a silent owner is asked once more, RECHECK_MS later, before the run is forfeited', async () => {
+        vi.useFakeTimers();
+        const held = heldPresence();
+        const tabs = storageEvents();
+        const { run, storage, notify } = setup({}, () => FIELD, notMidGalaxy, held.presence, tabs.events);
+        expect(run.rankLock).toBe('free');
+        storage.items.set(SAVE_KEY, otherTabWrote);
+        tabs.fire();
+        expect(run.rankLock).toBe('checking');
+        // Silence may just mean the owner is busy starting its galaxy: nothing is forfeited yet.
+        await held.answer(false);
+        expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+        expect(run.rankLock).toBe('checking');
+        expect(held.waiting()).toBe(0);
+        vi.advanceTimersByTime(RECHECK_MS);
+        expect(held.waiting()).toBe(1);
+        // The owner answers late, to the second ask: it is locked here, as its owner.
+        await held.answer(true);
+        expect(run.rankLock).toBe('elsewhere');
+        expect(run.save.rankRun).toMatchObject({ lives: 3, inGalaxy: true });
+        expect(notify).not.toHaveBeenCalled();
+      });
+
+      it('forfeits the run when it is still silent at the second ask', async () => {
+        vi.useFakeTimers();
+        const held = heldPresence();
+        const tabs = storageEvents();
+        const { run, storage, notify } = setup({}, () => FIELD, notMidGalaxy, held.presence, tabs.events);
+        storage.items.set(SAVE_KEY, otherTabWrote);
+        tabs.fire();
+        await held.answer(false);
+        vi.advanceTimersByTime(RECHECK_MS);
+        await held.answer(false);
+        expect(run.rankLock).toBe('free');
+        expect(run.save.rankRun).toMatchObject({ lives: 2, inGalaxy: false });
+        expect(notify.mock.calls).toEqual([[LEFT_RUN_NOTICE]]);
+      });
     });
 
     it('nothing is forfeited after dispose, even when the pending probe then goes unanswered', async () => {

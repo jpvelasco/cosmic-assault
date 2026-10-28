@@ -174,13 +174,14 @@ export function createRunController(deps: RunControllerDeps): RunController {
    * A run saved mid-galaxy is either another tab's live attempt or one left unfinished (a closed tab). Ask first: an
    * owner's answer locks it here, and it is asked again every `RECHECK_MS` in case that tab closed or crashed; silence
    * (or no channel) forfeits it. Runs again whenever another tab writes the save, and when this tab starts or ends a
-   * Rank galaxy; a newer check overrides any still waiting.
+   * Rank galaxy; a newer check overrides any still waiting. A check after another tab's write (`afterWrite`) that
+   * meets silence asks once more, `RECHECK_MS` later, before it forfeits: the owner may be busy starting its galaxy.
    */
-  function checkLeftRun(): void {
-    void settleLeftRun();
+  function checkLeftRun(afterWrite = false): void {
+    void settleLeftRun(afterWrite);
   }
 
-  async function settleLeftRun(): Promise<void> {
+  async function settleLeftRun(afterWrite: boolean): Promise<void> {
     const check = ++checks;
     clearTimeout(recheckTimer);
     const { rankRun, rankSeq } = store.save;
@@ -194,12 +195,16 @@ export function createRunController(deps: RunControllerDeps): RunController {
     if (check !== checks) return;
     // The run changed while the probe waited: ask about the run as it is now.
     if (store.save.rankSeq !== rankSeq) {
-      checkLeftRun();
+      checkLeftRun(afterWrite);
       return;
     }
     if (owned) {
       recheckTimer = setTimeout(checkLeftRun, RECHECK_MS);
       setLock('elsewhere');
+      return;
+    }
+    if (afterWrite) {
+      recheckTimer = setTimeout(checkLeftRun, RECHECK_MS);
       return;
     }
     // The forfeit re-checks inGalaxy and rankSeq inside its update: a run another tab already forfeited loses no second
@@ -219,7 +224,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
     // Another tab's write: this tab's map, galaxy select and Resume show it at once, and a run it left is re-checked.
     store.onExternalChange(() => {
       deps.refresh();
-      checkLeftRun();
+      checkLeftRun(true);
     }),
     store.onWriteFailure(() => {
       deps.notify(SAVE_FAILED_NOTICE);
