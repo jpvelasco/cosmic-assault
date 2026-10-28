@@ -144,8 +144,13 @@ export const rigStepper = (rig: BossRig): Stepper => (dt, arena) => {
   rig.r.step(dt, arena);
 };
 
+/** Steps the fight `r` runs, the boss alone. */
+export const bossStepper = (r: BossRunner): Stepper => (dt, arena) => {
+  r.step(dt, arena);
+};
+
 /** Steps `step` (the boss alone, by default) through the intro of the fight `r` runs and into the fight; fails if it has not begun. */
-export function throughIntro(r: BossRunner, arena: StubArena, step: Stepper = (dt, a) => { r.step(dt, a); }): void {
+export function throughIntro(r: BossRunner, arena: StubArena, step: Stepper = bossStepper(r)): void {
   runFor(step, arena, BOSS_INTRO_SECONDS + 0.05);
   if (r.state !== 'fighting') throw new Error(`${r.view.id} is ${r.state} after its intro, not fighting: check its intro length`);
 }

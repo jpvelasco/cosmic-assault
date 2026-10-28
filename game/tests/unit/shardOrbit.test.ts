@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { AttackSpec, BossBehaviour, BossSetup } from '../../src/sim/boss/behaviour';
+import type { AttackSpec, BossBehaviour } from '../../src/sim/boss/behaviour';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { ShardOrbit, type ShardOrbitOptions } from '../../src/sim/boss/shardOrbit';
-import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, runFor, throughIntro, type StubArena, stubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, runFor, throughIntro, type StubArena, stubArena, bossSetup } from '../helpers/bossArena';
 
 /** Six shards of radius 10 on an orbit of 80, held still so each slot stays where it is. */
 const STILL: ShardOrbitOptions = { counts: [6, 6], hp: 2, radius: 10, orbit: 80, speed: 0, exposedAt: 3, regrowSeconds: 1, regrowCap: 4 };
@@ -18,7 +17,7 @@ interface Orbit {
 /** A shard orbit under a fight, its core at the field's centre and its shards broken until the core is bare (three standing). */
 function bareOrbit(options: ShardOrbitOptions): Orbit {
   const arena = stubArena();
-  const setup: BossSetup = { maxHp: 30, rng: createRng(4), rockSpeed: 1, field: BOSS_FIELD };
+  const setup = bossSetup(30, { seed: 4 });
   const orbit = new ShardOrbit(options, setup, { x: BOSS_FIELD.width / 2, y: BOSS_FIELD.height / 2 });
   const behaviour: BossBehaviour = { driftSpeed: 0, parts: orbit.parts, reach: orbit.reach, attacks: { quake: SPEC, dive: SPEC }, vulnerable: () => orbit.exposed, step: (ctx) => { orbit.step(ctx); } };
   const runner = new BossRunner({ ...FIXTURE_DEF, phases: [['quake'], ['quake'], ['quake']] }, behaviour, setup);

@@ -7,7 +7,7 @@ import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, breakPart, FIXTURE_DEF, liveParts, ofType, runFor, throughIntro, type StubArena, stubArena, timedOfType } from '../helpers/bossArena';
+import { breakPart, FIXTURE_DEF, liveParts, ofType, runFor, throughIntro, type StubArena, stubArena, timedOfType, bossSetup } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const PARTS = 4;
@@ -42,7 +42,7 @@ function segmented(): BossBehaviour {
 }
 
 function fighting(def: BossDef = DEF, maxHp = 30, arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
-  const r = new BossRunner(def, segmented(), { maxHp, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD });
+  const r = new BossRunner(def, segmented(), bossSetup(maxHp));
   throughIntro(r, arena);
   return { r, arena };
 }
@@ -75,7 +75,7 @@ describe('armoured boss parts', () => {
   it('mark no part armoured for a behaviour that armours none', () => {
     const behaviour = { ...segmented() };
     delete (behaviour as { partVulnerable?: unknown }).partVulnerable;
-    const r = new BossRunner(DEF, behaviour, { maxHp: 30, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD });
+    const r = new BossRunner(DEF, behaviour, bossSetup(30));
     expect(r.view.parts.map((p) => p.armoured)).toEqual([false, false, false, false]);
     expect(bossTarget({ ...r.view, state: 'fighting' })).toBe(r.view.parts[0]);
   });

@@ -32,8 +32,8 @@ describe('the shared attack library', () => {
 
   it("runs the fixture's dive as the shared dash over its 0.8 s, and makes the Monolith's shards a ShardOrbit of its options", () => {
     const arena = stubArena();
-    const fixture = new BossRunner(FIXTURE_DEF, FIXTURE, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
-    const dashed = new BossRunner(FIXTURE_DEF, { ...FIXTURE, attacks: { ...FIXTURE.attacks, dive: { ...FIXTURE.attacks.dive, run: (ctx) => { dash(ctx, 0.8); } } } }, { maxHp: 30, rng: createRng(5), rockSpeed: 1, field: BOSS_FIELD });
+    const fixture = new BossRunner(FIXTURE_DEF, FIXTURE, bossSetup(30, { seed: 5 }));
+    const dashed = new BossRunner(FIXTURE_DEF, { ...FIXTURE, attacks: { ...FIXTURE.attacks, dive: { ...FIXTURE.attacks.dive, run: (ctx) => { dash(ctx, 0.8); } } } }, bossSetup(30, { seed: 5 }));
     const poses: number[][] = [[], []];
     runFor((dt, a) => {
       fixture.step(dt, a);

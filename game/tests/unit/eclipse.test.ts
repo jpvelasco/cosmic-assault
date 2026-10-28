@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import { bossHp, BOSSES } from '../../src/content/bosses';
 import { GALAXIES, galaxyById } from '../../src/content/galaxies';
-import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
+import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId } from '../../src/content/types';
 import { launchSlot, launchSlotsFor } from '../../src/sim/boss/attacks';
 import { createEclipse, DIVE_SECONDS, ECLIPSE_CAP, ECLIPSE_CORONA, ECLIPSE_REACH, ECLIPSE_VOLLEY, ECLIPSE_WAVES, QUAKE_ROCKS } from '../../src/sim/boss/eclipse';
 import type { Point } from '../../src/sim/math';
-import type { BossBehaviour, BossPhase, BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossBehaviour, BossPhase, BossView } from '../../src/sim/boss/behaviour';
 import { clearSpot, respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
-import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, rigStepper, runFor, type StubArena, stubArena } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, type BossRig, bossSetup, breakPart, fightingRig, liveParts, rigStepper, runFor, type StubArena, stubArena } from '../helpers/bossArena';
 
 const DEF = BOSSES.eclipse;
 const spot: Point = { x: 0, y: 0 };
@@ -25,7 +25,7 @@ const EARLIER = { monolith: BOSSES.monolith, hiveCarrier: BOSSES.hiveCarrier, wa
 const eclipse = (seed = 1, arena?: StubArena): BossRig => bossRig(DEF, createEclipse, MAX_HP, { seed, arena });
 const fighting = (seed = 1, arena?: StubArena): BossRig => fightingRig(DEF, createEclipse, MAX_HP, { seed, arena });
 
-const ATTACKS = createEclipse({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()), foes: eclipse().foes }).attacks;
+const ATTACKS = createEclipse(bossSetup(MAX_HP)).attacks;
 
 /** Breaks shards, in part order, until `count` are left standing. */
 function breakUntil(r: BossRunner, count: number): void {
@@ -95,7 +95,7 @@ describe('the Eclipse definition', () => {
   });
 
   it('is refused by the runner if a move its phases name is missing', () => {
-    const setup: BossSetup = { maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: stubArena().field(), bolts: new Bolts(stubArena()), foes: eclipse().foes };
+    const setup = bossSetup(MAX_HP);
     const full = createEclipse(setup);
     const lacking: BossBehaviour = { ...full, attacks: Object.fromEntries(Object.entries(full.attacks).filter(([id]) => id !== 'dive')) };
     expect(() => new BossRunner(DEF, lacking, setup)).toThrow(/dive/);
@@ -195,9 +195,8 @@ describe('the Eclipse corona', () => {
     for (const seed of [1, 2]) {
       for (const aspect of [4 / 3, 21 / 9]) {
         const arena = stubArena(undefined, { width: 720 * aspect, height: 720 });
-        const rig = eclipse(seed, arena);
+        const rig = fighting(seed, arena);
         const rng = createRng(seed * 7 + 1);
-        runFor(rigStepper(rig), arena, BOSS_INTRO_SECONDS + 0.05);
         for (let step = 0; step < 40 / STEP_SECONDS && rig.r.state === 'fighting'; step++) {
           if (step % 240 === 0) Object.assign(arena.ship, { x: rng.range(0, arena.field().width), y: rng.range(0, arena.field().height) });
           if (rng.chance(0.01)) breakUntil(rig.r, rng.int(4, 10));
@@ -222,8 +221,7 @@ describe('the Eclipse corona', () => {
 
   it('keeps every shard its volley throws inside the field, even with the ship in a corner', () => {
     const arena = stubArena(createShip(2, 2));
-    const rig = eclipse(1, arena);
-    runFor(rigStepper(rig), arena, BOSS_INTRO_SECONDS + 0.05);
+    const rig = fighting(1, arena);
     stepUntil(rig, (view) => view.active === 'shardVolley', 30);
     let flights = 0;
     for (let step = 0; step < ECLIPSE_VOLLEY.seconds / STEP_SECONDS && rig.r.view.active === 'shardVolley'; step++) {
@@ -311,8 +309,7 @@ describe('the Eclipse moves', () => {
 
   it('dives its core to the aim as a dash held inside the field, with its lane declared at the full reach of the corona', () => {
     const arena = stubArena(createShip(BOSS_FIELD.width - 2, BOSS_FIELD.height - 2));
-    const rig = eclipse(2, arena);
-    runFor(rigStepper(rig), arena, BOSS_INTRO_SECONDS + 0.05);
+    const rig = fighting(2, arena);
     toPhase(rig, 3);
     stepUntil(rig, (view) => view.windup === 'dive', 60);
     expect(rig.r.view.threat).toMatchObject({ kind: 'lane', reach: ECLIPSE_REACH });

@@ -15,13 +15,12 @@ import { stretchRoom } from '../../src/sim/boss/turretRing';
 import { createWarden, LOCK_BOLTS, LOCK_TURRETS, PULSE_RADIUS, PULSE_SECONDS, SPIN_FACTOR, SPIN_SECONDS, VOLLEY_REPEAT, WARDEN_RING } from '../../src/sim/boss/warden';
 import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
-import { Bolts } from '../../src/sim/foes/bolts';
 import { TAU, turnBetween } from '../../src/sim/math';
 import { createRng, deriveSeed } from '../../src/sim/rng';
 import { projectileFromShot, type Projectile } from '../../src/sim/projectile';
 import { World } from '../../src/sim/world';
 import { rescale } from '../../src/sim/wrap';
-import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, ofType, rigStepper, runFor, stubArena, timedOfType } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, type BossRig, breakPart, fightingRig, liveParts, ofType, rigStepper, runFor, stubArena, timedOfType, bossSetup } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 import { bearingOf, ringGaps, wardenGapBearings, wardenGaps, WIDE_GAP } from '../helpers/ringGaps';
 import { noEffects } from '../../src/content/pickups';
@@ -35,7 +34,7 @@ const PATH_MARGIN = 10;
 
 const warden = (seed = 1): BossRig => bossRig(DEF, createWarden, MAX_HP, { seed });
 
-const ATTACKS = createWarden({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()) }).attacks;
+const ATTACKS = createWarden(bossSetup(MAX_HP)).attacks;
 
 const fighting = (seed = 1): BossRig => fightingRig(DEF, createWarden, MAX_HP, { seed });
 

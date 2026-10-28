@@ -31,12 +31,11 @@ import {
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
-import { Bolts } from '../../src/sim/foes/bolts';
 import { TAU, turnBetween } from '../../src/sim/math';
 import { createRng, type Rng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, bossRig, breakPart, fightingRig, liveParts, rigStepper, runFor, stubArena, timedOfType, type BossRig } from '../helpers/bossArena';
+import { BOSS_FIELD, bossRig, breakPart, fightingRig, liveParts, rigStepper, runFor, stubArena, timedOfType, type BossRig, bossSetup } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 import { auditAttacks, fightRecorder } from '../helpers/telegraphAudit';
 
@@ -90,7 +89,7 @@ describe('the Leviathan definition', () => {
   });
 
   it('telegraphs its dive for 1 s, its spit for 0.5 s and its coil for 0.9 s, every one at least the minimum', () => {
-    const { attacks } = createLeviathan({ maxHp: MAX_HP, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()) });
+    const { attacks } = createLeviathan(bossSetup(MAX_HP));
     expect({ dive: attacks.dive.windup, spit: attacks.spit.windup, coil: attacks.coil.windup }).toEqual({ dive: 1, spit: 0.5, coil: 0.9 });
     // Long enough for a ship at rest to thrust out of the head's lane, with a 5% margin.
     expect(attacks.dive.windup).toBeGreaterThanOrEqual(1.05 * Math.sqrt((2 * (DEF.radius + PLAYER.radius)) / PLAYER.thrust));
@@ -591,7 +590,7 @@ describe('Leviathan determinism', () => {
   });
 
   it('draws which way its swim turns first, so seeds differ on an empty field: the two sides are mirror images', () => {
-    const body = (seed: number): readonly BossPart[] => createLeviathan({ maxHp: MAX_HP, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD, bolts: new Bolts(stubArena()) }).parts ?? [];
+    const body = (seed: number): readonly BossPart[] => createLeviathan(bossSetup(MAX_HP, { seed })).parts ?? [];
     const bySide = new Map<number, readonly BossPart[]>();
     for (let seed = 1; seed <= 20; seed++) {
       const parts = body(seed);

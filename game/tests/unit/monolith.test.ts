@@ -5,7 +5,7 @@ import type { AttackId } from '../../src/content/types';
 import { BOSS_INTRO_SECONDS, MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import { bossTarget, MAX_SHOVE_SPEED } from '../../src/sim/boss/bossRules';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
-import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
+import type { BossPart, BossView } from '../../src/sim/boss/behaviour';
 import { createMonolith, EXPOSED_AT, ORBIT_RADIUS, ORBIT_SPEED, REGROW_CAP, REGROW_SECONDS, SHARD_COUNTS, SHARD_HP, SHARD_RADIUS } from '../../src/sim/boss/monolith';
 import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -13,28 +13,20 @@ import type { SimEvent } from '../../src/sim/events';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import { World } from '../../src/sim/world';
-import { BOSS_FIELD, liveParts, runFor, type StubArena, stubArena, timedOfType, throughIntro } from '../helpers/bossArena';
+import { BOSS_FIELD, liveParts, runFor, type StubArena, stubArena, timedOfType, throughIntro, bossStepper, bossSetup } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = BOSSES.monolith;
 const MAX_HP = 60;
 const APPROACH = 20;
-const ATTACKS = createMonolith(setupFor(1)).attacks;
+const ATTACKS = createMonolith(bossSetup(MAX_HP)).attacks;
 /** Positions settle to float residue, not exactly. */
 const ORBIT_TOLERANCE = 1e-6;
 
-function setupFor(seed: number): BossSetup {
-  return { maxHp: MAX_HP, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD };
-}
-
 function monolith(seed = 1): BossRunner {
-  const setup = setupFor(seed);
+  const setup = bossSetup(MAX_HP, { seed });
   return new BossRunner(DEF, createMonolith(setup), setup);
 }
-
-const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
-  r.step(dt, arena);
-};
 
 /** A Monolith whose intro is over. */
 function fighting(seed = 1, arena: StubArena = stubArena()): { r: BossRunner; arena: StubArena } {
@@ -95,9 +87,9 @@ describe('the Monolith\'s shards', () => {
     const shard = r.view.parts[0];
     const bearing = (): number => Math.atan2((shard?.y ?? 0) - r.view.y, (shard?.x ?? 0) - r.view.x);
     const arena = stubArena();
-    runFor(stepper(r), arena, 0.5);
+    runFor(bossStepper(r), arena, 0.5);
     const before = bearing();
-    runFor(stepper(r), arena, 1);
+    runFor(bossStepper(r), arena, 1);
     const turned = bearing() - before;
     expect(ORBIT_SPEED).toBe(0.6);
     expect(turned - Math.round(turned / (2 * Math.PI)) * 2 * Math.PI).toBeCloseTo(0.6, 6);
@@ -121,7 +113,7 @@ describe('the Monolith\'s core', () => {
     expect(EXPOSED_AT).toBe(3);
     expect(r.view.vulnerable).toBe(true);
     expect(r.hit(1)).toBe('hit');
-    const log = runFor(stepper(r), arena, 0.5);
+    const log = runFor(bossStepper(r), arena, 0.5);
     expect(timedOfType(log, 'bossExposed')).toHaveLength(1);
     breakTo(r, 0);
     expect(r.hit(1)).toBe('hit');
@@ -140,7 +132,7 @@ describe('Monolith regrowth', () => {
   /** Shards alive after each step, for `seconds`. */
   function liveCounts(r: BossRunner, arena: StubArena, seconds: number): number[] {
     const counts: number[] = [];
-    runFor(stepper(r), arena, seconds, () => counts.push(liveParts(r.view).length));
+    runFor(bossStepper(r), arena, seconds, () => counts.push(liveParts(r.view).length));
     return counts;
   }
 
@@ -149,7 +141,7 @@ describe('Monolith regrowth', () => {
     breakTo(r, 0);
     const log: SimEvent[] = [];
     const counts: number[] = [];
-    runFor(stepper(r), arena, 40, () => {
+    runFor(bossStepper(r), arena, 40, () => {
       counts.push(liveParts(r.view).length);
       log.push(...arena.events);
     });
@@ -189,7 +181,7 @@ describe('Monolith regrowth', () => {
       const rng = createRng(seed * 31);
       let regrown = 0;
       breakTo(r, 0);
-      runFor(stepper(r), arena, 120, () => {
+      runFor(bossStepper(r), arena, 120, () => {
         const before = liveParts(r.view).length;
         if (rng.chance(0.004)) breakTo(r, rng.int(0, before + 1));
         regrown = Math.max(regrown, liveParts(r.view).length);
@@ -203,7 +195,7 @@ describe('Monolith regrowth', () => {
     for (const seed of [1, 2, 3, 4]) {
       const { r, arena } = fighting(seed);
       let clock = 0;
-      runFor(stepper(r), arena, 180, () => {
+      runFor(bossStepper(r), arena, 180, () => {
         clock += STEP_SECONDS;
         const target = bossTarget(r.view);
         if (clock < 1 || target === null) return;
@@ -222,7 +214,7 @@ describe('Monolith attacks', () => {
     const order = (seed: number, hp: number): AttackId[] => {
       const { r, arena } = fighting(seed);
       if (hp < MAX_HP) exposedAt(r, hp);
-      return timedOfType(runFor(stepper(r), arena, 30), 'bossWindup').map((l) => l.event.attack).slice(0, 6);
+      return timedOfType(runFor(bossStepper(r), arena, 30), 'bossWindup').map((l) => l.event.attack).slice(0, 6);
     };
     for (const seed of [1, 9]) {
       expect(order(seed, MAX_HP)).toEqual(Array<AttackId>(6).fill('shardVolley'));
@@ -239,7 +231,7 @@ describe('Monolith attacks', () => {
     const seen = new Map<AttackId, number>();
     let rocksAtStart = 0;
     let windupSteps = 0;
-    runFor(stepper(r), arena, 30, () => {
+    runFor(bossStepper(r), arena, 30, () => {
       const { windup } = r.view;
       const before = { vx: ship.vx, vy: ship.vy };
       r.shove(ship);
@@ -264,7 +256,7 @@ describe('Monolith attacks', () => {
     let closest = Infinity;
     let flying = 0;
     const volley = { started: false, ended: false };
-    runFor(stepper(r), arena, 7, () => {
+    runFor(bossStepper(r), arena, 7, () => {
       if (r.view.active === 'shardVolley') volley.started = true;
       if (!volley.started || volley.ended) return;
       if (r.view.active === null) {
@@ -291,7 +283,7 @@ describe('Monolith attacks', () => {
     // Bare with only shards 0 to 2 left just long enough before the second volley's flight that its first shard grows
     // back 0.45 s into it; the lowest broken shard is the one that grows, so breaking shard 0 in that flight makes it the one.
     const secondFlight = 2 * DEF.rest[0] + 2 * ATTACKS.shardVolley.windup + ATTACKS.shardVolley.active;
-    const lead = runFor(stepper(r), arena, secondFlight + 0.45 - REGROW_SECONDS);
+    const lead = runFor(bossStepper(r), arena, secondFlight + 0.45 - REGROW_SECONDS);
     parts.forEach((part, i) => {
       while (i > 2 && part.hp > 0) r.hitPart(i, 1);
     });
@@ -299,7 +291,7 @@ describe('Monolith attacks', () => {
     let broken = false;
     let regrownAt: number | null = null;
     const offOrbit = (): boolean => Math.abs(Math.hypot(thrown.x - r.view.x, thrown.y - r.view.y) - ORBIT_RADIUS) > 1;
-    runFor(stepper(r), arena, 8, () => {
+    runFor(bossStepper(r), arena, 8, () => {
       if (arena.events.some((e) => e.type === 'bossWindup')) volleys++;
       if (volleys !== 2 || r.view.active !== 'shardVolley') return;
       if (!broken && offOrbit()) {
@@ -317,7 +309,7 @@ describe('Monolith attacks', () => {
     const { r, arena } = fighting();
     breakTo(r, 2);
     let flying = 0;
-    runFor(stepper(r), arena, 5, () => {
+    runFor(bossStepper(r), arena, 5, () => {
       flying = Math.max(flying, orbitDistances(r.view).filter((d) => Math.abs(d - ORBIT_RADIUS) > 1).length);
     });
     expect(flying).toBe(2);
@@ -328,7 +320,7 @@ describe('Monolith attacks', () => {
     exposedAt(r, 20);
     let ring: { count: number; core: { x: number; y: number } } | null = null;
     const rocks = arena.asteroids;
-    runFor(stepper(r), arena, 4, () => {
+    runFor(bossStepper(r), arena, 4, () => {
       if (ring === null && rocks.length > 0) ring = { count: rocks.length, core: { x: r.view.x, y: r.view.y } };
     });
     expect(ring).not.toBeNull();
@@ -346,7 +338,7 @@ describe('Monolith attacks', () => {
       const { ship } = arena;
       Object.assign(ship, shipAt);
       let pushes = 0;
-      runFor(stepper(r), arena, 12, () => {
+      runFor(bossStepper(r), arena, 12, () => {
         const before = { vx: ship.vx, vy: ship.vy };
         r.shove(ship);
         if (ship.vx !== before.vx || ship.vy !== before.vy) pushes++;
@@ -368,7 +360,7 @@ describe('Monolith determinism', () => {
     const play = (seed: number): unknown => {
       const { r, arena } = fighting(seed);
       const poses: number[] = [];
-      const log = runFor(stepper(r), arena, 40, () => {
+      const log = runFor(bossStepper(r), arena, 40, () => {
         if (arena.elapsed() > 12 && liveParts(r.view).length > 0 && !r.view.vulnerable) breakTo(r, EXPOSED_AT);
         if (r.view.vulnerable && arena.elapsed() > 14 && arena.elapsed() < 15) r.hit(1);
         for (const p of r.view.parts) poses.push(p.x, p.y, p.hp);

@@ -16,7 +16,7 @@ import type { GalaxyMode } from '../../src/sim/scoring';
 import type { Ship } from '../../src/sim/ship';
 import { rescale } from '../../src/sim/wrap';
 import { World, type WorldOptions } from '../../src/sim/world';
-import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, ofType, runFor, stubArena, type StubArena, throughIntro } from '../helpers/bossArena';
+import { BOSS_FIELD, FIXTURE, FIXTURE_DEF, ofType, runFor, stubArena, type StubArena, throughIntro, bossSetup, bossStepper } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = FIXTURE_DEF;
@@ -25,12 +25,8 @@ const APPROACH = 20;
 const FIXTURE_HP = 20;
 
 function runnerFor(maxHp = FIXTURE_HP, seed = 5): BossRunner {
-  return new BossRunner(DEF, FIXTURE, { maxHp, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD });
+  return new BossRunner(DEF, FIXTURE, bossSetup(maxHp, { seed }));
 }
-
-const step = (r: BossRunner) => (dt: number, arena: StubArena) => {
-  r.step(dt, arena);
-};
 
 /** A fixture that has finished its intro and then lost enough HP to stand at `hp`. */
 function fightingAt(hp: number, field: Field = BOSS_FIELD): { r: BossRunner; arena: StubArena } {
@@ -62,7 +58,7 @@ describe('the fixture\'s ring', () => {
   function nextRing(r: BossRunner, arena: StubArena): { rocks: Asteroid[]; core: { x: number; y: number } } {
     arena.asteroids.length = 0;
     let ring = { rocks: [] as Asteroid[], core: { x: 0, y: 0 } };
-    runFor(step(r), arena, 12, () => {
+    runFor(bossStepper(r), arena, 12, () => {
       if (ring.rocks.length === 0 && arena.asteroids.length > 0) ring = { rocks: [...arena.asteroids], core: { x: r.view.x, y: r.view.y } };
     });
     return ring;
@@ -96,11 +92,11 @@ describe('the fixture\'s ring', () => {
 
   it('draws its rocks from the boss stream: the ring turns with the seed', () => {
     const ring = (seed: number): number[] => {
-      const r = new BossRunner(DEF, FIXTURE, { maxHp: 30, rng: createRng(seed), rockSpeed: 1, field: BOSS_FIELD });
+      const r = new BossRunner(DEF, FIXTURE, bossSetup(30, { seed }));
       const arena = stubArena();
       throughIntro(r, arena);
       arena.asteroids.length = 0;
-      runFor(step(r), arena, 4);
+      runFor(bossStepper(r), arena, 4);
       return arena.asteroids.map((a) => Math.atan2(a.vy, a.vx));
     };
     expect(ring(1)).toEqual(ring(1));
@@ -126,7 +122,7 @@ describe('the fixture\'s dash', () => {
     const { r, arena } = atDashWindup(at);
     if (moveTo !== null) Object.assign(arena.ship, moveTo);
     const trail: { x: number; y: number }[] = [];
-    runFor(step(r), arena, 1.5, () => trail.push({ x: r.view.x, y: r.view.y }));
+    runFor(bossStepper(r), arena, 1.5, () => trail.push({ x: r.view.x, y: r.view.y }));
     return trail;
   }
 
@@ -158,7 +154,7 @@ describe('the fixture\'s dash', () => {
     const { r, arena } = atDashWindup({ x: 1000, y: 500 }, field);
     r.resize(BOSS_FIELD, wide);
     Object.assign(field, wide);
-    runFor(step(r), arena, 1.3);
+    runFor(bossStepper(r), arena, 1.3);
     expect(r.view.x).toBeCloseTo(rescale(1000, BOSS_FIELD.width, wide.width), 0);
     expect(r.view.y).toBeCloseTo(500, 0);
   });

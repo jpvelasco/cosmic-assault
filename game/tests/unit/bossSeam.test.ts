@@ -10,16 +10,12 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import { FOE_CAPACITY, FoeField } from '../../src/sim/foes/foeField';
 import { GalaxyRun } from '../../src/sim/galaxy/galaxyRun';
 import { createRng } from '../../src/sim/rng';
-import { BOSS_FIELD, runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF } from '../helpers/bossArena';
+import { runFor, stubArena, timedOfType, type StubArena, FIXTURE_DEF, bossStepper, bossSetup, throughIntro } from '../helpers/bossArena';
 import { calmGalaxy } from '../helpers/mute';
 
 const DEF = FIXTURE_DEF;
 /** The probe's weak point: the half of its rim facing right, and only while it says its door is open. */
 const WEAK_SIDE = 1;
-
-const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
-  r.step(dt, arena);
-};
 
 interface DoorProbe extends BossBehaviour {
   /** Whether its door is open; the probe's core can be hurt only then. */
@@ -55,14 +51,13 @@ function doorProbe(): DoorProbe {
 }
 
 function runnerOf(behaviour: BossBehaviour): BossRunner {
-  return new BossRunner(DEF, behaviour, { maxHp: 30, rng: createRng(1), rockSpeed: 1, field: BOSS_FIELD });
+  return new BossRunner(DEF, behaviour, bossSetup(30));
 }
 
 function fighting(behaviour: BossBehaviour): { r: BossRunner; arena: StubArena } {
   const r = runnerOf(behaviour);
   const arena = stubArena();
-  runFor(stepper(r), arena, BOSS_INTRO_SECONDS + 0.05);
-  expect(r.state).toBe('fighting');
+  throughIntro(r, arena);
   return { r, arena };
 }
 
@@ -71,7 +66,7 @@ describe('a boss hurt only at a weak point', () => {
     const probe = doorProbe();
     const { r, arena } = fighting(probe);
     probe.open = true;
-    runFor(stepper(r), arena, STEP_SECONDS);
+    runFor(bossStepper(r), arena, STEP_SECONDS);
     const { x, y, radius } = r.view;
     expect(r.hit(1, x - radius, y)).toBe('deflected');
     expect(r.hit(1, x + radius, y)).toBe('hit');
@@ -91,7 +86,7 @@ describe('a boss hurt only at a weak point', () => {
     const probe = doorProbe();
     const { r, arena } = fighting(probe);
     probe.open = true;
-    runFor(stepper(r), arena, STEP_SECONDS);
+    runFor(bossStepper(r), arena, STEP_SECONDS);
     expect(r.hit(1)).toBe('deflected');
     expect(probe.asked).toEqual([{ x: r.view.x, y: r.view.y }]);
   });
@@ -101,12 +96,12 @@ describe('a boss hurt only at a weak point', () => {
     const r = runnerOf(probe);
     const arena = stubArena();
     probe.open = true;
-    runFor(stepper(r), arena, 0.5);
+    runFor(bossStepper(r), arena, 0.5);
     expect(bossTarget(r.view)).toBeNull();
-    runFor(stepper(r), arena, BOSS_INTRO_SECONDS);
+    runFor(bossStepper(r), arena, BOSS_INTRO_SECONDS);
     expect(bossTarget(r.view)).toEqual({ x: r.view.x + r.view.radius, y: r.view.y });
     probe.open = false;
-    runFor(stepper(r), arena, STEP_SECONDS);
+    runFor(bossStepper(r), arena, STEP_SECONDS);
     expect(bossTarget(r.view)).toBeNull();
   });
 
@@ -114,9 +109,9 @@ describe('a boss hurt only at a weak point', () => {
     const probe = doorProbe();
     const { r, arena } = fighting(probe);
     probe.open = true;
-    const opened = runFor(stepper(r), arena, 0.5);
+    const opened = runFor(bossStepper(r), arena, 0.5);
     probe.open = false;
-    const closed = runFor(stepper(r), arena, 0.5);
+    const closed = runFor(bossStepper(r), arena, 0.5);
     const { x, y } = r.view;
     expect(timedOfType(opened, 'hangarOpen').map((l) => l.event)).toEqual([{ type: 'hangarOpen', x, y }]);
     expect(timedOfType(closed, 'hangarClose').map((l) => l.event)).toEqual([{ type: 'hangarClose', x, y }]);
@@ -126,7 +121,7 @@ describe('a boss hurt only at a weak point', () => {
   it('faces down the field until its behaviour turns it', () => {
     const r = runnerOf(doorProbe());
     expect(r.view.facing).toBe(Math.PI / 2);
-    runFor(stepper(r), stubArena(), BOSS_INTRO_SECONDS + 1);
+    runFor(bossStepper(r), stubArena(), BOSS_INTRO_SECONDS + 1);
     expect(r.view.facing).toBe(Math.PI / 2);
   });
 });
