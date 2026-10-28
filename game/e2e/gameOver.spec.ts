@@ -192,9 +192,14 @@ function watchDeath(page: Page): Promise<void> {
 /** How long presses may go on before the next run must have played. */
 const PRESS_TIMEOUT_MS = 20000;
 
-/** Whether the page has stamped the next run's first play. */
-function playedInPage(page: Page): Promise<boolean> {
-  return page.evaluate(() => typeof window.__caDeathWatch?.playAt === 'number');
+/**
+ * Whether the next run plays: the card has opened and the game is in play now. This reads the game's mode at once rather
+ * than waiting on the watch's `playAt`, because a tap on Continue starts the run inside its click, a frame before the
+ * watch stamps it. A loop that checked the stamp would tap again in play, and that tap would wait for the next run's
+ * game over card and land inside its guard, leaving the run on the card.
+ */
+function playsInPage(page: Page): Promise<boolean> {
+  return page.evaluate(() => typeof window.__caDeathWatch?.cardAt === 'number' && window.__COSMIC_ASSAULT_TEST_API__?.getState().mode === 'playing');
 }
 
 /**
@@ -204,19 +209,21 @@ function playedInPage(page: Page): Promise<boolean> {
  */
 async function pressUntilPlays(page: Page, press: () => Promise<void>): Promise<void> {
   const deadline = Date.now() + PRESS_TIMEOUT_MS;
-  while (!(await playedInPage(page))) {
+  while (!(await playsInPage(page))) {
     if (Date.now() > deadline) throw new Error('The next run never played: no press started it, so the end card or its guard is stuck');
     await press();
   }
 }
 
 /**
- * The death path from the card: presses `press` until the next run plays, then returns the page time from the card's
- * opening to that play. It must be under DEATH_TO_PLAY_BUDGET_MS, and not under the guard: a play sooner would mean it
- * did not hold. The time includes the test driver's own input latency, which the page cannot separate out.
+ * The death path from the card: presses `press` until the next run plays, then, once the watch has stamped that play on
+ * the following frame, returns the page time from the card's opening to it. It must be under DEATH_TO_PLAY_BUDGET_MS,
+ * and not under the guard: a play sooner would mean it did not hold. The time includes the test driver's own input
+ * latency, which the page cannot separate out.
  */
 async function dieThenPress(page: Page, press: () => Promise<void>): Promise<number> {
   await pressUntilPlays(page, press);
+  await page.waitForFunction(() => typeof window.__caDeathWatch?.playAt === 'number');
   const ms = await page.evaluate(() => {
     const { cardAt, playAt } = window.__caDeathWatch ?? { cardAt: null, playAt: null };
     if (cardAt === null || playAt === null) throw new Error('The death watch saw no card or no play');
