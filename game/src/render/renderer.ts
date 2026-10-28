@@ -66,6 +66,8 @@ export interface Renderer {
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
+  /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
+  readonly spriteCache: Readonly<{ size: number; evictions: number }>;
   /** How much larger than their field size sprites are drawn at the current layout; 1 across the board before the first `resize`. */
   readonly visualScale: VisualScale;
   /** Cancels a pending re-bake and frees every sprite and particle. */
@@ -426,6 +428,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     get drawCount() {
       return drawCount;
+    },
+    get spriteCache() {
+      return baker.cacheUse;
     },
     get visualScale() {
       return layout?.visual ?? UNIT_VISUAL;

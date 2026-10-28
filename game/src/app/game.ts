@@ -415,6 +415,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     restartFrameStats: () => {
       monitor.reset();
     },
+    spriteCache: () => renderer.spriteCache,
   });
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */

@@ -19,6 +19,9 @@ afterEach(() => {
 const worldOf = (): World => new World({ seed: 1, field: FIELD, rules: { kind: 'galaxy', galaxy: galaxyById('1-1'), mode: 'free' } });
 
 /** Hooks installed over `world`, with `step` driving it the way the run controller does: its events go to the tally. */
+/** The sprite-cache use the hooks' renderer stand-in reports. */
+const CACHE_USE = { size: 12, evictions: 3 };
+
 function hooksFor(world: World | null, restartFrameStats: () => void = () => undefined): { hooks: E2eHooks; step: () => readonly SimEvent[] } {
   const hooks: E2eHooks = {};
   const step = (): readonly SimEvent[] => {
@@ -27,7 +30,7 @@ function hooksFor(world: World | null, restartFrameStats: () => void = () => und
     hooks.e2eEvents?.(events, world);
     return events;
   };
-  installE2eHooks(hooks, { run: { world, step: () => void step() }, mode: () => 'playing', controls: () => NO_CONTROLS, redraw: () => undefined, restartFrameStats });
+  installE2eHooks(hooks, { run: { world, step: () => void step() }, mode: () => 'playing', controls: () => NO_CONTROLS, redraw: () => undefined, restartFrameStats, spriteCache: () => CACHE_USE });
   return { hooks, step };
 }
 
@@ -110,6 +113,13 @@ describe('the e2e frame-stats restart', () => {
     hooks.e2eRestartFrameStats?.();
     expect(restart).toHaveBeenCalledTimes(1);
     expect(hooks.e2eEventCounts).toEqual({ galaxyStart: 1 });
+  });
+});
+
+describe('the e2e sprite-cache use', () => {
+  it('reads the renderer\'s sprite cache as it stands now', () => {
+    const { hooks } = hooksFor(worldOf());
+    expect(hooks.e2eSpriteCache?.()).toEqual(CACHE_USE);
   });
 });
 

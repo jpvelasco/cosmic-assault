@@ -876,6 +876,14 @@ describe('createRenderer', () => {
     expect(renderer.drawCount).toBe(2);
   });
 
+  it('reports its sprite cache\'s use as the baker counts it', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { world } = stubWorld();
+    renderer.draw(world, 1, 0);
+    expect(renderer.spriteCache).toEqual(baker.cacheUse);
+    expect(renderer.spriteCache.size).toBeGreaterThan(0);
+  });
+
   describe('visual scale', () => {
     it('draws at the field size on a desktop screen', () => {
       renderer.resize(1280, 720, FIELD);

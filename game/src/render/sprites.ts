@@ -61,6 +61,8 @@ export interface SpriteBaker {
    * anything that outlives a frame holds a key and looks it up each time it draws.
    */
   cached(key: string): Sprite | undefined;
+  /** The sprites cached now, and how many have been evicted to stay within the capacity since it was made. */
+  readonly cacheUse: Readonly<{ size: number; evictions: number }>;
   /** Frees every baked sprite, for example when a new run starts. */
   clear(): void;
 }
@@ -82,7 +84,11 @@ export interface Point {
 }
 
 const WHITE = '#ffffff';
-const DEFAULT_CAPACITY = 256;
+/**
+ * The sprites the cache holds by default: max(256, 1.5 × the most the e2e sprite-cache spec has seen in use at once in
+ * the scenes it plays), so steady play evicts nothing it will draw again soon.
+ */
+export const SPRITE_CACHE_CAPACITY = 256;
 /** Device pixels of transparent margin around every bake, so antialiased edges never clip. */
 const EDGE_PAD_PX = 2;
 
@@ -364,7 +370,7 @@ interface RockKey {
  * Keys are `kind|palette or colour|size(|asteroid id|shape)`. They omit the scale and visual scale because
  * `setScale` clears the cache, so every live entry was baked at the current ones.
  */
-export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
+export function createSpriteBaker(capacity = SPRITE_CACHE_CAPACITY): SpriteBaker {
   /** Cache keys per asteroid id, so `forget` finds every entry; eviction keeps it in step. */
   const asteroidKeys = new Map<number, Set<string>>();
   const cache = new SpriteCache<CacheEntry>(capacity, (key, { sprite, asteroidId }) => {
@@ -558,6 +564,9 @@ export function createSpriteBaker(capacity = DEFAULT_CAPACITY): SpriteBaker {
       return key === undefined ? undefined : bakeWhiteUnder(key, `white|${key}`);
     },
     cached: cachedSprite,
+    get cacheUse() {
+      return { size: cache.size, evictions: cache.evictions };
+    },
     clear() {
       cache.clear();
     },
