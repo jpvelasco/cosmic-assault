@@ -40,9 +40,9 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 }
 
 describe('the test bridge look and music', () => {
-  it('reports the palette and the music theme in force, beside the version-6 fields', () => {
+  it('reports the palette and the music theme in force, beside the version-7 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(6);
+    expect(api.version).toBe(7);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
   });
@@ -116,6 +116,20 @@ describe('the test bridge boss view', () => {
     expect(boss?.liveParts).toBeGreaterThanOrEqual(8);
     expect(boss?.hp).toBe(boss?.maxHp);
     expect(Object.keys(boss ?? {}).sort()).toEqual(['active', 'hp', 'id', 'liveParts', 'maxHp', 'phase', 'state', 'target', 'vulnerable', 'windup']);
+  });
+});
+
+describe('the test bridge attract mode', () => {
+  it("reports the hook's attract state, and null before the hooks are in", () => {
+    expect(bridgeFor(null).getState().attract).toBeNull();
+    const attract = { active: true, demo: '1-4', frames: 12, halted: false } as const;
+    expect(bridgeFor(null, undefined, { e2eAttractState: () => attract }).getState().attract).toEqual(attract);
+  });
+
+  it('hands attractNow to the hook', () => {
+    const e2eAttractNow = vi.fn();
+    bridgeFor(null, undefined, { e2eAttractNow }).attractNow();
+    expect(e2eAttractNow).toHaveBeenCalledTimes(1);
   });
 });
 

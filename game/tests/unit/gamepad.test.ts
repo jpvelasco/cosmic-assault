@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, pickPad, snapshotPad, type PadSnapshot } from '../../src/input/gamepad';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, padInUse, pickPad, snapshotPad, type PadSnapshot } from '../../src/input/gamepad';
 import { NO_CONTROLS } from '../../src/sim/controls';
 
 const BUTTONS = 17;
@@ -132,6 +132,23 @@ describe('padEdges', () => {
 
   it('reports several buttons pressed in one frame', () => {
     expect(padEdges(pad(), pad([0, 15]))).toEqual(['confirm', 'right']);
+  });
+});
+
+describe('padInUse', () => {
+  it('is false for no pad and for a pad at rest, its stick inside the dead zone', () => {
+    expect(padInUse(null)).toBe(false);
+    expect(padInUse(pad())).toBe(false);
+    expect(padInUse(pad([], [0.15, -0.1, 0, 0]))).toBe(false);
+  });
+
+  it.each([0, 1, 5, 7, 9, 12, 16])('is true while button %i is held, menu button or not', (button) => {
+    expect(padInUse(pad([button]))).toBe(true);
+  });
+
+  it('is true for a stick pushed past the dead zone, short of a menu direction', () => {
+    expect(padInUse(pad([], [0.3, 0, 0, 0]))).toBe(true);
+    expect(padInUse(pad([], [0.16, 0.16, 0, 0]))).toBe(true);
   });
 });
 

@@ -29,6 +29,8 @@ import {
   type DateEntry,
   type SeedEntry,
 } from '../../e2e/seeds';
+import { ATTRACT_DEMOS, DEMO_SECONDS, type AttractDemo } from '../../src/app/attract';
+import { runGalaxy } from '../../src/bot/run';
 import { nextDate } from '../../src/meta/calendar';
 import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { galaxyById } from '../../src/content/galaxies';
@@ -461,14 +463,71 @@ export interface FindOptions {
   readonly to?: number;
 }
 
-/** The lowest seeds from `from` for which `claim` holds in its table galaxy, lowest first. */
-export function findSeeds(claim: ClaimId, { from = 1, count = 5, to = 2000 }: FindOptions = {}): number[] {
-  const { galaxy } = entryFor(claim);
+/** The lowest seeds from `from` (and below `to`) for which `holds`, lowest first. */
+function lowestSeeds(holds: (seed: number) => boolean, { from = 1, count = 5, to = 2000 }: FindOptions): number[] {
   const found: number[] = [];
   for (let seed = from; seed < to && found.length < count; seed++) {
-    if (CLAIMS[claim].holds(seed, galaxy)) found.push(seed);
+    if (holds(seed)) found.push(seed);
   }
   return found;
+}
+
+/** The lowest seeds from `from` for which `claim` holds in its table galaxy, lowest first. */
+export function findSeeds(claim: ClaimId, options: FindOptions = {}): number[] {
+  const { galaxy } = entryFor(claim);
+  return lowestSeeds((seed) => CLAIMS[claim].holds(seed, galaxy), options);
+}
+
+/** The claim an attract demo's seed makes, named after its galaxy. */
+export type DemoClaimId = `attract-${GalaxyId}`;
+
+/** The field shapes a demo must hold at: the 16:9 reference and the narrowest and widest the game plays at. */
+const DEMO_ASPECTS: readonly (readonly [name: string, aspect: number])[] = [
+  ['16:9', 16 / 9],
+  ['4:3', 4 / 3],
+  ['21:9', 21 / 9],
+];
+
+/** The claim of the demo of `galaxy`. */
+const demoClaimOf = (galaxy: GalaxyId): DemoClaimId => `attract-${galaxy}`;
+
+/** The claims of the attract demos, in the order they play. */
+export function demoClaimIds(): DemoClaimId[] {
+  return ATTRACT_DEMOS.map((demo) => demoClaimOf(demo.galaxy));
+}
+
+/** The galaxy a demo claim is about; throws for a claim no demo makes. */
+function demoGalaxy(claim: DemoClaimId): GalaxyId {
+  const demo = ATTRACT_DEMOS.find((candidate) => demoClaimOf(candidate.galaxy) === claim);
+  if (demo === undefined) throw new RangeError(`No attract demo makes the claim "${claim}"; the demos are in ATTRACT_DEMOS in src/app/attract.ts`);
+  return demo.galaxy;
+}
+
+/** Whether the expert, in Free play of `galaxy` on `seed` at `aspect`, loses no life and is still in play after DEMO_SECONDS. */
+function expertLivesThroughDemo(seed: number, galaxy: GalaxyId, aspect: number): boolean {
+  const result = runGalaxy({ galaxy: galaxyById(galaxy), seed, profile: 'expert', aspect, maxSeconds: DEMO_SECONDS });
+  return result.deaths === 0 && !result.cleared && result.time >= DEMO_SECONDS - STEP_SECONDS;
+}
+
+/** What a demo's seed promises, for the failure message. */
+const demoPromise = (galaxy: GalaxyId): string =>
+  `keeps the expert in a Free play run of ${galaxy} alive on its first life for the attract demo's ${String(DEMO_SECONDS)} s, at ${DEMO_ASPECTS.map(([name]) => name).join(', ')}`;
+
+/** Whether `seed` keeps the demo claim of `galaxy` on every demo aspect. */
+export function demoClaimHolds(seed: number, galaxy: GalaxyId): boolean {
+  return DEMO_ASPECTS.every(([, aspect]) => expertLivesThroughDemo(seed, galaxy, aspect));
+}
+
+/** The failure message for a demo whose seed no longer keeps its claim: what broke, and the command that re-picks the seed. */
+export function unmetDemoClaimMessage({ seed, galaxy }: AttractDemo): string {
+  const claim = demoClaimOf(galaxy);
+  return `seed ${String(seed)} no longer ${demoPromise(galaxy)}, because the expert bot, spawning, pacing or balance changed; run: npm run find-seeds -- ${claim}, then set the ${galaxy} demo's seed in ATTRACT_DEMOS (game/src/app/attract.ts) to the lowest one it lists`;
+}
+
+/** The lowest seeds from `from` that keep a demo claim, lowest first. */
+export function findDemoSeeds(claim: DemoClaimId, options: FindOptions = {}): number[] {
+  const galaxy = demoGalaxy(claim);
+  return lowestSeeds((seed) => demoClaimHolds(seed, galaxy), options);
 }
 
 /** The field of a phone on its side at 844×390, where the Daily spec plays its phone clear. */

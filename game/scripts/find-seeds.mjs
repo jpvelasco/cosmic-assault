@@ -1,5 +1,6 @@
-// Lists the lowest World seeds, from 1 up, for which an e2e seed claim holds (see e2e/seeds.ts); for a date claim, the
-// earliest dates from DATE_EPOCH, with --from and --to counted in days from it.
+// Lists the lowest World seeds, from 1 up, for which an e2e seed claim holds (see e2e/seeds.ts) or an attract demo's claim
+// does (attract-<galaxy>, see ATTRACT_DEMOS in src/app/attract.ts); for a date claim, the earliest dates from DATE_EPOCH,
+// with --from and --to counted in days from it.
 // Run from game/ with: npm run find-seeds -- <claim> [--count N] [--from SEED] [--to SEED]
 // It loads the TypeScript checks the guard tests use (tests/helpers/seedClaims.ts) through Vite, headlessly.
 import { createServer } from 'vite';
@@ -25,9 +26,10 @@ function fail(message) {
 const args = process.argv.slice(2);
 const server = await createServer({ configFile: false, appType: 'custom', server: { middlewareMode: true }, logLevel: 'silent' });
 try {
-  const { claimIds, findSeeds, dateClaimIds, findDates } = await server.ssrLoadModule('/tests/helpers/seedClaims.ts');
+  const { claimIds, findSeeds, dateClaimIds, findDates, demoClaimIds, findDemoSeeds } = await server.ssrLoadModule('/tests/helpers/seedClaims.ts');
   const dateClaims = dateClaimIds();
-  const claims = [...claimIds(), ...dateClaims];
+  const demoClaims = demoClaimIds();
+  const claims = [...claimIds(), ...demoClaims, ...dateClaims];
   const claim = args[0];
   if (claim === undefined || claim.startsWith('--')) fail(`name a claim: ${claims.join(', ')}`);
   if (!claims.includes(claim)) fail(`unknown claim "${claim}"; the claims are ${claims.join(', ')}`);
@@ -36,7 +38,8 @@ try {
   const options = { from: numberFlag(args, 'from'), count: numberFlag(args, 'count'), to: numberFlag(args, 'to') };
   const given = Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined));
   const byDate = dateClaims.includes(claim);
-  const found = byDate ? findDates(claim, given) : findSeeds(claim, given);
+  const find = byDate ? findDates : demoClaims.includes(claim) ? findDemoSeeds : findSeeds;
+  const found = find(claim, given);
   if (found.length === 0) fail(`no ${byDate ? 'date' : 'seed'} from ${String(options.from ?? (byDate ? 0 : 1))} keeps "${claim}"; widen the range with --to, or the claim may need rethinking`);
   console.log(`${claim}: ${found.join(', ')}`);
 } finally {

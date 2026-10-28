@@ -30,12 +30,13 @@ import { createOverlay, type CoverChip } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
 import type { CardToggleDeps } from './cardToggle';
+import { createAttract } from './attract';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
 import { installE2eHooks, type E2eHooks } from './e2eHooks';
 import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
-import { coversFor, createInputRouter, type Cover } from './inputRouting';
+import { anyCoverUp, coversFor, createInputRouter, type Cover } from './inputRouting';
 import { createHangar } from './hangar';
 import { createRunController, type RunController } from './runController';
 import { runOverrides } from './seed';
@@ -195,6 +196,21 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   const guard = createCrashGuard(log, stopAfterCrash);
   /** The cards a player opens over the title, mode select or pause; the menu keys go to the one that is up. */
   const coverCards = [prefs, records, hangar] as const;
+  const attract = createAttract({
+    renderer,
+    log,
+    field: () => field,
+    screen: () => mode,
+    covered: () => anyCoverUp(coversUp()) || installPrompt.prompting,
+    visible: () => document.visibilityState === 'visible',
+    reducedMotion: () => renderer.effects.reducedMotion,
+    portrait: () => root.clientHeight >= root.clientWidth,
+    now: () => performance.now(),
+    demoStarted: () => {
+      scaler.startRun();
+    },
+    activeChanged: syncView,
+  });
   const view = createViewSync(root, {
     overlay,
     settingsCard: prefs.card,
@@ -216,6 +232,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       settings: prefs.settings,
       settingsOpen: prefs.open,
       look: look(),
+      attract: attract.active,
     }),
     screen: () => mode,
     tripped: () => guard.tripped,
@@ -242,6 +259,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       records.close();
       hangar.close();
     },
+    interrupt: () => attract.interrupt(),
   });
 
   /** What the settings, records or Hangar card needs to open and close over the screens, its focus going back to its chip. */
@@ -252,9 +270,20 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     return { screen: () => mode, covers, syncView, focusOpener };
   }
 
+  /** Which covers are up right now, refilled in place, so the attract demo can ask on every frame. */
+  const up = { settings: false, records: false, hangar: false, rotate: false, crash: false };
+  function coversUp(): typeof up {
+    up.settings = prefs.open;
+    up.records = records.open;
+    up.hangar = hangar.open;
+    up.rotate = view.needsRotation();
+    up.crash = guard.tripped;
+    return up;
+  }
+
   /** What covers the cards right now, for the router's table. */
   function covers(): Cover[] {
-    return coversFor({ settings: prefs.open, records: records.open, hangar: hangar.open, rotate: view.needsRotation(), crash: guard.tripped });
+    return coversFor(coversUp());
   }
 
   /** The look the ship draws: the chosen one where the save's stars unlock it. */
@@ -295,6 +324,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     renderer.resize(clientWidth, clientHeight, field);
     view.syncHudBounds();
     run.world?.resize(field);
+    attract.resize(field);
     redrawPending = true;
   }
 
@@ -311,6 +341,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     monitor.reset();
     scaler.startRun();
     audio.play('uiClick');
+  }
+
+  /** Feeds a busy frame (play, or the attract demo) to the quality scaler, applying the level it steps to. */
+  function sampleQuality(frameMs: number): void {
+    const levelBefore = scaler.index;
+    scaler.sample(frameMs);
+    if (scaler.index !== levelBefore) applyQuality();
   }
 
   /** Pauses a run in play; returns whether it did. */
@@ -391,23 +428,22 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const pad = readPad();
     const edges = padEdges(previousPad, pad);
     previousPad = pad;
-    router.routePad(edges, now);
+    router.routePad(pad, edges, now);
     hintSoundGesture(edges);
     router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
     const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
     // Still screens cost next to nothing, so their frame interval is the display's own rate.
-    if (mode !== 'playing' && !settling) scaler.sampleIdle(frameMs);
+    if (mode !== 'playing' && !settling && !attract.active) scaler.sampleIdle(frameMs);
+    if (attract.frame(frameSeconds)) sampleQuality(frameMs);
     const { world } = run;
     if (world === null) return;
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
     const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
     if (mode === 'playing') {
       monitor.sample(frameMs);
-      const levelBefore = scaler.index;
-      scaler.sample(frameMs);
-      if (scaler.index !== levelBefore) applyQuality();
+      sampleQuality(frameMs);
       const frozen = hitStop.frozen;
       stepRun(readControls(pad), frameSeconds);
       renderer.advance(visualSeconds, world, frozen);
@@ -438,6 +474,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       monitor.reset();
     },
     spriteCache: () => renderer.spriteCache,
+    attract,
   });
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */
@@ -459,7 +496,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     view.sync();
   };
   const onVisibilityChange = (): void => {
-    if (document.visibilityState === 'hidden') pause();
+    if (document.visibilityState !== 'hidden') return;
+    pause();
+    attract.interrupt();
   };
 
   const unlisteners = [

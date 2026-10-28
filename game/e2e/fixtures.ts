@@ -275,6 +275,35 @@ export async function waitForGameOver(page: Page): Promise<void> {
   await expect.poll(async () => (await gameState(page)).mode, { timeout: 20000 }).toBe('gameOver');
 }
 
+/** Attract mode's state on the bridge; null only before the hooks are in. */
+export async function attractState(page: Page): Promise<NonNullable<CosmicAssaultTestState['attract']>> {
+  const { attract } = await gameState(page);
+  if (attract === null) throw new Error('The bridge reports no attract state: open the e2e build with openGame() first');
+  return attract;
+}
+
+/** Counts the title's idle stretch as over (see `attractNow` in src/testApi.d.ts): the next frame on the bare title starts the demo. */
+export function askForAttract(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.attractNow();
+  });
+}
+
+/** Starts the attract demo on the bare title now, as 10 s without input would, and waits until it has drawn a few frames. */
+export async function startAttract(page: Page): Promise<void> {
+  await askForAttract(page);
+  await expect.poll(async () => (await attractState(page)).frames).toBeGreaterThan(5);
+}
+
+/** Waits for the input just sent to end the demo, then gives the next frames the chance to act on it, which they must not. */
+export async function expectDemoEndedOnTitle(page: Page): Promise<void> {
+  await expect.poll(async () => (await attractState(page)).active).toBe(false);
+  await nextFrames(page, 3);
+  expect((await gameState(page)).screen).toBe('title');
+}
+
 /** Deliberate wait: lets the game-over guard lapse so the card's inputs are live. */
 export async function waitOutGameOverGuard(page: Page): Promise<void> {
   await page.waitForTimeout(GAME_OVER_GUARD_MS + 100);

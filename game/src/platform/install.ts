@@ -41,6 +41,8 @@ function accepted(choice: unknown): boolean {
 
 export interface InstallPrompt {
   readonly offer: InstallOffer;
+  /** Whether the browser's install prompt is up, over the title. */
+  readonly prompting: boolean;
   /** Shows the kept browser prompt. Call it from a tap or key press; the offer goes once the player installs. */
   readonly install: () => void;
   readonly dispose: () => void;
@@ -77,6 +79,9 @@ export function createInstallPrompt(win: Window, log: RingLog, onChange: () => v
   return {
     get offer() {
       return installOffer({ standalone: isStandalone(win), hasPrompt: kept !== null, iosSafari });
+    },
+    get prompting() {
+      return showing;
     },
     install: () => {
       const event = kept;

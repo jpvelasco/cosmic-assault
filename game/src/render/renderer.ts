@@ -50,8 +50,11 @@ export interface Renderer {
    * A changed pixel ratio re-bakes after the usual resize debounce, not on the next frame.
    */
   setQuality(level: QualityLevel): void;
-  /** Draws the world `alpha` of the way from each entity's previous pose to its current one; the HUD shows `score`. */
-  draw(world: World, alpha: number, score: number): void;
+  /**
+   * Draws the world `alpha` of the way from each entity's previous pose to its current one; the HUD shows `score`. A
+   * null score draws no HUD, as the attract demo behind the title does.
+   */
+  draw(world: World, alpha: number, score: number | null): void;
   /** Frees the previous run's sprites and particles; call when a new run starts. */
   reset(): void;
   /**
@@ -362,7 +365,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
-  function draw(world: World, alpha: number, score: number): void {
+  function draw(world: World, alpha: number, score: number | null): void {
     const current = layout;
     const { bakes } = backdrop;
     if (current === null || bakes === null) {
@@ -377,8 +380,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     drawScene(world, a, current);
     drawOverlays(current, bakes, world.effects.timeWarp);
     ctx.restore();
-    ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
-    hud.draw(ctx, world, score, effects.reducedMotion);
+    if (score !== null) {
+      ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
+      hud.draw(ctx, world, score, effects.reducedMotion);
+    }
     drawCount++;
   }
 

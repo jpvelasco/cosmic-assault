@@ -984,6 +984,16 @@ describe('createRenderer', () => {
     expect(renderer.hasActiveParticles()).toBe(false);
   });
 
+  it('draws no HUD for a null score, as the attract demo asks, and the HUD again for a score', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { world } = stubWorld();
+    renderer.draw(world, 1, null);
+    expect(renderer.drawCount).toBe(1);
+    expect(renderer.hudRects).toEqual([]);
+    renderer.draw(world, 1, 0);
+    expect(renderer.hudRects.length).toBeGreaterThan(0);
+  });
+
   it('counts the frames it draws', () => {
     renderer.resize(1280, 720, FIELD);
     const { world } = stubWorld();

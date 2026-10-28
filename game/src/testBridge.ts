@@ -6,7 +6,7 @@ import type { World } from './sim/world';
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
 export const DELIBERATE_CRASH = 'e2e: deliberate crash';
 /** The bridge's shape version, raised whenever its state changes shape; the specs wait for this one. */
-export const BRIDGE_VERSION = 6;
+export const BRIDGE_VERSION = 7;
 
 function shipState({ ship }: World): CosmicAssaultTestShip {
   const { x, y, vx, vy, angle, thrusting, invulnerable } = ship;
@@ -91,6 +91,7 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
     logSize: app.log.size,
     fullscreen: app.fullscreen,
     spriteCache: hooks.e2eSpriteCache?.() ?? null,
+    attract: hooks.e2eAttractState?.() ?? null,
   };
 }
 
@@ -110,6 +111,9 @@ export function exposeTestBridge(app: App, hooks: E2eHooks): void {
     },
     restartFrameStats() {
       hooks.e2eRestartFrameStats?.();
+    },
+    attractNow() {
+      hooks.e2eAttractNow?.();
     },
     crash() {
       hooks.e2eBeforeFrame = () => {

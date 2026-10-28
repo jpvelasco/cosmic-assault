@@ -51,6 +51,8 @@ export interface OverlayState {
   readonly inputStyle: InputStyle;
   /** What the title card offers for installing the game: an Install chip, the iOS steps, or nothing. */
   readonly installOffer: InstallOffer;
+  /** Whether the attract demo plays behind the title, which then shows the canvas through and dims its card. */
+  readonly attract: boolean;
 }
 
 /** The chips that open a card over the title or mode select, and take focus back when it closes. */
@@ -68,6 +70,8 @@ export interface Overlay {
 }
 
 const INSTALL_TEST_ID = 'install-offer';
+/** The title panel's class while the attract demo plays behind it. */
+const ATTRACT_CLASS = 'title--attract';
 
 /**
  * Adds `el` with `attach` while `shown` and removes it otherwise. A shown element stays where it is, so it keeps
@@ -93,10 +97,10 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
+function titlePanel(demoLabel: HTMLElement, play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
+  card.append(demoLabel, element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
   return panel;
 }
 
@@ -171,8 +175,26 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
   const controlsHint = withTestId(element('p', 'hint'), 'controls-hint');
-  const title = titlePanel(play, titleResumeSlot, titleRow, startHint, controlsHint);
+  const demoLabel = withTestId(element('p', 'label demo-label', 'Demo'), 'demo-label');
+  demoLabel.hidden = true;
+  const title = titlePanel(demoLabel, play, titleResumeSlot, titleRow, startHint, controlsHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
+  /** The title control that had focus as the demo began, which gets it back as the demo ends. */
+  let focusBeforeDemo: Element | null = null;
+
+  /** Dims the title card over the demo and shows its label; as the demo ends, focus goes back where it was on the title. */
+  function showAttract(attract: boolean, covered: boolean): void {
+    demoLabel.hidden = !attract;
+    if (attract === title.classList.contains(ATTRACT_CLASS)) return;
+    title.classList.toggle(ATTRACT_CLASS, attract);
+    if (attract) {
+      focusBeforeDemo = document.activeElement;
+      return;
+    }
+    const before = focusBeforeDemo;
+    focusBeforeDemo = null;
+    if (before instanceof HTMLElement && title.contains(before) && !title.hidden && !covered) before.focus({ preventScroll: true });
+  }
   const panels: Partial<Record<Screen, HTMLElement>> = {
     title,
     paused: pausePanel(actions, quit, pauseRow),
@@ -186,12 +208,13 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const announcer = createBossAnnouncer(root);
 
   return {
-    update({ flow, save, today, daily, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+    update({ flow, save, today, daily, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer, attract }) {
       const { screen } = flow;
       for (const panel of all) {
         panel.hidden = panel !== panels[screen];
         panel.inert = covered;
       }
+      showAttract(attract, covered);
       const row = chipRows[screen];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
       // stay ahead of the title's Install chip.

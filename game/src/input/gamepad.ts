@@ -60,11 +60,16 @@ function leftStick(pad: PadSnapshot): readonly [x: number, y: number] {
   return [pad.axes[0] ?? 0, pad.axes[1] ?? 0];
 }
 
+/** How far the left stick is pushed from centre, 0 to about 1. */
+function stickPush(pad: PadSnapshot): number {
+  return Math.hypot(pad.axes[0] ?? 0, pad.axes[1] ?? 0);
+}
+
 /** Controls from a pad: the left stick steers like the touch stick, the D-pad turns and thrusts, A, RB and RT fire. */
 export function controlsFromPad(pad: PadSnapshot | null): Controls {
   if (pad === null) return NO_CONTROLS;
   const [x, y] = leftStick(pad);
-  const push = Math.hypot(x, y);
+  const push = stickPush(pad);
   const left = pad.pressed[DPAD_LEFT] === true;
   const right = pad.pressed[DPAD_RIGHT] === true;
   return {
@@ -79,6 +84,11 @@ export function controlsFromPad(pad: PadSnapshot | null): Controls {
             distance: Math.min(FULL_THRUST_DISTANCE, ((push - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE)) * FULL_THRUST_DISTANCE),
           },
   };
+}
+
+/** Whether the player is touching the pad: any button held, or the left stick pushed past its dead zone. */
+export function padInUse(pad: PadSnapshot | null): boolean {
+  return pad !== null && (stickPush(pad) > STICK_DEAD_ZONE || pad.pressed.includes(true));
 }
 
 /** The edges a pad is holding: its menu buttons, and the direction the left stick is pushed (its stronger axis, past the threshold). */

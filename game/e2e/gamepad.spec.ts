@@ -3,7 +3,7 @@ import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
 import { defaultSave } from '../src/meta/save';
 import { DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
-import { expect, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, test, toastOf, waitOutGameOverGuard } from './fixtures';
+import { expect, expectDemoEndedOnTitle, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, startAttract, test, toastOf, waitOutGameOverGuard } from './fixtures';
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -58,6 +58,13 @@ async function tap(page: Page, index: number): Promise<void> {
   await nextFrames(page);
   await setButton(page, index, false);
   await nextFrames(page);
+}
+
+/** Pushes the left stick to `x` across, centred up and down. */
+function setStickX(page: Page, x: number): Promise<void> {
+  return page.evaluate((value) => {
+    (window as unknown as { __fakePad: FakePad }).__fakePad.axes[0] = value;
+  }, x);
 }
 
 function disconnect(page: Page): Promise<void> {
@@ -120,6 +127,25 @@ test('the left stick points the ship where it is pushed and thrusts, like the to
   // Straight down on screen is angle pi/2.
   await expect.poll(async () => (await shipState(page)).angle).toBeCloseTo(Math.PI / 2, 1);
   await expect.poll(async () => (await shipState(page)).thrusting).toBe(true);
+});
+
+test('pad A ends the attract demo and presses nothing, held or let go; the next A plays', { tag: '@desktop' }, async ({ page }) => {
+  await startAttract(page);
+  await setButton(page, A, true);
+  await expectDemoEndedOnTitle(page);
+  await setButton(page, A, false);
+  await nextFrames(page);
+  expect((await gameState(page)).screen).toBe('title');
+  await startRun(page);
+});
+
+test('a stick pushed just past its dead zone ends the attract demo and moves nothing; the next A plays', { tag: '@desktop' }, async ({ page }) => {
+  await startAttract(page);
+  await setStickX(page, 0.3);
+  await expectDemoEndedOnTitle(page);
+  await setStickX(page, 0);
+  await nextFrames(page);
+  await startRun(page);
 });
 
 test('Start pauses and resumes, and B resumes from the pause card', { tag: '@desktop' }, async ({ page }) => {

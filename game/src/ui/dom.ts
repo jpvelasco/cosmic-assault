@@ -12,11 +12,11 @@ export function element<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-/** Adds `listener` to `target` and returns the function that removes it. */
-export function listen(target: EventTarget, type: string, listener: (e: Event) => void): () => void {
-  target.addEventListener(type, listener);
+/** Adds `listener` to `target` (in the capture phase with `capture`) and returns the function that removes it. */
+export function listen(target: EventTarget, type: string, listener: (e: Event) => void, capture = false): () => void {
+  target.addEventListener(type, listener, capture);
   return () => {
-    target.removeEventListener(type, listener);
+    target.removeEventListener(type, listener, capture);
   };
 }
 

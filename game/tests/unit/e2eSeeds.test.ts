@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { dateFor, E2E_DATES, E2E_SEEDS, seedFor } from '../../e2e/seeds';
-import { CLAIMS, DATE_CLAIMS, findDates, findSeeds, unmetClaimMessage, unmetDateClaimMessage } from '../helpers/seedClaims';
+import { ATTRACT_DEMOS } from '../../src/app/attract';
+import {
+  CLAIMS,
+  DATE_CLAIMS,
+  demoClaimHolds,
+  demoClaimIds,
+  findDates,
+  findDemoSeeds,
+  findSeeds,
+  unmetClaimMessage,
+  unmetDateClaimMessage,
+  unmetDemoClaimMessage,
+} from '../helpers/seedClaims';
 import { guardScript } from '../helpers/guardScript';
 
 const { run: runFinder } = guardScript('find-seeds.mjs', 'find-seeds-');
@@ -48,6 +60,36 @@ describe('the e2e date table', () => {
     expect(found[0]).toBe(dateFor('daily-game-over'));
     for (const date of found) expect(DATE_CLAIMS['daily-game-over'].holds(date)).toBe(true);
     expect(findDates('daily-game-over', { from: 30, count: 1 })[0]?.localeCompare('2026-01-31')).toBeGreaterThanOrEqual(0);
+  });
+});
+
+/** A demo claim plays the expert for the demo's length on three field shapes: about half a second, more on a loaded host. */
+const DEMO_CLAIM_TIMEOUT_MS = 15_000;
+
+describe('the attract demo seeds', { timeout: DEMO_CLAIM_TIMEOUT_MS }, () => {
+  it.each(ATTRACT_DEMOS)('keeps seed $seed for the $galaxy demo: the expert lives through it at every aspect', (demo) => {
+    expect(demoClaimHolds(demo.seed, demo.galaxy), unmetDemoClaimMessage(demo)).toBe(true);
+  });
+
+  it('names one claim per demo, after its galaxy', () => {
+    expect(demoClaimIds()).toEqual(ATTRACT_DEMOS.map(({ galaxy }) => `attract-${galaxy}`));
+    expect(new Set(demoClaimIds()).size).toBe(ATTRACT_DEMOS.length);
+  });
+
+  it('refuses a seed whose expert loses a life within the demo at one aspect', () => {
+    // Seed 1's expert in 1-3 is hit about 19 s in on the 4:3 field, though it lives through the 16:9 and 21:9 ones.
+    expect(demoClaimHolds(1, '1-3')).toBe(false);
+  });
+
+  it('says which demo broke and the command that re-picks its seed', () => {
+    const message = unmetDemoClaimMessage({ galaxy: '2-4', seed: 9 });
+    expect(message).toContain('seed 9');
+    expect(message).toContain('run: npm run find-seeds -- attract-2-4');
+    expect(message).toContain('ATTRACT_DEMOS (game/src/app/attract.ts)');
+  });
+
+  it('finds the lowest seeds that keep a demo claim, which the table holds', () => {
+    for (const demo of ATTRACT_DEMOS) expect(findDemoSeeds(`attract-${demo.galaxy}`, { count: 1 })).toEqual([demo.seed]);
   });
 });
 
@@ -101,10 +143,17 @@ describe('npm run find-seeds', { timeout: FINDER_TIMEOUT_MS }, () => {
     expect(typo.output).toContain('unknown option "--cnt"; the options are --count, --from, --to');
   });
 
+  it('prints the seeds that keep an attract demo claim', () => {
+    const { status, output } = runFinder('attract-2-2', '--count', '1');
+    expect(status).toBe(0);
+    expect(output).toMatch(/^attract-2-2: \d+\n$/);
+  });
+
   it('names the known claims when given an unknown one', () => {
     const { status, output } = runFinder('nope');
     expect(status).toBe(1);
     expect(output).toContain('unknown claim "nope"');
     expect(output).toContain('three-deaths');
+    expect(output).toContain('attract-1-3');
   });
 });
