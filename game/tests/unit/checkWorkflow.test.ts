@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { gameDir, guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 
@@ -12,13 +12,16 @@ const TARGET_FILES = [1, 2, 3, 4, 5].map((d) => `d${String(d)}-targets.test.ts`)
 
 /**
  * Lays out <tmp>/.github/workflows/ci.yml, <tmp>/website/ and <tmp>/game/tests/balance/ with `balanceFiles` in it,
- * returning the workflow path.
+ * nested paths included, returning the workflow path.
  */
 function writeFixture(text: string, websiteDirs: string[] = [], balanceFiles: string[] = TARGET_FILES): string {
   const root = tempRoot();
   mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
   mkdirSync(join(root, 'game', 'tests', 'balance'), { recursive: true });
-  for (const file of balanceFiles) writeFileSync(join(root, 'game', 'tests', 'balance', file), '');
+  for (const file of balanceFiles) {
+    mkdirSync(dirname(join(root, 'game', 'tests', 'balance', file)), { recursive: true });
+    writeFileSync(join(root, 'game', 'tests', 'balance', file), '');
+  }
   mkdirSync(join(root, 'website'));
   for (const dir of websiteDirs) mkdirSync(join(root, 'website', dir), { recursive: true });
   const workflowPath = join(root, '.github', 'workflows', 'ci.yml');
@@ -142,6 +145,7 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ['roll-up passing whatever the shards did', (t) => replaceOnce(t, rollUpCheck, '        run: true\n'), 'balance must pass only when every shard did'],
   ['a Dimension without its targets file', (t) => t, 'd3-targets.test.ts is missing', [], TARGET_FILES.filter((f) => !f.startsWith('d3-'))],
   ['a balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'pace.test.ts', 'targets.ts']],
+  ['a nested balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/bosses/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'bosses/pace.test.ts', 'bosses/d3-pace.test.ts']],
   ['a balance test named for a Dimension past the fifth', (t) => t, 'game/tests/balance/d6-pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'd6-pace.test.ts']],
   ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, perf, balance]\n'), 'never waits for the report-only balance jobs'],
   ['deploy not waiting for perf', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy]\n'), 'deploy must declare needs: [game, legacy, perf]'],

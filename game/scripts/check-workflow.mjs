@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const workflowPath = resolve(
@@ -89,11 +89,12 @@ const checks = [
 problems.push(...checks.filter(([ok]) => !ok).map(([, message]) => message));
 
 const balanceDir = resolve(repoRoot, 'game', 'tests', 'balance');
-const balanceFiles = existsSync(balanceDir) ? readdirSync(balanceDir) : [];
+// Every file under tests/balance/, nested ones included, as the balance config's tests/balance/**/*.test.ts finds them.
+const balanceFiles = existsSync(balanceDir) ? readdirSync(balanceDir, { recursive: true }).map((path) => path.split(sep).join('/')) : [];
 problems.push(...DIMENSIONS.filter((d) => !balanceFiles.includes(`d${String(d)}-targets.test.ts`)).map((d) =>
   `game/tests/balance/d${String(d)}-targets.test.ts is missing, so the Dimension ${String(d)} balance shard pins no targets; restore it`));
 const shardPrefix = new RegExp(`^d[${DIMENSIONS.join('')}]-`);
-problems.push(...balanceFiles.filter((file) => file.endsWith('.test.ts') && !shardPrefix.test(file)).map((file) =>
+problems.push(...balanceFiles.filter((file) => file.endsWith('.test.ts') && !shardPrefix.test(basename(file))).map((file) =>
   `game/tests/balance/${file} runs in no balance shard, since each shard runs only its d<N>- files; give it the d<N>- prefix of the Dimension it plays, N from ${String(DIMENSIONS[0])} to ${String(DIMENSIONS.at(-1))}`));
 
 const nextPaths = readdirSync(resolve(repoRoot, 'website'), { recursive: true })
