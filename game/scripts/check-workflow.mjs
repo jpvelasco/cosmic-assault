@@ -10,20 +10,17 @@ const lines = readFileSync(workflowPath, 'utf8')
   .split(/\r?\n/)
   .map((line) => (line.trim().startsWith('#') ? '' : line.trimEnd()));
 
-function jobBlock(id) {
-  const start = lines.indexOf(`  ${id}:`);
+/** The lines under the `header` line, up to the next line `end` matches; undefined with no such header. */
+function block(header, end) {
+  const start = lines.indexOf(header);
   if (start === -1) return undefined;
-  const end = lines.findIndex((line, i) => i > start && /^ {0,2}\S/.test(line));
-  return lines.slice(start + 1, end === -1 ? undefined : end);
+  const stop = lines.findIndex((line, i) => i > start && end.test(line));
+  return lines.slice(start + 1, stop === -1 ? undefined : stop);
 }
 
-/** The lines under top-level `key:`, up to the next top-level key, blank ones left out. */
-function topBlock(key) {
-  const start = lines.indexOf(`${key}:`);
-  if (start === -1) return [];
-  const end = lines.findIndex((line, i) => i > start && /^\S/.test(line));
-  return lines.slice(start + 1, end === -1 ? undefined : end).filter((line) => line !== '');
-}
+const jobBlock = (id) => block(`  ${id}:`, /^ {0,2}\S/);
+/** The lines under top-level `key:`, blank ones left out. */
+const topBlock = (key) => (block(`${key}:`, /^\S/) ?? []).filter((line) => line !== '');
 
 const jobs = Object.fromEntries(['game', 'legacy', 'perf', 'balance-dimension', 'balance', 'deploy'].map((id) => [id, jobBlock(id)]));
 const hasJobKey = (id, entry) => jobs[id]?.includes(`    ${entry}`) ?? false;
@@ -46,7 +43,7 @@ const problems = Object.entries(jobs)
 
 const DEPLOY_IF = "if: github.event_name == 'push' && github.ref == 'refs/heads/main'";
 /** A job's own `if:` lines, at job level. */
-const jobIfs = (id) => jobs[id]?.filter((line) => line.startsWith('    if:')).map((line) => line.trim()) ?? [];
+const jobIfs = (id) => jobs[id]?.filter((line) => line.startsWith('    if:')) ?? [];
 
 const checks = [
   [topBlock('permissions').join('\n') === '  contents: read',
