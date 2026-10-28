@@ -4,7 +4,7 @@ import { WARP_RIFT } from '../../src/content/hazards';
 import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { GalaxyEvent } from '../../src/content/types';
 import type { Asteroid } from '../../src/sim/asteroid';
-import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS, WRAP_MARGIN } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import type { Bolt } from '../../src/sim/foes/bolts';
@@ -232,6 +232,44 @@ describe('warp rift passage', () => {
     expect(r.hazards.strikes(pair.x, pair.y, PLAYER.radius)).toBe(false);
   });
 
+  it('wraps a body whose exit lands past the field\'s edge onto the far side, its previous pose reset there', () => {
+    const r = rig({ seed: 8 });
+    stepTo(r, FIELD_169, 22);
+    const [pair] = riftStates(r);
+    if (pair === undefined) throw new Error('a rift should be open');
+    // The far mouth moved hard by the left edge: a rock leaving it heading left lands past the wrap margin.
+    Object.assign(pair, { toX: 20, toY: 360 });
+    const radius = 40;
+    const rock = { id: 504, x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: -100, vy: 0, radius, size: 1 } as unknown as Asteroid;
+    expect(20 - (R + radius + 2)).toBeLessThan(-WRAP_MARGIN);
+    r.hazards.move(DT, r.ship, [rock], hazardFoes(), []);
+    expect(rock).toMatchObject({ x: FIELD_169.width + WRAP_MARGIN, y: 360, px: FIELD_169.width + WRAP_MARGIN, py: 360 });
+  });
+
+  it('lets a rested body sitting in a mouth jump again only once its rest is over', () => {
+    const r = rig({ seed: 8 });
+    stepTo(r, FIELD_169, 22);
+    const [pair] = riftStates(r);
+    if (pair === undefined) throw new Error('a rift should be open');
+    const rock = { id: 505, x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: 0, vy: -90, radius: 15, size: 2 } as unknown as Asteroid;
+    const jumped = (out: readonly SimEvent[]): boolean => out.some((e) => e.type === 'riftJump' && !e.ship);
+    const first: SimEvent[] = [];
+    r.hazards.move(DT, r.ship, [rock], hazardFoes(), first);
+    expect(jumped(first)).toBe(true);
+    // Set straight back down in the mouth it entered, at rest, it waits out its rest there.
+    Object.assign(rock, { x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: 0, vy: 0 });
+    let again: number | null = null;
+    for (let i = 1; i <= Math.round(0.5 / DT) && again === null; i++) {
+      const out: SimEvent[] = [];
+      r.hazards.step(22 + i * DT, FIELD_169, out);
+      r.hazards.move(DT, r.ship, [rock], hazardFoes(), out);
+      if (jumped(out)) again = i * DT;
+    }
+    expect(again).not.toBeNull();
+    expect(again ?? 0).toBeGreaterThanOrEqual(WARP_RIFT.rest - 1e-9);
+    expect(again ?? 0).toBeLessThan(WARP_RIFT.rest + DT + 1e-9);
+  });
+
   it('leaves a phaser warning of its blink where it is, so it blinks to the spot it showed, and carries one that is not warning', () => {
     const r = rig({ seed: 8 });
     stepTo(r, FIELD_169, 22);
@@ -285,10 +323,11 @@ describe('warp rift chaining', () => {
           { x: pair.x, y: pair.y, to: { x: pair.toX, y: pair.toY } },
           { x: pair.toX, y: pair.toY, to: { x: pair.x, y: pair.y } },
         ]);
+        let rockId = 1000;
         for (const entry of mouths)
           for (const radius of JUMP_RADII)
             for (let h = 0; h < JUMP_HEADINGS; h++) {
-              const rock = rockAt(entry, (h * 2 * Math.PI) / JUMP_HEADINGS, radius);
+              const rock = rockAt(rockId++, entry, (h * 2 * Math.PI) / JUMP_HEADINGS, radius);
               const out: SimEvent[] = [];
               r.hazards.move(DT, r.ship, [rock], hazardFoes(), out);
               const where = `${String(field.width)} seed ${String(seed)} radius ${String(radius)} heading ${String(h)}`;
@@ -309,7 +348,7 @@ describe('warp rift chaining', () => {
 });
 
 describe('warp rift exit grace', () => {
-  /** A rift of one pair, open, and the ship set down at the mouth (at, heading `vx`), with `bodies` placed as given. */
+  /** A rift of one pair from `seed`, stepped until it is open, and the pair. */
   function openRift(seed: number) {
     const r = rig({ seed, intensity: 1 });
     stepTo(r, FIELD_169, 22);

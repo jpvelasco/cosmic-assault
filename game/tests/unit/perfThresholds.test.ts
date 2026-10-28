@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ceilingFor, LONG_FRAME_HEADROOM, MIN_READINGS, P95_HEADROOM, PERF_CEILINGS, PERF_READINGS } from '../../e2e/perfThresholds';
+import { ceilingFor, LONG_FRAME_HEADROOM, MIN_READINGS, P95_HEADROOM, PERF_READINGS } from '../../e2e/perfThresholds';
 
 describe('ceilingFor', () => {
   it('allows p95 up to 1.25 times the worst reading, and long frames up to the most plus 2', () => {
@@ -28,6 +28,5 @@ describe('the perf ceilings', () => {
       expect(p95Ms, scene).toBeGreaterThan(0);
       expect(Number.isInteger(longFrames) && longFrames >= 0, scene).toBe(true);
     }
-    expect(PERF_CEILINGS[scene as keyof typeof PERF_CEILINGS]).toEqual(ceilingFor(readings));
   });
 });

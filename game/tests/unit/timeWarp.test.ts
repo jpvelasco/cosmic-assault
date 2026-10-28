@@ -17,7 +17,6 @@ function world(galaxy: GalaxyDef, opts: { readonly rocks?: readonly { x: number;
   return new World({ seed: 4, field: FIELD, rules: { kind: 'galaxy', galaxy, mode: 'free' }, ...(opts.rocks === undefined ? {} : { initialAsteroids: opts.rocks }) });
 }
 
-
 /** Keeps Time Warp running (collecting it again refreshes its clock) and, if `untouchable`, the ship out of every collision. */
 function hold(w: World, warp: boolean, untouchable = false): void {
   if (warp) w['run']?.loadout.collect('timeWarp');

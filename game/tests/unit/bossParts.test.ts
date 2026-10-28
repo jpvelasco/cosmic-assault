@@ -28,7 +28,6 @@ const stepper = (r: BossRunner) => (dt: number, arena: StubArena) => {
   r.step(dt, arena);
 };
 
-
 interface Probe extends BossBehaviour {
   /** Every dt the step hook saw, with the boss's state at the time. */
   readonly seen: (readonly [number, BossView['state']])[];

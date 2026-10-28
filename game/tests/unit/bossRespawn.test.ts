@@ -20,7 +20,6 @@ function inside(spot: { x: number; y: number }, field: Field): boolean {
   return spot.x >= RESPAWN_INSET && spot.x <= field.width - RESPAWN_INSET && spot.y >= RESPAWN_INSET && spot.y <= field.height * RESPAWN_LOWEST_SHARE;
 }
 
-
 describe('clearSpot', () => {
   it.each([
     ['at home', { x: 640, y: 201.6 }, BOSS_FIELD],

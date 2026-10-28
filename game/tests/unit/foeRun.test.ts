@@ -54,7 +54,6 @@ function park(foe: Foe, x: number, y: number): void {
   Object.assign(foe, { x, y, px: x, py: y, vx: 0, vy: 0, spin: 0 });
 }
 
-
 describe('a splitter in a galaxy run', () => {
   const galaxy = only('1-3', 'splitter');
 

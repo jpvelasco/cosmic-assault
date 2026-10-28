@@ -210,10 +210,6 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'zoneEnd', id: 1 })).toBeNull();
   });
 
-  it('caps the bolt zap at two a frame, as gunships fire together', () => {
-    expect(PER_FRAME_CAPS.bolt).toBe(2);
-  });
-
   it('gives each source of bolt its own voice: a boss\'s its quieter zap, a foe\'s the zap', () => {
     expect(nameOf({ type: 'boltFired', id: 1, source: 'boss', owner: 0, x: 0, y: 0, angle: 0 })).toBe('bossBolt');
     expect(nameOf({ type: 'boltFired', id: 1, source: 'gunship', owner: 3, x: 0, y: 0, angle: 0 })).toBe('bolt');

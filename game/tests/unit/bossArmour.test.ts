@@ -17,7 +17,6 @@ const PART_SPACING = 60;
 const BREAK_DAMAGE = 6;
 const DEF: BossDef = { ...FIXTURE_DEF, partBreakDamage: BREAK_DAMAGE };
 
-
 /**
  * A boss with a tail of four 2 HP parts in a row below its core. Only the tail-most live part can be hurt, the others
  * deflect; its core is shielded until every part is broken.

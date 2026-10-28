@@ -24,7 +24,6 @@ function world(opts: Scenario = {}): World {
   return new World({ seed: 1, field: FIELD, ...opts });
 }
 
-
 /** Mixed turning, thrust and fire that changes every half second. */
 function scriptedControls(step: number): Controls {
   const phase = Math.floor(step / (STEPS_PER_SECOND / 2)) % 4;
@@ -68,7 +67,6 @@ function tagsAt(w: World, points: Readonly<Record<string, { x: number; y: number
       .map(([tag]) => tag),
   );
 }
-
 
 function snapshot(w: World) {
   return JSON.stringify({

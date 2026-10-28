@@ -26,7 +26,6 @@ function galaxyWorld(opts: Scenario = {}): World {
   return new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy, mode }, ...rest });
 }
 
-
 function play(w: World, seconds: number, controls: Controls = NO_CONTROLS): SimEvent[] {
   const log: SimEvent[] = [];
   for (let i = 0; i < Math.round(seconds * STEPS) && (w.status === 'playing' || w.status === 'warping'); i++) log.push(...w.step(STEP_SECONDS, controls).map((e) => ({ ...e })));

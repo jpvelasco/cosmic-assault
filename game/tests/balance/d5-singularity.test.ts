@@ -30,6 +30,7 @@ describe('Singularity, played by the bots', { timeout: TIMEOUT_MS }, () => {
   it('warns of every black hole for its whole telegraph, and sees its pull and its swallowing at work, as the expert and the casual play', () => {
     const seen = new Map<string, number>();
     for (const { log } of [...expert, ...casual]) {
+      auditTelegraphs(log);
       auditFoeAttacks(log);
       for (const { event } of log) {
         const count = seen.get(event.type) ?? 0;

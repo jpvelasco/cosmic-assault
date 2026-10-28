@@ -24,8 +24,6 @@ const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
 const event = (type: GalaxyEvent['type'], at = 20, intensity: GalaxyEvent['intensity'] = 1): GalaxyEvent => ({ at, type, intensity });
 
-/** A live drone at (x, y). */
-
 /** A hazard that does only what a test gives it. */
 function standIn(overrides: Partial<Hazard> = {}): Hazard {
   return { states: [], step: () => undefined, resize: () => undefined, stop: () => undefined, ...overrides };

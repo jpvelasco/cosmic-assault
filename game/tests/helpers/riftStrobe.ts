@@ -18,11 +18,9 @@ const SWEEP_STEPS = 240;
 const RIFT_AT = 20;
 const SWEEP_FROM = 22;
 
-/** Each rock has its own id, since a body that has jumped rests under its id. */
-let nextRockId = 1000;
-/** A rock at `entry`, heading `angle` at 100 units a second, of `radius`. */
-export const rockAt = (entry: Readonly<{ x: number; y: number }>, angle: number, radius: number): Asteroid =>
-  ({ id: nextRockId++, x: entry.x, y: entry.y, px: entry.x, py: entry.y, vx: Math.cos(angle) * 100, vy: Math.sin(angle) * 100, radius, size: 0 }) as unknown as Asteroid;
+/** Rock `id` at `entry`, heading `angle` at 100 units a second, of `radius`; give each rock in a field its own id, since a body that has jumped rests under its id. */
+export const rockAt = (id: number, entry: Readonly<{ x: number; y: number }>, angle: number, radius: number): Asteroid =>
+  ({ id, x: entry.x, y: entry.y, px: entry.x, py: entry.y, vx: Math.cos(angle) * 100, vy: Math.sin(angle) * 100, radius, size: 0 }) as unknown as Asteroid;
 
 /**
  * Carries a body of every `JUMP_RADII` along every `JUMP_HEADINGS` heading out of every mouth of the pairs that one
@@ -38,10 +36,11 @@ export function strobeGaps(seed: number, field: Field): { readonly where: string
   for (let t = STEP_SECONDS; t <= SWEEP_FROM + 1e-9; t += STEP_SECONDS) hazards.step(t, field, []);
   const entries = hazards.states.flatMap((state) => (state.type === 'warpRift' ? [{ x: state.x, y: state.y }, { x: state.toX, y: state.toY }] : []));
   const gaps: { where: string; gap: number }[] = [];
+  let rockId = 1000;
   for (const entry of entries)
     for (const radius of JUMP_RADII)
       for (let h = 0; h < JUMP_HEADINGS; h++) {
-        const rock = rockAt(entry, (h * 2 * Math.PI) / JUMP_HEADINGS, radius);
+        const rock = rockAt(rockId++, entry, (h * 2 * Math.PI) / JUMP_HEADINGS, radius);
         const jumpSteps: number[] = [];
         for (let step = 0; step < SWEEP_STEPS; step++) {
           const out: SimEvent[] = [];

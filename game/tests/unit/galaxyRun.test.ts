@@ -34,7 +34,6 @@ function galaxyWorld(galaxy: GalaxyDef, opts: Scenario = {}): World {
   return new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy, mode }, ...rest });
 }
 
-
 /** Steps until the run stops or `seconds` pass, logging every event with the elapsed time after its step. */
 function play(w: World, seconds: number, controls: Controls = NO_CONTROLS, onStep?: (events: readonly SimEvent[]) => void): Timed[] {
   const log: Timed[] = [];

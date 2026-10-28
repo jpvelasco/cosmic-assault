@@ -12,7 +12,6 @@ import { foeRig, onlyFoe, runFoes } from '../helpers/foeRig';
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
 
-
 /** The point `distance` from (x, y) along `bearing`. */
 const along = (x: number, y: number, bearing: number, distance: number): { x: number; y: number } => ({
   x: x + Math.cos(bearing) * distance,

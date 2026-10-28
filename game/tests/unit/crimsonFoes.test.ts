@@ -15,7 +15,6 @@ const FIELD_169: Field = { width: 1280, height: 720 };
 const FIELD_219: Field = { width: FIELD_HEIGHT * MAX_ASPECT, height: FIELD_HEIGHT };
 const DT = STEP_SECONDS;
 
-
 describe('gunship', () => {
   it('arrives alone at an edge with 3 HP and radius 18, announced, outside the safe radius', () => {
     const r = foeRig({ shipX: 300, shipY: 300 });
