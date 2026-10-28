@@ -8,6 +8,7 @@ import type { Field } from '../field';
 import type { HazardBolts } from './hazard';
 import type { Foe } from '../foes/foe';
 import { nudge } from '../math';
+import { RESPAWN_MARGIN } from '../respawn';
 import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
 import { BlackHole } from './blackHole';
@@ -53,9 +54,6 @@ export class HazardField {
   private readonly shipPull = { x: 0, y: 0 };
   /** Made on the first move and refilled on every other, so moving bodies costs no allocation. Its ship is the one the keep-outs avoid. */
   private bodies: { -readonly [K in keyof Bodies]: Bodies[K] } | null = null;
-  /** The keep-outs, refilled in place from three reused circles. */
-  private readonly circles: Circle[] = [];
-  private readonly slots: { x: number; y: number; r: number }[] = [0, 1, 2].map(() => ({ x: 0, y: 0, r: 0 }));
 
   /**
    * @param events the galaxy's events; its showers are left to the director
@@ -127,27 +125,21 @@ export class HazardField {
   }
 
   /**
-   * The circles placed hazards keep out of: the field's centre, any respawn point and the safe radius of the ship
-   * last moved (none before the first move). A live view, refilled by each call.
+   * The circles placed hazards keep out of: the field's centre, by a respawn's margin the spot any hazard's respawn takes
+   * with nothing in the way, and the safe radius of the ship last moved (none before the first move). That spot is the
+   * same whatever the foes, so where a hazard is placed, and what its stream draws for it, never depends on them. The
+   * spots a crowded respawn falls back to are not kept out (round a black hole they would crowd rift mouths off its exit
+   * reach): the respawn search keeps clear of the placed hazards itself.
    */
   keepOuts(field: Field): readonly Circle[] {
-    const { circles } = this;
-    circles.length = 0;
-    this.keepOut(field.width / 2, field.height / 2, CENTRE_KEEP_OUT);
-    const spot = this.respawnPoint();
-    if (spot !== null) this.keepOut(spot.x, spot.y, ASTEROID.safeRadius);
+    const circles: Circle[] = [{ x: field.width / 2, y: field.height / 2, r: CENTRE_KEEP_OUT }];
+    for (const hazard of this.hazards) {
+      const spot = hazard.respawnSpot?.(field) ?? null;
+      if (spot !== null) circles.push({ x: spot.x, y: spot.y, r: RESPAWN_MARGIN });
+    }
     const ship = this.bodies?.ship;
-    if (ship !== undefined) this.keepOut(ship.x, ship.y, ASTEROID.safeRadius);
+    if (ship !== undefined) circles.push({ x: ship.x, y: ship.y, r: ASTEROID.safeRadius });
     return circles;
-  }
-
-  private keepOut(x: number, y: number, r: number): void {
-    const slot = this.slots[this.circles.length];
-    if (slot === undefined) throw new Error('HazardField keeps out at most 3 circles: add a slot for the new one');
-    slot.x = x;
-    slot.y = y;
-    slot.r = r;
-    this.circles.push(slot);
   }
 
   resize(old: Field, field: Field): void {

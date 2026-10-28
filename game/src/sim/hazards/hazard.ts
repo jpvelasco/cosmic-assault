@@ -90,8 +90,10 @@ export interface Hazard {
   swallows?(x: number, y: number, r: number): boolean;
   /** Moves or removes bodies once the pulls are applied, pushing what it did into `out`. */
   carry?(bodies: Bodies, out: SimEvent[]): void;
-  /** Where a respawning ship must come back while it is active, clear of it and of `foes`, or null for the default. */
+  /** Where a respawning ship must come back while it is active, clear of it, of `foes` and of the other hazards, or null for the default. */
   respawnPoint?(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null;
+  /** Where `respawnPoint` comes back in `field` with nothing in the way, whatever the foes, for placed hazards to keep out of; null when it has none. */
+  respawnSpot?(field: Field): Readonly<{ x: number; y: number }> | null;
   /** Stretches its places to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void;
   /** Ends every warning and hazard at once, without an event: the galaxy is over. */
@@ -106,7 +108,10 @@ export interface HazardSetup {
   readonly rng: Rng;
   /** Hands out an id for each hazard. */
   readonly nextId: () => number;
-  /** The hazards in play as of the last step, so a hazard can place itself clear of another (a rift clear of a black hole). */
+  /**
+   * The hazards in play as of the last step, so a hazard can place itself clear of another (a rift clear of a black hole),
+   * or keep a respawn clear of them.
+   */
   readonly inPlay: () => readonly Readonly<HazardState>[];
   /** The circles a placed hazard keeps out of, as they stand when it is placed. */
   readonly keepOuts: (field: Field) => readonly Circle[];

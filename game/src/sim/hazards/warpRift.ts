@@ -62,8 +62,9 @@ interface Mover {
 
 /**
  * The spots a mouth may take on a field: on the grid, inside the inset, clear of every keep-out circle (the centre, the
- * ship and any respawn point, all `setup.keepOuts`) by the mouth's own radius, and of the HUD and thumb corners by
- * `boxClearance`: the drawn radius, so a swirl stays out from under them, or else the hitbox radius alone.
+ * ship and the spot a respawn takes with nothing in the way, all `setup.keepOuts`) by the mouth's own radius, and of the
+ * HUD and thumb corners by `boxClearance`: the drawn radius, so a swirl stays out from under them, or else the hitbox
+ * radius alone.
  */
 function clearSpots(field: Field, circles: readonly Circle[], boxClearance: number): Spot[] {
   const boxes = zoneKeepOutBoxes(field);

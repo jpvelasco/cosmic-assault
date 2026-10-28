@@ -1,12 +1,13 @@
 import { FOES } from '../../content/foes';
-import { BLACK_HOLE, HAZARD_RULES } from '../../content/hazards';
+import { BLACK_HOLE, HAZARD_RULES, WARP_RIFT } from '../../content/hazards';
 import type { Point } from '../boss/behaviour';
 import type { Foe } from '../foes/foe';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
 import { nudge } from '../math';
-import { clearSpot, respawnBand, RESPAWN_MARGIN } from '../respawn';
+import { clearSpot, respawnBand, RESPAWN_MARGIN, type RespawnPart } from '../respawn';
 import { HazardSchedule } from './schedule';
+import type { ZoneBox } from './dangerZone';
 import type { Bodies, Hazard, HazardSetup, HazardState, PointHazardState, Pullable } from './hazard';
 
 /** The pull a black hole of `intensity` has on a body `distance` away: `min(maxAccel, strength · intensity / max(r, minRadius))`. */
@@ -52,12 +53,14 @@ interface Hole extends PointHazardState {
  */
 export class BlackHole implements Hazard {
   private readonly nextId: () => number;
+  private readonly inPlay: () => readonly Readonly<HazardState>[];
   private readonly schedule: HazardSchedule<Hole>;
   /** The field as of the last step or resize; null before the first. */
   private field: Field | null = null;
 
-  constructor({ events, nextId }: HazardSetup) {
+  constructor({ events, nextId, inPlay }: HazardSetup) {
     this.nextId = nextId;
+    this.inPlay = inPlay;
     this.schedule = new HazardSchedule<Hole>(events, HAZARD_RULES.blackHole.telegraph, {
       warn: (event, elapsed, field, into, out) => {
         const id = this.nextId();
@@ -125,15 +128,26 @@ export class BlackHole implements Hazard {
 
   /**
    * While the hole is warning or active, where a respawning ship comes back: a ship's safe radius outside the hole's
-   * `exitReach`, and as far from every live foe, so it neither falls in during its invulnerability nor wakes among a swarm
-   * that gathered where it died; else null. It tries the spots that far from the hole low in the respawn band, then high,
-   * right then left, so a respawn lies as far from the hole on every field; the respawn search (`clearSpot`) takes over
-   * when foes crowd them.
+   * `exitReach`, and as far from every live foe, live danger zone and rift mouth, so it neither falls in during its
+   * invulnerability nor wakes among a swarm that gathered where it died, in a zone or at a mouth; else null. It tries the
+   * spots that far from the hole low in the respawn band, then high, right then left, so a respawn lies as far from the
+   * hole on every field; the respawn search (`clearSpot`) takes over when those are crowded.
    */
-  respawnPoint(foes: readonly Readonly<Foe>[]): Readonly<{ x: number; y: number }> | null {
+  respawnPoint(foes: readonly Readonly<Foe>[]): Readonly<Point> | null {
     const hole = this.schedule.live[0];
     if (this.field === null || hole === undefined) return null;
-    return clearSpot({ x: hole.x, y: hole.y, parts: foes }, BLACK_HOLE.exitReach, this.field, RESPAWN_MARGIN, ringSpots(hole, this.field, BLACK_HOLE.exitReach + RESPAWN_MARGIN));
+    const parts: RespawnPart[] = [...foes];
+    const zones: ZoneBox[] = [];
+    for (const hazard of this.inPlay()) {
+      if (hazard.type === 'dangerZone') zones.push(hazard);
+      else if (hazard.type === 'warpRift') parts.push({ x: hazard.x, y: hazard.y, radius: WARP_RIFT.radius }, { x: hazard.toX, y: hazard.toY, radius: WARP_RIFT.radius });
+    }
+    return clearSpot({ x: hole.x, y: hole.y, parts, zones }, BLACK_HOLE.exitReach, this.field, RESPAWN_MARGIN, this.ring(this.field));
+  }
+
+  /** While the hole is warning or active, where its respawn comes back in `field` with nothing in the way, whatever the foes; else null. */
+  respawnSpot(field: Field): Readonly<Point> | null {
+    return this.ring(field)[0] ?? null;
   }
 
   resize(old: Field, field: Field): void {
@@ -143,6 +157,12 @@ export class BlackHole implements Hazard {
 
   stop(): void {
     this.schedule.stop();
+  }
+
+  /** The spots a respawn tries first while the hole is warning or active: a respawn's margin outside its `exitReach`. */
+  private ring(field: Field): Point[] {
+    const hole = this.schedule.live[0];
+    return hole === undefined ? [] : ringSpots(hole, field, BLACK_HOLE.exitReach + RESPAWN_MARGIN);
   }
 
   /** The active hole, if there is one: the only one a galaxy holds at once. */

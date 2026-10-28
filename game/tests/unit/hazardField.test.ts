@@ -14,12 +14,17 @@ import { shipPullAt } from '../../src/sim/hazards/shipPull';
 import { nudge } from '../../src/sim/math';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
+import type { SimEvent } from '../../src/sim/events';
+import type { Foe } from '../../src/sim/foes/foe';
 import { World } from '../../src/sim/world';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
 const DT = STEP_SECONDS;
 const event = (type: GalaxyEvent['type'], at = 20, intensity: GalaxyEvent['intensity'] = 1): GalaxyEvent => ({ at, type, intensity });
+
+/** A live drone at (x, y). */
+const foeAt = (id: number, x: number, y: number): Foe => ({ id, kind: 'drone', x, y, px: x, py: y, vx: 0, vy: 0, radius: 12, hp: 1 }) as unknown as Foe;
 
 /** A hazard that does only what a test gives it. */
 function standIn(overrides: Partial<Hazard> = {}): Hazard {
@@ -204,21 +209,41 @@ describe('HazardField', () => {
     expect(hazards.respawnPoint()).toBe(spot);
   });
 
-  it('keeps placed hazards out of the centre, any respawn point and the ship\'s safe radius', () => {
+  it('keeps placed hazards out of the centre, the spot a respawn takes with nothing in the way by a respawn\'s margin, and the ship\'s safe radius', () => {
     const ship = createShip(100, 200);
-    const spot = { x: 640, y: 576 };
-    const hazards = field([event('gravityWell')], { gravityWell: () => standIn({ respawnPoint: () => spot }) });
+    const hazards = field([event('gravityWell')], { gravityWell: () => standIn({ respawnSpot: () => ({ x: 640, y: 576 }), respawnPoint: () => ({ x: 1, y: 1 }) }) });
     hazards.move(DT, ship, [], [], []);
     expect(ASTEROID.safeRadius).toBe(150);
     expect(hazards.keepOuts(FIELD)).toEqual([
       { x: 640, y: 360, r: 150 },
-      { x: 640, y: 576, r: ASTEROID.safeRadius },
+      { x: 640, y: 576, r: PLAYER.radius + ASTEROID.safeRadius },
       { x: 100, y: 200, r: ASTEROID.safeRadius },
     ]);
     const plain = field([event('gravityWell')], { gravityWell: () => standIn() });
     expect(plain.keepOuts(FIELD), 'no ship moved yet').toHaveLength(1);
     plain.move(DT, ship, [], [], []);
     expect(plain.keepOuts(FIELD)).toHaveLength(2);
+  });
+
+  it.each([1, 2, 3, 4, 5])('places zones and rifts beside a black hole the same with foes crowding its respawn points as without, on seed %d', (seed) => {
+    const events = [event('blackHole', 5, 1), event('warpRift', 12, 1), event('dangerZone', 20, 1), event('dangerZone', 32, 2)];
+    /** Every warning of a run in which, once the hole warns, a foe gathers on each respawn point it offers. */
+    function warnings(crowded: boolean): SimEvent[] {
+      const hazards = field(events, HAZARD_FACTORIES, seed);
+      const out: SimEvent[] = [];
+      const foes: Foe[] = [];
+      const ship = createShip(640, 360);
+      for (let t = 0; t <= 34; t += 0.5) {
+        hazards.step(t, FIELD, out);
+        const spot = crowded ? hazards.respawnPoint() : null;
+        if (spot !== null && foes.length < 12) foes.push(foeAt(foes.length + 1, spot.x, spot.y));
+        hazards.move(DT, ship, [], foes, []);
+      }
+      return out.filter((e) => e.type === 'riftWarning' || e.type === 'zoneWarning');
+    }
+    const calm = warnings(false);
+    expect(calm.filter((e) => e.type === 'riftWarning')).toHaveLength(1);
+    expect(warnings(true)).toEqual(calm);
   });
 
   it('hands each hazard the keep-outs, read when it places, from the ship it last moved', () => {

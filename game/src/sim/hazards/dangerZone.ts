@@ -52,8 +52,8 @@ interface Zone extends ZoneState {
 /**
  * A galaxy's danger zones, an event at a time: each shows one zone per intensity (at most two), rectangles 120 to 220
  * a side, drawn as a warning for 2 s and lethal to touch for 10 s. The Shield absorbs a hit from one, as from anything.
- * They are placed inside the field, clear of each other and of every keep-out as they warn (the field's centre, any
- * respawn point and the ship), from their own stream.
+ * They are placed inside the field, clear of each other and of every keep-out as they warn (the field's centre, the
+ * spot a respawn takes with nothing in the way, and the ship), from their own stream.
  */
 export class DangerZones implements Hazard {
   private readonly rng: Rng;

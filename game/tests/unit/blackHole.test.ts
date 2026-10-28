@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLACK_HOLE, HAZARD_RULES, MAX_SHIP_PULL } from '../../src/content/hazards';
+import { BLACK_HOLE, HAZARD_RULES, MAX_SHIP_PULL, WARP_RIFT } from '../../src/content/hazards';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyEvent } from '../../src/content/types';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
@@ -10,6 +10,7 @@ import type { Bolt } from '../../src/sim/foes/bolts';
 import { Bolts } from '../../src/sim/foes/bolts';
 import type { Foe } from '../../src/sim/foes/foe';
 import { BlackHole, holeAcceleration, holeShare } from '../../src/sim/hazards/blackHole';
+import { zoneClearance } from '../../src/sim/hazards/dangerZone';
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
@@ -264,6 +265,66 @@ describe('the hole\'s life', () => {
     // A spent foe is no swarm: the first choice comes back.
     for (const foe of swarm) foe.hp = 0;
     expect(hazards.respawnPoint()).toEqual(first);
+  });
+
+  describe('with other hazards in play', () => {
+    /** How far outside every foe, zone and mouth a respawn lands: a ship's radius and its safe radius. */
+    const MARGIN = PLAYER.radius + ASTEROID.safeRadius;
+    /** A hole beside `inPlay`, built alone so a test sets the hazards in play; active on `FIELD` unless `stepped` is false. */
+    function holeAmong(inPlay: readonly HazardState[], stepped = true): BlackHole {
+      const made = new BlackHole({ events: [hole()], rng: createRng(1), nextId: () => 1, keepOuts: () => [], inPlay: () => inPlay });
+      if (stepped) made.step(START_AT + 1, FIELD, []);
+      return made;
+    }
+    /** Where a ship respawns beside `inPlay` with `foes` about. */
+    function respawnAmong(inPlay: readonly HazardState[], foes: readonly Foe[] = []): { x: number; y: number } {
+      const spot = holeAmong(inPlay).respawnPoint(foes);
+      if (spot === null) throw new Error('the hole is active, so it has a respawn point');
+      return spot;
+    }
+    const zoneOn = (spot: { x: number; y: number }, stage: HazardState['stage']): HazardState => ({ id: 7, type: 'dangerZone', stage, x: spot.x, y: spot.y, w: 160, h: 160, intensity: 1, remaining: 5 });
+    const riftOn = (spot: { x: number; y: number }, stage: HazardState['stage']): HazardState => ({ id: 8, type: 'warpRift', stage, x: 100, y: 100, toX: spot.x, toY: spot.y, intensity: 1, remaining: 5 });
+    /** How far `spot` lies outside every zone and rift mouth in `states`. */
+    function hazardClearance(states: readonly HazardState[], spot: { x: number; y: number }): number {
+      return Math.min(
+        ...states.map((s) => {
+          if (s.type === 'dangerZone') return zoneClearance(FIELD, s, spot.x, spot.y);
+          if (s.type === 'warpRift') return Math.min(Math.hypot(spot.x - s.x, spot.y - s.y), Math.hypot(spot.x - s.toX, spot.y - s.toY)) - WARP_RIFT.radius;
+          return Infinity;
+        }),
+      );
+    }
+
+    it.each([
+      ['a warning zone', zoneOn, 'warning'],
+      ['an active zone', zoneOn, 'active'],
+      ['a warning rift mouth', riftOn, 'warning'],
+      ['an open rift mouth', riftOn, 'active'],
+    ] as const)('moves the respawn point off %s over its first spot, to one a safe radius clear of it and of the hole', (_name, make, stage) => {
+      const states = [make(respawnAmong([]), stage)];
+      const spot = respawnAmong(states);
+      expect(hazardClearance(states, spot)).toBeGreaterThanOrEqual(MARGIN);
+      expect(Math.hypot(spot.x - CENTRE.x, spot.y - CENTRE.y)).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
+    });
+
+    it('keeps a respawn out of a zone and a rift mouth on the next spots when foes crowd the first', () => {
+      const first = respawnAmong([]);
+      const swarm = [foeAt(1, first.x, first.y)];
+      const second = respawnAmong([], swarm);
+      const third = respawnAmong([zoneOn(second, 'active')], swarm);
+      const states = [zoneOn(second, 'active'), riftOn(third, 'active')];
+      const spot = respawnAmong(states, swarm);
+      expect(hazardClearance(states, spot)).toBeGreaterThanOrEqual(MARGIN);
+      expect(Math.hypot(spot.x - first.x, spot.y - first.y) - 12).toBeGreaterThanOrEqual(MARGIN);
+    });
+
+    it('offers the spot it respawns at with nothing in the way, whatever the foes and hazards, for placed hazards to keep out of', () => {
+      const first = respawnAmong([]);
+      const made = holeAmong([zoneOn(first, 'active')]);
+      expect(made.respawnSpot(FIELD)).toEqual(first);
+      expect(made.respawnPoint([foeAt(1, first.x, first.y)])).not.toEqual(first);
+      expect(holeAmong([], false).respawnSpot(FIELD), 'no hole yet').toBeNull();
+    });
   });
 
   it('is one hazard of its own stream, \'hazards:blackHole\', so the other hazards\' draws do not move', () => {

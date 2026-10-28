@@ -59,9 +59,9 @@ export const WARP_RIFT = { maxPairs: 2, radius: 30, drawn: 48, apart: 0.4, inset
  * `min(maxAccel, strength · intensity / max(r, minRadius))` units/s². Its horizon has radius `horizon`: it swallows rocks,
  * foes, bolts and shots that reach it for no points and no drop, and touching it (within `horizon` plus the ship's radius)
  * costs the ship a life. While it is warning or active a respawning ship comes back a safe radius outside `exitReach` and
- * clear of the foes (`BlackHole.respawnPoint`). It speeds the rocks and foes it pulls up to `rockSpeedCap`, lower than the
- * ship's cap: at the wells' 300 the fragments it accelerates are too fast to read (a tuning value, set with the Singularity
- * balance).
+ * clear of the foes, the danger zones and the rift mouths (`BlackHole.respawnPoint`). It speeds the rocks and foes it
+ * pulls up to `rockSpeedCap`, lower than the ship's cap: at the wells' 300 the fragments it accelerates are too fast to
+ * read (a tuning value, set with the Singularity balance).
  *
  * `warnRadius` is the ring its warning is drawn at, and the distance a ship must be from it to escape the pull, from rest, at
  * the start: the test holds the hole to both. `exitReach` is the least distance from the hole a ship heading straight in at
