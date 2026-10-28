@@ -56,6 +56,15 @@ function stepTo(r: Rig, field: Field, seconds: number, each?: (t: number) => voi
 }
 
 const riftStates = (r: Rig): RiftState[] => r.hazards.states.filter((s): s is RiftState => s.type === 'warpRift');
+
+/** A rift of `intensity` from `seed` on a 16:9 field, stepped until it is open, and its first pair. */
+function openRift(seed: number, intensity: 1 | 2 = 2): { r: Rig; pair: RiftState } {
+  const r = rig({ seed, intensity });
+  stepTo(r, FIELD_169, 22);
+  const [pair] = riftStates(r);
+  if (pair === undefined) throw new Error('a rift should be open');
+  return { r, pair };
+}
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 describe('warp rift placement', () => {
@@ -141,10 +150,7 @@ describe('warp rift passage', () => {
   });
 
   it('sends a ship that reaches an open mouth out of its paired one, along its velocity and just outside the mouth', () => {
-    const r = rig({ seed: 3 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(3);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 100;
@@ -161,10 +167,7 @@ describe('warp rift passage', () => {
   });
 
   it('resets a jumping ship\'s previous pose, so it does not streak across the field', () => {
-    const r = rig({ seed: 4 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(4);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.px = pair.x;
@@ -177,10 +180,7 @@ describe('warp rift passage', () => {
   });
 
   it('sends a body with no velocity out the way away from its partner', () => {
-    const r = rig({ seed: 5 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(5);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = r.ship.vy = 0;
@@ -190,10 +190,7 @@ describe('warp rift passage', () => {
   });
 
   it('does not send a body back through the mouth it has just left, while it moves on', () => {
-    const r = rig({ seed: 6 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(6);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 150;
@@ -208,10 +205,7 @@ describe('warp rift passage', () => {
   });
 
   it('sends a rock through too, and resets its previous pose', () => {
-    const r = rig({ seed: 7 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(7);
     const rock = { id: 500, x: pair.x, y: pair.y, px: pair.x - 30, py: pair.y, vx: 0, vy: -90, radius: ASTEROID.radii[1], size: 1 } as unknown as Asteroid;
     const out: SimEvent[] = [];
     r.hazards.move(DT, r.ship, [rock], hazardFoes(), out);
@@ -222,10 +216,7 @@ describe('warp rift passage', () => {
   });
 
   it('sends a foe through, and strikes nothing itself', () => {
-    const r = rig({ seed: 8 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(8);
     const drone = foeAt('drone', pair.x, pair.y, { id: 501 });
     r.hazards.move(DT, r.ship, [], hazardFoes(drone), []);
     expect(dist(drone, { x: pair.toX, y: pair.toY })).toBeGreaterThanOrEqual(R + FOES.drone.radius);
@@ -233,10 +224,7 @@ describe('warp rift passage', () => {
   });
 
   it('wraps a body whose exit lands past the field\'s edge onto the far side, its previous pose reset there', () => {
-    const r = rig({ seed: 8 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(8);
     // The far mouth moved hard by the left edge: a rock leaving it heading left lands past the wrap margin.
     Object.assign(pair, { toX: 20, toY: 360 });
     const radius = 40;
@@ -247,10 +235,7 @@ describe('warp rift passage', () => {
   });
 
   it('lets a rested body sitting in a mouth jump again only once its rest is over', () => {
-    const r = rig({ seed: 8 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(8);
     const rock = { id: 505, x: pair.x, y: pair.y, px: pair.x, py: pair.y, vx: 0, vy: -90, radius: 15, size: 2 } as unknown as Asteroid;
     const jumped = (out: readonly SimEvent[]): boolean => out.some((e) => e.type === 'riftJump' && !e.ship);
     const first: SimEvent[] = [];
@@ -271,10 +256,7 @@ describe('warp rift passage', () => {
   });
 
   it('leaves a phaser warning of its blink where it is, so it blinks to the spot it showed, and carries one that is not warning', () => {
-    const r = rig({ seed: 8 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
+    const { r, pair } = openRift(8);
     const warning = foeAt('phaser', pair.x, pair.y, { id: 502, charging: true, aimX: 100, aimY: 100 });
     const roaming = foeAt('phaser', pair.toX, pair.toY, { id: 503 });
     r.hazards.move(DT, r.ship, [], hazardFoes(warning, roaming), []);
@@ -348,17 +330,8 @@ describe('warp rift chaining', () => {
 });
 
 describe('warp rift exit grace', () => {
-  /** A rift of one pair from `seed`, stepped until it is open, and the pair. */
-  function openRift(seed: number) {
-    const r = rig({ seed, intensity: 1 });
-    stepTo(r, FIELD_169, 22);
-    const [pair] = riftStates(r);
-    if (pair === undefined) throw new Error('a rift should be open');
-    return { r, pair };
-  }
-
   it('grants the ship a grace of MIN_WINDUP_SECONDS when a jump puts it onto a rock', () => {
-    const { r, pair } = openRift(21);
+    const { r, pair } = openRift(21, 1);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 100;
@@ -372,7 +345,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('grants the same grace when a jump carries a rock onto a ship parked beside the other mouth', () => {
-    const { r, pair } = openRift(22);
+    const { r, pair } = openRift(22, 1);
     // A rock at the first mouth, moving toward the second: it comes out of the second 72 units along that line.
     const dx = pair.toX - pair.x;
     const dy = pair.toY - pair.y;
@@ -389,7 +362,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('grants nothing when a jump lands clear of every body', () => {
-    const { r, pair } = openRift(23);
+    const { r, pair } = openRift(23, 1);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 100;
@@ -399,7 +372,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('grants the same grace when a hostile bolt would reach the ship within a windup of its jump', () => {
-    const { r, pair } = openRift(24);
+    const { r, pair } = openRift(24, 1);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 100;
@@ -412,7 +385,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('grants the same grace when an armed mine\'s blast would reach the ship before its windup ends', () => {
-    const { r, pair } = openRift(25);
+    const { r, pair } = openRift(25, 1);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 100;
@@ -425,7 +398,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('grants nothing for a mine whose blast falls after the windup, or for a bolt that flies away', () => {
-    const { r, pair } = openRift(26);
+    const { r, pair } = openRift(26, 1);
     r.ship.x = pair.x;
     r.ship.y = pair.y;
     r.ship.vx = 100;
@@ -437,7 +410,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('judges a charging mine carried out of a rift by its blast radius, so a ship its blast would reach is graced', () => {
-    const { r, pair } = openRift(27);
+    const { r, pair } = openRift(27, 1);
     // A still mine at the first mouth leaves by the second, 44 out along the line between them; the ship waits 60 past it,
     // inside the mine's blast reach (80) and clear of its body, and is not itself carried.
     const dx = pair.toX - pair.x;
@@ -457,7 +430,7 @@ describe('warp rift exit grace', () => {
   });
 
   it('grants nothing for a carried mine whose blast falls outside the reach of the ship', () => {
-    const { r, pair } = openRift(28);
+    const { r, pair } = openRift(28, 1);
     const dx = pair.toX - pair.x;
     const dy = pair.toY - pair.y;
     const length = Math.hypot(dx, dy);
