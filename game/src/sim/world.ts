@@ -89,10 +89,7 @@ export class World {
   private readonly targets: ShotTargets = {
     rocks: this.asteroidList,
     foes: () => this.run?.foeList ?? NONE,
-    aim: () => {
-      const boss = this.run?.boss ?? null;
-      return boss === null ? null : bossTarget(boss);
-    },
+    aim: () => bossTarget(this.run?.boss ?? null),
     hitBoss: (x, y, radius) => this.run?.bosses.hitBoss(x, y, radius) === true,
     hitFoe: (x, y, radius, struck) => this.run?.hitFoe(x, y, radius, struck) ?? -1,
     hitRock: (x, y, radius) => this.breakRock(x, y, radius),

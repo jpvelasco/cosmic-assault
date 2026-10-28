@@ -24,9 +24,12 @@ export function phaseFor(hp: number, maxHp: number): BossPhase {
   return hp * 3 <= maxHp * 2 ? 2 : 1;
 }
 
-/** Where a shot does harm now: wherever the boss's behaviour says, by default the core if it can be hurt, else a live part; nowhere outside the fight. */
-export function bossTarget(view: Readonly<BossView>): Readonly<Point> | null {
-  return view.state === 'fighting' ? view.target : null;
+/**
+ * Where a shot does harm now: wherever the boss's behaviour says, by default the core if it can be hurt, else a live part;
+ * nowhere outside the fight, or with no boss.
+ */
+export function bossTarget(view: Readonly<BossView> | null): Readonly<Point> | null {
+  return view?.state === 'fighting' ? view.target : null;
 }
 
 /** Where a shot harms a boss whose behaviour does not say: the core if it can be hurt, else its first live part that is not armoured. */

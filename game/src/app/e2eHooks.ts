@@ -65,8 +65,7 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
    */
   const strikeBoss = (): boolean => {
     const { world } = run;
-    const boss = world?.boss ?? null;
-    const target = boss === null ? null : bossTarget(boss);
+    const target = bossTarget(world?.boss ?? null);
     if (world === null || target === null) return false;
     return world['run']?.bosses.hitBoss(target.x, target.y, 1) === true;
   };
