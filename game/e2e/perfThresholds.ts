@@ -27,20 +27,19 @@ export function ceilingFor(readings: readonly FrameReading[]): FrameCeiling {
 }
 
 /**
- * The readings each scene's ceiling comes from, under the perf project's 4x CPU slowdown. Calibrated from CI runs; see
- * ledger. Until those are recorded these are provisional: three quiet runs, one at a time, on a 16-vCPU cloud host,
- * where both scenes hold the display's 60 Hz, so the ceilings they give are far tighter than a CI runner meets.
+ * The readings each scene's ceiling comes from, under the perf project's 4x CPU slowdown: three runs of the CI `perf`
+ * job on GitHub's `ubuntu-24.04` runners. Recalibrate from fresh CI runs when a scene's content or the renderer changes.
  */
 export const PERF_READINGS: Readonly<Record<PerfScene, readonly FrameReading[]>> = {
   field: [
-    { p95Ms: 18, longFrames: 0 },
-    { p95Ms: 18.25, longFrames: 0 },
-    { p95Ms: 18, longFrames: 0 },
+    { p95Ms: 21.75, longFrames: 0 },
+    { p95Ms: 20.25, longFrames: 0 },
+    { p95Ms: 20, longFrames: 0 },
   ],
   bossFight: [
-    { p95Ms: 17, longFrames: 0 },
-    { p95Ms: 17, longFrames: 0 },
-    { p95Ms: 17, longFrames: 0 },
+    { p95Ms: 17.25, longFrames: 0 },
+    { p95Ms: 17.25, longFrames: 0 },
+    { p95Ms: 17.25, longFrames: 0 },
   ],
 };
 
