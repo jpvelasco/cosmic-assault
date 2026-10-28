@@ -3,7 +3,7 @@ import { BOSSES } from '../../src/content/bosses';
 import { galaxyById } from '../../src/content/galaxies';
 import type { BossId } from '../../src/content/types';
 import type { AttackSpec, BossBehaviour, BossFactory, BossPart } from '../../src/sim/boss/behaviour';
-import { respawnClearance } from '../../src/sim/respawn';
+import { respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { BOSS_BEHAVIOURS } from '../../src/sim/boss/roster';
 import { BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
@@ -166,6 +166,6 @@ describe('part-aware boss reach', () => {
     expect(Math.hypot(BOSS_FIELD.width / 2 - segment.x, BOSS_FIELD.height * 0.8 - segment.y)).toBeLessThan(SEGMENT_RADIUS + ASTEROID.safeRadius);
     const spot = run.respawnPoint();
     if (spot === null) throw new Error('no respawn spot');
-    expect(respawnClearance(boss, run.bosses.runner?.reach ?? 0, spot.x, spot.y)).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
+    expect(respawnClearance(boss, run.bosses.runner?.reach ?? 0, spot.x, spot.y)).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
   });
 });

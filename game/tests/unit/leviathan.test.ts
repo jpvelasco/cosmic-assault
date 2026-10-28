@@ -5,7 +5,7 @@ import { MIN_WINDUP_SECONDS } from '../../src/content/pacingRules';
 import type { AttackId, GalaxyDef } from '../../src/content/types';
 import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
 import { bossTarget } from '../../src/sim/boss/bossRules';
-import { respawnClearance } from '../../src/sim/respawn';
+import { respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import {
   coilAim,
@@ -28,7 +28,7 @@ import {
   SWIM_SPEED,
   TRAIL_STEP,
 } from '../../src/sim/boss/leviathan';
-import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { Field } from '../../src/sim/field';
 import { Bolts } from '../../src/sim/foes/bolts';
@@ -673,7 +673,7 @@ describe('the Leviathan in 4-★', () => {
       if (w.lives === 0) continue;
       const boss = w.boss;
       if (boss === null) throw new Error('only the Leviathan hits the ship here');
-      expect(respawnClearance(boss, boss.radius, w.ship.x, w.ship.y)).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
+      expect(respawnClearance(boss, boss.radius, w.ship.x, w.ship.y)).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
       respawns++;
     }
     expect(hits).toBeGreaterThanOrEqual(1);

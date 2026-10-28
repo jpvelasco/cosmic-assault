@@ -9,7 +9,7 @@ import { createView } from '../../src/bot/view';
 import type { BossPart, BossSetup, BossView } from '../../src/sim/boss/behaviour';
 import { crosses } from '../../src/sim/boss/attacks';
 import { BossArena } from '../../src/sim/boss/bossArena';
-import { respawnClearance } from '../../src/sim/respawn';
+import { respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
 import { stretchRoom } from '../../src/sim/boss/turretRing';
 import { createWarden, LOCK_BOLTS, LOCK_TURRETS, PULSE_RADIUS, PULSE_SECONDS, SPIN_FACTOR, SPIN_SECONDS, VOLLEY_REPEAT, WARDEN_RING } from '../../src/sim/boss/warden';
@@ -584,7 +584,7 @@ describe('the Warden in 3-★', () => {
         if (!w.step(STEP_SECONDS, NO_CONTROLS).some((e) => e.type === 'shipHit') || w.lives === 0) continue;
         const boss = w.boss;
         if (boss === null) throw new Error('only the Warden hits the ship here');
-        expect(respawnClearance(boss, 136, w.ship.x, w.ship.y)).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
+        expect(respawnClearance(boss, 136, w.ship.x, w.ship.y)).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
         respawns++;
       }
     }

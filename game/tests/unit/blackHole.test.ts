@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FOES } from '../../src/content/foes';
 import { BLACK_HOLE, HAZARD_RULES, MAX_SHIP_PULL, WARP_RIFT } from '../../src/content/hazards';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyEvent } from '../../src/content/types';
@@ -14,7 +15,10 @@ import { zoneClearance } from '../../src/sim/hazards/dangerZone';
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
+import { RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { createRng } from '../../src/sim/rng';
+import { wrappedDistance } from '../../src/sim/wrap';
+import { foeAt } from '../helpers/foeAt';
 import { clearTime, flyOut } from '../helpers/holeEscape';
 import { createShip, type Ship } from '../../src/sim/ship';
 
@@ -38,10 +42,6 @@ function holeField(elapsed: number, intensity: GalaxyEvent['intensity'] = 1, out
 
 function rockAt(id: number, x: number, y: number, radius = ASTEROID.radii[2] as number): Asteroid {
   return { id, x, y, px: x, py: y, vx: 0, vy: 0, radius, size: 2, rotation: 0, protation: 0, spin: 0, transient: false } as unknown as Asteroid;
-}
-
-function foeAt(id: number, x: number, y: number, kind: Foe['kind'] = 'drone', hp = 1): Foe {
-  return { id, kind, x, y, px: x, py: y, vx: 0, vy: 0, radius: 12, hp, rotation: 0, protation: 0, fromAttack: false } as unknown as Foe;
 }
 
 function shipAt(x: number, y: number): Ship {
@@ -96,8 +96,8 @@ describe('the black hole\'s pull', () => {
   });
 
   it('pulls a foe that is pulled, and not one that steers itself', () => {
-    const pulled = foeAt(4, CENTRE.x + 200, CENTRE.y, 'splitter', 2);
-    const steering = foeAt(5, CENTRE.x - 200, CENTRE.y, 'phaser', 2);
+    const pulled = foeAt('splitter', CENTRE.x + 200, CENTRE.y, { id: 4 });
+    const steering = foeAt('phaser', CENTRE.x - 200, CENTRE.y, { id: 5 });
     holeField(START_AT + 1).move(DT, shipAt(60, 60), [], [pulled, steering], []);
     expect(pulled.vx).toBeLessThan(0);
     expect(steering.vx).toBe(0);
@@ -167,8 +167,8 @@ describe('swallowing', () => {
 
   it('destroys a foe inside the horizon for 0 points, leaving nothing behind: foeDestroyed at 0, and its hp at 0', () => {
     const out: SimEvent[] = [];
-    const inside = foeAt(20, CENTRE.x, CENTRE.y + 10, 'splitter', 2);
-    const outside = foeAt(21, CENTRE.x + 200, CENTRE.y);
+    const inside = foeAt('splitter', CENTRE.x, CENTRE.y + 10, { id: 20 });
+    const outside = foeAt('drone', CENTRE.x + 200, CENTRE.y, { id: 21 });
     holeField(START_AT + 1).move(DT, shipAt(60, 60), [], [inside, outside], out);
     expect(inside.hp).toBe(0);
     expect(outside.hp).toBeGreaterThan(0);
@@ -230,7 +230,7 @@ describe('the hole\'s life', () => {
   });
 
   /** How far a respawn point must lie from the hole: a ship's safe radius outside the reach it survives a reaction from. */
-  const SAFE_FROM_HOLE = BLACK_HOLE.exitReach + PLAYER.radius + ASTEROID.safeRadius;
+  const SAFE_FROM_HOLE = BLACK_HOLE.exitReach + RESPAWN_MARGIN;
 
   it.each([MIN_ASPECT, 16 / 9, MAX_ASPECT])('puts the respawn point a safe radius outside its exit reach and no farther, inside the field, at aspect %d', (aspect) => {
     const field: Field = { width: FIELD_HEIGHT * aspect, height: FIELD_HEIGHT };
@@ -255,11 +255,11 @@ describe('the hole\'s life', () => {
     hazards.move(DT, ship, [], [], []);
     const first = hazards.respawnPoint();
     if (first === null) throw new Error('the hole is active, so it has a respawn point');
-    const swarm = [foeAt(1, first.x, first.y), foeAt(2, first.x + 30, first.y), foeAt(3, first.x, first.y - 30)];
+    const swarm = [foeAt('drone', first.x, first.y, { id: 1 }), foeAt('drone', first.x + 30, first.y, { id: 2 }), foeAt('drone', first.x, first.y - 30, { id: 3 })];
     hazards.move(DT, ship, [], swarm, []);
     const moved = hazards.respawnPoint();
     if (moved === null) throw new Error('the hole is active, so it has a respawn point');
-    for (const foe of swarm) expect(Math.hypot(moved.x - foe.x, moved.y - foe.y) - foe.radius).toBeGreaterThanOrEqual(PLAYER.radius + ASTEROID.safeRadius);
+    for (const foe of swarm) expect(Math.hypot(moved.x - foe.x, moved.y - foe.y) - foe.radius).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
     expect(Math.hypot(moved.x - CENTRE.x, moved.y - CENTRE.y)).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
     expect(hazards.respawnPoint()).toEqual(moved);
     // A spent foe is no swarm: the first choice comes back.
@@ -268,8 +268,6 @@ describe('the hole\'s life', () => {
   });
 
   describe('with other hazards in play', () => {
-    /** How far outside every foe, zone and mouth a respawn lands: a ship's radius and its safe radius. */
-    const MARGIN = PLAYER.radius + ASTEROID.safeRadius;
     /** A hole beside `inPlay`, built alone so a test sets the hazards in play; active on `FIELD` unless `stepped` is false. */
     function holeAmong(inPlay: readonly HazardState[], stepped = true): BlackHole {
       const made = new BlackHole({ events: [hole()], rng: createRng(1), nextId: () => 1, keepOuts: () => [], inPlay: () => inPlay });
@@ -284,12 +282,12 @@ describe('the hole\'s life', () => {
     }
     const zoneOn = (spot: { x: number; y: number }, stage: HazardState['stage']): HazardState => ({ id: 7, type: 'dangerZone', stage, x: spot.x, y: spot.y, w: 160, h: 160, intensity: 1, remaining: 5 });
     const riftOn = (spot: { x: number; y: number }, stage: HazardState['stage']): HazardState => ({ id: 8, type: 'warpRift', stage, x: 100, y: 100, toX: spot.x, toY: spot.y, intensity: 1, remaining: 5 });
-    /** How far `spot` lies outside every zone and rift mouth in `states`. */
+    /** How far `spot` lies outside every zone and rift mouth in `states`, across the wrap. */
     function hazardClearance(states: readonly HazardState[], spot: { x: number; y: number }): number {
       return Math.min(
         ...states.map((s) => {
           if (s.type === 'dangerZone') return zoneClearance(FIELD, s, spot.x, spot.y);
-          if (s.type === 'warpRift') return Math.min(Math.hypot(spot.x - s.x, spot.y - s.y), Math.hypot(spot.x - s.toX, spot.y - s.toY)) - WARP_RIFT.radius;
+          if (s.type === 'warpRift') return Math.min(wrappedDistance(spot, s, FIELD), wrappedDistance(spot, { x: s.toX, y: s.toY }, FIELD)) - WARP_RIFT.radius;
           return Infinity;
         }),
       );
@@ -303,26 +301,26 @@ describe('the hole\'s life', () => {
     ] as const)('moves the respawn point off %s over its first spot, to one a safe radius clear of it and of the hole', (_name, make, stage) => {
       const states = [make(respawnAmong([]), stage)];
       const spot = respawnAmong(states);
-      expect(hazardClearance(states, spot)).toBeGreaterThanOrEqual(MARGIN);
+      expect(hazardClearance(states, spot)).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
       expect(Math.hypot(spot.x - CENTRE.x, spot.y - CENTRE.y)).toBeGreaterThanOrEqual(SAFE_FROM_HOLE);
     });
 
     it('keeps a respawn out of a zone and a rift mouth on the next spots when foes crowd the first', () => {
       const first = respawnAmong([]);
-      const swarm = [foeAt(1, first.x, first.y)];
+      const swarm = [foeAt('drone', first.x, first.y, { id: 1 })];
       const second = respawnAmong([], swarm);
       const third = respawnAmong([zoneOn(second, 'active')], swarm);
       const states = [zoneOn(second, 'active'), riftOn(third, 'active')];
       const spot = respawnAmong(states, swarm);
-      expect(hazardClearance(states, spot)).toBeGreaterThanOrEqual(MARGIN);
-      expect(Math.hypot(spot.x - first.x, spot.y - first.y) - 12).toBeGreaterThanOrEqual(MARGIN);
+      expect(hazardClearance(states, spot)).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
+      expect(Math.hypot(spot.x - first.x, spot.y - first.y) - FOES.drone.radius).toBeGreaterThanOrEqual(RESPAWN_MARGIN);
     });
 
     it('offers the spot it respawns at with nothing in the way, whatever the foes and hazards, for placed hazards to keep out of', () => {
       const first = respawnAmong([]);
       const made = holeAmong([zoneOn(first, 'active')]);
       expect(made.respawnSpot(FIELD)).toEqual(first);
-      expect(made.respawnPoint([foeAt(1, first.x, first.y)])).not.toEqual(first);
+      expect(made.respawnPoint([foeAt('drone', first.x, first.y, { id: 1 })])).not.toEqual(first);
       expect(holeAmong([], false).respawnSpot(FIELD), 'no hole yet').toBeNull();
     });
   });

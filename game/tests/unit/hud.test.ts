@@ -12,9 +12,9 @@ import { World } from '../../src/sim/world';
 import { BOSSES } from '../../src/content/bosses';
 import { HIVE_HOME_SHARE } from '../../src/sim/boss/hiveCarrier';
 import { bossHome } from '../../src/sim/boss/bossRules';
-import { clearSpot } from '../../src/sim/respawn';
+import { clearSpot, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { ORBIT_RADIUS, SHARD_RADIUS } from '../../src/sim/boss/monolith';
-import { ASTEROID, PLAYER } from '../../src/sim/config';
+import { PLAYER } from '../../src/sim/config';
 import { fieldForViewport } from '../../src/sim/field';
 import { layoutFor } from '../../src/render/layout';
 
@@ -388,7 +388,7 @@ describe('createHud', () => {
       { core: { x: field.width / 2, y: field.height * HIVE_HOME_SHARE }, reach: BOSSES.hiveCarrier.radius },
     ];
     for (const { core, reach } of homes) {
-      const spot = clearSpot(core, reach + PLAYER.radius + ASTEROID.safeRadius, field);
+      const spot = clearSpot(core, reach + RESPAWN_MARGIN, field);
       // The ship as drawn: its centre on screen, and its radius grown by the small-screen sprite scale.
       const x = layout.fieldX + spot.x * layout.scale;
       const y = layout.fieldY + spot.y * layout.scale;

@@ -12,11 +12,13 @@ import type { Hazard, HazardFactory, HazardSetup, HazardState, PointHazardState 
 import { HAZARD_FACTORIES, HazardField, hazardStreamName } from '../../src/sim/hazards/hazardField';
 import { shipPullAt } from '../../src/sim/hazards/shipPull';
 import { nudge } from '../../src/sim/math';
+import { RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { createRng } from '../../src/sim/rng';
 import { createShip } from '../../src/sim/ship';
 import type { SimEvent } from '../../src/sim/events';
 import type { Foe } from '../../src/sim/foes/foe';
 import { World } from '../../src/sim/world';
+import { foeAt } from '../helpers/foeAt';
 import { MUTED_KINDS } from '../helpers/mute';
 
 const FIELD: Field = { width: 1280, height: 720 };
@@ -24,7 +26,6 @@ const DT = STEP_SECONDS;
 const event = (type: GalaxyEvent['type'], at = 20, intensity: GalaxyEvent['intensity'] = 1): GalaxyEvent => ({ at, type, intensity });
 
 /** A live drone at (x, y). */
-const foeAt = (id: number, x: number, y: number): Foe => ({ id, kind: 'drone', x, y, px: x, py: y, vx: 0, vy: 0, radius: 12, hp: 1 }) as unknown as Foe;
 
 /** A hazard that does only what a test gives it. */
 function standIn(overrides: Partial<Hazard> = {}): Hazard {
@@ -216,7 +217,7 @@ describe('HazardField', () => {
     expect(ASTEROID.safeRadius).toBe(150);
     expect(hazards.keepOuts(FIELD)).toEqual([
       { x: 640, y: 360, r: 150 },
-      { x: 640, y: 576, r: PLAYER.radius + ASTEROID.safeRadius },
+      { x: 640, y: 576, r: RESPAWN_MARGIN },
       { x: 100, y: 200, r: ASTEROID.safeRadius },
     ]);
     const plain = field([event('gravityWell')], { gravityWell: () => standIn() });
@@ -236,7 +237,7 @@ describe('HazardField', () => {
       for (let t = 0; t <= 34; t += 0.5) {
         hazards.step(t, FIELD, out);
         const spot = crowded ? hazards.respawnPoint() : null;
-        if (spot !== null && foes.length < 12) foes.push(foeAt(foes.length + 1, spot.x, spot.y));
+        if (spot !== null && foes.length < 12) foes.push(foeAt('drone', spot.x, spot.y, { id: foes.length + 1 }));
         hazards.move(DT, ship, [], foes, []);
       }
       return out.filter((e) => e.type === 'riftWarning' || e.type === 'zoneWarning');

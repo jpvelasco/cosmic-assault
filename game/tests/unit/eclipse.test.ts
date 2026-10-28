@@ -7,9 +7,9 @@ import { launchSlot, launchSlotsFor } from '../../src/sim/boss/attacks';
 import { createEclipse, DIVE_SECONDS, ECLIPSE_CAP, ECLIPSE_CORONA, ECLIPSE_REACH, ECLIPSE_VOLLEY, ECLIPSE_WAVES, QUAKE_ROCKS } from '../../src/sim/boss/eclipse';
 import type { Point } from '../../src/sim/math';
 import type { BossBehaviour, BossPart, BossPhase, BossSetup, BossView } from '../../src/sim/boss/behaviour';
-import { clearSpot, respawnClearance } from '../../src/sim/respawn';
+import { clearSpot, respawnClearance, RESPAWN_MARGIN } from '../../src/sim/respawn';
 import { BossRunner } from '../../src/sim/boss/bossRunner';
-import { ASTEROID, PLAYER, STEP_SECONDS } from '../../src/sim/config';
+import { PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { Bolts } from '../../src/sim/foes/bolts';
 import { FoeField } from '../../src/sim/foes/foeField';
 import { createRng } from '../../src/sim/rng';
@@ -414,7 +414,7 @@ describe('the Eclipse moves', () => {
 describe('the Eclipse\'s fairness', () => {
   it('keeps its respawn clear of the corona at every spot its core drifts to', () => {
     const rig = fighting(7);
-    const margin = PLAYER.radius + ASTEROID.safeRadius;
+    const margin = RESPAWN_MARGIN;
     for (let step = 0; step < 30 / STEP_SECONDS; step++) {
       stepper(rig)(STEP_SECONDS, rig.arena);
       const spot = clearSpot(rig.r.view, rig.r.reach, rig.arena.field(), margin);
