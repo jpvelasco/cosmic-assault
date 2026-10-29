@@ -25,10 +25,13 @@ async function pauseRun(page: Page): Promise<void> {
   await expectMode(page, 'paused', { timeout: FRAME_TIMEOUT_MS });
 }
 
-/** Pauses (if the run is still in play) and quits from the pause card. */
+/** Pauses (if the run is still in play) and quits from the pause card, whose Quit asks twice in Rank. */
 async function quitRun(page: Page): Promise<void> {
   await pauseRun(page);
-  await page.getByTestId('quit').click();
+  const quit = page.getByTestId('quit');
+  await quit.click();
+  await expect(quit).toHaveText('Really quit? Costs a life');
+  await quit.click();
   await expectMode(page, 'title', { timeout: FRAME_TIMEOUT_MS });
 }
 

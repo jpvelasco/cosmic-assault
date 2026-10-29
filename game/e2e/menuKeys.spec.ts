@@ -18,7 +18,8 @@ test('Enter on the focused Quit lands on the title and does not start a run', as
   await page.keyboard.press('Escape');
   await expectMode(page, 'paused');
 
-  await page.keyboard.press('ArrowDown');
+  // The pause card opens with Resume focused, so one arrow reaches Quit under it.
+  await expect(page.getByTestId('resume')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: 'Quit' })).toBeFocused();
   await page.keyboard.press('Enter');

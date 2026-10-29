@@ -172,7 +172,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     },
     install: installPrompt.install,
   }, log);
-  // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
+  // After the overlay, so the settings card is drawn over the title, mode select and pause cards it opens from.
   const prefs = createSettingsController(root, {
     storage,
     initial: saved,
@@ -241,7 +241,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     run: {
       flow: run.command,
       pause: pauseByPlayer,
-      resume,
+      // Esc, P and the pad's Back and Start take back a Rank Quit that asks again, rather than resume behind it.
+      resume: () => {
+        if (!overlay.cancelQuit()) resume();
+      },
       toggleMute: prefs.toggleMute,
       toggleFullscreen: () => {
         fullscreen.toggle();
@@ -402,7 +405,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     overlay.endAttract();
     // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
     run.dispose();
-    touch.show(false);
+    touch.show('none');
     prefs.card.hide();
     rotatePrompt.show(false);
     view.armIdleCursor();

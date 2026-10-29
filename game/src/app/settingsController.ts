@@ -4,7 +4,7 @@ import type { Effects } from '../render/effects';
 import { listen } from '../ui/dom';
 import { createSettingsCard, type SettingsCard } from '../ui/settingsCard';
 import type { Toast } from '../ui/toast';
-import { createCardToggle, type CardToggleDeps } from './cardToggle';
+import { createCardToggle, SETTINGS_SCREENS, type CardToggleDeps } from './cardToggle';
 import type { HitStop } from './hitStop';
 import { saveSettings, shakeEnabled, type Settings } from './settings';
 
@@ -26,7 +26,7 @@ export interface SettingsController {
   readonly settings: Settings;
   /** Puts a change into effect and saves it at once, for a choice made outside the settings card (the Hangar's). */
   readonly choose: (patch: Partial<Settings>) => void;
-  /** Whether the settings card is over the title or pause card; the run behind it, if any, stays as it was. */
+  /** Whether the settings card is over the title, mode select or pause card; the run behind it, if any, stays as it was. */
   readonly open: boolean;
   readonly card: SettingsCard;
   /** The M key and the sound chips. */
@@ -94,7 +94,7 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
       toggle.close();
     },
   });
-  const toggle = createCardToggle(card, { ...deps, opensOn: ['title', 'paused'] });
+  const toggle = createCardToggle(card, { ...deps, opensOn: SETTINGS_SCREENS });
   const unlisten = listen(reducedMotion, 'change', syncMotion);
   applySettings({});
 

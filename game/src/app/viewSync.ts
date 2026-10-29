@@ -3,7 +3,7 @@ import type { TouchControls } from '../input/touchControls';
 import type { CornerBox } from '../render/hud';
 import type { Renderer } from '../render/renderer';
 import { listen } from '../ui/dom';
-import { TOUCH_STYLE_QUERY } from '../ui/hints';
+import { hintCopy, TOUCH_STYLE_QUERY, type InputStyle } from '../ui/hints';
 import type { Overlay, OverlayState } from '../ui/overlay';
 import type { RotatePrompt } from '../ui/rotatePrompt';
 import { createSafeAreaProbe } from '../ui/safeArea';
@@ -55,7 +55,7 @@ export interface ViewSync {
   portrait(): boolean;
   /** Hides the cursor after it rests for `IDLE_CURSOR_MS` in play; any move, and leaving play or a crash, brings it back. */
   armIdleCursor(): void;
-  /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button. */
+  /** Keeps the HUD inside the safe area and clear of the pause button. */
   syncHudBounds(): void;
   dispose(): void;
 }
@@ -66,18 +66,15 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const touchStyle = window.matchMedia(TOUCH_STYLE_QUERY);
   const portrait = window.matchMedia('(orientation: portrait)');
-  /** The touch pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
+  /** The pause button's corner, kept while the button is hidden: it is anchored top-right, so it holds across resizes. */
   let pauseCorner: CornerBox | null = null;
   let idleCursorTimer: number | undefined;
 
   const needsRotation = (): boolean => touchStyle.matches && portrait.matches;
 
   function syncHudBounds(): void {
-    if (!coarsePointer.matches) pauseCorner = null;
-    else {
-      const button = touch.pauseRect();
-      if (button !== null) pauseCorner = { width: root.clientWidth - button.left, height: button.bottom };
-    }
+    const button = touch.pauseRect();
+    if (button !== null) pauseCorner = { width: root.clientWidth - button.left, height: button.bottom };
     renderer.setHudBounds({ insets: safeArea.read(), topRight: pauseCorner });
   }
 
@@ -85,14 +82,17 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     if (deps.tripped()) return;
     const { settings, settingsOpen, look, ...state } = deps.read();
     const rotating = needsRotation();
-    overlay.update({ ...state, covered: settingsOpen || records.open || hangar.open || rotating, inputStyle: touchStyle.matches ? 'touch' : 'keys' });
+    const inputStyle: InputStyle = touchStyle.matches ? 'touch' : 'keys';
+    overlay.update({ ...state, covered: settingsOpen || records.open || hangar.open || rotating, inputStyle });
     settingsCard.update(settings, coarsePointer.matches);
     records.card.update(state.save, state.today);
     hangar.card.update(state.save, settings);
     for (const card of [settingsCard, records.card, hangar.card]) card.cover(rotating);
     renderer.setLook(look);
     rotatePrompt.show(rotating);
-    touch.show(state.flow.screen === 'playing' && coarsePointer.matches);
+    // The pause button shows in play on every device; the joystick and FIRE only for a finger.
+    touch.show(state.flow.screen !== 'playing' ? 'none' : coarsePointer.matches ? 'all' : 'pause');
+    touch.setPauseTip(hintCopy(inputStyle).pauseTip);
     syncHudBounds();
   }
 

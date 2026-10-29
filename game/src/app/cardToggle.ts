@@ -2,6 +2,11 @@ import type { CoverCard } from '../ui/coverCard';
 import type { Screen } from './flow';
 import { actsUnder, type Cover } from './inputRouting';
 
+/** Where the Records and Hangar chips are, so where their cards open. */
+const MENU_CARD_SCREENS: readonly Screen[] = ['title', 'modeSelect'];
+/** Where the Settings chip is: beside Records and Hangar, and on the pause card. */
+export const SETTINGS_SCREENS: readonly Screen[] = [...MENU_CARD_SCREENS, 'paused'];
+
 export interface CardToggleDeps {
   /** The screens whose cards offer the card. */
   readonly opensOn: readonly Screen[];
@@ -31,7 +36,7 @@ export function createMenuCardToggle<C extends Pick<CoverCard, 'show' | 'hide'>>
     makeCard(() => {
       toggle.close();
     }),
-    { ...deps, opensOn: ['title', 'modeSelect'] },
+    { ...deps, opensOn: MENU_CARD_SCREENS },
   );
   return toggle;
 }

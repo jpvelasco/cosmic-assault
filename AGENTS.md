@@ -238,6 +238,22 @@
   - Gamepads use the standard mapping: the left stick steers like the touch
     joystick, the D-pad turns and thrusts, A/RB/RT fire, Start pauses, and on
     menus the D-pad moves focus, A confirms and B goes back.
+  - Pausing and leaving a run look the same on every device. In play the pause
+    button (`input/touchControls.ts`) shows top right whatever the pointer, and
+    the HUD always keeps clear of its corner; only the joystick and FIRE are
+    touch-only. It pauses on pointerdown, never fires the ship, and with keys
+    its tooltip names Esc and P. The pause card (`ui/pauseCard.ts`) focuses
+    Resume each time it is entered, the auto-pause on blur or a hidden tab
+    included, so Enter, Space and pad A resume, and with keys it names Esc
+    beside Resume. Its Quit reads "Quit to title" in Free play and the Daily;
+    in Rank it asks twice ("Really quit? Costs a life"), and Esc, P or the
+    pad's Back or Start takes the question back without resuming
+    (`cancelQuit` in `ui/overlay.ts`). A key held down onto a focused card
+    button presses nothing, and its release reaches the game (`ui/dom.ts`).
+    Settings opens from the title, mode select and the pause card
+    (`SETTINGS_SCREENS` in `app/cardToggle.ts`), and closing it puts focus back
+    on its chip. `e2e/navigation.spec.ts` covers all of this on the desktop and
+    the phone.
   - The crash guard wraps each frame. A crash shows a recovery card with
     *Try again* and *Copy report*; the report comes from an in-memory ring log
     and nothing is sent anywhere.
