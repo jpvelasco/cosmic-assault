@@ -82,7 +82,8 @@ const END_BUTTONS: readonly EndButton[] = [
   // The Daily's Retry plays the same date again.
   { kind: 'retry', label: 'Retry', testId: 'results-retry', shows: (flow) => flow.mode !== 'rank' && flow.screen !== 'rankComplete' },
   { kind: 'map', label: 'Map', testId: 'results-map', shows: (flow) => flow.mode === 'free' && flow.screen !== 'rankComplete' },
-  { kind: 'title', label: 'Title', testId: 'rank-title', shows: (flow) => flow.mode !== 'free' },
+  { kind: 'title', label: 'Title', testId: 'rank-title', shows: (flow) => flow.mode === 'rank' },
+  { kind: 'title', label: 'Title', testId: 'daily-title', shows: (flow) => flow.mode === 'daily' },
 ];
 
 /** The test ids of the buttons the end card shows for `flow`, in order. */

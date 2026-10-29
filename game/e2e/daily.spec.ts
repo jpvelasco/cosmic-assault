@@ -100,7 +100,7 @@ test('a Daily clear shows its target and no stars, writes no progress but the Da
   await expect(page.locator('.new-best')).toBeHidden();
   for (const hidden of ['results-next', 'results-map', 'rank-continue']) await expect(page.getByTestId(hidden)).toBeHidden();
   await expect(page.getByTestId('results-retry')).toBeVisible();
-  await expect(page.getByTestId('rank-title')).toBeVisible();
+  await expect(page.getByTestId('daily-title')).toBeVisible();
   await page.setViewportSize({ width: 1366, height: 860 });
   await page.screenshot({ path: test.info().outputPath('daily-results-1366x860.png') });
 
@@ -222,7 +222,7 @@ test('a clear starts the streak, the next date\'s clear runs it to 2, and two da
   await openDaily(page, second);
   await clearDailyFromModeSelect(page);
   expect((await storedSave(page)).daily).toMatchObject({ lastCleared: second, streak: 2, bestStreak: 2 });
-  await clickPastGuard(page, 'rank-title', 'title');
+  await clickPastGuard(page, 'daily-title', 'title');
   await openModeSelect(page);
   await expect(page.getByTestId('daily-streak')).toHaveText('Streak 2');
   expect(rankPart(await storedSave(page))).toEqual(rankBefore);

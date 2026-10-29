@@ -51,8 +51,8 @@ describe('the end card for each mode', () => {
   });
 
   it('offers the Daily a Retry of the same date and the title, and no Next or Map', () => {
-    expect(endButtons(daily('results'))).toEqual(['results-retry', 'rank-title']);
-    expect(endButtons(daily('gameOver'))).toEqual(['results-retry', 'rank-title']);
+    expect(endButtons(daily('results'))).toEqual(['results-retry', 'daily-title']);
+    expect(endButtons(daily('gameOver'))).toEqual(['results-retry', 'daily-title']);
   });
 
   it('keeps the Free play and Rank buttons as they were', () => {
