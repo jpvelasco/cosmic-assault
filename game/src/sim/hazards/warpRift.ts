@@ -6,11 +6,11 @@ import type { GalaxyEvent } from '../../content/types';
 import { ASTEROID, PLAYER } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import { TIME_EPSILON, type Point } from '../math';
+import { nearestPoint, TIME_EPSILON, type Point } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
 import { rescale, wrapDelta, wrapPosition } from '../wrap';
-import { clearSpots } from './placement';
+import { clearSpots, isClearSpot, type SpotRule } from './placement';
 import type { Bodies, Circle, Hazard, HazardSetup, HazardState, RiftState } from './hazard';
 import { HazardSchedule, ScheduledHazard } from './schedule';
 
@@ -42,6 +42,25 @@ interface Pair extends RiftState {
  * from; the fallback's is for a crowded field.
  */
 const HOLE_RUNGS: readonly number[] = [BLACK_HOLE.exitReach, BLACK_HOLE.exitFallback].map((exit) => exit + PLAYER.radius + EXIT_GAP);
+
+/** The spots a pair's mouths may take on one rung of the hole's ladder: those clear of the corners by the drawn radius, then by the hitbox radius. */
+interface Layout {
+  readonly drawn: readonly Point[];
+  readonly hitbox: readonly Point[];
+}
+
+/** How a mouth keeps clear: of every circle by its own radius, of the HUD and thumb corners by `corners` (its drawn or hitbox radius). */
+const mouthRule = (corners: number): SpotRule => ({ inset: WARP_RIFT.inset, reach: WARP_RIFT.radius, corners });
+
+/** The spots clear of `keepOut` in `field`: by the drawn radius from the HUD and thumb corners, so a swirl stays out from under them, or else by the hitbox radius alone. */
+const mouthLayout = (field: Field, keepOut: readonly Circle[]): Layout => ({
+  drawn: clearSpots(field, keepOut, mouthRule(WARP_RIFT.drawn)),
+  hitbox: clearSpots(field, keepOut, mouthRule(WARP_RIFT.radius)),
+});
+
+/** Whether `spot` lies at least `MOUTH_SPACING` from both mouths of every pair in `pairs`. */
+const spacedFrom = (spot: Readonly<Point>, pairs: readonly Pair[]): boolean =>
+  pairs.every((p) => Math.hypot(spot.x - p.x, spot.y - p.y) >= MOUTH_SPACING && Math.hypot(spot.x - p.toX, spot.y - p.toY) >= MOUTH_SPACING);
 
 /** The id the ship rests under: rocks and foes take ids from the arena, which start at 1. */
 const SHIP_KEY = 0;
@@ -75,6 +94,24 @@ function touchesWithin(field: Field, ship: Readonly<Ship>, body: Mover, radius: 
 }
 
 /**
+ * Where `mouth` belongs after a resize: where it is, if it keeps clear of the `loosest` rung's circles and the corners by
+ * its hitbox radius, `MOUTH_SPACING` from the `others`' mouths and `apart` of the width from its `partner`; else the
+ * nearest spot of `layouts` that keeps the last two, on the first rung and corner clearance with one; else where it is.
+ */
+function refitMouth(field: Field, layouts: readonly Layout[], loosest: readonly Circle[], mouth: Point, partner: Readonly<Point>, others: readonly Pair[]): Point {
+  const far = WARP_RIFT.apart * field.width;
+  const fits = (spot: Readonly<Point>): boolean => spacedFrom(spot, others) && Math.hypot(spot.x - partner.x, spot.y - partner.y) >= far;
+  if (isClearSpot(field, loosest, mouthRule(WARP_RIFT.radius), mouth) && fits(mouth)) return mouth;
+  for (const { drawn, hitbox } of layouts) {
+    for (const spots of [drawn, hitbox]) {
+      const spot = nearestPoint(spots.filter(fits), mouth);
+      if (spot !== null) return spot;
+    }
+  }
+  return mouth;
+}
+
+/**
  * A galaxy's warp rifts, one event at a time: each shows `min(intensity, 2)` pairs of mouths as a warning for its
  * telegraph, then the pairs are open for their length. A body whose edge reaches an open mouth (`radius` plus its own)
  * leaves by the paired mouth, along its velocity and just outside it, with its previous pose reset so nothing streaks.
@@ -82,7 +119,8 @@ function touchesWithin(field: Field, ship: Readonly<Ship>, body: Mover, radius: 
  * ship its invulnerability for that long. It never strikes. Mouths keep clear of the field's centre, the ship and the HUD
  * and thumb corners, and of each other across pairs (`MOUTH_SPACING`), and sit at least `apart` of the field's width
  * from their pair: placed from their own stream. While a black hole is in play they also keep out of its reach, on the
- * first of `HOLE_RUNGS` that leaves room, and a pair with room on neither is not placed.
+ * first of `HOLE_RUNGS` that leaves room, and a pair with room on neither is not placed. A resize that leaves a mouth
+ * breaking these rules moves it to the nearest spot that keeps them (`refit`).
  */
 export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
   private readonly rng: Rng;
@@ -153,16 +191,7 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
    * spots for each rung of the hole's ladder (or for no rung, with no hole in play) are found once per warning.
    */
   private warn(event: GalaxyEvent, elapsed: number, field: Field, into: Pair[], out: SimEvent[]): void {
-    const circles = this.keepOuts(field);
-    const hole = this.inPlay().find((h) => h.type === 'blackHole') ?? null;
-    const rungs: readonly (number | null)[] = hole === null ? [null] : HOLE_RUNGS;
-    const layouts = rungs.map((reach) => {
-      const keepOut = reach === null || hole === null ? circles : [...circles, { x: hole.x, y: hole.y, r: reach }];
-      // A mouth keeps out of every circle by its own radius, and of the HUD and thumb corners by its drawn radius, so a
-      // swirl stays out from under them, or else by its hitbox radius alone.
-      const spots = (corners: number): Point[] => clearSpots(field, keepOut, { inset: WARP_RIFT.inset, reach: WARP_RIFT.radius, corners });
-      return { drawn: spots(WARP_RIFT.drawn), hitbox: spots(WARP_RIFT.radius) };
-    });
+    const layouts = this.rungs(field).map((keepOut) => mouthLayout(field, keepOut));
     const count = Math.min(event.intensity, WARP_RIFT.maxPairs);
     for (let i = 0; i < count; i++) {
       const pair = this.placeOnLadder(elapsed, event, field, layouts, into);
@@ -173,11 +202,21 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
   }
 
   /**
+   * The circles a mouth keeps out of on each rung of the hole's ladder, most preferred first: the keep-outs and, while a
+   * black hole is in play, a ring round it of that rung's radius. With no hole in play there is one rung, the keep-outs.
+   */
+  private rungs(field: Field): (readonly Circle[])[] {
+    const circles = this.keepOuts(field);
+    const hole = this.inPlay().find((h) => h.type === 'blackHole') ?? null;
+    return hole === null ? [circles] : HOLE_RUNGS.map((r) => [...circles, { x: hole.x, y: hole.y, r }]);
+  }
+
+  /**
    * A pair placed on the first rung of `layouts` that fits it, each rung tried first on the spots whose corner clearance is
    * the drawn radius, then on those cleared by the hitbox radius only. A pair that fits no rung is dropped: no pair is ever
    * placed closer than `MOUTH_SPACING`.
    */
-  private placeOnLadder(elapsed: number, event: GalaxyEvent, field: Field, layouts: readonly { drawn: readonly Point[]; hitbox: readonly Point[] }[], placed: readonly Pair[]): Pair | null {
+  private placeOnLadder(elapsed: number, event: GalaxyEvent, field: Field, layouts: readonly Layout[], placed: readonly Pair[]): Pair | null {
     for (const { drawn, hitbox } of layouts) {
       const pair = this.place(elapsed, event, field, drawn, placed) ?? this.place(elapsed, event, field, hitbox, placed);
       if (pair !== null) return pair;
@@ -191,7 +230,7 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
    */
   private place(elapsed: number, event: GalaxyEvent, field: Field, spots: readonly Point[], placed: readonly Pair[]): Pair | null {
     const far = WARP_RIFT.apart * field.width;
-    const free = spots.filter((s) => placed.every((p) => Math.hypot(s.x - p.x, s.y - p.y) >= MOUTH_SPACING && Math.hypot(s.x - p.toX, s.y - p.toY) >= MOUTH_SPACING));
+    const free = spots.filter((s) => spacedFrom(s, placed));
     if (free.length === 0) return null;
     for (let i = 0; i < TRIES; i++) {
       const a = free[this.rng.int(0, free.length)];
@@ -259,6 +298,28 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
     super.rescaleState(pair, old, field);
     pair.toX = rescale(pair.toX, old.width, field.width);
     pair.toY = rescale(pair.toY, old.height, field.height);
+  }
+
+  /**
+   * After a resize, with every hazard in its new place: a mouth the stretch left where no rung would place it (in a
+   * keep-out, the re-centred hole's exit reach included, under a HUD or thumb corner, too near another pair or its own)
+   * moves to the nearest spot that fits, on the first rung with one. A mouth with nowhere to go stays. It draws nothing.
+   */
+  refit(field: Field): void {
+    const pairs = this.schedule.live;
+    if (pairs.length === 0) return;
+    const rungs = this.rungs(field);
+    const loosest = rungs.at(-1) ?? [];
+    const layouts = rungs.map((keepOut) => mouthLayout(field, keepOut));
+    for (const pair of pairs) {
+      const others = pairs.filter((p) => p !== pair);
+      const from = refitMouth(field, layouts, loosest, { x: pair.x, y: pair.y }, { x: pair.toX, y: pair.toY }, others);
+      const to = refitMouth(field, layouts, loosest, { x: pair.toX, y: pair.toY }, from, others);
+      pair.x = from.x;
+      pair.y = from.y;
+      pair.toX = to.x;
+      pair.toY = to.y;
+    }
   }
 
   /** Grants the ship its invulnerability for a windup if `body` (of `radius`) reaches it within `seconds`. */

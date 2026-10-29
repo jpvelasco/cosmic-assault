@@ -104,6 +104,11 @@ export interface Hazard {
   respawnSpot?(field: Field): Readonly<{ x: number; y: number }> | null;
   /** Stretches its places to the new field, like the World's other entities. */
   resize(old: Field, field: Field): void;
+  /**
+   * Once every hazard has stretched to a new field of another size: moves what the stretch left where it is never placed,
+   * judged against the other hazards' new places. It draws nothing from its stream.
+   */
+  refit?(field: Field): void;
   /** Ends every warning and hazard at once, without an event: the galaxy is over. */
   stop(): void;
 }
