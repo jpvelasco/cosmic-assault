@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
-import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
+import { TIMED_PICKUPS } from '../src/content/pickups';
+import { PICKUP_PILL_SIZE } from '../src/render/hudPickups';
+import { collectPickup, expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
 import { PHONE_VIEWPORT } from './seeds';
 
 interface Box {
@@ -21,28 +23,30 @@ async function startRun(page: Page): Promise<void> {
   await nextFrames(page, 3);
 }
 
-/** On a touch screen the HUD pills stay on screen and out from under the pause button. */
-async function expectHudClearOfPause(page: Page): Promise<void> {
-  await startRun(page);
-
+/** What is wrong with the HUD pills drawn last: a pill overlapping another or the pause button, or reaching off the viewport. */
+async function hudProblems(page: Page): Promise<{ readonly rects: readonly Box[]; readonly problems: string[] }> {
   const pause = await page.getByTestId('touch-pause').boundingBox();
   if (pause === null) throw new Error('The pause button has no layout box; is the touch layer shown?');
   const viewport = page.viewportSize();
   if (viewport === null) throw new Error('The project has no viewport; set one in playwright.config.ts');
-  const { hudRects } = await gameState(page);
-
-  // Score, lives, the galaxy and its timer bar.
-  expect(hudRects).toHaveLength(4);
-  hudRects.forEach((rect, i) => {
-    for (const other of hudRects.slice(i + 1)) expect(intersects(rect, other), `HUD pill ${JSON.stringify(rect)} overlaps ${JSON.stringify(other)}`).toBe(false);
+  const { hudRects: rects } = await gameState(page);
+  const problems: string[] = [];
+  rects.forEach((rect, i) => {
+    const pill = `HUD pill ${JSON.stringify(rect)}`;
+    for (const other of rects.slice(i + 1)) if (intersects(rect, other)) problems.push(`${pill} overlaps ${JSON.stringify(other)}`);
+    if (intersects(rect, pause)) problems.push(`${pill} overlaps the pause button`);
+    if (rect.x < 0 || rect.y < 0 || rect.x + rect.width > viewport.width || rect.y + rect.height > viewport.height) problems.push(`${pill} reaches off the viewport`);
   });
-  for (const rect of hudRects) {
-    expect(intersects(rect, pause), `HUD pill ${JSON.stringify(rect)} overlaps the pause button`).toBe(false);
-    expect(rect.x).toBeGreaterThanOrEqual(0);
-    expect(rect.y).toBeGreaterThanOrEqual(0);
-    expect(rect.x + rect.width).toBeLessThanOrEqual(viewport.width);
-    expect(rect.y + rect.height).toBeLessThanOrEqual(viewport.height);
-  }
+  return { rects, problems };
+}
+
+/** On a touch screen the HUD pills stay on screen and out from under the pause button. */
+async function expectHudClearOfPause(page: Page): Promise<void> {
+  await startRun(page);
+  const { rects, problems } = await hudProblems(page);
+  // Score, lives, the galaxy and its timer bar.
+  expect(rects).toHaveLength(4);
+  expect(problems).toEqual([]);
 }
 
 test('the HUD stays inside the viewport and clear of the pause button', async ({ page }) => {
@@ -55,6 +59,31 @@ test.describe('on an 844×390 phone', () => {
   test('the HUD stays inside the viewport and clear of the pause button', async ({ page }) => {
     await expectHudClearOfPause(page);
   });
+});
+
+test('a full row of the eight timed pickup pills fits beside the lives, clear of the pause button, each countdown badge at full size', async ({ page }) => {
+  await startRun(page);
+  for (const kind of TIMED_PICKUPS) await collectPickup(page, kind);
+  await nextFrames(page, 3);
+  const { effects } = await gameState(page);
+  expect(Object.keys(effects).sort(), 'every timed effect should be running').toEqual([...TIMED_PICKUPS].sort());
+  const { rects, problems } = await hudProblems(page);
+  expect(problems).toEqual([]);
+  // The pickup badges are drawn last but the boss bar, which a survival galaxy never shows.
+  const badges = rects.slice(-TIMED_PICKUPS.length);
+  expect(rects.length, 'the score, lives, galaxy and timer pills, any combo pill, and a badge per effect').toBeGreaterThanOrEqual(4 + TIMED_PICKUPS.length);
+  for (const badge of badges) {
+    // A countdown's sweep and glyph are drawn for a badge this size: any smaller and they blur into each other.
+    expect(badge.width, `badge ${JSON.stringify(badge)}`).toBeGreaterThanOrEqual(PICKUP_PILL_SIZE);
+    expect(badge.height, `badge ${JSON.stringify(badge)}`).toBeCloseTo(badge.width, 6);
+  }
+  // One row: every badge on the lives row, left to right.
+  const [first] = badges;
+  for (const [i, badge] of badges.entries()) {
+    expect(badge.y, `badge ${String(i)}`).toBeCloseTo(first?.y ?? NaN, 6);
+    if (i > 0) expect(badge.x).toBeGreaterThan(badges[i - 1]?.x ?? Infinity);
+  }
+  await page.screenshot({ path: test.info().outputPath('hud-pickup-row.png') });
 });
 
 test('sprites are drawn larger on a phone screen', async ({ page }, testInfo) => {
