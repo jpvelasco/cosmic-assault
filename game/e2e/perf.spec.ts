@@ -2,14 +2,20 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { GalaxyId } from '../src/content/types';
+import { IDLE_SETTLE_MS, IDLE_WINDOW_MS } from '../src/render/quality';
 import { expect, fastForward, gameState, openGame, restartFrameStats, test } from './fixtures';
-import { PERF_CEILINGS, type PerfScene } from './perfThresholds';
+import { frameReport, PERF_CEILINGS, type PerfScene } from './perfThresholds';
 import { CARRIER_GALAXY, PERF_FIGHT_HOLD_SECONDS, PERF_FIGHT_LIVES, PERF_GALAXY, PERF_HOLD_SECONDS, PERF_SETTLE_SECONDS, seedFor, TO_BOSS_FIGHT_SECONDS, type ClaimId } from './seeds';
 
 const CPU_SLOWDOWN = 4;
 /** The target for a throttled phone-class CPU; recorded in perf.json, not asserted: the ceilings in perfThresholds.ts are. */
 const BUDGET_P95_MS = 33;
 const REPORT_PATH = 'test-results/perf.json';
+/**
+ * Ms the case idles on its first screen before play, so the quality scaler measures the display's frame interval there
+ * (it skips IDLE_SETTLE_MS, then keeps the fastest IDLE_WINDOW_MS window): the interval a slow frame is judged against.
+ */
+const IDLE_MS = IDLE_SETTLE_MS + 2 * IDLE_WINDOW_MS;
 
 /**
  * One measured scene: where it plays, the sim seconds skipped so it opens mid-scene, and how long it is measured. A
@@ -44,11 +50,15 @@ test.afterAll(() => {
   writeFileSync(REPORT_PATH, `${JSON.stringify({ cpuSlowdown: CPU_SLOWDOWN, budgetP95Ms: BUDGET_P95_MS, cases: reports }, null, 2)}\n`);
 });
 
-/** Starts the case's run and skips ahead, settling there, then holds fire and a left turn while it measures, and returns the run's state. */
+/**
+ * Idles on the first screen while the display's interval is measured, starts the case's run and skips ahead, settling
+ * there, then holds fire and a left turn while it measures, and returns the run's state.
+ */
 async function hold(page: Page, { galaxy, claim, skipSeconds, holdSeconds, lives }: PerfCase): Promise<CosmicAssaultTestState> {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });
   await openGame(page, { seed: seedFor(claim), galaxy, ...(lives === undefined ? {} : { lives }) });
+  await page.waitForTimeout(IDLE_MS);
 
   await page.keyboard.press('Space');
   await page.keyboard.up('Space');
@@ -69,7 +79,7 @@ async function hold(page: Page, { galaxy, claim, skipSeconds, holdSeconds, lives
 
 for (const perfCase of CASES) {
   test(`frame time under a 4x CPU slowdown, ${perfCase.name} in ${perfCase.galaxy}, within its calibrated ceilings`, async ({ page }) => {
-    test.setTimeout((perfCase.holdSeconds + PERF_SETTLE_SECONDS) * 1000 + 40000);
+    test.setTimeout((perfCase.holdSeconds + PERF_SETTLE_SECONDS) * 1000 + IDLE_MS + 40000);
     const { frameStats, quality, mode, asteroidCount, foes, boss } = await hold(page, perfCase);
     const report = {
       galaxy: perfCase.galaxy,
@@ -81,17 +91,14 @@ for (const perfCase of CASES) {
       foesAtEnd: foes.length,
       bossAtEnd: boss === null ? null : { state: boss.state, phase: boss.phase, hp: boss.hp },
       withinBudget: frameStats.p95 <= BUDGET_P95_MS,
-      ceiling: PERF_CEILINGS[perfCase.name],
-      ...frameStats,
+      ...frameReport(frameStats, PERF_CEILINGS[perfCase.name]),
       finalQuality: quality,
     };
     reports[perfCase.name] = report;
     console.log(`perf ${perfCase.name}: ${JSON.stringify(report)}`);
 
-    const ceiling = PERF_CEILINGS[perfCase.name];
     expect(frameStats.count, 'measured frames (a run past its 3 s warm-up)').toBeGreaterThan(0);
     expect(mode, 'the scene ends in play: a game over would measure the end card').toBe('playing');
-    expect(frameStats.p95, `p95 frame ms vs the ${String(ceiling.p95Ms)} ms ceiling (e2e/perfThresholds.ts)`).toBeLessThanOrEqual(ceiling.p95Ms);
-    expect(frameStats.longFrames, `long frames vs the ceiling of ${String(ceiling.longFrames)} (e2e/perfThresholds.ts)`).toBeLessThanOrEqual(ceiling.longFrames);
+    expect(report.breaches, 'the frame-time ceilings the scene is over').toEqual([]);
   });
 }

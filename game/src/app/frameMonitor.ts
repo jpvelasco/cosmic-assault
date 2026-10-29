@@ -6,11 +6,16 @@ export const LONG_FRAME_MS = 50;
 /** A frame longer than this is a stall: the page was frozen, not merely slow. */
 export const STALL_MS = 1000;
 
+/** A frame longer than this many display intervals is slow: it missed at least one refresh of the display. */
+export const SLOW_FRAME_INTERVALS = 1.5;
+
 export interface FrameSummary {
   readonly count: number;
   readonly p50: number;
   readonly p95: number;
   readonly longFrames: number;
+  /** The share (0–1) of frames longer than SLOW_FRAME_INTERVALS display intervals; 0 with no frames. */
+  readonly slowShare: number;
 }
 
 /** Frame times land in bins this wide, so percentiles are exact to within this many ms. */
@@ -28,11 +33,13 @@ export class FrameMonitor {
   private elapsed = 0;
   private count = 0;
   private longFrames = 0;
+  private slowFrames = 0;
 
   /** `onStall` hears of every frame over STALL_MS, warm-up included. */
   constructor(private readonly onStall: (frameMs: number) => void = () => undefined) {}
 
-  sample(frameMs: number): void {
+  /** `displayMs` is the display's own frame interval (`QualityScaler.displayIntervalMs`), which says whether the frame is slow. */
+  sample(frameMs: number, displayMs: number): void {
     if (!(frameMs >= 0)) return;
     if (frameMs > STALL_MS) this.onStall(frameMs);
     if (this.elapsed < WARMUP_MS) {
@@ -43,6 +50,7 @@ export class FrameMonitor {
     this.bins[bin] = (this.bins[bin] as number) + 1;
     this.count++;
     if (frameMs >= LONG_FRAME_MS) this.longFrames++;
+    if (frameMs > SLOW_FRAME_INTERVALS * displayMs) this.slowFrames++;
   }
 
   /** Forgets everything, including the warm-up already served; call when a run starts. */
@@ -51,10 +59,12 @@ export class FrameMonitor {
     this.elapsed = 0;
     this.count = 0;
     this.longFrames = 0;
+    this.slowFrames = 0;
   }
 
   summary(): FrameSummary {
-    return { count: this.count, p50: this.percentile(0.5), p95: this.percentile(0.95), longFrames: this.longFrames };
+    const slowShare = this.count === 0 ? 0 : this.slowFrames / this.count;
+    return { count: this.count, p50: this.percentile(0.5), p95: this.percentile(0.95), longFrames: this.longFrames, slowShare };
   }
 
   /** Nearest-rank percentile `p` (0–1) in ms; 0 with no frames. */
