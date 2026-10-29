@@ -1,6 +1,7 @@
-import { appendFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { filesIn } from '../../scripts/site.mjs';
 import { createPagesServer, type PagesServer } from '../../scripts/serve-pages.mjs';
 import { gameScratch, guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 import { sharedReleaseBuild } from '../helpers/releaseBuild';
@@ -23,16 +24,12 @@ async function serveLive(dir: string): Promise<PagesServer> {
   return server;
 }
 
-function fileCount(dir: string): number {
-  return readdirSync(dir, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).length;
-}
-
 describe('compare-live', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('passes when the site serves the build byte for byte and a missing file under next/ answers 404', async () => {
     const live = await serveLive(built());
     expect(await compare(built(), live.url)).toEqual({
       status: 0,
-      output: `${live.url} serves ${built()} byte for byte (${String(fileCount(built()))} files), and next/no-such-file answers 404\n`,
+      output: `${live.url} serves ${built()} byte for byte (${String(filesIn(built()).length)} files), and next/no-such-file answers 404\n`,
     });
   });
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { Script } from 'node:vm';
-import { buildDir, filesIn } from './build-dir.mjs';
+import { buildDir, filesIn } from './site.mjs';
 
 // Usage: check-pages.mjs [dist]
 //

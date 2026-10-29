@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildDir, filesIn } from './build-dir.mjs';
+import { buildDir, filesIn } from './site.mjs';
 
 // Usage: check-no-bridge.mjs [dist]         fails if the release build carries any e2e-only code;
 //        check-no-bridge.mjs --e2e [dist-e2e] fails if the e2e build lacks a mark, which would blind the first check.

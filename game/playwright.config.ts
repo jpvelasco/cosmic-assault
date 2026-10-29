@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { siteAddress } from './scripts/site.mjs';
 
 const isCI = !!process.env['CI'];
 // Off Vite's default preview port (4173), so a stray `npm run preview` is never mistaken for these builds.
@@ -10,8 +11,8 @@ const RELEASE_URL = 'http://localhost:4318';
  */
 export function livePagesUrl(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
-  const url = URL.canParse(value) ? new URL(value) : undefined;
-  if (url === undefined || !['http:', 'https:'].includes(url.protocol) || !url.pathname.endsWith('/') || url.search !== '' || url.hash !== '') {
+  const url = siteAddress(value);
+  if (url === undefined) {
     throw new Error(
       `PAGES_URL is "${value}", which is not the address of a site's directory: set it to an http(s) address ending in a slash, such as https://example.github.io/cosmic-assault/, or unset it to test dist/ locally`,
     );

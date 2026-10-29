@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildDir } from './build-dir.mjs';
+import { buildDir } from './site.mjs';
 
 // Usage: check-base.mjs [dist]   fails if the page in [dist] (game/dist by default) loads an asset from the host's root.
 

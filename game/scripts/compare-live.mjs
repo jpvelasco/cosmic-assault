@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildDir, filesIn } from './build-dir.mjs';
+import { buildDir, filesIn, siteAddress } from './site.mjs';
 
 // Usage: node scripts/compare-live.mjs <dist> <url>
 //
@@ -10,14 +10,6 @@ import { buildDir, filesIn } from './build-dir.mjs';
 const USAGE = "Usage: node scripts/compare-live.mjs <dist> <url>, where <url> is the site's address ending in a slash, such as https://example.github.io/project/";
 const MISSING_FILE = 'next/no-such-file';
 const TIMEOUT_MS = 30_000;
-
-/** `text` as the site's address, or undefined when it is not an http(s) address ending in a slash. */
-function siteAddress(text) {
-  if (!URL.canParse(text)) return undefined;
-  const url = new URL(text);
-  const ok = ['http:', 'https:'].includes(url.protocol) && url.pathname.endsWith('/') && url.search === '' && url.hash === '';
-  return ok ? url : undefined;
-}
 
 /** How the site answers `url`, or why it could not be asked. */
 async function ask(url) {

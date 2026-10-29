@@ -3,6 +3,7 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { createPagesServer, NOT_FOUND_BODY, PAGES_MAX_AGE_SECONDS, type PagesMount, type PagesServer } from '../scripts/serve-pages.mjs';
+import { filesIn } from '../scripts/site.mjs';
 import { defaultSave, SAVE_KEY } from '../src/meta/save';
 import { PREVIEW_CACHE_PREFIX } from '../src/platform/swLogic';
 import { expect, test as base } from './fixtures';
@@ -79,12 +80,11 @@ function writeNextDeploy(dir: string, version: string): void {
     renameSync(join(assets, name), join(assets, renamed));
     return [name, renamed] as const;
   });
-  for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
-    if (!entry.isFile() || !TEXT_FILES.has(extname(entry.name))) continue;
-    const path = join(entry.parentPath, entry.name);
+  for (const file of filesIn(dir).filter((name) => TEXT_FILES.has(extname(name)))) {
+    const path = join(dir, file);
     let text = renames.reduce((current, [from, to]) => current.replaceAll(from, to), readFileSync(path, 'utf8'));
-    if (path === join(dir, 'sw.js')) text = text.replaceAll(version, `${version}b`);
-    if (path === join(dir, 'index.html')) text = text.replace('</head>', `${NEXT_DEPLOY_MARK}</head>`);
+    if (file === 'sw.js') text = text.replaceAll(version, `${version}b`);
+    if (file === 'index.html') text = text.replace('</head>', `${NEXT_DEPLOY_MARK}</head>`);
     writeFileSync(path, text);
   }
 }
