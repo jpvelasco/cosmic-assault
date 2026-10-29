@@ -12,9 +12,9 @@ import type { SimEvent } from '../sim/events';
 import type { GalaxyMode } from '../sim/scoring';
 import { createBossAnnouncer } from './bossAnnouncer';
 import { createDimensionMap } from './dimensionMap';
-import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_BUTTON, showSoundState, wearKey, withTestId, type Act, type MenuCard } from './dom';
+import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_BUTTON, reserveSpace, showSoundState, wearKey, withTestId, type Act, type MenuCard } from './dom';
 import { createGalaxySelect } from './galaxySelect';
-import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
+import { hintCopy, hintVariants, IOS_INSTALL_HINT, type InputStyle } from './hints';
 import { createModeSelect } from './modeSelect';
 import { createPauseCard } from './pauseCard';
 import { createResultsCard } from './resultsCard';
@@ -106,7 +106,8 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
 function titlePanel(demoLabel: HTMLElement, play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(demoLabel, element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
+  const lines = [reserveSpace(startHint, hintVariants((hints) => hints.start)), reserveSpace(controlsHint, hintVariants((hints) => hints.controls))];
+  card.append(demoLabel, element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, ...lines, chipRow, build);
   return panel;
 }
 

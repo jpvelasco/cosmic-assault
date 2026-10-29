@@ -339,3 +339,43 @@ test('a Free play game over marks Map as where Esc goes, Retry as Enter\'s, and 
   await expectMode(page, 'map');
   await expect(page.getByTestId('dimension-1')).toBeFocused();
 });
+
+/** The boxes of `locators`, once every card has finished popping in. */
+async function settledBoxes(page: Page, locators: readonly Locator[]): Promise<unknown[]> {
+  await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== 'running'));
+  return Promise.all(locators.map((locator) => locator.boundingBox()));
+}
+
+/** Each input kind in turn, by a press no card acts on: Q, which no screen binds, and the D-pad, which only moves focus. */
+const KIND_SWITCHES: readonly (readonly [kind: string, use: (page: Page) => Promise<void>])[] = [
+  ['keys', (page) => page.keyboard.press('KeyQ')],
+  ['pad', (page) => tapPad(page, PAD.DPAD_LEFT)],
+  ['keys again', (page) => page.keyboard.press('KeyQ')],
+];
+
+/** The hints change words with the input kind, but `locators` (a card's buttons) stay exactly where and as large as they were. */
+async function expectStillThroughKinds(page: Page, locators: readonly Locator[]): Promise<void> {
+  const before = await settledBoxes(page, locators);
+  for (const [kind, use] of KIND_SWITCHES) {
+    await use(page);
+    await nextFrames(page, 2);
+    expect(await settledBoxes(page, locators), `after ${kind}`).toEqual(before);
+  }
+}
+
+test('the title, pause and end cards keep their size and their buttons their places as the input kind changes', async ({ page, isMobile }) => {
+  await installFakePad(page);
+  await openGameOverRun(page);
+  // A phone starts in touch, its guess; a desktop in keys.
+  await expectStillThroughKinds(page, [page.getByTestId('play')]);
+
+  await startRun(page, isMobile);
+  await press(pauseButton(page), isMobile);
+  await expectMode(page, 'paused');
+  await expectStillThroughKinds(page, [resume(page), quit(page)]);
+
+  await press(resume(page), isMobile);
+  await expectMode(page, 'playing');
+  await waitForGameOver(page);
+  await expectStillThroughKinds(page, [page.getByTestId('rank-continue'), page.getByTestId('rank-title')]);
+});

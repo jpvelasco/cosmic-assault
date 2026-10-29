@@ -267,6 +267,11 @@
     coarse)` guesses touch or keys. `inputStyle` in `ui/hints.ts` turns the
     kind into the copy's style (`keys`, which a mouse shares, `touch` or `pad`),
     and a change of kind redraws the cards on the next frame, never mid-press.
+    It never moves a button: each worded line keeps the space of its longest
+    wording in any style (`reserveSpace` and `hintVariants`), and a key mark
+    sits in padding its button keeps whether a key shows or not (`wearKey` in
+    `ui/dom.ts`), so the title, pause and end cards hold their size and their
+    buttons their places, as `e2e/navigation.spec.ts` checks.
     Only the words follow it: the joystick and FIRE still show for
     `(pointer: coarse)`, and the rotate prompt for a phone held upright.
   - Pausing and leaving a run look the same on every device. In play the pause

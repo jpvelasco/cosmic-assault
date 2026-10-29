@@ -4,8 +4,8 @@ import { galaxyLabel } from '../content/galaxies';
 import type { NewBest } from '../meta/bests';
 import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
 import { DAILY_CLEARED, dailyTitle, targetLine } from './dailyCopy';
-import { button, cardPanel, element, PRIMARY, starRow, wearKey, withTestId, type Act } from './dom';
-import type { HintCopy } from './hints';
+import { button, cardPanel, element, PRIMARY, reserveSpace, starRow, wearKey, withTestId, type Act } from './dom';
+import { hintVariants, type HintCopy } from './hints';
 
 export interface ResultsState {
   readonly flow: FlowState;
@@ -139,7 +139,9 @@ export function createResultsCard(act: Act): ResultsCard {
   runTotal.el.classList.add('end-line--total');
   const target = withTestId(element('p', 'end-target'), 'end-target');
   const hint = element('p', 'hint');
+  const hintLine = reserveSpace(hint, hintVariants((hints) => hints.restart));
   const suspendHint = withTestId(element('p', 'hint'), 'end-suspend');
+  const suspendLine = reserveSpace(suspendHint, hintVariants((hints) => hints.suspend));
   const buttons = END_BUTTONS.map(({ kind, label, testId, shows }) => {
     const el = withTestId(button('menu-button', label, act({ kind })), testId);
     return { el, testId, shows, showKey: wearKey(el) };
@@ -148,7 +150,7 @@ export function createResultsCard(act: Act): ResultsCard {
   row.append(...buttons.map(({ el }) => el));
   const receipt = element('div', 'end-lines');
   receipt.append(points.el, clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
-  card.append(galaxy, heading, stars.el, score, target, newBest, newLook, receipt, hint, suspendHint, row);
+  card.append(galaxy, heading, stars.el, score, target, newBest, newLook, receipt, hintLine, suspendLine, row);
 
   /**
    * The clear's bonuses and, in Rank, the Dimension's multiplier and the run total. After a game over only a Rank run
@@ -193,10 +195,12 @@ export function createResultsCard(act: Act): ResultsCard {
       newLook.textContent = won ? newLookLabel(result) : '';
       newLook.hidden = newLook.textContent === '';
       setLines(flow, value);
-      hint.textContent = screen === 'gameOver' ? hints.restart : '';
-      hint.hidden = hint.textContent === '';
-      suspendHint.textContent = suspends(flow) ? hints.suspend : '';
-      suspendHint.hidden = suspendHint.textContent === '';
+      // Each line shows or goes by the card's state alone; its space holds its longest wording in any input style.
+      hintLine.hidden = screen !== 'gameOver';
+      hint.textContent = hints.restart;
+      suspendLine.hidden = !suspends(flow);
+      suspendHint.textContent = hints.suspend;
+      suspendHint.hidden = hints.suspend === '';
       const keys = endKeys(flow);
       let first = true;
       for (const { el, testId, shows, showKey } of buttons) {

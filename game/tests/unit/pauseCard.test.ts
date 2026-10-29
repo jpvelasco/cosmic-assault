@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hintCopy } from '../../src/ui/hints';
+import { hintCopy, hintVariants } from '../../src/ui/hints';
 import { createPauseCard, pressQuit, quitLabel } from '../../src/ui/pauseCard';
-import { asFake, stubDocument } from '../helpers/fakeDom';
+import { asFake, stubDocument, type FakeElement } from '../helpers/fakeDom';
 
 describe('the pause card Quit', () => {
   it('asks twice in Rank, where it costs a life, and once in Free play and the Daily', () => {
@@ -73,5 +73,14 @@ describe('createPauseCard', () => {
     card.update('free', hintCopy('touch'));
     expect(key?.hidden).toBe(true);
     expect(hint.hidden).toBe(true);
+  });
+
+  it('keeps the space of the longest wording of its key line in any style, so the input kind never moves its buttons', () => {
+    const { card, hint } = pauseCard();
+    const holder = (el: FakeElement): FakeElement | null => (el.children.includes(hint) ? el : el.children.map(holder).find((found) => found !== null) ?? null);
+    const wrap = holder(asFake(card.panel));
+    const copies = wrap?.children.filter((child) => child !== hint).map((child) => child.dataset['text']);
+    expect(copies).toEqual(hintVariants((hints) => hints.paused).filter((text) => text !== ''));
+    expect(wrap?.className).toBe('reserve');
   });
 });

@@ -77,6 +77,11 @@ export function hintCopy(style: InputStyle): HintCopy {
   return HINTS[style];
 }
 
+/** What `pick` reads from the copy of every style: the texts a line may show, whose space it keeps (`reserveSpace`). */
+export function hintVariants(pick: (hints: HintCopy) => string): string[] {
+  return Object.values(HINTS).map(pick);
+}
+
 /** iOS Safari cannot install from a button, so the title card names the steps instead. */
 export const IOS_INSTALL_HINT = 'Add to Home Screen: tap Share, then Add to Home Screen';
 

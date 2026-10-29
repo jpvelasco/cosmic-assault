@@ -1,6 +1,6 @@
 import type { GalaxyMode } from '../sim/scoring';
-import { button, cardPanel, element, PRIMARY_BUTTON, wearKey, withTestId } from './dom';
-import type { HintCopy } from './hints';
+import { button, cardPanel, element, PRIMARY_BUTTON, reserveSpace, wearKey, withTestId } from './dom';
+import { hintVariants, type HintCopy } from './hints';
 
 /** Where the pause card's Quit stands: in Rank a first press arms it, and only a press while it is armed quits. */
 export type QuitStep = 'ready' | 'armed';
@@ -45,7 +45,7 @@ export function createPauseCard(actions: { readonly resume: () => void; readonly
     'quit',
   );
   const hint = withTestId(element('p', 'hint'), 'pause-hint');
-  card.append(element('h2', 'heading', 'Paused'), resume, quit, hint, chips);
+  card.append(element('h2', 'heading', 'Paused'), resume, quit, reserveSpace(hint, hintVariants((hints) => hints.paused)), chips);
 
   function showQuit(): void {
     quit.textContent = quitLabel(mode, step);

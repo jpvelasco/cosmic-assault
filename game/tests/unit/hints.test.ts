@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hintCopy, inputStyle } from '../../src/ui/hints';
+import { hintCopy, hintVariants, inputStyle } from '../../src/ui/hints';
 
 describe('inputStyle', () => {
   it('names keys for a keyboard and for a mouse, which sits beside one; taps for a finger; buttons for a pad', () => {
@@ -65,5 +65,9 @@ describe('hintCopy', () => {
 
   it('never mentions a key to a pad player', () => {
     expect(Object.values(hintCopy('pad')).join(' ')).not.toMatch(/\b(space|key|keys|esc|enter|arrows?|wasd)\b|\b[RPZX]\b/i);
+  });
+
+  it('lists a line\'s wording in every style, for the space it keeps', () => {
+    expect(hintVariants((hints) => hints.start).sort()).toEqual(['Press A to start', 'Press Space to start', 'Tap to start']);
   });
 });
