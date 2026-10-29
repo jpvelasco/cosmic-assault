@@ -26,8 +26,10 @@ type FrameStats = CosmicAssaultTestState['frameStats'];
 export const P95_HEADROOM = 1.25;
 /** A run may have this many long frames more than the most its scene's readings hold. */
 export const LONG_FRAME_HEADROOM = 2;
-/** A run's share of slow frames may reach this many times the worst share its scene's readings hold. */
+/** A run's share of slow frames may reach this many times the worst share its scene's readings hold... */
 export const SLOW_SHARE_HEADROOM = 1.25;
+/** ...or, when that is less, this much more than the worst: a scene whose readings are all near zero (a boss fight is about 720 frames) would otherwise fail on one slow frame. */
+export const SLOW_SHARE_FLOOR = 0.005;
 /**
  * Readings a ceiling needs before it means anything. A scene's p95 sits near the display's frame step, so a runner a
  * little slower tips it past the step: the same commit has read about 25% slower an hour later, and fewer readings than
@@ -77,21 +79,25 @@ export const PERF_READINGS: Readonly<Record<PerfScene, readonly FrameReading[]>>
   ],
 };
 
-/** The slow-frame share ceiling `shares` allow, SLOW_SHARE_HEADROOM times the worst to a hundredth of a percent; null with no shares yet. */
+/** The slow-frame share ceiling `shares` allow: the worst plus SLOW_SHARE_HEADROOM's extra or SLOW_SHARE_FLOOR, whichever is more, rounded up to a hundredth of a percent; null with no shares yet. */
 export function slowShareCeilingFor(shares: readonly number[]): number | null {
   if (shares.length === 0) return null;
   requireReadings(shares.length);
-  return Math.round(SLOW_SHARE_HEADROOM * Math.max(...shares) * 10000) / 10000;
+  const worst = Math.max(...shares);
+  const ceiling = worst + Math.max((SLOW_SHARE_HEADROOM - 1) * worst, SLOW_SHARE_FLOOR);
+  return Math.ceil(Number((ceiling * 10000).toPrecision(12))) / 10000;
 }
 
 /**
  * The slow-frame shares each scene's ceiling comes from, read from `slowShare` in the CI `perf` job's perf.json under
- * the same 4x CPU slowdown. None are recorded yet, so no scene's share is asserted: record eight runs spread over six
- * hours or more, as for PERF_READINGS, and the ceiling holds from then on.
+ * the same 4x CPU slowdown: eight runs of the job on GitHub's `ubuntu-24.04` runners over ten hours, all of one commit.
+ * The field's shares swing from 0.2% to 20% with the runner (the p95 readings above swing the same way), so its ceiling
+ * is wide and catches only a large regression; the boss fight's are steadier. Recalibrate the same way when a scene's
+ * content or the renderer changes.
  */
 export const SLOW_SHARE_READINGS: Readonly<Record<PerfScene, readonly number[]>> = {
-  field: [],
-  bossFight: [],
+  field: [0.026831785345717233, 0.018499486125385406, 0.001936108422071636, 0.09081196581196581, 0.0019398642095053346, 0.002997002997002997, 0.02405857740585774, 0.1970554926387316],
+  bossFight: [0.002777777777777778, 0.0013908205841446453, 0, 0.008658008658008658, 0, 0.0013850415512465374, 0.003003003003003003, 0.010542168674698794],
 };
 
 function sceneCeiling(scene: PerfScene): SceneCeiling {

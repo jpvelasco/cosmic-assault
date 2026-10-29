@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ceilingBreaches, ceilingFor, frameReport, LONG_FRAME_HEADROOM, MIN_READINGS, P95_HEADROOM, PERF_CEILINGS, PERF_READINGS, SLOW_SHARE_HEADROOM, SLOW_SHARE_READINGS, slowShareCeilingFor, type SceneCeiling } from '../../e2e/perfThresholds';
+import { ceilingBreaches, ceilingFor, frameReport, LONG_FRAME_HEADROOM, MIN_READINGS, P95_HEADROOM, PERF_CEILINGS, PERF_READINGS, SLOW_SHARE_FLOOR, SLOW_SHARE_HEADROOM, SLOW_SHARE_READINGS, slowShareCeilingFor, type SceneCeiling } from '../../e2e/perfThresholds';
 
 /** `n` readings of `p95Ms` each, with no long frames. */
 function readings(n: number, p95Ms = 30): { p95Ms: number; longFrames: number }[] {
@@ -39,18 +39,33 @@ describe('the perf ceilings', () => {
 });
 
 describe('slowShareCeilingFor', () => {
-  it('allows up to 1.25 times the worst share, to a hundredth of a percent', () => {
+  const eight = (worst: number): number[] => [worst, ...Array<number>(MIN_READINGS - 1).fill(0)];
+
+  it('allows 1.25 times the worst share, rounded up to a hundredth of a percent', () => {
     expect(SLOW_SHARE_HEADROOM).toBe(1.25);
     expect(slowShareCeilingFor([0.02, 0.031, 0.04, 0.012, 0.03, 0.01, 0.025, 0.033])).toBe(0.05);
-    expect(slowShareCeilingFor([0.0123, ...Array<number>(MIN_READINGS - 1).fill(0)])).toBe(0.0154);
+    expect(slowShareCeilingFor(eight(0.0123))).toBe(0.0173);
+    expect(slowShareCeilingFor(eight(0.1970554926387316))).toBe(0.2464);
+  });
+
+  it('allows a floor of 0.5 points over a worst that is near zero, so one slow frame does not fail the gate', () => {
+    expect(SLOW_SHARE_FLOOR).toBe(0.005);
+    expect(slowShareCeilingFor(eight(0))).toBe(0.005);
+    expect(slowShareCeilingFor(eight(0.0028))).toBe(0.0078);
+  });
+
+  it('never rounds under the worst plus the floor', () => {
+    for (const worst of [0, 0.0001, 0.0028, 0.01, 0.0133, 0.02, 0.0399, 0.1]) {
+      expect(slowShareCeilingFor(eight(worst)) ?? 0, String(worst)).toBeGreaterThanOrEqual(worst + SLOW_SHARE_FLOOR - 1e-12);
+    }
   });
 
   it('sets no ceiling for a scene with no readings yet', () => {
     expect(slowShareCeilingFor([])).toBeNull();
   });
 
-  it('refuses a partial calibration, saying to record more', () => {
-    expect(() => slowShareCeilingFor(Array<number>(MIN_READINGS - 1).fill(0.01))).toThrow(/at least 8 readings \(got 7\); record more runs/);
+  it.each(Array.from({ length: MIN_READINGS - 1 }, (_, i) => i + 1))('refuses a partial calibration of %i readings, saying to record more', (count) => {
+    expect(() => slowShareCeilingFor(Array<number>(count).fill(0.01))).toThrow(new RegExp(`at least 8 readings \\(got ${String(count)}\\); record more runs`));
   });
 });
 
@@ -99,8 +114,8 @@ describe('frameReport', () => {
 });
 
 describe('the slow-frame share ceilings', () => {
-  it.each(Object.entries(SLOW_SHARE_READINGS))('come from real readings of the %s scene, or none yet', (scene, shares) => {
-    expect(shares.length === 0 || shares.length >= MIN_READINGS, scene).toBe(true);
+  it.each(Object.entries(SLOW_SHARE_READINGS))('come from at least eight real readings of the %s scene', (scene, shares) => {
+    expect(shares.length, scene).toBeGreaterThanOrEqual(MIN_READINGS);
     for (const share of shares) expect(share >= 0 && share <= 1, scene).toBe(true);
   });
 

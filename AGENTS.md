@@ -34,7 +34,7 @@
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
   tally, frame-stats restart, sprite-cache use, attract now, attract state) reaches
   `dist/`. The bridge (`testBridge.ts`, typed in `testApi.d.ts`) carries a
-  `BRIDGE_VERSION`, now 8, raised whenever its state changes shape; the specs wait for
+  `BRIDGE_VERSION`, now 9, raised whenever its state changes shape; the specs wait for
   that version. Each hook lives in
   `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
