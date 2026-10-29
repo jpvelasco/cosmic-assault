@@ -74,7 +74,6 @@ export function dailyBestBefore(save: SaveData, date: string): number | null {
 /** The streak to show on `today`: the streak while the last clear was today or yesterday, else 0 (nothing is shown). */
 export function shownStreak(save: SaveData, today: string): number {
   const { lastCleared, streak } = save.daily;
-  if (lastCleared === null) return 0;
   return lastCleared === today || lastCleared === previousDate(today) ? streak : 0;
 }
 
