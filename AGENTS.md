@@ -115,8 +115,9 @@
     parts strike the ship, swallow shots, carry bodies, or move the respawn,
     which `sim/respawn.ts` keeps clear of the boss, the hole, foes, zones and
     rift mouths. Each foe kind says whether a pull moves it. Foes and hazards
-    are drawn by `render/foePass.ts` and `render/hazardPass.ts`; a well holds
-    still under reduced motion.
+    are drawn by `render/foePass.ts` and `render/hazardPass.ts` (the hazards'
+    painters are in `render/hazardArt.ts`); a well holds still under reduced
+    motion.
   - Hostile bolts (`sim/foes/bolts.ts`) come from one pool per level, fired by
     gunships and boss attacks after a telegraphed windup: a bolt flies straight,
     leaves the field rather than wrapping, and lasts `BOLT.life` seconds of the
