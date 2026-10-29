@@ -1,5 +1,5 @@
 // Renders the README's stills into docs/assets/screens/ with Playwright's Chromium, from the e2e build.
-// Usage: npm run readme-shots [-- --skip-build] [-- --out <dir>]
+// Usage: npm run readme-shots -- [--skip-build] [--out <dir>]
 //
 // It builds dist-e2e/ (unless --skip-build), serves it, stages each scene through the e2e build's URL overrides and test
 // bridge, and writes one PNG per entry of SHOTS. A still over SHOT_BYTE_CAP is scaled down until it fits. Run it after
