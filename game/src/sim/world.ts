@@ -433,7 +433,7 @@ export class World {
     this.events.push({ type: 'asteroidDestroyed', id: a.id, x: a.x, y: a.y, size: a.size, points });
   }
 
-  /** Removes broken asteroids and appends their children in break order, like the live splice-and-push. */
+  /** Removes broken asteroids and appends their children in break order, like the classic game's splice-and-push. */
   private breakAsteroids(): void {
     for (const index of this.broken) {
       const parent = this.asteroidList[index] as Asteroid;
