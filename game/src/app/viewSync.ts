@@ -47,6 +47,8 @@ export interface ViewSync {
   sync(): void;
   /** A phone held upright: the game needs the wide screen, so it asks for a turn instead of playing. */
   needsRotation(): boolean;
+  /** The page is upright, taller than it is wide, whatever the device. */
+  portrait(): boolean;
   /** Hides the cursor after it rests for `IDLE_CURSOR_MS` in play; any move, and leaving play or a crash, brings it back. */
   armIdleCursor(): void;
   /** Keeps the HUD inside the safe area and, on touch screens, clear of the pause button. */
@@ -115,6 +117,7 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
   return {
     sync,
     needsRotation,
+    portrait: () => portrait.matches,
     armIdleCursor,
     syncHudBounds,
     dispose() {

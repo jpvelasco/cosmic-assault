@@ -10,7 +10,7 @@ import {
   type IdleState,
 } from '../../src/app/attract';
 import type { Screen } from '../../src/app/flow';
-import { createBot } from '../../src/bot/run';
+import { createBot } from '../../src/bot/create';
 import { createView, readView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
 import type { PaletteId } from '../../src/content/types';
@@ -311,6 +311,44 @@ describe('the attract demo', () => {
       h.attract.dueNow();
       expect(h.frames(ATTRACT_IDLE_SECONDS * 2)).toBe(0);
       expect(h.attract.interrupt()).toBe(false);
+    });
+
+    it('logs both and stays off, without throwing, when tidying the broken demo away throws too', () => {
+      const h = harness();
+      h.frames(ATTRACT_IDLE_SECONDS + 1);
+      h.renderer.draw.mockImplementation(() => {
+        throw new Error('draw broke');
+      });
+      h.renderer.reset.mockImplementation(() => {
+        throw new Error('reset broke');
+      });
+      expect(() => h.frames(FRAME * 3)).not.toThrow();
+      expect(h.attract.active).toBe(false);
+      expect(h.attract.halted).toBe(true);
+      expect(h.log.entries().map((e) => e.message)).toEqual([
+        expect.stringMatching(/attract demo stopped.*draw broke/is),
+        expect.stringMatching(/could not tidy up.*reset broke/is),
+      ]);
+    });
+  });
+
+  describe('when ending a demo throws', () => {
+    it.each<[string, (h: Harness) => void]>([
+      ['as a cover goes up', (h) => { h.scene.covered = true; h.frames(FRAME); }],
+      ['on an input', (h) => { h.attract.interrupt(); }],
+    ])('%s, stops for the session and writes the log, without throwing', (_, endIt) => {
+      const h = harness();
+      h.frames(ATTRACT_IDLE_SECONDS + 1);
+      expect(h.attract.active).toBe(true);
+      h.renderer.setPalette.mockImplementation(() => {
+        throw new Error('palette broke');
+      });
+      expect(() => {
+        endIt(h);
+      }).not.toThrow();
+      expect(h.attract.active).toBe(false);
+      expect(h.attract.halted).toBe(true);
+      expect(h.log.entries()[0]?.message).toMatch(/attract demo stopped.*palette broke/is);
     });
   });
 });

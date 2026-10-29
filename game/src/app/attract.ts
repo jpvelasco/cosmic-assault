@@ -1,4 +1,5 @@
-import { createBot } from '../bot/run';
+import { botRng } from '../bot/create';
+import { createExpert } from '../bot/expert';
 import { createView, readView, type Bot, type BotView } from '../bot/view';
 import { galaxyById } from '../content/galaxies';
 import type { GalaxyId, PaletteId } from '../content/types';
@@ -6,7 +7,7 @@ import { describeError } from '../platform/crashGuard';
 import type { RingLog } from '../platform/log';
 import type { Renderer } from '../render/renderer';
 import type { Field } from '../sim/field';
-import { createFixedStepLoop } from '../sim/loop';
+import { createFixedStepLoop, visualFrameSeconds } from '../sim/loop';
 import { hasEnded, World } from '../sim/world';
 import type { Screen } from './flow';
 
@@ -16,8 +17,6 @@ export const ATTRACT_IDLE_SECONDS = 10;
 export const DEMO_SECONDS = 45;
 /** The still pause between one demo's end and the next one's start. */
 export const DEMO_GAP_SECONDS = 1;
-/** The longest frame the idle count and a demo take, so a stalled tab, or one back from the background, never jumps ahead. */
-const MAX_FRAME_SECONDS = 0.1;
 
 /** A demo: a galaxy the expert bot flies in Free play, on a World seed of its own. */
 export interface AttractDemo {
@@ -91,7 +90,11 @@ export interface Attract {
   /** An input, or the tab going to the background: restarts the idle count and ends a demo. True if it ended one, so the input must do nothing else. */
   interrupt(): boolean;
   resize(field: Field): void;
-  /** Counts the idle stretch as over, so the next frame on the bare title starts a demo. */
+  /**
+   * Counts the idle stretch as over, so the next frame on the bare title starts a demo, as ATTRACT_IDLE_SECONDS of idling
+   * would. Only tests and the e2e attract-now hook call it; a release build carries it uncalled, as dropping it there
+   * would take a build-mode branch here or a test seam in the deps.
+   */
   dueNow(): void;
   /** Stops attract mode for the session, as the game stopping after a crash does: a demo playing ends, and none starts. */
   stop(): void;
@@ -109,7 +112,7 @@ class DemoRun {
     readonly world: World,
     private readonly renderer: AttractDeps['renderer'],
   ) {
-    this.bot = createBot('expert', demo.seed);
+    this.bot = createExpert(botRng(demo.seed));
     this.view = createView(world);
   }
 
@@ -124,6 +127,7 @@ class DemoRun {
 /**
  * Plays the expert bot through the demo galaxies behind the title once the title has sat idle. It never touches the
  * save, the screen flow, the pickup notices or the audio: the demo World is free play, and only the renderer sees it.
+ * Whatever throws in a frame or an interrupt, the demo or the tidying up after it, stops attract mode for the session.
  */
 export function createAttract(deps: AttractDeps): Attract {
   const { renderer } = deps;
@@ -204,6 +208,32 @@ export function createAttract(deps: AttractDeps): Attract {
     return true;
   }
 
+  /** One display frame of `dt`: counts the idle time, or turns attract mode on or off and plays the demo. */
+  function tick(dt: number): boolean {
+    const now = readState();
+    if (!attractAllowed(now)) {
+      state.idleSeconds = 0;
+      turnOff();
+      return false;
+    }
+    if (!active) {
+      state.idleSeconds += dt;
+      if (!attractDue(now)) return false;
+      turnOn();
+    }
+    return playFrame(dt);
+  }
+
+  /** Runs `body`; a throw stops attract mode for the session, writing the log, and gives `fallback`. */
+  function guarded<T>(body: () => T, fallback: T): T {
+    try {
+      return body();
+    } catch (error) {
+      halt(error);
+      return fallback;
+    }
+  }
+
   /** Stops attract mode for the session, never throwing: a failure to tidy the demo away is logged instead. */
   function stopForSession(): void {
     halted = true;
@@ -236,30 +266,12 @@ export function createAttract(deps: AttractDeps): Attract {
       return halted;
     },
     frame(frameSeconds) {
-      if (halted) return false;
-      const dt = Math.min(Math.max(frameSeconds, 0), MAX_FRAME_SECONDS);
-      const now = readState();
-      if (!attractAllowed(now)) {
-        state.idleSeconds = 0;
-        turnOff();
-        return false;
-      }
-      if (!active) {
-        state.idleSeconds += dt;
-        if (!attractDue(now)) return false;
-        turnOn();
-      }
-      try {
-        return playFrame(dt);
-      } catch (error) {
-        halt(error);
-        return false;
-      }
+      return !halted && guarded(() => tick(visualFrameSeconds(frameSeconds)), false);
     },
     interrupt() {
       state.idleSeconds = 0;
       const ended = active;
-      turnOff();
+      guarded(turnOff, undefined);
       return ended;
     },
     resize(field) {

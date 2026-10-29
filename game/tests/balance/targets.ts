@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
+import type { BotProfile } from '../../src/bot/create';
+import { runGalaxy, type RunResult } from '../../src/bot/run';
 import { DIMENSION_NUMBERS, GALAXIES, GALAXY_INDEXES, galaxyById, galaxyLabel, galaxyOrdinal } from '../../src/content/galaxies';
 import { galaxyIdOf, type BossId, type Dimension, type GalaxyId } from '../../src/content/types';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';

@@ -1,4 +1,5 @@
-import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
+import type { BotProfile } from '../../src/bot/create';
+import { runGalaxy, type RunResult } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 

@@ -21,7 +21,7 @@ import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
 import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
-import { createFixedStepLoop } from '../sim/loop';
+import { createFixedStepLoop, visualFrameSeconds } from '../sim/loop';
 import { applyAccents } from '../ui/accents';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
@@ -84,9 +84,6 @@ export interface App {
   quit(): void;
   dispose(): void;
 }
-
-/** Caps the visual step after a stalled frame, so stars and particles never jump. */
-const MAX_VISUAL_STEP_SECONDS = 0.1;
 
 export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
@@ -204,7 +201,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     covered: () => anyCoverUp(coversUp()) || installPrompt.prompting,
     visible: () => document.visibilityState === 'visible',
     reducedMotion: () => renderer.effects.reducedMotion,
-    portrait: () => root.clientHeight >= root.clientWidth,
+    portrait: () => view.portrait(),
     now: () => performance.now(),
     demoStarted: () => {
       scaler.startRun();
@@ -443,7 +440,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const { world } = run;
     if (world === null) return;
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
-    const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
+    const visualSeconds = visualFrameSeconds(frameSeconds);
     if (mode === 'playing') {
       monitor.sample(frameMs);
       sampleQuality(frameMs);

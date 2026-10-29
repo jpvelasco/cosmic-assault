@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { runGalaxy, type BotProfile } from '../../src/bot/run';
+import type { BotProfile } from '../../src/bot/create';
+import { runGalaxy } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS, type Controls } from '../../src/sim/controls';

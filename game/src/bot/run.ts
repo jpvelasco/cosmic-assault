@@ -3,28 +3,16 @@ import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, STEP_SECONDS } from '../sim/confi
 import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
-import { createRng, deriveSeed } from '../sim/rng';
 import type { GalaxyMode, Stars } from '../sim/scoring';
 import { hasEnded, World } from '../sim/world';
-import { createCasual } from './casual';
-import { createExpert } from './expert';
-import { STATUE } from './statue';
-import { createView, readView, type Bot } from './view';
-
-export type BotProfile = 'statue' | 'casual' | 'expert';
+import { createBot, type BotProfile } from './create';
+import { createView, readView } from './view';
 
 /** The 1280×720 reference field. */
 const REFERENCE_ASPECT = 16 / 9;
 /** How long past its timer a survival galaxy may run (its warp lasts 1.5 s), and how long a boss fight may last. */
 const SURVIVAL_OVERRUN_SECONDS = 5;
 const BOSS_FIGHT_SECONDS = 300;
-
-/** A bot of `profile` for a run with `seed`, drawing only from that seed's 'bot' stream. */
-export function createBot(profile: BotProfile, seed: number): Bot {
-  if (profile === 'statue') return STATUE;
-  const rng = createRng(deriveSeed(seed, 'bot'));
-  return profile === 'expert' ? createExpert(rng) : createCasual(rng);
-}
 
 export interface RunOptions {
   readonly galaxy: GalaxyDef;

@@ -15,6 +15,8 @@ export interface FixedStepLoopOptions {
 }
 
 const DEFAULT_MAX_FRAME_SECONDS = 0.05;
+/** The longest frame the visuals and the attract demo take, so a stalled tab, or one back from the background, never jumps them ahead. */
+const MAX_VISUAL_FRAME_SECONDS = 0.1;
 const DEFAULT_MAX_STEPS = 5;
 const STEP_EPSILON = 1e-9;
 
@@ -24,6 +26,9 @@ function clampFrame(frameSeconds: number, maxFrameSeconds: number): number {
   }
   return Math.min(frameSeconds, maxFrameSeconds);
 }
+
+/** A display frame of `frameSeconds` as the visuals and the attract demo take it: none if negative, at most MAX_VISUAL_FRAME_SECONDS. */
+export const visualFrameSeconds = (frameSeconds: number): number => clampFrame(frameSeconds, MAX_VISUAL_FRAME_SECONDS);
 
 function assertLoopOptions(step: number, maxFrameSeconds: number, maxSteps: number): void {
   if (!Number.isFinite(step) || step <= 0) {

@@ -61,17 +61,18 @@
   over, pause, settings, records, the Hangar, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
   crash guard and the local log; `sw/` is the service worker itself; `bot/`
-  holds the bots and their level runner (`run.ts`). The tests and the balance
-  suites use every profile; the expert also ships to players, flying the attract
-  demo behind the title, while the level runner stays test-only.
+  holds the bots (`create.ts` makes one of each profile) and their level runner
+  (`run.ts`). The tests and the balance suites use every profile; the expert
+  alone also ships to players, flying the attract demo behind the title, while
+  the casual, the statue and the level runner stay test-only.
   - `bot/` is pure like `sim/` (ESLint enforces it: no DOM, clock or `Math.random`). A bot reads
     a `BotView` (the World's state, refilled in place) and returns controls; it
     never changes the World. There are three profiles: `statue` sends no input
     (the baseline of what a level does to an idle ship), `casual` is a
     handicapped player (late reactions, a wobbling aim, dodges only some
-    threats), and `expert` is the full pilot, which the casual wraps. `createBot`
-    gives each run its own random stream, derived from the run's seed with
-    `deriveSeed(seed, 'bot')`; a bot draws from nothing else, so a bot run
+    threats), and `expert` is the full pilot, which the casual wraps. Each run's
+    bot draws its own random stream, `botRng(seed)` (`bot/create.ts`), derived from
+    the run's seed with `deriveSeed(seed, 'bot')`; a bot draws from nothing else, so a bot run
     replays exactly and never shifts a sim stream. A change to the expert changes
     what the casual does, so rerun the balance suites after either.
   - Pickups and weapon tiers (`sim/pickups/`, `content/pickups.ts`): a kill can
@@ -212,13 +213,14 @@
     by its dependencies: it has no save store, flow, notices or audio, so a demo
     writes nothing, counts no run and plays no sound effect, and the renderer
     draws it with `renderer.draw(world, alpha, null)`, which skips the HUD. The
-    input that ends it is swallowed in the capture phase (`app/inputRouting.ts`):
+    input that ends it is swallowed in the capture phase (`app/demoEnders.ts`):
     the key with its repeats and release, a pointer press with the clicks it leads
     to, and a pad frame (`routePad(pad, edges, now)` says when it swallowed one, so
     that press spends no sound hint). Only keys that would act on the page (Enter,
     Space, Tab, the arrows) lose their browser action; F5, F12 and browser shortcuts
-    keep theirs. A throw in a demo stops attract for the session and writes the
-    local log, with no crash card; a crash of the game stops it too.
+    keep theirs. A throw in a demo frame, or in tidying a demo away, stops attract
+    for the session and writes the local log, with no crash card; a crash of the
+    game stops it too.
     `e2e/attract.spec.ts` covers it, through the bridge's `attract` state and
     `attractNow()`.
   - Ship controls (input, thrust, fire, turn, the volley and the frame loop)

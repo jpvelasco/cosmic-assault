@@ -1,4 +1,5 @@
-import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
+import type { BotProfile } from '../../src/bot/create';
+import { runGalaxy, type RunResult } from '../../src/bot/run';
 import { GUNSHIP, MINE, PHASER } from '../../src/content/foes';
 import { galaxyById } from '../../src/content/galaxies';
 import { DANGER_ZONE, HAZARD_RULES, WARP_RIFT } from '../../src/content/hazards';
