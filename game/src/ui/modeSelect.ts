@@ -12,7 +12,7 @@ export interface ModeSelect {
   readonly confirmNewRank: MenuCard;
   /** Where the title's Resume Rank group sits while mode select shows. */
   readonly resumeSlot: HTMLElement;
-  /** The last row, under the mode cards: the Records chip, then the shared Back. */
+  /** The last row, under the mode cards: the Settings, Records and Hangar chips, then the shared Back. */
   readonly chipRow: HTMLElement;
   /** Sets the line on how to choose, for keys or taps. */
   setHint(text: string): void;

@@ -93,7 +93,7 @@ function shakeChoices(onShake: (shake: ScreenShake) => void): { group: HTMLEleme
 }
 
 /**
- * The settings screen: a glass card over the title or pause card that opened it. Controls report through
+ * The settings screen: a glass card over the title, mode select or pause card that opened it. Controls report through
  * `actions` and are refreshed by `update`; Esc anywhere closes it, even from a focused slider.
  */
 export function createSettingsCard(root: HTMLElement, actions: SettingsCardActions): SettingsCard {

@@ -154,7 +154,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   /** The menu cards, which take the shared Back. */
   const menus: Partial<Record<Screen, MenuCard>> = { modeSelect: modes.modeSelect, confirmNewRank: modes.confirmNewRank, map: dimensionMap, galaxySelect };
   const resumeSlots: Partial<Record<Screen, HTMLElement>> = { title: titleResumeSlot, modeSelect: modes.resumeSlot };
-  // One set of chips serves the title and pause cards; `update` moves it into the visible card's row.
+  // One set of chips serves the title, mode select and pause cards; `update` moves it into the visible card's row.
   const sound = chip('sound-toggle', actions.toggleMute);
   const fullscreen = chip('fullscreen-toggle', actions.toggleFullscreen);
   const settings = chip('settings-open', actions.openSettings);
@@ -235,10 +235,10 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
       const row = chipRows[screen];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
       // stay ahead of the title's Install chip.
-      if (row !== undefined && sound.parentElement !== row) row.prepend(sound, fullscreen, settings);
-      // Records and Hangar sit after Settings on the title, and ahead of Back in the last row of mode select.
+      if (row !== undefined && settings.parentElement !== row) row.prepend(sound, fullscreen, settings);
+      // Records and Hangar sit after Settings on the title; on mode select Settings leads them, ahead of Back in its last row.
       if (screen === 'title' && records.previousElementSibling !== settings) settings.after(records, hangar);
-      else if (screen === 'modeSelect' && records.parentElement !== modes.chipRow) modes.chipRow.prepend(records, hangar);
+      else if (screen === 'modeSelect' && settings.parentElement !== modes.chipRow) modes.chipRow.prepend(settings, records, hangar);
       mountWhen(installOffer === 'prompt', installChip, (el) => {
         titleRow.append(el);
       });
