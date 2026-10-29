@@ -477,6 +477,12 @@ emits `src/sw/worker.ts` as `sw.js` with the list of every built file but the tw
 512 px icons (`NOT_PRECACHED`), which the browser fetches itself when it installs
 the app; `tests/unit/icons.test.ts` caps the precached icons' bytes. The worker
 registers from `./sw.js` with its default scope, so it controls only `/next/`
-and never the legacy root; it is never registered by the Vite dev server. Each
-deploy gets a new cache version, and older `cosmic-assault-next-*` caches are
-deleted when the new worker activates.
+and never the legacy root; it is never registered by the Vite dev server. Within
+its scope it never answers for a `next` directory below it (`shouldHandle` in
+`platform/swLogic.ts`), and its cached page answers only navigations to the
+game's own address (`./` or `./index.html`, any query), so any other page keeps
+the host's answer, a 404 included. Its caches are named `cosmic-assault-v2-`
+plus the build's version; each deploy gets a new version, and when the new
+worker activates it deletes older `cosmic-assault-v2-*` caches and every
+`cosmic-assault-next-*` cache the preview's earlier worker left. It deletes no
+other cache.

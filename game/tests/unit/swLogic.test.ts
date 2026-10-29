@@ -1,12 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cacheFirst, isErrorPage, isStaleCache, NAVIGATION_TIMEOUT_MS, networkFirst, precacheName, shouldCache, shouldHandle } from '../../src/platform/swLogic';
+import {
+  CACHE_PREFIX,
+  cacheFirst,
+  isEntryNavigation,
+  isErrorPage,
+  isStaleCache,
+  NAVIGATION_TIMEOUT_MS,
+  networkFirst,
+  precacheName,
+  PREVIEW_CACHE_PREFIX,
+  RETIRED_PREVIEW_DIR,
+  shouldCache,
+  shouldHandle,
+} from '../../src/platform/swLogic';
 
-const SCOPE = new URL('https://example.test/cosmic-assault/next/');
-const at = (path: string) => new URL(path, SCOPE);
+const SCOPES = [new URL('https://example.test/cosmic-assault/'), new URL('https://example.test/')];
 
 describe('precacheName', () => {
-  it('prefixes the version', () => {
-    expect(precacheName('abc123')).toBe('cosmic-assault-next-abc123');
+  it('prefixes the version with the game\'s own cache prefix', () => {
+    expect(precacheName('abc123')).toBe('cosmic-assault-v2-abc123');
+    expect(precacheName('abc123').startsWith(CACHE_PREFIX)).toBe(true);
+  });
+
+  it('never matches the retired preview\'s caches, which are deleted by name', () => {
+    expect(PREVIEW_CACHE_PREFIX).toBe('cosmic-assault-next-');
+    expect(precacheName('abc123').startsWith(PREVIEW_CACHE_PREFIX)).toBe(false);
   });
 });
 
@@ -17,37 +35,76 @@ describe('isStaleCache', () => {
     expect(isStaleCache(precacheName('old'), current)).toBe(true);
   });
 
+  it('is true for any cache the retired preview left', () => {
+    expect(isStaleCache('cosmic-assault-next-old', current)).toBe(true);
+    expect(isStaleCache('cosmic-assault-next-new', current)).toBe(true);
+  });
+
   it('is false for the current cache', () => {
     expect(isStaleCache(current, current)).toBe(false);
   });
 
-  it('is false for a cache that is not ours', () => {
+  it('is false for a cache that is not ours, even one whose name holds our words', () => {
     expect(isStaleCache('workbox-precache-v2', current)).toBe(false);
     expect(isStaleCache('cosmic-assault-legacy', current)).toBe(false);
+    expect(isStaleCache('cosmic-assault-v2', current)).toBe(false);
+    expect(isStaleCache('cosmic-assault-next', current)).toBe(false);
   });
 });
 
-describe('shouldHandle', () => {
-  it('handles a GET for an asset under the scope', () => {
-    expect(shouldHandle(at('/cosmic-assault/next/assets/x.js'), 'GET', SCOPE)).toBe(true);
-    expect(shouldHandle(at('/cosmic-assault/next/'), 'GET', SCOPE)).toBe(true);
+describe.each(SCOPES.map((scope) => [scope.href, scope] as const))('with the scope %s', (_, scope) => {
+  const at = (path: string) => new URL(path, scope);
+
+  describe('shouldHandle', () => {
+    it('handles a GET for the game and its assets', () => {
+      expect(shouldHandle(at('./'), 'GET', scope)).toBe(true);
+      expect(shouldHandle(at('index.html?seed=7'), 'GET', scope)).toBe(true);
+      expect(shouldHandle(at('assets/x.js'), 'GET', scope)).toBe(true);
+    });
+
+    it('leaves the retired preview address to the network, with or without a slash', () => {
+      expect(shouldHandle(at(RETIRED_PREVIEW_DIR), 'GET', scope)).toBe(false);
+      expect(shouldHandle(at('next'), 'GET', scope)).toBe(false);
+      expect(shouldHandle(at('next?from=old-link'), 'GET', scope)).toBe(false);
+      expect(shouldHandle(at('next/'), 'GET', scope)).toBe(false);
+      expect(shouldHandle(at('next/index.html'), 'GET', scope)).toBe(false);
+      expect(shouldHandle(at('next/sw.js'), 'GET', scope)).toBe(false);
+      expect(shouldHandle(at('next/assets/x.js'), 'GET', scope)).toBe(false);
+    });
+
+    it('still handles a file whose name only starts with the preview\'s', () => {
+      expect(shouldHandle(at('nextlevel.png'), 'GET', scope)).toBe(true);
+      expect(shouldHandle(at('next-other/x.js'), 'GET', scope)).toBe(true);
+      expect(shouldHandle(at('assets/next/x.js'), 'GET', scope)).toBe(true);
+    });
+
+    it('leaves anything but GET alone', () => {
+      expect(shouldHandle(at('assets/x.js'), 'POST', scope)).toBe(false);
+      expect(shouldHandle(at('assets/x.js'), 'HEAD', scope)).toBe(false);
+    });
+
+    it('leaves another origin alone, even on the same path', () => {
+      expect(shouldHandle(new URL(`https://cdn.test${scope.pathname}assets/x.js`), 'GET', scope)).toBe(false);
+      expect(shouldHandle(new URL(`http://example.test${scope.pathname}assets/x.js`), 'GET', scope)).toBe(false);
+    });
   });
 
-  it('leaves the legacy site at the root alone', () => {
-    expect(shouldHandle(at('/cosmic-assault/'), 'GET', SCOPE)).toBe(false);
-    expect(shouldHandle(at('/cosmic-assault/index.html'), 'GET', SCOPE)).toBe(false);
-    expect(shouldHandle(at('/cosmic-assault/next'), 'GET', SCOPE)).toBe(false);
-    expect(shouldHandle(at('/cosmic-assault/next-other/x.js'), 'GET', SCOPE)).toBe(false);
-  });
+  describe('isEntryNavigation', () => {
+    it('is true for the game\'s own address, whatever the query', () => {
+      expect(isEntryNavigation(at('./'), scope)).toBe(true);
+      expect(isEntryNavigation(at('index.html'), scope)).toBe(true);
+      expect(isEntryNavigation(at('./?seed=7&lives=1'), scope)).toBe(true);
+      expect(isEntryNavigation(at('index.html?galaxy=2-1#top'), scope)).toBe(true);
+    });
 
-  it('leaves anything but GET alone', () => {
-    expect(shouldHandle(at('/cosmic-assault/next/assets/x.js'), 'POST', SCOPE)).toBe(false);
-    expect(shouldHandle(at('/cosmic-assault/next/assets/x.js'), 'HEAD', SCOPE)).toBe(false);
-  });
-
-  it('leaves another origin alone, even on the same path', () => {
-    expect(shouldHandle(new URL('https://cdn.test/cosmic-assault/next/assets/x.js'), 'GET', SCOPE)).toBe(false);
-    expect(shouldHandle(new URL('http://example.test/cosmic-assault/next/assets/x.js'), 'GET', SCOPE)).toBe(false);
+    it('is false for any other page, so a missing one stays the host\'s 404', () => {
+      expect(isEntryNavigation(at('missing/'), scope)).toBe(false);
+      expect(isEntryNavigation(at('missing.html'), scope)).toBe(false);
+      expect(isEntryNavigation(at('sw.js'), scope)).toBe(false);
+      expect(isEntryNavigation(at('index.htm'), scope)).toBe(false);
+      expect(isEntryNavigation(at('next/'), scope)).toBe(false);
+      expect(isEntryNavigation(at('next/index.html'), scope)).toBe(false);
+    });
   });
 });
 
