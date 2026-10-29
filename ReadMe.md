@@ -73,7 +73,7 @@
 | --- | --- |
 | Steer and thrust | The left stick, like the joystick, or the D-pad to turn and thrust |
 | Fire | `A`, `RB` or `RT` |
-| Pause | `Start` |
+| Pause | `Start` or `B` |
 | Menus | The D-pad moves, `A` chooses, `B` goes back |
 
 Phones play in landscape; the game asks you to rotate if you hold it upright.
