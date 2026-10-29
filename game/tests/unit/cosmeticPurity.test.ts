@@ -6,7 +6,7 @@ import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { fakeCanvas } from '../helpers/fakeCanvas';
 import { digestPlay, playScripted, type DigestRun } from '../helpers/eventDigest';
-import { importsOf, resolveImport, sourcesUnder } from '../helpers/sourceImports';
+import { importClosure, importsOf, resolveImport, sourcesUnder } from '../helpers/sourceImports';
 
 const FIELD = { width: 1280, height: 720 };
 const SECONDS = 30;
@@ -30,15 +30,11 @@ function pureFiles(): string[] {
 }
 
 describe('cosmetics are only read by the drawing and the menus', () => {
-  it('keeps the simulation, the bots, the galaxy tables and the meta rules free of every look', () => {
+  it('keeps the simulation, the bots, the galaxy tables and the meta rules free of every look, through any module between', () => {
     const files = pureFiles();
     expect(files.length).toBeGreaterThan(40);
-    const leaks = files.flatMap((file) =>
-      importsOf(file)
-        .map((specifier) => ({ file, specifier, target: resolveImport(file, specifier) }))
-        .filter(({ target }) => target !== null && COSMETIC.test(target)),
-    );
-    expect(leaks, leaks.map(({ file, specifier }) => `${file} imports ${specifier}`).join('\n')).toEqual([]);
+    const leaks = files.flatMap((file) => importClosure(file).filter((module) => COSMETIC.test(module)).map((module) => `${file} loads ${module}`));
+    expect(leaks, leaks.join('\n')).toEqual([]);
   });
 
   it('lets only meta/cosmetics.ts read the looks among the meta rules', () => {

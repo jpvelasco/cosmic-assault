@@ -14,6 +14,7 @@ import { rgba } from '../../src/render/color';
 import { createAsteroid, type AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID } from '../../src/sim/config';
 import { createRng } from '../../src/sim/rng';
+import { recordingContext } from '../helpers/fakeCanvas';
 
 interface Point {
   readonly x: number;
@@ -125,17 +126,7 @@ interface FakeCanvas {
 }
 
 /** A Canvas 2D stand-in that accepts every call, so the baker's sizing and caching run in Node. */
-function fakeContext(): unknown {
-  const gradient = { addColorStop: () => undefined };
-  return new Proxy(
-    {},
-    {
-      get: (_target, name) =>
-        name === 'createLinearGradient' || name === 'createRadialGradient' ? () => gradient : () => undefined,
-      set: () => true,
-    },
-  );
-}
+const fakeContext = (): unknown => recordingContext();
 
 describe('createSpriteBaker', () => {
   let created: FakeCanvas[];
@@ -256,16 +247,12 @@ describe('createSpriteBaker', () => {
 
   it('paints the shot and the asteroid in each palette\'s own colours', () => {
     const painted: string[] = [];
-    const recording = new Proxy(
-      {},
-      {
-        get: (_target, name) => (name === 'createLinearGradient' || name === 'createRadialGradient' ? () => ({ addColorStop: (_at: number, color: string) => painted.push(color) }) : () => undefined),
-        set: (_target, name, value) => {
-          if (name === 'fillStyle' || name === 'strokeStyle') painted.push(String(value));
-          return true;
-        },
+    const recording = recordingContext({
+      stop: (_at, color) => painted.push(color),
+      set: (name, value) => {
+        if (name === 'fillStyle' || name === 'strokeStyle') painted.push(String(value));
       },
-    );
+    });
     vi.stubGlobal('document', { createElement: (): FakeCanvas => ({ width: 0, height: 0, getContext: () => recording }) });
     const all = PALETTE_IDS.map(paletteFor);
     const a = rock(5);
@@ -389,20 +376,10 @@ describe('createSpriteBaker', () => {
         createElement: () => {
           const log: string[] = [];
           calls.push(log);
-          const gradient = { addColorStop: () => undefined };
-          const ctx = new Proxy(
-            {},
-            {
-              get: (_target, name) => {
-                if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => gradient;
-                return (...args: unknown[]) => log.push(`${String(name)}(${args.map((arg) => (typeof arg === 'number' ? String(arg) : 'canvas')).join(',')})`);
-              },
-              set: (_target, name, value) => {
-                log.push(`${String(name)}=${String(value)}`);
-                return true;
-              },
-            },
-          );
+          const ctx = recordingContext({
+            call: (name, args) => log.push(`${name}(${args.map((arg) => (typeof arg === 'number' ? String(arg) : 'canvas')).join(',')})`),
+            set: (name, value) => log.push(`${name}=${String(value)}`),
+          });
           const canvas = { width: 0, height: 0, getContext: () => ctx };
           canvases.push(canvas);
           return canvas;
@@ -500,33 +477,23 @@ describe('createSpriteBaker', () => {
 });
 
 describe('ship skins', () => {
+  const PATH_OPS: readonly string[] = ['beginPath', 'moveTo', 'lineTo', 'closePath', 'bezierCurveTo', 'arc', 'ellipse', 'clip'];
+
   /** A canvas whose context logs each path op and fill with its arguments; a gradient logs its stops. */
   function recordingCanvas(ops: string[]): { getContext(kind: string): unknown } {
     let fillStyle: unknown = '';
     let strokeStyle: unknown = '';
-    const gradient = () => {
-      const stops: string[] = [];
-      return { stops, addColorStop: (offset: number, color: string) => stops.push(`${String(offset)}:${color}`) };
-    };
-    const ctx = new Proxy(
-      {},
-      {
-        get: (_target, name) => {
-          if (name === 'createLinearGradient' || name === 'createRadialGradient') return gradient;
-          if (name === 'fill') return () => ops.push(`fill ${JSON.stringify(fillStyle)}`);
-          if (name === 'stroke') return () => ops.push(`stroke ${String(strokeStyle)}`);
-          if (typeof name === 'string' && ['beginPath', 'moveTo', 'lineTo', 'closePath', 'bezierCurveTo', 'arc', 'ellipse', 'clip'].includes(name)) {
-            return (...args: unknown[]) => ops.push(`${name} ${args.map(String).join(' ')}`);
-          }
-          return () => undefined;
-        },
-        set: (_target, name, value) => {
-          if (name === 'fillStyle') fillStyle = value;
-          if (name === 'strokeStyle') strokeStyle = value;
-          return true;
-        },
+    const ctx = recordingContext({
+      call: (name, args) => {
+        if (name === 'fill') ops.push(`fill ${JSON.stringify(fillStyle)}`);
+        else if (name === 'stroke') ops.push(`stroke ${String(strokeStyle)}`);
+        else if (PATH_OPS.includes(name)) ops.push(`${name} ${args.map(String).join(' ')}`);
       },
-    );
+      set: (name, value) => {
+        if (name === 'fillStyle') fillStyle = value;
+        if (name === 'strokeStyle') strokeStyle = value;
+      },
+    });
     return { getContext: () => ctx };
   }
 

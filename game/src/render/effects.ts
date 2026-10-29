@@ -1,4 +1,4 @@
-import { TRAILS, type TrailId, type TrailSpec } from '../content/cosmetics';
+import { trailCore, TRAILS, type TrailId, type TrailSpec } from '../content/cosmetics';
 import { FOES, MINE } from '../content/foes';
 import { BLACK_HOLE, WARP_RIFT } from '../content/hazards';
 import type { FoeKind } from '../content/types';
@@ -426,7 +426,8 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
 
   /** The colour of the next trail particle: its core's white now and then, else the next colour of the trail's steps or a pick. */
   const trailColor = (): string => {
-    if (trail.coreShare > 0 && rng.chance(trail.coreShare)) return trail.core;
+    const core = trailCore(trail);
+    if (core !== null && rng.chance(trail.coreShare)) return core;
     if (trail.cycle) {
       const color = trail.colors[trailStep % trail.colors.length] ?? trail.core;
       trailStep++;

@@ -1,4 +1,4 @@
-import { SKIN_IDS, SKINS, TRAIL_IDS, TRAILS, type Look, type SkinId, type TrailId } from '../content/cosmetics';
+import { SKIN_IDS, SKINS, trailCore, TRAIL_IDS, TRAILS, type Look, type SkinId, type TrailId } from '../content/cosmetics';
 import { ALL_STARS } from '../content/galaxies';
 import { effectiveLook, totalStars, unlockedLooks } from '../meta/cosmetics';
 import type { SaveData } from '../meta/save';
@@ -92,9 +92,10 @@ function createPreview(): Preview {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
       const trail = TRAILS[look.trail];
+      const core = trailCore(trail);
       ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < TRAIL_DOTS; i++) {
-        const color = trail.coreShare > 0 && i % 2 === 0 ? trail.core : trail.colors[i % trail.colors.length] ?? trail.core;
+        const color = core !== null && i % 2 === 0 ? core : trail.colors[i % trail.colors.length] ?? trail.core;
         ctx.globalAlpha = 1 - i / (TRAIL_DOTS + 1);
         const wobble = i % 2 === 0 ? -1 : 1;
         place(baker.glow(color, TRAIL_GLOW_UNITS), SHIP_X - (TRAIL_FIRST_UNITS + i * TRAIL_STEP_UNITS), SHIP_Y + wobble);

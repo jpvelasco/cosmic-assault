@@ -109,7 +109,8 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
       show(before, toTitle(before));
       return;
     }
-    show(before, action.kind === 'clear' ? namingUnlocks(after, saveBefore, store.save) : after);
+    // A debug run, whose store never writes, keeps no stars, so it names no unlock, as it names no new best.
+    show(before, action.kind === 'clear' && store.writes ? namingUnlocks(after, saveBefore, store.save) : after);
   }
 
   /** A new Rank run, at `from`; `?lives=` sets its lives. */

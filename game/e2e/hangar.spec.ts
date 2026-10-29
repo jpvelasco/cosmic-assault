@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
-import { defaultSave, type SaveData } from '../src/meta/save';
-import { expect, expectMode, gameState, openFreshGame, openGame, seedLook, seedSave, test, waitForBridge } from './fixtures';
+import type { SaveData } from '../src/meta/save';
+import { expect, expectMode, gameState, openFreshGame, openGame, seedLook, seedSave, test, threeStarSave, waitForBridge } from './fixtures';
 
 const openChip = (page: Page) => page.getByTestId('hangar-open');
 const card = (page: Page) => page.getByTestId('hangar');
@@ -44,10 +44,7 @@ function pillProblems(page: Page): Promise<string[]> {
 }
 
 /** Three stars in each of ten galaxies: 30 stars, enough for Ember, Glacier and the Comet trail, short of Ion's 36 and Aurora's 45. */
-const THIRTY: SaveData = {
-  ...defaultSave(),
-  galaxies: Object.fromEntries((['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '2-1', '2-2', '2-3', '2-4'] as const).map((id) => [id, { bestScore: 1000, stars: 3 }])),
-};
+const THIRTY: SaveData = threeStarSave(['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '2-1', '2-2', '2-3', '2-4']);
 
 /** Waits for the card's pop-in to end, so what is measured or shot is the card at rest, not scaled mid-animation. */
 async function settled(page: Page): Promise<void> {

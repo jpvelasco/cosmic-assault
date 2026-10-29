@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { GalaxyId } from '../src/content/types';
-import { SKIN_IDS, TRAILS, TRAIL_IDS, type Look, type TrailId } from '../src/content/cosmetics';
+import { SKIN_IDS, trailCore, TRAILS, TRAIL_IDS, type Look, type TrailId } from '../src/content/cosmetics';
 import { SPRITE_CACHE_CAPACITY } from '../src/render/sprites';
 import { ALL_STARS_SAVE, expect, fastForward, gameState, openGame, seedLook, seedSave, startRun, test } from './fixtures';
 import { CACHE_GALAXY, CACHE_HOLD_SECONDS, CACHE_LIVES, ECLIPSE_GALAXY, LEVIATHAN_GALAXY, seedFor, TO_BOSS_FIGHT_SECONDS, WARDEN_GALAXY, type ClaimId } from './seeds';
@@ -18,7 +18,11 @@ const REPORT_PATH = 'test-results/sprite-cache.json';
 const THRUST_MS = 1000;
 
 /** The glow colours a trail bakes: its colours, and its core when it draws one. */
-const trailColours = (id: TrailId): readonly string[] => [...new Set([...TRAILS[id].colors, ...(TRAILS[id].coreShare > 0 ? [TRAILS[id].core] : [])])];
+function trailColours(id: TrailId): readonly string[] {
+  const { colors } = TRAILS[id];
+  const core = trailCore(TRAILS[id]);
+  return [...new Set(core === null ? colors : [...colors, core])];
+}
 /**
  * The scenes are played in the look that bakes the most sprites: the trail with the most glow colours (a skin bakes
  * one hull whichever it is), so the capacity holds for every look a player can choose.

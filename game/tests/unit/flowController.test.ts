@@ -173,6 +173,15 @@ describe('createFlowController: events', () => {
     expect(flow.state.result?.newLooks).toEqual([]);
   });
 
+  it('names no look on a debug run\'s clear: its store never writes, so the stars it wins are not kept', () => {
+    const save: SaveData = { ...defaultSave(), galaxies: { '1-2': { bestScore: 1, stars: 3 }, '1-3': { bestScore: 1, stars: 3 }, '1-4': { bestScore: 1, stars: 2 } } };
+    const { flow } = setup({ save, galaxy: '1-1', writes: false });
+    flow.command({ kind: 'start' });
+    playUntilEnd(flow, '1-1');
+    expect(flow.state.screen).toBe('results');
+    expect(flow.state.result?.newLooks ?? []).toEqual([]);
+  });
+
   it('never calls a debug run a new best: its store never writes, so it keeps no record to beat', () => {
     const { flow } = setup({ save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1', writes: false });
     flow.command({ kind: 'start' });

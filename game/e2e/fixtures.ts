@@ -116,11 +116,14 @@ export function seedSave(page: Page, save: SaveData, options: { once?: boolean }
   return seedStorage(page, JSON.stringify(save), options);
 }
 
-/** Three stars in every galaxy, which unlocks every look. */
-export const ALL_STARS_SAVE: SaveData = {
+/** A save with three stars in each galaxy of `ids`, and nothing else won. */
+export const threeStarSave = (ids: readonly GalaxyId[]): SaveData => ({
   ...defaultSave(),
-  galaxies: Object.fromEntries(GALAXIES.map(({ id }) => [id, { bestScore: 1000, stars: 3 }])),
-};
+  galaxies: Object.fromEntries(ids.map((id) => [id, { bestScore: 1000, stars: 3 }])),
+});
+
+/** Three stars in every galaxy, which unlocks every look. */
+export const ALL_STARS_SAVE: SaveData = threeStarSave(GALAXIES.map(({ id }) => id));
 
 /** Stores settings that choose `look`, before the page loads; the ship draws it only where the save's stars unlock it. */
 export async function seedLook(page: Page, look: Look): Promise<void> {

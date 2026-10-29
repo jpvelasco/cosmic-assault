@@ -76,3 +76,42 @@ export function fakeCanvas(): FakeCanvas {
   );
   return fake;
 }
+
+/** What a recording 2D context tells of: each method called, with its arguments; each property set; each gradient stop. */
+export interface ContextLog {
+  call?(name: string, args: readonly unknown[]): void;
+  set?(name: string, value: unknown): void;
+  stop?(offset: number, color: string): void;
+}
+
+/**
+ * A Canvas 2D stand-in that accepts every call and tells `log` of it. Each gradient it makes is new, and keeps its stops
+ * as `offset:colour` in `stops`.
+ */
+export function recordingContext(log: ContextLog = {}): unknown {
+  const gradient = () => {
+    const stops: string[] = [];
+    return {
+      stops,
+      addColorStop: (offset: number, color: string) => {
+        stops.push(`${String(offset)}:${color}`);
+        log.stop?.(offset, color);
+      },
+    };
+  };
+  return new Proxy(
+    {},
+    {
+      get: (_target, name) =>
+        name === 'createLinearGradient' || name === 'createRadialGradient'
+          ? gradient
+          : (...args: unknown[]) => {
+              log.call?.(String(name), args);
+            },
+      set: (_target, name, value) => {
+        log.set?.(String(name), value);
+        return true;
+      },
+    },
+  );
+}

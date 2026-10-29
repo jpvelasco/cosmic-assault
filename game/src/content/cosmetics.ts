@@ -58,6 +58,9 @@ export interface TrailSpec {
   readonly cycle: boolean;
 }
 
+/** The colour some of `trail`'s particles take in place of its colours, or null when it has no core. */
+export const trailCore = (trail: TrailSpec): string | null => (trail.coreShare > 0 ? trail.core : null);
+
 /** The engine's flame colours, which the standard trail keeps. */
 const FLAME = ['#ffb347', '#ff6a3c'] as const;
 
