@@ -367,9 +367,10 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await page.reload();
 
       await expect(page.getByRole('heading', { name: 'Classic site' })).toBeVisible();
-      // A browser checks a worker for an update at most once a day on navigation; ask for the check it would make.
-      await page.evaluate(async () => {
-        await (await navigator.serviceWorker.getRegistration('./'))?.update();
+      // A browser checks a worker for an update at most once a day on navigation; start the check it would make. The
+      // rollback worker then reloads this page, so do not wait on the check from inside the page.
+      await page.evaluate(() => {
+        void navigator.serviceWorker.getRegistration('./').then((registration) => registration?.update());
       });
       await expect.poll(() => registrationScopes(page), { message: 'no worker is left registered for the root' }).not.toContain(site.url);
       await expect.poll(() => cachesNamed(page, ROOT_CACHE_PREFIX), { message: 'no root cache is left' }).toEqual([]);
