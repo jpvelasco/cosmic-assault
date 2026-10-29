@@ -10,42 +10,25 @@ export class FakeElement {
   hidden = false;
   readonly dataset: Record<string, string | undefined> = {};
   readonly children: FakeElement[] = [];
-  readonly style = { setProperty: (): void => undefined };
   readonly classList = {
     add: (...names: string[]): void => {
-      this.className = [...new Set([...this.classes(), ...names])].join(' ');
-    },
-    toggle: (name: string, on: boolean): void => {
-      this.className = [...this.classes().filter((c) => c !== name), ...(on ? [name] : [])].join(' ');
+      this.className = [this.className, ...names].join(' ').trim();
     },
   };
-  private readonly attributes = new Map<string, string>();
-  private readonly listeners = new Map<string, (() => void)[]>();
 
   constructor(readonly tagName: string) {}
-
-  private classes(): string[] {
-    return this.className.split(' ').filter((c) => c !== '');
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attributes.set(name, value);
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.get(name) ?? null;
-  }
 
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
   }
 
-  addEventListener(type: string, listener: () => void): void {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  /** Attributes and listeners are taken and dropped: the tests read what a card shows, not how it is labelled or wired. */
+  setAttribute(): void {
+    // Nothing to keep.
   }
 
-  click(): void {
-    for (const listener of this.listeners.get('click') ?? []) listener();
+  addEventListener(): void {
+    // Nothing to keep.
   }
 
   /** This element or the first one under it with the `data-testid` `testId`. */
