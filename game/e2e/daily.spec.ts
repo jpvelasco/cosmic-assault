@@ -3,12 +3,13 @@ import { TWISTS_BY_ID } from '../src/content/daily';
 import { nextDate, previousDate } from '../src/meta/calendar';
 import { dailyGalaxy } from '../src/meta/dailyGalaxy';
 import { defaultSave, type SaveData } from '../src/meta/save';
-import { DAILY_CLEARED, dailyCardLine, dailyTitle, targetLine, twistToast } from '../src/ui/dailyCopy';
+import { DAILY_CLEARED, dailyTitle, targetLine, twistToast } from '../src/ui/dailyCopy';
 import { PRESSURE } from '../tests/helpers/pressure';
 import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor, PHONE_PORTRAIT_VIEWPORT, PHONE_VIEWPORT } from './seeds';
 import {
   clickPastGuard,
   collectPickup,
+  dailyCardLineOf,
   expect,
   expectMode,
   fastForward,
@@ -65,7 +66,7 @@ test('the Daily card names the day\'s twist and target, and Enter on it plays th
   await openDaily(page, CLEAR_DATE);
   await page.keyboard.press('Space');
   await expectMode(page, 'modeSelect');
-  await expect(dailyCard(page)).toContainText(dailyCardLine(twist.name, daily.target));
+  await expect(dailyCard(page)).toContainText(dailyCardLineOf(CLEAR_DATE));
   await expect(dailyCard(page)).toContainText(twist.blurb);
   await expect(page.getByTestId('daily-streak')).toBeHidden();
   expect(await cardProblems(page)).toEqual([]);
@@ -84,12 +85,6 @@ test('the Daily card names the day\'s twist and target, and Enter on it plays th
   await expect(toastOf(page)).toHaveText(twistToast(twist.name));
 });
 
-/** The line the Daily card shows for `date`'s twist and target. */
-function cardLineOf(date: string): string {
-  const daily = dailyGalaxy(date);
-  return dailyCardLine(TWISTS_BY_ID[daily.twist].name, daily.target);
-}
-
 /** Noon on `date` in the browser's time zone: half a day from either midnight. */
 const noonOn = (date: string): Date => new Date(`${date}T12:00:00`);
 
@@ -99,25 +94,25 @@ test('a Daily card resting across midnight shows the new day once the page is ba
   const third = nextDate(second);
   const fourth = nextDate(third);
   // Each step can only tell that the card moved on if no two days show the same line.
-  expect(new Set([first, second, third, fourth].map(cardLineOf)).size).toBe(4);
+  expect(new Set([first, second, third, fourth].map(dailyCardLineOf)).size).toBe(4);
   // No `?today=`: the game reads the device's clock, which only `Date` is faked for, so the game loop runs as normal.
   await page.clock.setFixedTime(noonOn(first));
   await openFreshGame(page);
   await openModeSelect(page);
-  await expect(dailyCard(page)).toContainText(cardLineOf(first));
+  await expect(dailyCard(page)).toContainText(dailyCardLineOf(first));
 
   await page.clock.setFixedTime(noonOn(second));
   await setPageHidden(page, false);
-  await expect(dailyCard(page)).toContainText(cardLineOf(second));
+  await expect(dailyCard(page)).toContainText(dailyCardLineOf(second));
 
   await page.clock.setFixedTime(noonOn(third));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(dailyCard(page)).toContainText(cardLineOf(third));
+  await expect(dailyCard(page)).toContainText(dailyCardLineOf(third));
 
   await page.clock.setFixedTime(noonOn(fourth));
   await dailyCard(page).focus();
   await page.keyboard.press('Enter');
-  await expect(dailyCard(page)).toContainText(cardLineOf(fourth));
+  await expect(dailyCard(page)).toContainText(dailyCardLineOf(fourth));
   await expect(dailyCard(page)).toBeFocused();
   await expectMode(page, 'modeSelect');
   await page.keyboard.press('Enter');

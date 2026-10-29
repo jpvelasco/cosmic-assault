@@ -1,6 +1,6 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildDir, filesIn } from './site.mjs';
 
 // Usage: check-no-bridge.mjs [dist]         fails if the release build carries any e2e-only code;
 //        check-no-bridge.mjs --e2e [dist-e2e] fails if the e2e build lacks a mark, which would blind the first check.
@@ -19,17 +19,10 @@ const MARKS = [
 ];
 
 const e2e = process.argv[2] === '--e2e';
-const [defaultDir, buildScript] = e2e ? ['../dist-e2e', 'build:e2e'] : ['../dist', 'build'];
-const dir = resolve(process.argv[e2e ? 3 : 2] ?? fileURLToPath(new URL(defaultDir, import.meta.url)));
+const dir = buildDir(process.argv[e2e ? 3 : 2], e2e ? { fallback: 'dist-e2e', buildScript: 'build:e2e' } : {});
 
-if (!existsSync(dir)) {
-  console.error(`${dir} does not exist; run npm run ${buildScript} first`);
-  process.exit(1);
-}
-
-const files = readdirSync(dir, { recursive: true, withFileTypes: true })
-  .filter((entry) => entry.isFile())
-  .map((entry) => join(entry.parentPath, entry.name))
+const files = filesIn(dir)
+  .map((file) => join(dir, file))
   .map((path) => ({ path, text: readFileSync(path, 'latin1') }));
 
 const problems = MARKS.flatMap(({ text, what, owner }) => {

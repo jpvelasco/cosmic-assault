@@ -1,20 +1,45 @@
 import { defineConfig, devices } from '@playwright/test';
+import { siteAddress } from './scripts/site.mjs';
 
 const isCI = !!process.env['CI'];
 // Off Vite's default preview port (4173), so a stray `npm run preview` is never mistaken for these builds.
 const E2E_URL = 'http://localhost:4317';
 const RELEASE_URL = 'http://localhost:4318';
+/**
+ * PAGES_URL, if set: the live site the `pages` project checks instead of a local one. It must be the http(s) address
+ * of the site's directory, ending in a slash, since every page the tests open is resolved against it.
+ */
+export function livePagesUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const url = siteAddress(value);
+  if (url === undefined) {
+    throw new Error(
+      `PAGES_URL is "${value}", which is not the address of a site's directory: set it to an http(s) address ending in a slash, such as https://example.github.io/cosmic-assault/, or unset it to test dist/ locally`,
+    );
+  }
+  return url.href;
+}
+
+/** The release build as GitHub Pages serves this site, under its project path; PAGES_URL points the project at a live copy instead. */
+const LIVE_PAGES_URL = livePagesUrl(process.env['PAGES_URL']);
+const PAGES_URL = LIVE_PAGES_URL ?? 'http://localhost:4319/cosmic-assault/';
 const desktopChrome = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } };
+
+/** A web server at `url`, started by `command` unless one already answers there outside CI. */
+function webServer(command: string, url: string) {
+  return { command, url, reuseExistingServer: !isCI, timeout: 60000 };
+}
 
 /** Serves a built `outDir`. CI builds it in an earlier step; locally, build first so preview is never stale. */
 function previewServer(build: string, outDir: string, url: string) {
   const port = new URL(url).port;
-  return {
-    command: `${isCI ? '' : `npm run ${build} && `}npm run preview -- --outDir ${outDir} --port ${port} --strictPort`,
-    url,
-    reuseExistingServer: !isCI,
-    timeout: 60000,
-  };
+  return webServer(`${isCI ? '' : `npm run ${build} && `}npm run preview -- --outDir ${outDir} --port ${port} --strictPort`, url);
+}
+
+/** Serves dist/ as GitHub Pages would, under the path of `url`. */
+function pagesServer(url: string) {
+  const { pathname, port } = new URL(url);
+  return webServer(`node scripts/serve-pages.mjs --dir dist --prefix ${pathname} --port ${port}`, url);
 }
 
 export default defineConfig({
@@ -26,7 +51,9 @@ export default defineConfig({
     baseURL: E2E_URL,
   },
   // Tags pick a project where a spec runs in several: @desktop and @phone run only there, and @release also runs
-  // against the release build. tests/unit/e2eProjects.test.ts checks that every spec keeps a test that runs.
+  // against the release build; pages takes the whole of pages.spec.ts by its file name, which grep sees right after the
+  // project name.
+  // tests/unit/e2eProjects.test.ts checks that every spec keeps a test that runs.
   projects: [
     // These drive the e2e build, which carries the test bridge.
     {
@@ -55,6 +82,20 @@ export default defineConfig({
       grep: /@release/,
       use: { ...desktopChrome, baseURL: RELEASE_URL },
     },
+    // The release build under the site's project path, as GitHub Pages serves it, and the service workers' lifecycle
+    // across the move from the preview address (pages.spec.ts serves its own sites). The trailing slash in baseURL is
+    // what keeps relative navigation inside the project path.
+    {
+      name: 'pages',
+      testMatch: ['**/pages.spec.ts', '**/release-smoke.spec.ts', '**/install.spec.ts'],
+      grep: [/@release/, /(^| )pages\.spec\.ts( |$)/],
+      use: { ...desktopChrome, baseURL: PAGES_URL },
+    },
   ],
-  webServer: [previewServer('build:e2e', 'dist-e2e', E2E_URL), previewServer('build', 'dist', RELEASE_URL)],
+  webServer: [
+    previewServer('build:e2e', 'dist-e2e', E2E_URL),
+    previewServer('build', 'dist', RELEASE_URL),
+    // After the release preview, which builds dist/ locally before this serves it.
+    ...(LIVE_PAGES_URL === undefined ? [pagesServer(PAGES_URL)] : []),
+  ],
 });

@@ -3,14 +3,14 @@ import { createCrashGuard } from '../../src/platform/crashGuard';
 import { RingLog } from '../../src/platform/log';
 
 const ORIGIN = 'https://example.test';
-const OURS = `${ORIGIN}/next/assets/index-abc.js`;
+const OURS = `${ORIGIN}/cosmic-assault/assets/index-abc.js`;
 
 interface FakeWindow extends EventTarget {
   location: { origin: string; href: string };
 }
 
 function fakeWindow(): FakeWindow {
-  return Object.assign(new EventTarget(), { location: { origin: ORIGIN, href: `${ORIGIN}/next/index.html?seed=1` } });
+  return Object.assign(new EventTarget(), { location: { origin: ORIGIN, href: `${ORIGIN}/cosmic-assault/index.html?seed=1` } });
 }
 
 /** An `error` event as browsers shape it (Node has no ErrorEvent). */
@@ -133,7 +133,7 @@ describe('attachGlobal', () => {
 
   it('does not trip on a same-origin script outside our base path', () => {
     const { win, onCrash } = setup();
-    win.dispatchEvent(errorEvent({ message: 'legacy', filename: `${ORIGIN}/game-modular.js` }));
+    win.dispatchEvent(errorEvent({ message: 'other project', filename: `${ORIGIN}/other-project/main.js` }));
     expect(onCrash).not.toHaveBeenCalled();
   });
 

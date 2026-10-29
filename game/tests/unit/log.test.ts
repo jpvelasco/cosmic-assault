@@ -48,9 +48,9 @@ describe('RingLog', () => {
   it('reports valid JSON holding the meta and the entries', () => {
     const log = new RingLog(2);
     log.add('stall', '1200 ms', 5);
-    const parsed: unknown = JSON.parse(log.report({ build: 'preview · local', mode: 'playing' }));
+    const parsed: unknown = JSON.parse(log.report({ build: 'v2.0.0 · local', mode: 'playing' }));
     expect(parsed).toEqual({
-      meta: { build: 'preview · local', mode: 'playing' },
+      meta: { build: 'v2.0.0 · local', mode: 'playing' },
       entries: [{ t: 5, kind: 'stall', message: '1200 ms' }],
     });
   });

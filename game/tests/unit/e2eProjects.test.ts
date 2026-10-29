@@ -1,12 +1,16 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
-import config from '../../playwright.config';
+import config, { livePagesUrl } from '../../playwright.config';
 import { listedTests, listTests, projectMatchers, projectsWithTestIgnore, scriptProjects, specsWithTests, testsNoProjectRuns, unmatchedSpecs } from '../helpers/specCoverage';
 
-const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true });
-const specs = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.spec.ts')).map((entry) => entry.name);
+const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true, recursive: true });
+const isSpec = (entry: (typeof entries)[number]): boolean => entry.isFile() && entry.name.endsWith('.spec.ts');
+const e2eDir = resolve(fileURLToPath(new URL('../../e2e/', import.meta.url)));
+const isTopLevel = (entry: (typeof entries)[number]): boolean => resolve(entry.parentPath) === e2eDir;
+const specs = entries.filter((entry) => isSpec(entry) && isTopLevel(entry)).map((entry) => entry.name);
 
 describe('unmatchedSpecs', () => {
   it('names a spec that no pattern matches', () => {
@@ -50,19 +54,19 @@ describe('listedTests', () => {
       ],
     };
     expect(listedTests(report)).toEqual([
-      { file: 'a.spec.ts', title: 'top @phone', project: 'p' },
-      { file: 'a.spec.ts', title: 'group inner', project: 'q' },
+      { file: 'a.spec.ts', title: 'a.spec.ts top @phone', project: 'p' },
+      { file: 'a.spec.ts', title: 'a.spec.ts group inner', project: 'q' },
     ]);
   });
 });
 
 describe('testsNoProjectRuns', () => {
   const tests = [
-    { file: 'a.spec.ts', title: 'plain', project: 'desk' },
-    { file: 'a.spec.ts', title: 'only on a phone @phone', project: 'desk' },
-    { file: 'a.spec.ts', title: 'only on a phone @phone', project: 'phone' },
-    { file: 'b.spec.ts', title: 'a release check @release', project: 'smoke' },
-    { file: 'b.spec.ts', title: 'a desktop check @desktop', project: 'smoke' },
+    { file: 'a.spec.ts', title: 'a.spec.ts plain', project: 'desk' },
+    { file: 'a.spec.ts', title: 'a.spec.ts only on a phone @phone', project: 'desk' },
+    { file: 'a.spec.ts', title: 'a.spec.ts only on a phone @phone', project: 'phone' },
+    { file: 'b.spec.ts', title: 'b.spec.ts a release check @release', project: 'smoke' },
+    { file: 'b.spec.ts', title: 'b.spec.ts a desktop check @desktop', project: 'smoke' },
   ];
   const projects = [
     { name: 'desk', grepInvert: /@phone/ },
@@ -82,8 +86,14 @@ describe('testsNoProjectRuns', () => {
     expect(testsNoProjectRuns(tests.slice(0, 3), { projects }, ['desk'])).toEqual(['a.spec.ts › only on a phone @phone']);
   });
 
+  it('lets a project pick a whole file by its name, as grep sees the file first', () => {
+    const listed = listedTests({ suites: [{ file: 'c.spec.ts', specs: [{ title: 'x', tests: [{ projectName: 'p' }] }] }] });
+    expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: [/@b/, /(^| )c\.spec\.ts( |$)/] }] }, ['p'])).toEqual([]);
+    expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: /(^| )d\.spec\.ts( |$)/ }] }, ['p'])).toEqual(['c.spec.ts › x']);
+  });
+
   it('accepts a list of patterns, any of which selects or drops a test', () => {
-    const listed = [{ file: 'c.spec.ts', title: 'x @a', project: 'p' }];
+    const listed = [{ file: 'c.spec.ts', title: 'c.spec.ts x @a', project: 'p' }];
     expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: [/@b/, /@a/] }] }, ['p'])).toEqual([]);
     expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grepInvert: [/@b/, /@a/] }] }, ['p'])).toEqual(['c.spec.ts › x @a']);
   });
@@ -100,6 +110,20 @@ describe('projectsWithTestIgnore', () => {
   it('names the projects that set testIgnore', () => {
     const config: PlaywrightTestConfig = { testIgnore: 'z', projects: [{ name: 'a' }, { name: 'b', testIgnore: '**/x.spec.ts' }, { testIgnore: [] }] };
     expect(projectsWithTestIgnore(config)).toEqual(['(config)', 'b', '(unnamed)']);
+  });
+});
+
+describe('livePagesUrl', () => {
+  it('takes the address of a live site\'s directory, over http or https', () => {
+    expect(livePagesUrl(undefined)).toBeUndefined();
+    expect(livePagesUrl('https://example.github.io/cosmic-assault/')).toBe('https://example.github.io/cosmic-assault/');
+    expect(livePagesUrl('http://localhost:4319/')).toBe('http://localhost:4319/');
+  });
+
+  it('refuses anything else, saying what to set instead', () => {
+    for (const value of ['', 'example.github.io/cosmic-assault/', 'https://example.github.io/cosmic-assault', 'file:///tmp/site/', 'https://example.github.io/cosmic-assault/?x=1', 'https://example.github.io/cosmic-assault/#top']) {
+      expect(() => livePagesUrl(value), value).toThrow(/PAGES_URL .*ending in a slash.*or unset it/);
+    }
   });
 });
 
@@ -134,6 +158,6 @@ describe('playwright.config.ts', () => {
   });
 
   it('keeps specs directly in e2e/, where the coverage check can see them', () => {
-    expect(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).toEqual([]);
+    expect(entries.filter((entry) => isSpec(entry) && !isTopLevel(entry)).map((entry) => join(entry.parentPath, entry.name))).toEqual([]);
   });
 });

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { SETTINGS_KEY } from '../src/app/settings';
 import { DELIBERATE_CRASH } from '../src/testBridge';
-import { attractState, expect, expectMode, gameState, nextFrames, openGame, startAttract, test, toastOf, waitForBridge } from './fixtures';
+import { attractState, BUILD_LABEL, expect, expectMode, gameState, nextFrames, openGame, startAttract, test, toastOf, waitForBridge } from './fixtures';
 
 
 test.use({ allowedErrors: [DELIBERATE_CRASH] });
@@ -99,7 +99,7 @@ test('Copy report puts the log, with the error in it, on the clipboard', async (
   expect(onTop, 'the toast is drawn above the crash card').toBe(true);
   const text = await page.evaluate(() => navigator.clipboard.readText());
   const report = JSON.parse(text) as { meta: Record<string, string>; entries: { kind: string; message: string }[] };
-  expect(report.meta['build']).toMatch(/^preview · /);
+  expect(report.meta['build']).toMatch(BUILD_LABEL);
   expect(report.meta['mode']).toBe('playing');
   expect(report.entries.some((entry) => entry.kind === 'mode' && entry.message === 'playing')).toBe(true);
   expect(report.entries.some((entry) => entry.kind === 'error' && entry.message.includes(DELIBERATE_CRASH))).toBe(true);

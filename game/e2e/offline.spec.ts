@@ -1,15 +1,17 @@
-import { precacheName } from '../src/platform/swLogic';
+import { precacheName, PREVIEW_CACHE_PREFIX } from '../src/platform/swLogic';
 import { expect, openGame, test, waitForBridge } from './fixtures';
 
-const STALE = precacheName('old');
-const FOREIGN = 'another-app-cache';
+/** Ours to delete: an older build's cache, and one the preview address left. */
+const STALE = [precacheName('old'), `${PREVIEW_CACHE_PREFIX}old`];
+/** Not ours, so kept: another app's cache, and one whose name merely shares the game's words. */
+const FOREIGN = ['another-app-cache', 'cosmic-assault-legacy'];
 
 test('after one visit the game starts offline, keeping only this build of our cache', async ({ page, context, baseURL }) => {
   // sw.js is a page at this origin that no worker controls yet, so the caches are seeded before registration.
   await page.goto('/sw.js');
   await page.evaluate(async (names) => {
     await Promise.all(names.map((name) => caches.open(name)));
-  }, [STALE, FOREIGN]);
+  }, [...STALE, ...FOREIGN]);
 
   await openGame(page);
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
@@ -18,9 +20,9 @@ test('after one visit the game starts offline, keeping only this build of our ca
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 
   const keys = await page.evaluate(() => caches.keys());
-  expect(keys, 'the stale cache is gone and the foreign one kept').not.toContain(STALE);
-  expect(keys).toContain(FOREIGN);
-  const ours = keys.filter((name) => name !== FOREIGN);
+  expect(keys.filter((name) => STALE.includes(name)), 'the stale caches are gone').toEqual([]);
+  expect(keys, 'the foreign ones are kept').toEqual(expect.arrayContaining(FOREIGN));
+  const ours = keys.filter((name) => !FOREIGN.includes(name));
   expect(ours).toHaveLength(1);
   expect(ours[0]).toMatch(new RegExp(`^${precacheName('')}[0-9a-f]+$`));
   const scripts = await page.evaluate(() => [...document.scripts].map((script) => script.src));

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <meta http-equiv="refresh" content="3; url=../">
+    <link rel="canonical" href="../">
+    <title>Cosmic Assault has moved</title>
+    <style>
+      html { color-scheme: dark; background: #1d0b44; color: #f2ecff; font: 1.125rem/1.5 system-ui, sans-serif; }
+      body { margin: 0; min-height: 100vh; display: grid; place-content: center; padding: 1.5rem; box-sizing: border-box; text-align: center; }
+      h1 { margin: 0 0 0.5rem; font-size: 1.75rem; }
+      a { display: inline-block; margin: 1rem 0; padding: 0.75rem 1.5rem; border-radius: 999px; background: #f2ecff; color: #1d0b44; font-weight: 600; text-decoration: none; }
+      p:last-of-type { font-size: 0.9rem; opacity: 0.8; }
+    </style>
+  </head>
+  <body>
+    <h1>Cosmic Assault has moved</h1>
+    <p>The game now lives at its main address. Taking you there…</p>
+    <a href="../">Play Cosmic Assault</a>
+    <p>Installed the preview as an app? It now opens the game. Keep it, because your progress may be saved inside it, and open it once while online.</p>
+    <script>
+      function leave() { location.replace('../'); }
+      setTimeout(leave, 2000);
+      try {
+        navigator.serviceWorker.register('./sw.js').then((registration) => registration.update()).catch(leave);
+      } catch {
+        leave();
+      }
+    </script>
+  </body>
+</html>

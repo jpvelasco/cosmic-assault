@@ -67,6 +67,9 @@ jobs:
       - name: Check release build has no test bridge
         run: npm run check:no-bridge
 
+      - name: Check the site layout
+        run: npm run check:pages
+
       - name: Build for end-to-end tests
         run: npm run build:e2e
 
@@ -199,56 +202,9 @@ jobs:
           SHARDS: ${{ needs.balance-dimension.result }}
         run: test "$SHARDS" = success
 
-  legacy:
-    name: Legacy Playwright tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: tests
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests
-        run: npx playwright test --project=chromium-desktop --reporter=html,list
-        env:
-          CI: true
-
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: tests/playwright-report/
-          retention-days: 14
-          if-no-files-found: ignore
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results
-          path: tests/test-results/
-          retention-days: 14
-          if-no-files-found: ignore
-
   deploy:
     name: Deploy to GitHub Pages
-    needs: [game, legacy, perf]
+    needs: [game, perf]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -268,17 +224,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Stage live site
-        run: mkdir _site && cp -R website/. _site/
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
 
-      - name: Add game build at next/
+      - name: Download game build
         uses: actions/download-artifact@v8
         with:
           name: game-dist
-          path: _site/next
+          path: _site
 
-      - name: Verify site root is unchanged website/
-        run: diff -r website _site --exclude next
+      - name: Check relative asset base
+        run: node game/scripts/check-base.mjs _site
+
+      - name: Check the site has no test bridge
+        run: node game/scripts/check-no-bridge.mjs _site
+
+      - name: Check the site layout
+        run: node game/scripts/check-pages.mjs _site
 
       - name: Setup Pages
         uses: actions/configure-pages@v6

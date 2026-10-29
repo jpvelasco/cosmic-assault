@@ -3,7 +3,15 @@
  * only caller in the app; it bundles this file into `sw.js`.
  */
 
-const CACHE_PREFIX = 'cosmic-assault-next-';
+/** The game's caches: this prefix and the build's version. */
+export const CACHE_PREFIX = 'cosmic-assault-v2-';
+/**
+ * The caches of the worker that served the preview address, left on devices that ran it. The name is frozen: it is
+ * what those devices hold.
+ */
+export const PREVIEW_CACHE_PREFIX = 'cosmic-assault-next-';
+/** The retired preview address, a directory under the game's: the worker never answers for it. */
+export const RETIRED_PREVIEW_DIR = 'next';
 
 /** How long a navigation waits for the network before the cached page is served, so a captive or slow network never hangs the player. */
 export const NAVIGATION_TIMEOUT_MS = 3000;
@@ -12,14 +20,27 @@ export function precacheName(version: string): string {
   return `${CACHE_PREFIX}${version}`;
 }
 
-/** True only for an older cache of ours: another app's cache on this origin is never touched. */
+/** True only for an older cache of ours or one the preview left: another app's cache on this origin is never touched. */
 export function isStaleCache(name: string, current: string): boolean {
-  return name.startsWith(CACHE_PREFIX) && name !== current;
+  return (name.startsWith(CACHE_PREFIX) && name !== current) || name.startsWith(PREVIEW_CACHE_PREFIX);
 }
 
-/** GETs inside the worker's scope only; the legacy site at the root and other origins pass straight through. */
+/**
+ * GETs inside the worker's scope only, bar the retired preview address under it: other projects on this host, other
+ * origins and anything under `next/` pass straight through to the network.
+ */
 export function shouldHandle(url: URL, method: string, scope: URL): boolean {
-  return method === 'GET' && url.origin === scope.origin && url.pathname.startsWith(scope.pathname);
+  if (method !== 'GET' || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return false;
+  const path = url.pathname.slice(scope.pathname.length);
+  return path !== RETIRED_PREVIEW_DIR && !path.startsWith(`${RETIRED_PREVIEW_DIR}/`);
+}
+
+/**
+ * The game's own address (the scope's directory or its index.html, whatever the query): the only navigations the cached
+ * page may answer, so any other page in scope keeps the host's answer, a 404 included.
+ */
+export function isEntryNavigation(url: URL, scope: URL): boolean {
+  return url.pathname === scope.pathname || url.pathname === `${scope.pathname}index.html`;
 }
 
 /** Only whole, same-origin successes are stored: never an opaque, failed or partial (206) response. */

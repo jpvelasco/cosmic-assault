@@ -1,7 +1,7 @@
 const HASH_PRIME_X = 73856093;
 const HASH_PRIME_Y = 19349663;
 
-/** Strict test: circles that exactly touch do not overlap, matching the live game. */
+/** Strict test: circles that exactly touch do not overlap, matching the classic game. */
 export function circlesOverlap(ax: number, ay: number, ar: number, bx: number, by: number, br: number): boolean {
   const dx = ax - bx;
   const dy = ay - by;

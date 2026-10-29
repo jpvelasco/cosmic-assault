@@ -51,7 +51,10 @@ export function specsWithTests(report: { readonly suites?: readonly ListedSuite[
   return (report.suites ?? []).filter(hasTests).map((suite) => suite.file);
 }
 
-/** One test as one project lists it; `title` is what `grep` sees: describe titles, the test title, then its tags. */
+/**
+ * One test as one project lists it; `title` is what `grep` sees: the file, then describe titles, the test title and its
+ * tags, joined by spaces. (Playwright's grep also sees the project name first, which is left out so the title is the same in every project.)
+ */
 export interface ListedTest {
   readonly file: string;
   readonly title: string;
@@ -71,7 +74,7 @@ function suiteTests(suite: ListedSuite, titles: readonly string[]): ListedTest[]
 
 /** Every test in `report`, once per project that lists it. */
 export function listedTests(report: { readonly suites?: readonly ListedSuite[] }): ListedTest[] {
-  return (report.suites ?? []).flatMap((suite) => suiteTests(suite, []));
+  return (report.suites ?? []).flatMap((suite) => suiteTests(suite, [suite.file]));
 }
 
 type Patterns = RegExp | readonly RegExp[] | undefined;
@@ -96,7 +99,7 @@ export function testsNoProjectRuns(
     if (project === undefined || !runProjects.includes(test.project)) return false;
     return (project.grep === undefined || anyMatches(project.grep, test.title)) && !anyMatches(project.grepInvert, test.title);
   };
-  const keyOf = (test: ListedTest): string => `${test.file} › ${test.title}`;
+  const keyOf = (test: ListedTest): string => `${test.file} › ${test.title.slice(test.file.length + 1)}`;
   const runs = new Set(tests.filter(selected).map(keyOf));
   return [...new Set(tests.map(keyOf))].filter((key) => !runs.has(key));
 }

@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test';
 import { IOS_INSTALL_HINT } from '../src/ui/hints';
 import { expect, test } from './fixtures';
 
-// No test here needs the test bridge. The release build (project release-smoke) runs only the @release one: the
-// install metadata it ships. The chip's behaviour is the same in both builds, so chromium-desktop alone covers it.
+// No test here needs the test bridge. The release build (projects release-smoke and pages) runs only the @release
+// one: the install metadata it ships. The chip's behaviour is the same in both builds, so chromium-desktop alone covers it.
 
 const offer = (page: Page) => page.getByTestId('install-offer');
 
@@ -21,7 +21,7 @@ async function openTitle(page: Page): Promise<void> {
       true,
     );
   });
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.getByTestId('build-label')).toBeVisible();
 }
 
@@ -117,7 +117,11 @@ test('the manifest link and every icon it lists resolve', { tag: '@release' }, a
   expect(response.status(), manifestUrl).toBe(200);
   const { icons } = (await response.json()) as { icons: { src: string }[] };
   expect(icons.length).toBeGreaterThan(0);
-  for (const url of [touchIconUrl, ...icons.map((icon) => new URL(icon.src, manifestUrl).href)]) {
+  const iconUrls = [touchIconUrl, ...icons.map((icon) => new URL(icon.src, manifestUrl).href)];
+  // Each resolves inside the page's own directory, so under a project path none of them leaves the site.
+  const site = new URL('./', page.url()).href;
+  expect([manifestUrl, ...iconUrls].filter((url) => !url.startsWith(site)), `addresses outside ${site}`).toEqual([]);
+  for (const url of iconUrls) {
     const icon = await request.get(url);
     expect(icon.status(), url).toBe(200);
     expect(icon.headers()['content-type'], url).toBe('image/png');

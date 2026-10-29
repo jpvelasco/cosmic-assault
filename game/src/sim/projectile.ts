@@ -39,7 +39,7 @@ export function projectileFromShot(shot: Shot, id = 0, pierce = 0, homing = fals
   return { id, x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, px: shot.x, py: shot.y, life: PROJECTILE.lifespan, pierce, homing, struck: NONE_STRUCK };
 }
 
-/** Moves, ages, then wraps like the live game; returns false once the projectile has expired. */
+/** Moves, ages, then wraps like the classic game; returns false once the projectile has expired. */
 export function stepProjectile(p: Projectile, dt: number, field: Field): boolean {
   p.x += p.vx * dt;
   p.y += p.vy * dt;

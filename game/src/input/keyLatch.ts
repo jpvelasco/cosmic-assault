@@ -1,6 +1,6 @@
 /**
  * Blocks the keys held when a run starts until each is released, so the key that
- * started the run does not also fire or steer (the live game resets input on start).
+ * started the run does not also fire or steer (the classic game resets input on start).
  */
 export interface KeyLatch {
   /** Blocks every code in `held` (a copy is kept) and forgets earlier latches. */

@@ -173,7 +173,7 @@ export interface SpawnPoint {
 
 /**
  * The point on `edge`'s wrap line at `along` (x on the top and bottom edges, y on the sides).
- * The live game spawns 100 out, wraps there on the first frame and back on the next, entering
+ * The classic game spawns 100 out, wraps there on the first frame and back on the next, entering
  * at the wrap line; spawning on it gives the same entry without the jump across the field.
  */
 export function edgePoint(edge: Edge, along: number, field: Field): SpawnPoint {
