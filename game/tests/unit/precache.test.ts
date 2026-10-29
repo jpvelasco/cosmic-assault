@@ -1,11 +1,11 @@
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
-import { build, type Plugin } from 'vite';
+import type { Plugin } from 'vite';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { injectPrecache, NOT_PRECACHED, RETIRE_FILE_NAME, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
+import { buildRelease, PUBLIC_DIR } from '../helpers/releaseBuild';
 
 const WORKER_CODE = 'const a=__PRECACHE__,b=__VERSION__;self.addEventListener("install",()=>caches.open(b).then(c=>c.addAll(a)));';
 
@@ -98,8 +98,6 @@ describe('injectPrecache', () => {
 
 describe('the release build', () => {
   const tempDirs: string[] = [];
-  const configFile = fileURLToPath(new URL('../../vite.config.ts', import.meta.url));
-  const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
 
   function tempDir(prefix: string): string {
     const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -115,20 +113,10 @@ describe('the release build', () => {
     version: string;
   }
 
-  /**
-   * Builds into a fresh temp directory with a fixed build date, so only `plugins` and the public directory can make two
-   * builds differ.
-   */
-  async function buildOnce(plugins: Plugin[] = [], fromPublic = publicDir): Promise<Built> {
+  /** Builds into a fresh temp directory; only `plugins` and the public directory can make two builds differ. */
+  async function buildOnce(plugins: Plugin[] = [], publicDir = PUBLIC_DIR): Promise<Built> {
     const outDir = tempDir('precache-build-');
-    await build({
-      configFile,
-      logLevel: 'silent',
-      plugins,
-      publicDir: fromPublic,
-      define: { __BUILD_DATE__: JSON.stringify('2026-01-01T00:00:00.000Z') },
-      build: { outDir, emptyOutDir: true },
-    });
+    await buildRelease(outDir, { plugins, publicDir });
     const code = readFileSync(join(outDir, SW_FILE_NAME), 'utf8');
     const retireCode = readFileSync(join(outDir, RETIRE_FILE_NAME), 'utf8');
     const list = JSON.parse(/\["\.\/"[^\]]*\]/.exec(code)?.[0] ?? '[]') as string[];
@@ -138,7 +126,7 @@ describe('the release build', () => {
   /** A copy of public/ whose retired preview page has one more line. */
   function editedPublic(): string {
     const dir = tempDir('precache-public-');
-    cpSync(publicDir, dir, { recursive: true });
+    cpSync(PUBLIC_DIR, dir, { recursive: true });
     const stub = join(dir, 'next', 'index.html');
     writeFileSync(stub, `${readFileSync(stub, 'utf8')}<!-- edited -->\n`);
     return dir;
