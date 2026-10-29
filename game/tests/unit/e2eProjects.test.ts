@@ -61,11 +61,11 @@ describe('listedTests', () => {
 
 describe('testsNoProjectRuns', () => {
   const tests = [
-    { file: 'a.spec.ts', title: 'plain', project: 'desk' },
-    { file: 'a.spec.ts', title: 'only on a phone @phone', project: 'desk' },
-    { file: 'a.spec.ts', title: 'only on a phone @phone', project: 'phone' },
-    { file: 'b.spec.ts', title: 'a release check @release', project: 'smoke' },
-    { file: 'b.spec.ts', title: 'a desktop check @desktop', project: 'smoke' },
+    { file: 'a.spec.ts', title: 'a.spec.ts plain', project: 'desk' },
+    { file: 'a.spec.ts', title: 'a.spec.ts only on a phone @phone', project: 'desk' },
+    { file: 'a.spec.ts', title: 'a.spec.ts only on a phone @phone', project: 'phone' },
+    { file: 'b.spec.ts', title: 'b.spec.ts a release check @release', project: 'smoke' },
+    { file: 'b.spec.ts', title: 'b.spec.ts a desktop check @desktop', project: 'smoke' },
   ];
   const projects = [
     { name: 'desk', grepInvert: /@phone/ },
@@ -88,11 +88,11 @@ describe('testsNoProjectRuns', () => {
   it('lets a project pick a whole file by its name, as grep sees the file first', () => {
     const listed = listedTests({ suites: [{ file: 'c.spec.ts', specs: [{ title: 'x', tests: [{ projectName: 'p' }] }] }] });
     expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: [/@b/, /(^| )c\.spec\.ts( |$)/] }] }, ['p'])).toEqual([]);
-    expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: /(^| )d\.spec\.ts( |$)/ }] }, ['p'])).toEqual(['c.spec.ts › c.spec.ts x']);
+    expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: /(^| )d\.spec\.ts( |$)/ }] }, ['p'])).toEqual(['c.spec.ts › x']);
   });
 
   it('accepts a list of patterns, any of which selects or drops a test', () => {
-    const listed = [{ file: 'c.spec.ts', title: 'x @a', project: 'p' }];
+    const listed = [{ file: 'c.spec.ts', title: 'c.spec.ts x @a', project: 'p' }];
     expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: [/@b/, /@a/] }] }, ['p'])).toEqual([]);
     expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grepInvert: [/@b/, /@a/] }] }, ['p'])).toEqual(['c.spec.ts › x @a']);
   });

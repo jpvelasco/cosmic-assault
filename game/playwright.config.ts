@@ -51,7 +51,8 @@ export default defineConfig({
     baseURL: E2E_URL,
   },
   // Tags pick a project where a spec runs in several: @desktop and @phone run only there, and @release also runs
-  // against the release build. tests/unit/e2eProjects.test.ts checks that every spec keeps a test that runs.
+  // against the release build; pages takes the whole of pages.spec.ts by its file name, which grep sees first.
+  // tests/unit/e2eProjects.test.ts checks that every spec keeps a test that runs.
   projects: [
     // These drive the e2e build, which carries the test bridge.
     {
