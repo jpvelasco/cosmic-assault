@@ -66,17 +66,6 @@ describe('check-no-bridge (release build)', { timeout: SPAWN_TIMEOUT_MS }, () =>
     expect(result.output).toContain(join('assets', 'index.js'));
   });
 
-  it.each([
-    ['attract-now', ATTRACT_NOW],
-    ['attract-state', ATTRACT_STATE],
-  ])('fails when a file carries the e2e %s hook, naming the build and the file', (name, hook) => {
-    const dist = writeDist({ 'assets/attract.js': hook });
-    const result = runGuard(dist);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(`release build ${dist} contains the e2e ${name} hook; release builds must not — check the import.meta.env.MODE guard in src/app/e2eHooks.ts`);
-    expect(result.output).toContain(join('assets', 'attract.js'));
-  });
-
   it('fails with a hint when the directory is missing', () => {
     const result = runGuard(join(writeDist({}), 'missing'));
     expect(result.status).toBe(1);
@@ -113,68 +102,31 @@ describe('check-no-bridge --e2e (e2e build)', { timeout: SPAWN_TIMEOUT_MS }, () 
     expect(result.status).toBe(1);
     expect(result.output).toContain('run npm run build:e2e first');
   });
-
-  it.each([
-    ['attract-now', 'e2eAttractNow', ATTRACT_NOW],
-    ['attract-state', 'e2eAttractState', ATTRACT_STATE],
-  ])('fails when the %s hook is missing, so the release check cannot go blind', (name, mark, hook) => {
-    const dist = writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${ALL_HOOKS.replace(hook, '')}` });
-    const result = runGuard('--e2e', dist);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(`e2e build ${dist} lacks the e2e ${name} hook (${mark}); the release check scans for that mark, so keep it in src/app/e2eHooks.ts or update scripts/check-no-bridge.mjs`);
-  });
-
-  it('fails when the fast-forward hook is missing, so the release check cannot go blind', () => {
-    const dist = writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${HOOK};${DAMAGE_BOSS};${GRANT_PICKUP};${EVENT_TALLY}` });
-    const result = runGuard('--e2e', dist);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(`e2e build ${dist} lacks the e2e fast-forward hook (e2eFastForward)`);
-  });
 });
 
-describe('check-no-bridge (release build): the fast-forward hook', { timeout: SPAWN_TIMEOUT_MS }, () => {
-  it('fails when a release file carries it', () => {
-    const dist = writeDist({ 'assets/index.js': FAST_FORWARD });
+/** Every hook `src/app/e2eHooks.ts` owns: its name in the guard's messages, its mark, and a line of an e2e build carrying it. */
+describe.each([
+  { name: 'fast-forward', mark: 'e2eFastForward', carrier: FAST_FORWARD },
+  { name: 'boss-damage', mark: 'e2eDamageBoss', carrier: DAMAGE_BOSS },
+  { name: 'pickup-grant', mark: 'e2eGrantPickup', carrier: GRANT_PICKUP },
+  { name: 'event-tally', mark: 'e2eEvents', carrier: EVENT_TALLY },
+  { name: 'frame-stats-restart', mark: 'e2eRestartFrameStats', carrier: RESTART_STATS },
+  { name: 'sprite-cache', mark: 'e2eSpriteCache', carrier: SPRITE_CACHE },
+  { name: 'attract-now', mark: 'e2eAttractNow', carrier: ATTRACT_NOW },
+  { name: 'attract-state', mark: 'e2eAttractState', carrier: ATTRACT_STATE },
+])('check-no-bridge: the $name hook', { timeout: SPAWN_TIMEOUT_MS }, ({ name, mark, carrier }) => {
+  it('fails a release build that carries it, naming the build and the file', () => {
+    const dist = writeDist({ 'assets/hook.js': carrier });
     const result = runGuard(dist);
     expect(result.status).toBe(1);
-    expect(result.output).toContain(`release build ${dist} contains the e2e fast-forward hook`);
-  });
-});
-
-describe('check-no-bridge: the boss-damage hook', { timeout: SPAWN_TIMEOUT_MS }, () => {
-  it('fails a release build that carries it', () => {
-    const dist = writeDist({ 'assets/index.js': DAMAGE_BOSS });
-    const result = runGuard(dist);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(`release build ${dist} contains the e2e boss-damage hook; release builds must not — check the import.meta.env.MODE guard in src/app/e2eHooks.ts`);
+    expect(result.output).toContain(`release build ${dist} contains the e2e ${name} hook; release builds must not — check the import.meta.env.MODE guard in src/app/e2eHooks.ts`);
+    expect(result.output).toContain(join('assets', 'hook.js'));
   });
 
   it('fails an e2e build that lacks it, so the release check cannot go blind', () => {
-    const dist = writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${HOOK};${FAST_FORWARD};${GRANT_PICKUP};${EVENT_TALLY}` });
+    const dist = writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': `${BRIDGE};${ALL_HOOKS.replace(carrier, '')}` });
     const result = runGuard('--e2e', dist);
     expect(result.status).toBe(1);
-    expect(result.output).toContain(`e2e build ${dist} lacks the e2e boss-damage hook (e2eDamageBoss)`);
-  });
-});
-
-describe.each([
-  { name: 'pickup-grant', mark: 'e2eGrantPickup', carrier: GRANT_PICKUP, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${EVENT_TALLY};${RESTART_STATS};${SPRITE_CACHE}` },
-  { name: 'event-tally', mark: 'e2eEvents', carrier: EVENT_TALLY, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${RESTART_STATS};${SPRITE_CACHE}` },
-  { name: 'frame-stats-restart', mark: 'e2eRestartFrameStats', carrier: RESTART_STATS, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${EVENT_TALLY};${SPRITE_CACHE}` },
-  { name: 'sprite-cache', mark: 'e2eSpriteCache', carrier: SPRITE_CACHE, others: `${BRIDGE};${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${EVENT_TALLY};${RESTART_STATS}` },
-])('check-no-bridge: the $name hook', ({ name, mark, carrier, others }) => {
-  it('fails a release build that carries it', { timeout: SPAWN_TIMEOUT_MS }, () => {
-    const dist = writeDist({ 'assets/index.js': carrier });
-    const result = runGuard(dist);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(`release build ${dist} contains the e2e ${name} `);
-    expect(result.output).toContain('check the import.meta.env.MODE guard in src/app/e2eHooks.ts');
-  });
-
-  it('fails an e2e build that lacks it, so the release check cannot go blind', { timeout: SPAWN_TIMEOUT_MS }, () => {
-    const dist = writeDist({ 'assets/index.js': QUERY, 'assets/bridge.js': others });
-    const result = runGuard('--e2e', dist);
-    expect(result.status).toBe(1);
-    expect(result.output).toContain(`(${mark})`);
+    expect(result.output).toContain(`e2e build ${dist} lacks the e2e ${name} hook (${mark}); the release check scans for that mark, so keep it in src/app/e2eHooks.ts or update scripts/check-no-bridge.mjs`);
   });
 });
