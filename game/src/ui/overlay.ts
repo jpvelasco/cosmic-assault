@@ -14,12 +14,14 @@ import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_B
 import { createGalaxySelect } from './galaxySelect';
 import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
 import { createModeSelect } from './modeSelect';
+import { createPauseCard } from './pauseCard';
 import { createResultsCard } from './resultsCard';
 
 export interface OverlayActions {
   /** A screen command from a button: the router applies it, through its cover table and the end-card guard. */
   readonly command: (command: Command) => void;
   readonly resume: () => void;
+  /** The pause card's Quit, once it has asked twice in Rank. */
   readonly quit: () => void;
   readonly toggleMute: () => void;
   readonly toggleFullscreen: () => void;
@@ -65,6 +67,8 @@ export interface Overlay {
   handle(events: readonly SimEvent[]): void;
   /** Puts keyboard focus on the visible card's Settings, Records or Hangar chip, as the card it opened closes. */
   focusChip(which: CoverChip): void;
+  /** Takes back a Rank Quit that asks to be pressed again; true if one did. Esc, P and the pad's Back and Start do this instead of resuming. */
+  cancelQuit(): boolean;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
   controls(screen: Screen): HTMLElement[];
   /** Takes the demo's dimming and label off the title now, without an update: the game has stopped after a crash. */
@@ -107,14 +111,6 @@ function titlePanel(demoLabel: HTMLElement, play: HTMLElement, resumeSlot: HTMLE
   return panel;
 }
 
-function pausePanel(actions: OverlayActions, quit: HTMLButtonElement, chipRow: HTMLElement): HTMLElement {
-  const { panel, card } = cardPanel('pause');
-  card.append(element('h2', 'heading', 'Paused'), button(PRIMARY_BUTTON, 'Resume', actions.resume), quit, chipRow);
-  return panel;
-}
-
-/** In Rank a Quit mid-galaxy forfeits it, so the button says what it costs. */
-const quitLabel = (flow: FlowState): string => (flow.mode === 'rank' ? 'Quit (costs a life)' : 'Quit');
 /** A lost run (no lives) can only go on through a Continue, which resets the score. */
 const resumeLabel = (save: SaveData): string => (save.rankRun?.lives === 0 ? 'Continue Rank (score resets)' : 'Resume Rank');
 
@@ -132,8 +128,8 @@ function keepIn(host: HTMLElement | undefined, el: HTMLElement): void {
 }
 
 /**
- * The screens as DOM layers over the canvas, one visible per screen: the title and pause cards here, mode select, the
- * Dimension map, galaxy select and the end card from their own modules. Every card button sends a command, so the
+ * The screens as DOM layers over the canvas, one visible per screen: the title card here, the pause card, mode select,
+ * the Dimension map, galaxy select and the end card from their own modules. Every card button sends a command, so the
  * router's cover table and the end-card guard apply to taps as to keys. The end cards act only on their buttons, so
  * taps that were aimed at the ship cannot skip the score.
  */
@@ -142,7 +138,6 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
     actions.command(command);
   };
   const play = withTestId(button(PRIMARY_BUTTON, 'Play', send({ kind: 'start' })), 'play');
-  const quit = withTestId(button('menu-button', '', actions.quit), 'quit');
   // One Resume Rank group, with where the run stands and whether another tab plays it, on the title and mode select.
   const resumeRank = withTestId(button('menu-button', '', send({ kind: 'resumeRank' })), 'resume-rank');
   const savedRun = element('p', 'hint resume-summary');
@@ -176,6 +171,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   const titleRow = element('div', 'chips');
   const pauseRow = element('div', 'chips');
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
+  const pauseCard = createPauseCard(actions, pauseRow);
   const startHint = element('p', 'hint');
   const controlsHint = withTestId(element('p', 'hint'), 'controls-hint');
   const demoLabel = withTestId(element('p', 'label demo-label', 'Demo'), 'demo-label');
@@ -186,6 +182,22 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   onTapOutsideButtons(title, send({ kind: 'start' }));
   /** The title control that had focus as the demo began, which gets it back as the demo ends. */
   let focusBeforeDemo: Element | null = null;
+  /** The screen the last update showed, so entering the pause card can be told from staying on it. */
+  let shownScreen: Screen | null = null;
+  /** Resume takes focus as the pause card shows, or once a cover over it (the rotate prompt) goes. */
+  let resumeFocusDue = false;
+
+  /** Entering the pause card puts Quit back to its first step; Resume takes focus whenever the card can take it. */
+  function enterScreen(screen: Screen, covered: boolean): void {
+    if (screen !== shownScreen) {
+      shownScreen = screen;
+      resumeFocusDue = screen === 'paused';
+      if (resumeFocusDue) pauseCard.disarm();
+    }
+    if (!resumeFocusDue || covered) return;
+    resumeFocusDue = false;
+    pauseCard.focusResume();
+  }
 
   /** Dims the title card over the demo and shows its label; as the demo ends, focus goes back where it was on the title. */
   function showAttract(attract: boolean, covered: boolean): void {
@@ -202,7 +214,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   }
   const panels: Partial<Record<Screen, HTMLElement>> = {
     title,
-    paused: pausePanel(actions, quit, pauseRow),
+    paused: pauseCard.panel,
     results: results.panel,
     gameOver: results.panel,
     rankComplete: results.panel,
@@ -245,8 +257,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
       resumeRank.classList.toggle(PRIMARY, screen === 'modeSelect');
       savedRun.textContent = savedRunText(save);
       elsewhere.hidden = rankLock !== 'elsewhere';
-      quit.textContent = quitLabel(flow);
       const hints = hintCopy(inputStyle);
+      pauseCard.update(flow.mode, hints);
+      enterScreen(screen, covered);
       startHint.textContent = hints.start;
       controlsHint.textContent = hints.controls;
       controlsHint.hidden = hints.controls === '';
@@ -261,6 +274,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
     },
     focusChip(which) {
       coverChips[which].focus();
+    },
+    cancelQuit() {
+      return pauseCard.disarm();
     },
     controls(screen) {
       const panel = panels[screen];

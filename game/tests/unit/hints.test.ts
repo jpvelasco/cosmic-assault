@@ -8,12 +8,22 @@ describe('hintCopy', () => {
       restart: 'Press R to play again',
       choose: 'Arrow keys to choose, Enter to go',
       controls: 'Fly with the arrows or WASD · fire with Space, Z or X',
+      resumeKey: 'Esc',
+      paused: 'Esc or P to resume',
       pauseTip: 'Pause (Esc or P)',
     });
   });
 
   it('names taps for touch players', () => {
-    expect(hintCopy('touch')).toEqual({ start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode', controls: '', pauseTip: '' });
+    expect(hintCopy('touch')).toEqual({
+      start: 'Tap to start',
+      restart: 'Tap Retry or Continue to play again',
+      choose: 'Tap a mode',
+      controls: '',
+      resumeKey: '',
+      paused: '',
+      pauseTip: '',
+    });
   });
 
   it('never mentions a key to a touch player', () => {

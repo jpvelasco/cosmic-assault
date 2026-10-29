@@ -241,7 +241,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     run: {
       flow: run.command,
       pause: pauseByPlayer,
-      resume,
+      // Esc, P and the pad's Back and Start take back a Rank Quit that asks again, rather than resume behind it.
+      resume: () => {
+        if (!overlay.cancelQuit()) resume();
+      },
       toggleMute: prefs.toggleMute,
       toggleFullscreen: () => {
         fullscreen.toggle();

@@ -30,16 +30,27 @@ export function button(className: string, text: string, onClick: () => void): HT
 const onButton = (e: Event): boolean => e.target instanceof Element && e.target.closest('button') !== null;
 
 /**
- * Enter and Space on a focused button inside `panel` do that button's action only, as a click does: they never reach
- * the window's key handling, which would start, resume or leave a run. A mouse press on a button leaves no control of
- * the card focused, neither that button nor one the keys or pad had reached, so after a click Space still starts a run.
+ * Enter and Space pressed on a focused button inside `panel` do that button's action only, as a click does: they never
+ * reach the window's key handling, which would start, resume or leave a run. A key held down from before (Space firing
+ * as the run pauses onto a focused Resume) presses nothing: its repeats and its release go on to the window, so the
+ * game hears it let go. A mouse press on a button leaves no control of the card focused, neither that button nor one the
+ * keys or pad had reached, so after a click Space still starts a run.
  */
 function keepActivationKeysLocal(panel: HTMLElement): void {
-  const stop = (e: KeyboardEvent): void => {
-    if ((e.code === 'Enter' || e.code === 'Space') && onButton(e)) e.stopPropagation();
-  };
-  panel.addEventListener('keydown', stop);
-  panel.addEventListener('keyup', stop);
+  /** The activation keys pressed down on one of the panel's buttons and not yet let go there; focus leaving forgets them. */
+  const pressedHere = new Set<string>();
+  panel.addEventListener('keydown', (e) => {
+    if ((e.code !== 'Enter' && e.code !== 'Space') || !onButton(e)) return;
+    if (!e.repeat) pressedHere.add(e.code);
+    if (pressedHere.has(e.code)) e.stopPropagation();
+    else e.preventDefault();
+  });
+  panel.addEventListener('keyup', (e) => {
+    if (pressedHere.delete(e.code) && onButton(e)) e.stopPropagation();
+  });
+  panel.addEventListener('focusout', () => {
+    pressedHere.clear();
+  });
   panel.addEventListener('mousedown', (e) => {
     if (!onButton(e)) return;
     e.preventDefault();
