@@ -96,6 +96,7 @@ const comment = (line: string) => `    # ${line.trim()}\n`;
 const topPermissions = 'permissions:\n  contents: read\n';
 
 const CONTINUE_ON_ERROR = '        continue-on-error: true\n';
+const STEP_IF_FALSE = '        if: false\n';
 const JOB_CONTINUE_ON_ERROR = '    continue-on-error: true\n';
 const DEPLOY_STEPS = "deploy's steps must be exactly, in order:";
 const NO_CONTINUE = 'continue-on-error is not allowed in the game, perf and deploy jobs';
@@ -259,7 +260,10 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ['every artifact downloaded as the site', extend(downloadName, "          pattern: '*'\n"), "deploy's Download game build step must take exactly"],
   ['the checkout uploaded as the site', swap(uploadPages, uploadPages.replace('path: _site', 'path: .')), "deploy's Upload Pages artifact step must take exactly"],
   ['the unchecked game build uploaded as the site', swap(uploadPages, uploadPages.replace('path: _site', 'path: game/dist')), "deploy's Upload Pages artifact step must take exactly"],
-  ['a site check skipped by a step if', extend(sitePages, '        if: false\n'), 'deploy must have no step-level if:'],
+  ['a site check skipped by a step if', extend(sitePages, STEP_IF_FALSE), 'deploy must have no step-level if:'],
+  ['the e2e tests skipped by a step if', extend(e2eStep, STEP_IF_FALSE), 'game must have no step-level if:'],
+  ['the unit tests skipped on pushes', extend(unitStep, "        if: github.event_name == 'pull_request'\n"), 'game must have no step-level if:'],
+  ['the perf run skipped by a step if', extend(perfStep, STEP_IF_FALSE), 'perf must have no step-level if:'],
   ['a site check left to continue on error', extend(siteBridge, CONTINUE_ON_ERROR), NO_CONTINUE],
   ['deploy permissions widened', swap(deployPermissions, deployPermissions.replace('contents: read', 'contents: write')), "deploy's permissions must be exactly"],
   ['deploy permissions with a write added', extend(deployPermissions, '      actions: write\n'), "deploy's permissions must be exactly"],
@@ -267,13 +271,7 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
 
 
 describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
-  it('accepts the real ci.yml', () => {
-    const { status, output } = runGuard(realWorkflow);
-    expect(output).toContain('workflow ok');
-    expect(status).toBe(0);
-  });
-
-  it('accepts the report-only balance job, which deploy does not wait for, and the perf job, which it does', () => {
+  it('accepts the real ci.yml, with its report-only balance job, which deploy does not wait for, and the perf job, which it does', () => {
     expect(realText).toMatch(/^ {2}balance:$/m);
     expect(realText).toMatch(/^ {2}perf:$/m);
     expect(realText).toContain(needsLine);

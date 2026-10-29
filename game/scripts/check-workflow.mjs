@@ -80,6 +80,8 @@ const DEPLOY_STEPS = [
 const deployActions = stepsOf('deploy').map(stepAction).join('; ');
 const DEPLOY_PERMISSIONS = ['contents: read', 'pages: write', 'id-token: write'].join(', ');
 const deployPermissions = (nested('    permissions:', jobs.deploy ?? []) ?? []).map((line) => line.trim()).join(', ');
+/** The one action a game, perf or deploy step may skip with a step-level `if:`: uploading a report or the build, which no check depends on. */
+const MAY_SKIP = 'uses: actions/upload-artifact';
 /** A job's own `if:` lines, at job level. */
 const jobIfs = (id) => jobs[id]?.filter((line) => line.startsWith('    if:')) ?? [];
 
@@ -104,8 +106,8 @@ const checks = [
     `ci.yml: deploy's Upload Pages artifact step must take exactly path: ${SITE}, the checked download, and nothing else; restore it`],
   [deployPermissions === DEPLOY_PERMISSIONS,
     `ci.yml: deploy's permissions must be exactly ${DEPLOY_PERMISSIONS}, what publishing to Pages needs and no more; restore them`],
-  [!stepsOf('deploy').some((step) => step.some((line) => line.startsWith('        if:'))),
-    'ci.yml: deploy must have no step-level if:, since a skipped check would let an unchecked site publish; remove it'],
+  ...['game', 'perf', 'deploy'].map((id) => [!stepsOf(id).some((step) => stepAction(step) !== MAY_SKIP && step.some((line) => line.startsWith('        if:'))),
+    `ci.yml: ${id} must have no step-level if: (only an upload-artifact step may have one), since a skipped test or check would let an unchecked build publish; remove it`]),
   [hasJobKey('game', GAME_NAME),
     `ci.yml: the game job's name: must be exactly "${GAME_NAME.slice('name: '.length)}", the check the main branch's ruleset requires; a renamed check never reports and blocks every merge, so restore it`],
   [hasStep('game', 'actions/upload-artifact', ['name: game-dist', 'path: game/dist/', 'if-no-files-found: error']),
