@@ -9,10 +9,14 @@ import { parseArgs } from 'node:util';
 //
 // A static server that answers like GitHub Pages, for tests: a directory URL serves its index.html, a directory
 // without its trailing slash answers 301 to the slash form, and anything else missing answers 404. Unlike Pages, every
-// answer carries `Cache-Control: no-cache` with an ETag, so a test that swaps what is served sees the change at once.
+// answer carries `Cache-Control: no-cache` with an ETag, so a test that swaps what is served sees the change at once;
+// a mount given `maxAge` sends its files with `max-age` instead, as Pages does (PAGES_MAX_AGE_SECONDS).
 
 const GAME_DIR = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const USAGE = 'Usage: node scripts/serve-pages.mjs --dir <dir> [--prefix /cosmic-assault/] [--port 4319]';
+
+/** How long Pages lets a browser keep any file it serves without asking again (`Cache-Control: max-age=600`). */
+export const PAGES_MAX_AGE_SECONDS = 600;
 
 export const NOT_FOUND_BODY = '<!doctype html>\n<html lang="en"><meta charset="utf-8"><title>Page not found</title><h1>404</h1><p>There is no page at this address.</p></html>\n';
 const MOVED_BODY = '<!doctype html>\n<html lang="en"><meta charset="utf-8"><title>Moved</title><h1>301</h1><p>This page has moved.</p></html>\n';
@@ -39,16 +43,16 @@ function sitePath(prefix, path) {
   return new URL(path, `http://pages${prefix}`).pathname;
 }
 
-/** Each mount's directory, checked to be inside game/, and the URL path it answers for. */
+/** Each mount's directory, checked to be inside game/, the URL path it answers for, and its files' Cache-Control. */
 function placeMounts(prefix, mounts) {
-  return mounts.map(({ dir, at }) => {
+  return mounts.map(({ dir, at, maxAge }) => {
     const root = resolve(dir);
     if (root === GAME_DIR || !isWithin(GAME_DIR, root)) {
       throw new Error(`${root} is not inside game/; serve a directory inside ${GAME_DIR}, such as dist`);
     }
     const path = sitePath(prefix, at);
     if (!path.endsWith('/')) throw new Error(`The mount point ${at} is not a directory; end it with a slash, as in ${at}/`);
-    return { root, path };
+    return { root, path, cacheControl: maxAge === undefined ? 'no-cache' : `max-age=${String(maxAge)}` };
   });
 }
 
@@ -61,8 +65,8 @@ function statOf(file) {
 }
 
 /**
- * Where `pathname` leads: a file to serve, a 301 to the slash form, or nothing. A URL is answered by the last mount
- * whose path holds it, from that mount's directory alone.
+ * Where `pathname` leads: a file to serve and the mount it is served from, a 301 to the slash form, or nothing. A URL
+ * is answered by the last mount whose path holds it, from that mount's directory alone.
  */
 function locate(mounts, pathname) {
   if (mounts.some((mount) => mount.path === `${pathname}/`)) return { moved: true };
@@ -80,9 +84,9 @@ function locate(mounts, pathname) {
   if (stats?.isDirectory()) {
     if (!pathname.endsWith('/')) return { moved: true };
     const index = join(target, 'index.html');
-    return statOf(index)?.isFile() ? { file: index } : {};
+    return statOf(index)?.isFile() ? { file: index, mount } : {};
   }
-  return stats?.isFile() && !pathname.endsWith('/') ? { file: target } : {};
+  return stats?.isFile() && !pathname.endsWith('/') ? { file: target, mount } : {};
 }
 
 function etagOf(body) {
@@ -113,9 +117,9 @@ export async function createPagesServer({ prefix = '/', port = 0, mounts }) {
 
   const answer = (request) => {
     const url = new URL(request.url ?? '/', 'http://pages');
-    const { file, moved } = locate(placed, url.pathname);
+    const { file, mount, moved } = locate(placed, url.pathname);
     if (file !== undefined) {
-      return { status: 200, type: CONTENT_TYPES[extname(file)] ?? 'application/octet-stream', body: bodyOf(file) };
+      return { status: 200, type: CONTENT_TYPES[extname(file)] ?? 'application/octet-stream', body: bodyOf(file), cacheControl: mount.cacheControl };
     }
     if (moved) return { status: 301, type: CONTENT_TYPES['.html'], body: Buffer.from(MOVED_BODY), location: `${url.pathname}/${url.search}` };
     return { status: 404, type: CONTENT_TYPES['.html'], body: Buffer.from(NOT_FOUND_BODY) };
@@ -126,9 +130,9 @@ export async function createPagesServer({ prefix = '/', port = 0, mounts }) {
       response.writeHead(405, { Allow: 'GET, HEAD', 'Cache-Control': 'no-cache' }).end();
       return;
     }
-    const { status, type, body, location } = answer(request);
+    const { status, type, body, location, cacheControl = 'no-cache' } = answer(request);
     const etag = etagOf(body);
-    const headers = { 'Cache-Control': 'no-cache', ETag: etag, ...(location === undefined ? {} : { Location: location }) };
+    const headers = { 'Cache-Control': cacheControl, ETag: etag, ...(location === undefined ? {} : { Location: location }) };
     if (status === 200 && request.headers['if-none-match'] === etag) {
       response.writeHead(304, headers).end();
       return;

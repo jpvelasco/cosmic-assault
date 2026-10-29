@@ -50,9 +50,11 @@ self.addEventListener('fetch', (event) => {
   if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
   const navigation = request.mode === 'navigate';
   if (navigation && !isEntryNavigation(url, scope)) return;
+  // A navigation asks the host whether the page changed (`no-cache`) even while the browser's HTTP cache would still
+  // call its copy fresh (GitHub Pages allows ten minutes), so the page never comes from an older deploy than the worker.
   event.respondWith(
     navigation
-      ? networkFirst(fetch(request), () => caches.match(INDEX_URL, MATCH), NAVIGATION_TIMEOUT_MS)
+      ? networkFirst(fetch(request, { cache: 'no-cache' }), () => caches.match(INDEX_URL, MATCH), NAVIGATION_TIMEOUT_MS)
       : cacheFirst(
           () => caches.match(request, MATCH),
           () => fetch(request),

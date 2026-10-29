@@ -2,6 +2,8 @@
 export interface PagesMount {
   readonly dir: string;
   readonly at: string;
+  /** Sends this mount's files with `Cache-Control: max-age=<maxAge>` instead of `no-cache`, as Pages does. */
+  readonly maxAge?: number;
 }
 
 export interface PagesServer {
@@ -13,6 +15,9 @@ export interface PagesServer {
   rewrite(path: string, from: string, to: string): void;
   close(): Promise<void>;
 }
+
+/** How long Pages lets a browser keep any file it serves without asking again. */
+export const PAGES_MAX_AGE_SECONDS: number;
 
 /** The body of every 404 the server sends. */
 export const NOT_FOUND_BODY: string;

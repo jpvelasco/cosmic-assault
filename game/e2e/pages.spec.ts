@@ -1,8 +1,8 @@
-import { copyFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
-import { createPagesServer, NOT_FOUND_BODY, type PagesMount, type PagesServer } from '../scripts/serve-pages.mjs';
+import { createPagesServer, NOT_FOUND_BODY, PAGES_MAX_AGE_SECONDS, type PagesMount, type PagesServer } from '../scripts/serve-pages.mjs';
 import { defaultSave, SAVE_KEY } from '../src/meta/save';
 import { expect, test as base } from './fixtures';
 
@@ -15,7 +15,9 @@ import { expect, test as base } from './fixtures';
  * commit 271163b, with only its precache list replaced by the fixture's own three files.
  *
  * Unlike Pages, the server sends `Cache-Control: no-cache`, so a swap of what it serves is seen at once. Pages sends
- * `max-age=600`, so on a real device a deploy can take up to ten minutes to show.
+ * `max-age=600`, so on a real device a deploy can take up to ten minutes to show. That turns the browser's HTTP cache
+ * off for these cases, so one case serves the game as Pages caches it, to prove that the next deploy's page is never
+ * taken from that cache.
  *
  * Each test serves its own site on a free port and builds its own state, so a swap here never races another spec and
  * one failing case never hides another.
@@ -28,6 +30,10 @@ const PREVIEW_CACHE_PREFIX = 'cosmic-assault-next-';
 /** The root worker's caches, which a cleanup of the preview's never matches. */
 const ROOT_CACHE_PREFIX = 'cosmic-assault-v2-';
 const MOVE_TIMEOUT_MS = 10_000;
+/** Marks the page of the deploy that writeNextDeploy() makes. */
+const NEXT_DEPLOY_MARK = '<meta name="deploy" content="next">';
+/** The built files that name other built files. */
+const TEXT_FILES = new Set(['.html', '.js', '.css', '.webmanifest']);
 
 const classic: PagesMount = { dir: join(FIXTURES, 'classic'), at: './' };
 const preview: PagesMount = { dir: join(FIXTURES, 'preview'), at: 'next/' };
@@ -58,6 +64,28 @@ const test = base.extend<{ prefix: string; serve: (mounts: readonly PagesMount[]
 
 // A page these cases expect to answer 404 logs its failed load.
 test.use({ allowedErrors: ['the server responded with a status of 404'] });
+
+/**
+ * Writes into `dir` the build as the next deploy would be: every asset under a new name and the old names gone, the
+ * page and the worker naming the new ones, the worker's version `<version>b`, and the page marked with NEXT_DEPLOY_MARK.
+ */
+function writeNextDeploy(dir: string, version: string): void {
+  cpSync(DIST, dir, { recursive: true });
+  const assets = join(dir, 'assets');
+  const renames = readdirSync(assets).map((name) => {
+    const renamed = name.replace(/(\.\w+)$/, '-next$1');
+    renameSync(join(assets, name), join(assets, renamed));
+    return [name, renamed] as const;
+  });
+  for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !TEXT_FILES.has(extname(entry.name))) continue;
+    const path = join(entry.parentPath, entry.name);
+    let text = renames.reduce((current, [from, to]) => current.replaceAll(from, to), readFileSync(path, 'utf8'));
+    if (path === join(dir, 'sw.js')) text = text.replaceAll(version, `${version}b`);
+    if (path === join(dir, 'index.html')) text = text.replace('</head>', `${NEXT_DEPLOY_MARK}</head>`);
+    writeFileSync(path, text);
+  }
+}
 
 const nextOf = (site: PagesServer): string => new URL('next/', site.url).href;
 /** The names of the origin's caches that start with `prefix`. */
@@ -208,6 +236,35 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await context.setOffline(true);
       await page.reload();
       await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
+    });
+
+    test('after the next deploy, the game page comes from it, even while the HTTP cache still holds the last one', async ({ page, serve }, testInfo) => {
+      const cachedAsPages = (dir: string): PagesMount[] => [{ dir, at: './', maxAge: PAGES_MAX_AGE_SECONDS }];
+      const site = await serve(cachedAsPages(DIST));
+      await visitRoot(page, site);
+      const version = (await cachesNamed(page, ROOT_CACHE_PREFIX))[0]?.slice(ROOT_CACHE_PREFIX.length) ?? '';
+      // A link with a query is the game's page too, which the worker answers; the HTTP cache now holds it for ten
+      // minutes. Installing the next deploy's worker refreshes only the copies it precaches, never this one.
+      const linked = new URL('?from=link', site.url).href;
+      await page.goto(linked);
+      await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
+
+      const nextDeploy = testInfo.outputPath('next-deploy');
+      writeNextDeploy(nextDeploy, version);
+      site.setMounts(cachedAsPages(nextDeploy));
+      await page.evaluate(async () => {
+        await (await navigator.serviceWorker.ready).update();
+      });
+      await expect.poll(() => cachesNamed(page, ROOT_CACHE_PREFIX), { message: 'the next deploy\'s worker has taken over' }).toEqual([
+        `${ROOT_CACHE_PREFIX}${version}b`,
+      ]);
+
+      // Ordinary navigations, each to an address other than the current one: a reload would revalidate by itself.
+      for (const address of [site.url, linked]) {
+        await page.goto(address);
+        await expect(page.locator('meta[name="deploy"]'), `${address} shows the next deploy's page`).toHaveAttribute('content', 'next');
+        await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
+      }
     });
 
     test('restoring the classic site with a self-removing root worker leaves no root worker or cache', async ({ page, serve }, testInfo) => {

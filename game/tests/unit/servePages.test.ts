@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
-import { createPagesServer, NOT_FOUND_BODY, type PagesMount, type PagesServer } from '../../scripts/serve-pages.mjs';
+import { createPagesServer, NOT_FOUND_BODY, PAGES_MAX_AGE_SECONDS, type PagesMount, type PagesServer } from '../../scripts/serve-pages.mjs';
 import { gameDir, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 
 // The server only serves directories inside game/, so the sites under test are written to its ignored test-results/.
@@ -163,6 +163,25 @@ describe('createPagesServer', () => {
     const again = await get(server, '/sw.js', { headers: { 'if-none-match': etag } });
     expect(again.status).toBe(304);
     expect(await again.text()).toBe('');
+  });
+
+  it('sends a mount\'s files with max-age when the mount asks to be cached as Pages caches, still answering 304 to a matching ETag', async () => {
+    const cached = site({ 'index.html': 'cached', 'sw.js': 'go()' });
+    const server = await serve([{ dir: site(GAME), at: './' }, { dir: cached, at: 'next/', maxAge: PAGES_MAX_AGE_SECONDS }]);
+
+    expect(PAGES_MAX_AGE_SECONDS).toBe(600);
+    for (const path of ['/next/', '/next/sw.js']) {
+      const response = await get(server, path);
+      expect(response.headers.get('cache-control'), path).toBe('max-age=600');
+      expect(response.headers.get('etag'), path).toMatch(/^"[0-9a-f]+"$/);
+    }
+    const etag = (await get(server, '/next/')).headers.get('etag') ?? '';
+    const again = await get(server, '/next/', { headers: { 'if-none-match': etag } });
+    expect(again.status).toBe(304);
+    expect(again.headers.get('cache-control')).toBe('max-age=600');
+    for (const path of ['/', '/next/missing', '/next']) {
+      expect((await get(server, path)).headers.get('cache-control'), `${path}: the rest stays no-cache`).toBe('no-cache');
+    }
   });
 
   it('rewrites one literal in one served file, which changes its ETag', async () => {

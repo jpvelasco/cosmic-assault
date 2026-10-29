@@ -162,6 +162,8 @@ describe('the release build', () => {
     expect(() => new Script(code)).not.toThrow();
     expect(code).not.toMatch(/\bimport\s*\(/);
     expect(version).not.toBe('');
+    // e2e/pages.spec.ts shows why: a page the HTTP cache still calls fresh can be older than the worker's files.
+    expect(code, 'the page is revalidated with the host').toMatch(/cache:[`'"]no-cache[`'"]/);
 
     expect(list).toContain('index.html');
     // The installed app opens offline only if its manifest and small icons (copied from public/) are cached too; the
