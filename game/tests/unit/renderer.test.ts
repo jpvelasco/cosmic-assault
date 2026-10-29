@@ -992,6 +992,19 @@ describe('createRenderer', () => {
     expect(renderer.hudRects).toEqual([]);
     renderer.draw(world, 1, 0);
     expect(renderer.hudRects.length).toBeGreaterThan(0);
+    // A demo frame after a run shows none of the run's pills.
+    renderer.draw(world, 1, null);
+    expect(renderer.hudRects).toEqual([]);
+  });
+
+  it('restores the canvas state after a pass throws, so the next frame starts clean', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { stub, world } = stubWorld();
+    stub.asteroids = [null as never];
+    expect(() => {
+      renderer.draw(world, 1, 0);
+    }).toThrow();
+    expect(canvas.saved).toBe(0);
   });
 
   it('counts the frames it draws', () => {

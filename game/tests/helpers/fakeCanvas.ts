@@ -24,6 +24,8 @@ export interface FakeCanvas {
   arcs: number;
   /** Every point a line or curve was drawn to, with the alpha then. */
   readonly lines: { x: number; y: number; alpha: number }[];
+  /** The `save()`s not yet restored. */
+  saved: number;
   getContext(kind: string): unknown;
 }
 
@@ -36,7 +38,7 @@ export function fakeCanvas(): FakeCanvas {
   let f = 0;
   let alpha = 1;
   let smoothing = true;
-  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, lines: [], getContext: () => ctx };
+  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, lines: [], saved: 0, getContext: () => ctx };
   const gradient = { addColorStop: (_at: number, color: string) => fake.stops.push(color) };
   const ctx = new Proxy(
     {},
@@ -54,6 +56,10 @@ export function fakeCanvas(): FakeCanvas {
             return (image: unknown) => draws.push({ image, a, b, e, f, alpha, smoothing });
           case 'arc':
             return () => fake.arcs++;
+          case 'save':
+            return () => fake.saved++;
+          case 'restore':
+            return () => fake.saved--;
           case 'lineTo':
             return (x: number, y: number) => fake.lines.push({ x, y, alpha });
           case 'quadraticCurveTo':

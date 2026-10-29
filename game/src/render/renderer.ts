@@ -73,7 +73,7 @@ export interface Renderer {
   /** The score the run sets to beat, which the HUD's score pill shows (a Daily's target); null for none. */
   setTarget(target: number | null): void;
   readonly effects: Effects;
-  /** The HUD pills drawn last, in CSS px. */
+  /** The HUD pills drawn last, in CSS px: none after a frame drawn without the HUD. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
@@ -125,6 +125,8 @@ export function blinkHidden(elapsed: number): boolean {
 export function shipHidden(world: Pick<World, 'ship' | 'elapsed'>): boolean {
   return world.ship.invulnerable && blinkHidden(world.elapsed);
 }
+
+const NO_HUD_RECTS: readonly HudRect[] = [];
 
 export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts = {}): Renderer {
   const ctx = get2dContext(canvas);
@@ -365,6 +367,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
+  /** Whether the last frame drew the HUD: a demo frame, drawn with no score, shows no pills. */
+  let hudDrawn = false;
+
   function draw(world: World, alpha: number, score: number | null): void {
     const current = layout;
     const { bakes } = backdrop;
@@ -376,10 +381,15 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     clearBars(current);
     ctx.save();
-    drawBackdrop(world, current, bakes.sky);
-    drawScene(world, a, current);
-    drawOverlays(current, bakes, world.effects.timeWarp);
-    ctx.restore();
+    // A pass that throws leaves no alpha, composite or clip behind for the next frame.
+    try {
+      drawBackdrop(world, current, bakes.sky);
+      drawScene(world, a, current);
+      drawOverlays(current, bakes, world.effects.timeWarp);
+    } finally {
+      ctx.restore();
+    }
+    hudDrawn = score !== null;
     if (score !== null) {
       ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
       hud.draw(ctx, world, score, effects.reducedMotion);
@@ -445,7 +455,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     },
     effects,
     get hudRects() {
-      return hud.rects;
+      return hudDrawn ? hud.rects : NO_HUD_RECTS;
     },
     get drawCount() {
       return drawCount;
