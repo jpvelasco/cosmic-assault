@@ -12,6 +12,7 @@ import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { BRIDGE_VERSION } from '../src/testBridge';
 import { dailyCardLine } from '../src/ui/dailyCopy';
+import { APP_VERSION } from '../vite/appVersion';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /**
@@ -45,7 +46,7 @@ export { expect };
 export const toastOf = (page: Page) => page.getByRole('status').and(page.locator('.toast'));
 
 /** The build label of a built game, on the title screen and in the crash report; the specs' one owner of its format. */
-export const BUILD_LABEL = /^preview · (local|[0-9a-f]{7}) · \d{4}-\d{2}-\d{2}$/;
+export const BUILD_LABEL = new RegExp(`^v${APP_VERSION.replaceAll('.', '\\.')} · (local|[0-9a-f]{7}) · \\d{4}-\\d{2}-\\d{2}$`);
 
 /** The line the Daily card shows for `date`'s twist and target. */
 export function dailyCardLineOf(date: string): string {
