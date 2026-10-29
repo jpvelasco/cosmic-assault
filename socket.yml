@@ -1,6 +1,6 @@
 # Socket Security: supply-chain risk scanner for npm dependencies.
-# Scans game/package.json and tests/package.json (and their lockfiles) on every
-# PR through the Socket GitHub App, which must have access to this repository.
+# Scans game/package.json (and its lockfile) on every PR through the Socket
+# GitHub App, which must have access to this repository.
 # Docs: https://docs.socket.dev/docs/socket-yml
 version: 2
 

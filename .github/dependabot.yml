@@ -20,12 +20,3 @@ updates:
       # Keep Node type definitions on the runtime major in .nvmrc (24).
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-
-  - package-ecosystem: "npm"
-    directory: "/tests"
-    schedule:
-      interval: "weekly"
-    groups:
-      dev-dependencies:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
