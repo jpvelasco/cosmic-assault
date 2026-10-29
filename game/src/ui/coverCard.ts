@@ -15,10 +15,9 @@ export interface CoverCard {
 
 /**
  * A hidden glass dialog card on an `overlay--modifier` panel in `root`, headed and named by `title`; the caller adds
- * its body. While it shows, Esc calls `close` from any focus, even a focused slider, and stops there: the game's own
- * Esc (resume, back) must not also run.
+ * its body. Esc and pad B close it through the input router, which closes the topmost cover card from any focus.
  */
-export function createCoverCard(root: HTMLElement, modifier: string, title: string, close: () => void): CoverCard {
+export function createCoverCard(root: HTMLElement, modifier: string, title: string): CoverCard {
   const { panel, card } = cardPanel(modifier);
   panel.hidden = true;
   const heading = element('h2', 'heading', title);
@@ -29,30 +28,22 @@ export function createCoverCard(root: HTMLElement, modifier: string, title: stri
   card.append(heading);
   root.append(panel);
 
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (e.code !== 'Escape') return;
-    e.stopPropagation();
-    if (!e.repeat) close();
-  };
   const controls = (): HTMLElement[] => focusableControls(panel);
 
   return {
     card,
     show() {
       panel.hidden = false;
-      document.addEventListener('keydown', onKeyDown);
       controls()[0]?.focus();
     },
     hide() {
       panel.hidden = true;
-      document.removeEventListener('keydown', onKeyDown);
     },
     cover(covered) {
       panel.inert = covered;
     },
     controls,
     dispose() {
-      document.removeEventListener('keydown', onKeyDown);
       panel.remove();
     },
   };

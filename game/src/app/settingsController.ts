@@ -4,14 +4,14 @@ import type { Effects } from '../render/effects';
 import { listen } from '../ui/dom';
 import { createSettingsCard, type SettingsCard } from '../ui/settingsCard';
 import type { Toast } from '../ui/toast';
-import { createCardToggle, SETTINGS_SCREENS, type CardToggleDeps } from './cardToggle';
+import { createCardToggle, type CardToggle, type CardToggleDeps } from './cardToggle';
 import type { HitStop } from './hitStop';
 import { saveSettings, shakeEnabled, type Settings } from './settings';
 
 const TOAST_MUTED = 'Muted';
 const TOAST_SOUND_ON = 'Sound on';
 
-export interface SettingsControllerDeps extends Omit<CardToggleDeps, 'opensOn'> {
+export interface SettingsControllerDeps extends CardToggleDeps {
   readonly storage: Storage | null;
   /** The settings loaded at start; the audio engine was built from them. */
   readonly initial: Settings;
@@ -26,14 +26,10 @@ export interface SettingsController {
   readonly settings: Settings;
   /** Puts a change into effect and saves it at once, for a choice made outside the settings card (the Hangar's). */
   readonly choose: (patch: Partial<Settings>) => void;
-  /** Whether the settings card is over the title, mode select or pause card; the run behind it, if any, stays as it was. */
-  readonly open: boolean;
-  readonly card: SettingsCard;
+  /** The settings card over the title, mode select or pause card, and whether it is up; the run behind it, if any, stays as it was. */
+  readonly toggle: CardToggle<SettingsCard>;
   /** The M key and the sound chips. */
   readonly toggleMute: () => void;
-  readonly openSettings: () => void;
-  /** Done, Esc and pad Back: back to the card that opened it, with focus on the chip that did. */
-  readonly closeSettings: () => void;
   readonly dispose: () => void;
 }
 
@@ -83,18 +79,20 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     deps.syncView();
   }
 
-  const card = createSettingsCard(root, {
-    change: applySettings,
-    save: persistSettings,
-    toggleMute,
-    previewSfx: () => {
-      audio.play('uiClick');
-    },
-    done: () => {
-      toggle.close();
-    },
-  });
-  const toggle = createCardToggle(card, { ...deps, opensOn: SETTINGS_SCREENS });
+  const toggle = createCardToggle(
+    'settings',
+    (done) =>
+      createSettingsCard(root, {
+        change: applySettings,
+        save: persistSettings,
+        toggleMute,
+        previewSfx: () => {
+          audio.play('uiClick');
+        },
+        done,
+      }),
+    deps,
+  );
   const unlisten = listen(reducedMotion, 'change', syncMotion);
   applySettings({});
 
@@ -103,16 +101,11 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
       return settings;
     },
     choose,
-    get open() {
-      return toggle.open;
-    },
-    card,
+    toggle,
     toggleMute,
-    openSettings: toggle.show,
-    closeSettings: toggle.close,
     dispose: () => {
       unlisten();
-      card.dispose();
+      toggle.card.dispose();
     },
   };
 }

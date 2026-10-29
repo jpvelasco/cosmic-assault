@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Command } from '../../src/app/commands';
+import type { Screen } from '../../src/app/flow';
 import { GAME_OVER_GUARD_MS } from '../../src/app/gameOverGuard';
-import { actsUnder, anyCoverUp, commandActs, coversFor, createInputRouter, inputForCommand, type Cover, type RoutedInput } from '../../src/app/inputRouting';
+import { actsUnder, anyCoverUp, commandActs, coversFor, createInputRouter, inputForCommand, noCoversUp, type Cover, type RoutedInput } from '../../src/app/inputRouting';
 import { createKeyLatch } from '../../src/input/keyLatch';
 import { pad } from '../helpers/padSnapshot';
 
@@ -105,6 +106,7 @@ describe('commandActs', () => {
 });
 
 const PAD_A = 0;
+const PAD_B = 1;
 
 /** A key event as a browser dispatches it, on a window stand-in. */
 function keyEvent(type: 'keydown' | 'keyup', code: string, { repeat = false, ctrlKey = false, metaKey = false, altKey = false } = {}): Event {
@@ -297,9 +299,93 @@ describe('the input that ends an attract demo', () => {
   });
 });
 
+describe('noCoversUp', () => {
+  it('holds every cover, none of them up', () => {
+    expect(noCoversUp()).toEqual(UNCOVERED);
+  });
+});
+
 describe('anyCoverUp', () => {
   it('agrees with coversFor on every cover', () => {
     expect(anyCoverUp(UNCOVERED)).toBe(false);
     for (const cover of Object.keys(UNCOVERED) as (keyof typeof UNCOVERED)[]) expect(anyCoverUp({ ...UNCOVERED, [cover]: true }), cover).toBe(true);
+  });
+});
+
+/** A router on a window stand-in over `screen`, with the covers `covers` gives; `later` hears what the router lets by, as the game's key handling would. */
+function coverRouter(screen: Screen, covers: () => readonly Cover[]) {
+  vi.stubGlobal('document', { body: { classList: { add: vi.fn(), remove: vi.fn() } }, activeElement: null });
+  const win = new EventTarget();
+  const run = { flow: vi.fn(), pause: vi.fn(), resume: vi.fn(), toggleMute: vi.fn(), toggleFullscreen: vi.fn() };
+  const closeCard = vi.fn();
+  const router = createInputRouter(win as unknown as Window, {
+    keyboard: { held: new Set(), drainPressed: () => [], dispose: () => undefined },
+    startKeys: createKeyLatch(),
+    run,
+    screen: () => screen,
+    covers,
+    msSinceRunEnd: () => Number.POSITIVE_INFINITY,
+    menuControls: () => [],
+    closeCard,
+    interrupt: () => false,
+  });
+  const later = vi.fn();
+  win.addEventListener('keydown', later);
+  return { win, router, run, closeCard, later };
+}
+
+describe('Esc and pad B over a cover card', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each<Cover>(['settings', 'records', 'hangar'])('Esc closes the %s card once, and the game never hears it', (cover) => {
+    const { win, closeCard, later } = coverRouter('paused', () => [cover]);
+    win.dispatchEvent(keyEvent('keydown', 'Escape'));
+    expect(closeCard).toHaveBeenCalledOnce();
+    expect(later).not.toHaveBeenCalled();
+  });
+
+  it('closes nothing more on the held key repeating, which the game does not hear either', () => {
+    const { win, closeCard, later } = coverRouter('modeSelect', () => ['records']);
+    win.dispatchEvent(keyEvent('keydown', 'Escape', { repeat: true }));
+    expect(closeCard).not.toHaveBeenCalled();
+    expect(later).not.toHaveBeenCalled();
+  });
+
+  it('leaves Esc to the game when no cover card is up, and other keys always', () => {
+    const { win, closeCard, later } = coverRouter('paused', () => ['none']);
+    win.dispatchEvent(keyEvent('keydown', 'Escape'));
+    expect(closeCard).not.toHaveBeenCalled();
+    expect(later).toHaveBeenCalledOnce();
+    const covered = coverRouter('title', () => ['settings']);
+    covered.win.dispatchEvent(keyEvent('keydown', 'KeyM'));
+    expect(covered.later).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the card up under the rotate prompt, however closing is asked, and still keeps the press from the game', () => {
+    const { win, router, closeCard, later, run } = coverRouter('paused', () => ['settings', 'rotate']);
+    win.dispatchEvent(keyEvent('keydown', 'Escape'));
+    router.routePad(pad([PAD_B]), ['back'], 0);
+    expect(closeCard).not.toHaveBeenCalled();
+    expect(later).not.toHaveBeenCalled();
+    expect(run.resume).not.toHaveBeenCalled();
+  });
+
+  it('pad B closes the top card and does nothing else', () => {
+    const { router, closeCard, run } = coverRouter('paused', () => ['hangar']);
+    router.routePad(pad([PAD_B]), ['back'], 0);
+    expect(closeCard).toHaveBeenCalledOnce();
+    expect(run.resume).not.toHaveBeenCalled();
+  });
+
+  it('pad B in play pauses, as Esc does, and on the pause card resumes', () => {
+    const playing = coverRouter('playing', () => ['none']);
+    playing.router.routePad(pad([PAD_B]), ['back'], 0);
+    expect(playing.run.pause).toHaveBeenCalledOnce();
+    expect(playing.closeCard).not.toHaveBeenCalled();
+    const paused = coverRouter('paused', () => ['none']);
+    paused.router.routePad(pad([PAD_B]), ['back'], 0);
+    expect(paused.run.resume).toHaveBeenCalledOnce();
   });
 });

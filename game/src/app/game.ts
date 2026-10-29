@@ -26,17 +26,17 @@ import { applyAccents } from '../ui/accents';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
-import { createOverlay, type CoverChip } from '../ui/overlay';
+import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
-import type { CardToggleDeps } from './cardToggle';
+import { COVER_CARD_IDS, createCoverCards, type CardToggleDeps, type CoverCardId } from './cardToggle';
 import { createAttract } from './attract';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
 import { installE2eHooks, type E2eHooks } from './e2eHooks';
 import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
-import { anyCoverUp, coversFor, createInputRouter, type Cover } from './inputRouting';
+import { anyCoverUp, coversFor, createInputRouter, noCoversUp, type Cover } from './inputRouting';
 import { createHangar } from './hangar';
 import { createRunController, type RunController } from './runController';
 import { runOverrides } from './seed';
@@ -162,7 +162,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       applyNow(TOGGLE_FULLSCREEN);
     },
     openSettings: () => {
-      prefs.openSettings();
+      prefs.toggle.show();
     },
     openRecords: () => {
       records.show();
@@ -191,8 +191,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     toast,
   });
   const guard = createCrashGuard(log, stopAfterCrash);
-  /** The cards a player opens over the title, mode select or pause; the menu keys go to the one that is up. */
-  const coverCards = [prefs, records, hangar] as const;
+  /** The cards a player opens over the title, mode select or pause; Esc, pad B and the menu keys go to the one on top. */
+  const coverCards = createCoverCards({ settings: prefs.toggle, records, hangar });
   const attract = createAttract({
     renderer,
     log,
@@ -210,7 +210,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   });
   const view = createViewSync(root, {
     overlay,
-    settingsCard: prefs.card,
+    coverCards,
+    settingsCard: prefs.toggle.card,
     records,
     hangar,
     rotatePrompt,
@@ -227,10 +228,10 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       installOffer: installPrompt.offer,
       settings: prefs.settings,
-      settingsOpen: prefs.open,
       look: look(),
       attract: attract.active,
     }),
+    covered: () => anyCoverUp(coversUp()),
     screen: () => mode,
     tripped: () => guard.tripped,
     onTurnUpright: pause,
@@ -253,29 +254,23 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     screen: () => mode,
     covers,
     msSinceRunEnd: (now) => now - runEndedAt,
-    menuControls: () => coverCards.find((cover) => cover.open)?.card.controls() ?? overlay.controls(mode),
-    closeCard: () => {
-      prefs.closeSettings();
-      records.close();
-      hangar.close();
-    },
+    menuControls: () => coverCards.top()?.card.controls() ?? overlay.controls(mode),
+    closeCard: coverCards.closeTop,
     interrupt: () => attract.interrupt(),
   });
 
   /** What the settings, records or Hangar card needs to open and close over the screens, its focus going back to its chip. */
-  function coverCardDeps(chip: CoverChip): Omit<CardToggleDeps, 'opensOn'> {
+  function coverCardDeps(chip: CoverCardId): CardToggleDeps {
     const focusOpener = (): void => {
       overlay.focusChip(chip);
     };
-    return { screen: () => mode, covers, syncView, focusOpener };
+    return { screen: () => mode, syncView, focusOpener };
   }
 
   /** Which covers are up right now, refilled in place, so the attract demo can ask on every frame. */
-  const up = { settings: false, records: false, hangar: false, rotate: false, crash: false };
+  const up = noCoversUp();
   function coversUp(): typeof up {
-    up.settings = prefs.open;
-    up.records = records.open;
-    up.hangar = hangar.open;
+    for (const id of COVER_CARD_IDS) up[id] = coverCards.isOpen(id);
     up.rotate = view.needsRotation();
     up.crash = guard.tripped;
     return up;
@@ -406,7 +401,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
     run.dispose();
     touch.show('none');
-    prefs.card.hide();
+    prefs.toggle.card.hide();
     rotatePrompt.show(false);
     view.armIdleCursor();
     crashCard.show();
