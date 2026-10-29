@@ -16,12 +16,12 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
 import { RingLog } from '../../src/platform/log';
 import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
+import { NO_EVENTS } from '../helpers/flowRig';
 import { memoryStorage } from '../helpers/memoryStorage';
 import { seedFor } from '../../e2e/seeds';
 import { CALLOUT_MS, TOAST_MS } from '../../src/ui/toast';
 
 const FIELD = { width: 1280, height: 720 };
-const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
 const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined, today: undefined };
 
 /** A presence where no other tab ever answers, unless `owner` is set: then one owns every run. */

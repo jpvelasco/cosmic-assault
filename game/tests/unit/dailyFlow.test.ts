@@ -1,7 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applySaveChange, INITIAL_FLOW, runDef, saveChange, transition, type FlowAction, type FlowState, type SaveChange, type Screen } from '../../src/app/flow';
-import { createFlowController } from '../../src/app/flowController';
-import { createSaveStore, type StorageEvents } from '../../src/app/saveStore';
 import { galaxyById } from '../../src/content/galaxies';
 import { bestsBefore, NO_BESTS, type BestsBefore } from '../../src/meta/bests';
 import { totalStars } from '../../src/meta/cosmetics';
@@ -10,13 +8,12 @@ import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
 import type { ClearReport } from '../../src/sim/scoring';
-import { memoryStorage } from '../helpers/memoryStorage';
+import { flowRig } from '../helpers/flowRig';
 
 const DATE = '2026-10-26';
 const NEXT_DAY = '2026-10-27';
 const ANCHOR = dailyGalaxy(DATE).def.id;
 const REPORT: ClearReport = { score: 4200, bonus: 750, deaths: 1, stars: 2 };
-const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
 
 const at = (screen: Screen, extra: Partial<FlowState> = {}): FlowState => ({ ...INITIAL_FLOW, screen, ...extra });
 /** A Daily run of DATE on `screen`, as reached from mode select. */
@@ -147,10 +144,7 @@ describe('saveChange: the Daily is sealed off from every other record', () => {
 
   /** Clears the Daily of DATE from mode select on a store over `save`, saving (a normal run) or not (a debug run). */
   function clearDailyOn(save: SaveData, writes: boolean) {
-    const storage = memoryStorage(save);
-    const store = createSaveStore({ storage, events: NO_EVENTS, writes });
-    store.load();
-    const flow = createFlowController({ store, overrides: { galaxy: undefined, startLives: undefined }, today: () => DATE, startRun: vi.fn(), showScreen: vi.fn(), notify: vi.fn() });
+    const { flow, storage } = flowRig({ save, writes, today: DATE });
     flow.command({ kind: 'start' });
     flow.command({ kind: 'chooseMode', mode: 'daily' });
     flow.handle([{ type: 'galaxyCleared', score: REPORT.score, bonus: REPORT.bonus, deaths: REPORT.deaths, stars: REPORT.stars }], { lives: 2, weaponTier: 1 });
@@ -173,29 +167,7 @@ describe('saveChange: the Daily is sealed off from every other record', () => {
 });
 
 describe('createFlowController: the Daily', () => {
-  function setup(save: SaveData = defaultSave()) {
-    const storage = memoryStorage(save);
-    const store = createSaveStore({ storage, events: NO_EVENTS });
-    store.load();
-    let today = DATE;
-    const started: FlowState[] = [];
-    const flow = createFlowController({
-      store,
-      overrides: { galaxy: undefined, startLives: undefined },
-      today: () => today,
-      startRun: (state) => started.push(state),
-      showScreen: vi.fn(),
-      notify: vi.fn(),
-    });
-    return {
-      flow,
-      store,
-      started,
-      setToday: (date: string) => {
-        today = date;
-      },
-    };
-  }
+  const setup = (save: SaveData = defaultSave()) => flowRig({ save, today: DATE });
 
   const cleared = (score: number) => [{ type: 'galaxyCleared' as const, score, bonus: 0, deaths: 0, stars: 3 as const }];
 

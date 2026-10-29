@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FlowState, Screen } from '../../src/app/flow';
-import { createFlowController, STALE_NEW_RUN_NOTICE, STALE_RUN_NOTICE, type FlowControllerDeps } from '../../src/app/flowController';
-import { createSaveStore, type StorageEvents } from '../../src/app/saveStore';
+import { STALE_NEW_RUN_NOTICE, STALE_RUN_NOTICE } from '../../src/app/flowController';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 import { setRankRun } from '../../src/meta/progress';
@@ -11,31 +9,13 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
+import { flowRig, type FlowRigOptions } from '../helpers/flowRig';
 import { memoryStorage } from '../helpers/memoryStorage';
 
 const TODAY = '2026-10-26';
 const FIELD = { width: 1280, height: 720 };
-const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
-
-type Backing = Pick<Storage, 'getItem' | 'setItem'>;
-
-/** A tab: its own store over `storage` (shared between tabs to model two), and its flow. */
-function setup(options: { save?: SaveData; storage?: Backing; galaxy?: GalaxyId; startLives?: number; writes?: boolean } = {}) {
-  const store = createSaveStore({ storage: options.storage ?? memoryStorage(options.save), events: NO_EVENTS, writes: options.writes ?? true });
-  store.load();
-  const started: FlowState[] = [];
-  const screens: Screen[] = [];
-  const notify = vi.fn<(text: string) => void>();
-  const deps: FlowControllerDeps = {
-    store,
-    overrides: { galaxy: options.galaxy, startLives: options.startLives },
-    today: () => TODAY,
-    startRun: (flow) => started.push(flow),
-    showScreen: (screen) => screens.push(screen),
-    notify,
-  };
-  return { flow: createFlowController(deps), store, started, screens, notify };
-}
+/** A tab on TODAY: its own store over `storage` (shared between tabs to model two), and its flow. */
+const setup = (options: Omit<FlowRigOptions, 'today'> = {}) => flowRig({ ...options, today: TODAY });
 
 /**
  * Steps a World of `id` idle, feeding `flow` the events `heard` lets through, until the flow leaves play; the seed
@@ -277,13 +257,11 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
   });
 
   it('a live Rank galaxy keeps answering for the run as each hit moves its rankSeq on', () => {
-    const live: (number | null)[] = [];
-    const tab = setup();
-    const flow = createFlowController({ store: tab.store, overrides: { galaxy: undefined, startLives: undefined }, today: () => TODAY, startRun: () => undefined, showScreen: () => undefined, notify: () => undefined, liveRun: (seq) => live.push(seq) });
+    const { flow, store, live } = setup();
     flow.command({ kind: 'start' });
     flow.command({ kind: 'chooseMode', mode: 'rank' });
     flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
-    expect(live.at(-1)).toBe(tab.store.save.rankSeq);
+    expect(live.at(-1)).toBe(store.save.rankSeq);
     expect(live.at(-1)).toBeGreaterThan(live.at(-2) ?? Number.POSITIVE_INFINITY);
   });
 
