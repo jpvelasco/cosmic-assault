@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Command } from '../../src/app/commands';
 import { GAME_OVER_GUARD_MS } from '../../src/app/gameOverGuard';
 import { actsUnder, anyCoverUp, commandActs, coversFor, createInputRouter, inputForCommand, type Cover, type RoutedInput } from '../../src/app/inputRouting';
-import type { PadSnapshot } from '../../src/input/gamepad';
 import { createKeyLatch } from '../../src/input/keyLatch';
+import { pad } from '../helpers/padSnapshot';
 
 const UNCOVERED = { settings: false, records: false, hangar: false, rotate: false, crash: false };
 const NO_COVER = coversFor(UNCOVERED);
@@ -103,11 +103,6 @@ describe('commandActs', () => {
     }
   });
 });
-
-/** A standard-mapping pad snapshot with `buttons` held and the left stick at `stick`. */
-function padWith(buttons: readonly number[] = [], stick: readonly [number, number] = [0, 0]): PadSnapshot {
-  return { axes: [...stick, 0, 0], pressed: Array.from({ length: 17 }, (_, i) => buttons.includes(i)) };
-}
 
 const PAD_A = 0;
 
@@ -258,34 +253,34 @@ describe('the input that ends an attract demo', () => {
     reaches(keyEvent('keydown', 'Enter'));
     expect(reaches(new Event('click'))).toBe(true);
     reaches(new Event('pointerdown'));
-    router.routePad(padWith([PAD_A]), [], 0);
+    router.routePad(pad([PAD_A]), [], 0);
     expect(reaches(new Event('click'))).toBe(true);
   });
 
   it('swallows a pad press that ends the demo, and a button still held from it, and says so; the next press acts', () => {
     const { router, run, interrupt } = demoRouter();
-    expect(router.routePad(padWith([PAD_A]), ['confirm'], 0)).toBe(true);
+    expect(router.routePad(pad([PAD_A]), ['confirm'], 0)).toBe(true);
     expect(interrupt).toHaveBeenCalledTimes(1);
-    expect(router.routePad(padWith([PAD_A]), [], 0)).toBe(false);
-    router.routePad(padWith(), [], 0);
+    expect(router.routePad(pad([PAD_A]), [], 0)).toBe(false);
+    router.routePad(pad(), [], 0);
     expect(run.flow).not.toHaveBeenCalled();
-    expect(router.routePad(padWith([PAD_A]), ['confirm'], 0)).toBe(false);
+    expect(router.routePad(pad([PAD_A]), ['confirm'], 0)).toBe(false);
     expect(run.flow).toHaveBeenCalledWith({ kind: 'start' });
   });
 
   it('ends the demo on a stick pushed past its dead zone, short of a menu move, and acts on the next press', () => {
     const { router, run, interrupt } = demoRouter();
-    router.routePad(padWith([], [0.3, 0]), [], 0);
+    router.routePad(pad([], [0.3, 0, 0, 0]), [], 0);
     expect(interrupt).toHaveBeenCalledTimes(1);
     expect(interrupt).toHaveLastReturnedWith(true);
-    router.routePad(padWith(), [], 0);
-    router.routePad(padWith([PAD_A]), ['confirm'], 0);
+    router.routePad(pad(), [], 0);
+    router.routePad(pad([PAD_A]), ['confirm'], 0);
     expect(run.flow).toHaveBeenCalledWith({ kind: 'start' });
   });
 
   it('counts a pad at rest as no input', () => {
     const { router, interrupt } = demoRouter();
-    router.routePad(padWith(), [], 0);
+    router.routePad(pad(), [], 0);
     router.routePad(null, [], 0);
     expect(interrupt).not.toHaveBeenCalled();
   });

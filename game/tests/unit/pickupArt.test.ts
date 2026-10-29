@@ -2,17 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { PICKUP_IDS } from '../../src/content/pickups';
 import { drawGlyph, expiryAlpha, PICKUP_COLORS } from '../../src/render/pickupArt';
 import { PICKUP } from '../../src/sim/config';
+import { recordingContext } from '../helpers/fakeCanvas';
 
 /** A Canvas 2D stand-in that names every call made on it. */
-function recordingContext(): { ctx: CanvasRenderingContext2D; calls: string[] } {
+function namingContext(): { ctx: CanvasRenderingContext2D; calls: string[] } {
   const calls: string[] = [];
-  const ctx = new Proxy(
-    {},
-    {
-      get: (_target, name) => () => calls.push(String(name)),
-      set: () => true,
-    },
-  ) as CanvasRenderingContext2D;
+  const ctx = recordingContext({ call: (name) => calls.push(name) }) as CanvasRenderingContext2D;
   return { ctx, calls };
 }
 
@@ -44,7 +39,7 @@ describe('expiryAlpha', () => {
 describe('drawGlyph', () => {
   it('draws every pickup from canvas paths alone, never text', () => {
     for (const kind of PICKUP_IDS) {
-      const { ctx, calls } = recordingContext();
+      const { ctx, calls } = namingContext();
       drawGlyph(ctx, kind, 0, 0, 10, PICKUP_COLORS[kind]);
       expect(calls.some((name) => name === 'fill' || name === 'stroke'), kind).toBe(true);
       expect(calls.filter((name) => name.endsWith('Text'))).toEqual([]);
@@ -53,12 +48,12 @@ describe('drawGlyph', () => {
 
   it('draws Crimson Nebula\'s two by shape and stroke alike: a lance through a ring, and a dart at the end of its curving trail', () => {
     for (const kind of ['piercingBeam', 'homingMissiles'] as const) {
-      const { ctx, calls } = recordingContext();
+      const { ctx, calls } = namingContext();
       drawGlyph(ctx, kind, 0, 0, 10, PICKUP_COLORS[kind]);
       expect(calls.filter((name) => name === 'stroke'), kind).toHaveLength(1);
       expect(calls.filter((name) => name === 'fill'), kind).toHaveLength(1);
     }
-    const { ctx, calls } = recordingContext();
+    const { ctx, calls } = namingContext();
     drawGlyph(ctx, 'homingMissiles', 0, 0, 10, PICKUP_COLORS.homingMissiles);
     expect(calls).toContain('quadraticCurveTo');
   });

@@ -4,6 +4,7 @@ import type { PaletteId } from '../../src/content/types';
 import { paletteFor } from '../../src/render/palette';
 import type { SceneLook } from '../../src/render/scene';
 import type { Sprite, SpriteBaker } from '../../src/render/sprites';
+import { recordingContext } from './fakeCanvas';
 
 export const PASS_FIELD = { width: 1280, height: 720 };
 /** A scene's look with full glow, at `time` seconds, held still under reduced motion if `still`. */
@@ -45,26 +46,13 @@ export function hazardPassRig(palette: PaletteId): PassRig {
   const keys: string[] = [];
   const stamps: PassStamp[] = [];
   const state = { alpha: 1, dash: [] as readonly number[] };
-  const ctx: Record<string, unknown> = {
-    globalCompositeOperation: 'source-over',
-    lineWidth: 1,
-    lineCap: 'butt',
-    strokeStyle: '',
-    lineDashOffset: 0,
-    createRadialGradient: () => ({ addColorStop: () => undefined }),
-    setLineDash: (dash: readonly number[]) => {
-      state.dash = dash;
+  const ctx = recordingContext({
+    call: (name, args) => {
+      if (name === 'setLineDash') state.dash = args[0] as readonly number[];
+      else if ((PATH_CALLS as readonly string[]).includes(name)) calls.push({ name, args, alpha: state.alpha, dash: state.dash });
     },
-  };
-  for (const name of PATH_CALLS) {
-    ctx[name] = (...args: unknown[]): void => {
-      calls.push({ name, args, alpha: state.alpha, dash: state.dash });
-    };
-  }
-  Object.defineProperty(ctx, 'globalAlpha', {
-    get: () => state.alpha,
-    set: (value: number) => {
-      state.alpha = value;
+    set: (name, value) => {
+      if (name === 'globalAlpha') state.alpha = value as number;
     },
   });
   const baker = {
@@ -78,5 +66,5 @@ export function hazardPassRig(palette: PaletteId): PassRig {
   const stamp = (_sprite: Sprite, _x: number, _y: number, cos: number, sin: number, reach: number): void => {
     stamps.push({ key: keys[keys.length - 1] ?? '', alpha: state.alpha, angle: Math.atan2(sin, cos), reach });
   };
-  return { hazards: createHazardPass(ctx as unknown as CanvasRenderingContext2D, pen, stamp, baker, paletteFor(palette)), calls, keys, stamps };
+  return { hazards: createHazardPass(ctx as CanvasRenderingContext2D, pen, stamp, baker, paletteFor(palette)), calls, keys, stamps };
 }

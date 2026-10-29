@@ -1,13 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, padInUse, pickPad, snapshotPad, type PadSnapshot } from '../../src/input/gamepad';
+import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, padInUse, pickPad, snapshotPad } from '../../src/input/gamepad';
 import { NO_CONTROLS } from '../../src/sim/controls';
+import { pad } from '../helpers/padSnapshot';
 
-const BUTTONS = 17;
-
-/** A standard-mapping snapshot with the given buttons pressed and axes set (left stick x, y, right stick x, y). */
-function pad(buttons: readonly number[] = [], axes: readonly number[] = [0, 0, 0, 0]): PadSnapshot {
-  return { axes, pressed: Array.from({ length: BUTTONS }, (_, i) => buttons.includes(i)) };
-}
 
 describe('controlsFromPad', () => {
   it('maps no pad and a resting pad to neutral controls', () => {
