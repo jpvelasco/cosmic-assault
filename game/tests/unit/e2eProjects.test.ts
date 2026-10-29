@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
-import config from '../../playwright.config';
+import config, { livePagesUrl } from '../../playwright.config';
 import { listedTests, listTests, projectMatchers, projectsWithTestIgnore, scriptProjects, specsWithTests, testsNoProjectRuns, unmatchedSpecs } from '../helpers/specCoverage';
 
 const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true, recursive: true });
@@ -109,6 +109,20 @@ describe('projectsWithTestIgnore', () => {
   it('names the projects that set testIgnore', () => {
     const config: PlaywrightTestConfig = { testIgnore: 'z', projects: [{ name: 'a' }, { name: 'b', testIgnore: '**/x.spec.ts' }, { testIgnore: [] }] };
     expect(projectsWithTestIgnore(config)).toEqual(['(config)', 'b', '(unnamed)']);
+  });
+});
+
+describe('livePagesUrl', () => {
+  it('takes the address of a live site\'s directory, over http or https', () => {
+    expect(livePagesUrl(undefined)).toBeUndefined();
+    expect(livePagesUrl('https://example.github.io/cosmic-assault/')).toBe('https://example.github.io/cosmic-assault/');
+    expect(livePagesUrl('http://localhost:4319/')).toBe('http://localhost:4319/');
+  });
+
+  it('refuses anything else, saying what to set instead', () => {
+    for (const value of ['', 'example.github.io/cosmic-assault/', 'https://example.github.io/cosmic-assault', 'file:///tmp/site/', 'https://example.github.io/cosmic-assault/?x=1', 'https://example.github.io/cosmic-assault/#top']) {
+      expect(() => livePagesUrl(value), value).toThrow(/PAGES_URL .*ending in a slash.*or unset it/);
+    }
   });
 });
 

@@ -65,28 +65,37 @@ function statOf(file) {
 }
 
 /**
- * Where `pathname` leads: a file to serve and the mount it is served from, a 301 to the slash form, or nothing. A URL
- * is answered by the last mount whose path holds it, from that mount's directory alone.
+ * `pathname` decoded once, so every spelling of an address matches the same mount; undefined for a malformed escape or
+ * an encoded slash, backslash or NUL, which no file's address holds.
+ */
+function decodedPath(pathname) {
+  if (/%(2f|5c|00)/i.test(pathname)) return undefined;
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Where the URL path `pathname` leads: a file to serve and the mount it is served from, a 301 to the slash form, or
+ * nothing. A URL is answered by the last mount whose path holds it, from that mount's directory alone.
  */
 function locate(mounts, pathname) {
-  if (mounts.some((mount) => mount.path === `${pathname}/`)) return { moved: true };
-  const mount = mounts.findLast((candidate) => pathname.startsWith(candidate.path));
+  const path = decodedPath(pathname);
+  if (path === undefined) return {};
+  if (mounts.some((mount) => mount.path === `${path}/`)) return { moved: true };
+  const mount = mounts.findLast((candidate) => path.startsWith(candidate.path));
   if (mount === undefined) return {};
-  let rest;
-  try {
-    rest = decodeURIComponent(pathname.slice(mount.path.length));
-  } catch {
-    return {};
-  }
-  const target = join(mount.root, rest);
+  const target = join(mount.root, path.slice(mount.path.length));
   if (!isWithin(mount.root, target)) return {};
   const stats = statOf(target);
   if (stats?.isDirectory()) {
-    if (!pathname.endsWith('/')) return { moved: true };
+    if (!path.endsWith('/')) return { moved: true };
     const index = join(target, 'index.html');
     return statOf(index)?.isFile() ? { file: index, mount } : {};
   }
-  return stats?.isFile() && !pathname.endsWith('/') ? { file: target, mount } : {};
+  return stats?.isFile() && !path.endsWith('/') ? { file: target, mount } : {};
 }
 
 function etagOf(body) {

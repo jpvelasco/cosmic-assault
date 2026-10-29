@@ -30,6 +30,14 @@ const PREVIEW_CACHE_PREFIX = 'cosmic-assault-next-';
 /** The root worker's caches, which a cleanup of the preview's never matches. */
 const ROOT_CACHE_PREFIX = 'cosmic-assault-v2-';
 const MOVE_TIMEOUT_MS = 10_000;
+/** How long a page waits for a worker to become ready before the case reports that none did. */
+const READY_TIMEOUT_MS = 5_000;
+/** Longer than the preview worker's wait for the network (3 s), after which it answers a navigation from its cache. */
+const SLOW_STUB_MS = 5_000;
+/** How long the retiring worker takes to arrive on the slow network. */
+const SLOW_WORKER_MS = 1_000;
+/** The move on a slow network waits for the browser's own update check, which comes in its own time. */
+const SLOW_MOVE_TIMEOUT_MS = 30_000;
 /** Marks the page of the deploy that writeNextDeploy() makes. */
 const NEXT_DEPLOY_MARK = '<meta name="deploy" content="next">';
 /** The built files that name other built files. */
@@ -62,9 +70,6 @@ const test = base.extend<{ prefix: string; serve: (mounts: readonly PagesMount[]
   },
 });
 
-// A page these cases expect to answer 404 logs its failed load.
-test.use({ allowedErrors: ['the server responded with a status of 404'] });
-
 /**
  * Writes into `dir` the build as the next deploy would be: every asset under a new name and the old names gone, the
  * page and the worker naming the new ones, the worker's version `<version>b`, and the page marked with NEXT_DEPLOY_MARK.
@@ -94,6 +99,19 @@ const cachesNamed = async (page: Page, prefix: string): Promise<string[]> =>
 const registrationScopes = (page: Page): Promise<string[]> =>
   page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((registration) => registration.scope));
 
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The scope of the worker that serves the page, or a note that none became ready in time. */
+const readyScope = (page: Page): Promise<string> =>
+  page.evaluate(async (ms) => {
+    const late = new Promise<string>((resolve) => {
+      setTimeout(() => {
+        resolve(`no worker became ready within ${String(ms)} ms`);
+      }, ms);
+    });
+    return Promise.race([navigator.serviceWorker.ready.then((registration) => registration.scope), late]);
+  }, READY_TIMEOUT_MS);
+
 async function waitForController(page: Page): Promise<void> {
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 }
@@ -113,8 +131,8 @@ async function visitRoot(page: Page, site: PagesServer): Promise<void> {
 }
 
 /** The page has left next/ for the site root, and nothing of the preview's worker is left on the device. */
-async function expectMovedToRoot(page: Page, site: PagesServer): Promise<void> {
-  await expect(page, 'the page moves from next/ to the site root').toHaveURL(site.url, { timeout: MOVE_TIMEOUT_MS });
+async function expectMovedToRoot(page: Page, site: PagesServer, timeout = MOVE_TIMEOUT_MS): Promise<void> {
+  await expect(page, 'the page moves from next/ to the site root').toHaveURL(site.url, { timeout });
   await expect.poll(() => registrationScopes(page), { message: 'no worker is left registered for next/' }).not.toContain(nextOf(site));
   await expect.poll(() => cachesNamed(page, PREVIEW_CACHE_PREFIX), { message: 'no preview cache is left' }).toEqual([]);
 }
@@ -157,7 +175,7 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await page.goto(nextOf(site));
 
       await expectMovedToRoot(page, site);
-      expect(await page.evaluate(async () => (await navigator.serviceWorker.ready).scope), 'the root worker serves the root').toBe(site.url);
+      expect(await readyScope(page), 'the root worker serves the root').toBe(site.url);
       await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
       expect(await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY), 'the save is untouched').toBe(SEEDED);
       expect(rootErrors, 'console errors on the root').toEqual([]);
@@ -186,26 +204,31 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await expectMovedToRoot(page, site);
     });
 
-    test('the root worker never answers for next/: once it is gone, next/ is the host\'s 404 online and an error offline', async ({ page, context, serve }, testInfo) => {
-      const site = await serve(reveal);
-      await visitRoot(page, site);
-      const hidden = testInfo.outputPath('hidden-next');
-      mkdirSync(hidden, { recursive: true });
-      site.setMounts([...reveal, { dir: hidden, at: 'next/' }]);
+    test.describe('once next/ is gone', () => {
+      // Its 404 answers are logged as failed loads.
+      test.use({ allowedErrors: ['the server responded with a status of 404'] });
 
-      const missing = await page.goto(nextOf(site));
-      expect(missing?.status(), 'next/ answers the host\'s 404, not the cached game').toBe(404);
-      expect(await missing?.text()).toBe(NOT_FOUND_BODY);
+      test('the root worker never answers for next/: once it is gone, next/ is the host\'s 404 online and an error offline', async ({ page, context, serve }, testInfo) => {
+        const site = await serve(reveal);
+        await visitRoot(page, site);
+        const hidden = testInfo.outputPath('hidden-next');
+        mkdirSync(hidden, { recursive: true });
+        site.setMounts([...reveal, { dir: hidden, at: 'next/' }]);
 
-      const withoutSlash = nextOf(site).slice(0, -1);
-      const moved = await page.goto(withoutSlash);
-      expect(moved?.status()).toBe(404);
-      const redirect = moved?.request().redirectedFrom();
-      expect(redirect?.url(), 'next answers 301 to next/ first').toBe(withoutSlash);
-      expect((await redirect?.response())?.status()).toBe(301);
+        const missing = await page.goto(nextOf(site));
+        expect(missing?.status(), 'next/ answers the host\'s 404, not the cached game').toBe(404);
+        expect(await missing?.text()).toBe(NOT_FOUND_BODY);
 
-      await context.setOffline(true);
-      await expect(page.goto(nextOf(site)), 'offline, next/ is a network error, not the cached game').rejects.toThrow(/net::ERR_/);
+        const withoutSlash = nextOf(site).slice(0, -1);
+        const moved = await page.goto(withoutSlash);
+        expect(moved?.status()).toBe(404);
+        const redirect = moved?.request().redirectedFrom();
+        expect(redirect?.url(), 'next answers 301 to next/ first').toBe(withoutSlash);
+        expect((await redirect?.response())?.status()).toBe(301);
+
+        await context.setOffline(true);
+        await expect(page.goto(nextOf(site)), 'offline, next/ is a network error, not the cached game').rejects.toThrow(/net::ERR_/);
+      });
     });
 
     if (prefixed) {
@@ -218,6 +241,49 @@ for (const prefix of ['/', '/cosmic-assault/']) {
         expect(await page.evaluate(() => navigator.serviceWorker.controller === null), 'no worker controls the other project').toBe(true);
       });
     }
+
+    test('a device that plays at the root keeps the root worker and its cache when it opens next/, and still plays offline', async ({ page, context, serve }) => {
+      const site = await serve(reveal);
+      await visitRoot(page, site);
+      const ours = await cachesNamed(page, ROOT_CACHE_PREFIX);
+      expect(ours).toHaveLength(1);
+
+      await page.goto(nextOf(site));
+
+      await expectMovedToRoot(page, site);
+      await expect.poll(() => registrationScopes(page), { message: 'only the root worker is left registered' }).toEqual([site.url]);
+      expect(await readyScope(page), 'the root worker serves the root').toBe(site.url);
+      expect(await cachesNamed(page, ROOT_CACHE_PREFIX), 'the root cache is untouched').toEqual(ours);
+      await context.setOffline(true);
+      await page.reload();
+      await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
+    });
+
+    test('on a slow network, a device that ran the preview reaches the root through the browser\'s own update check', async ({ page, context, serve }) => {
+      test.setTimeout(60_000);
+      const site = await serve(BEFORE);
+      await visitPreview(page, site);
+      site.setMounts(reveal);
+      // The stub comes too late for the preview worker, which answers next/ from its cache instead, so the stub's own
+      // script and redirect never run; the retiring worker is slow to arrive as well. Routes see the workers' requests.
+      let stubRequests = 0;
+      await context.route(nextOf(site), async (route) => {
+        stubRequests += 1;
+        await delay(SLOW_STUB_MS);
+        await route.continue().catch(() => undefined);
+      });
+      await context.route(new URL('next/sw.js', site.url).href, async (route) => {
+        await delay(SLOW_WORKER_MS);
+        await route.continue().catch(() => undefined);
+      });
+
+      await page.goto(nextOf(site));
+      await expect(page.getByRole('heading', { name: 'Preview build' }), 'the preview worker answers from its cache').toBeVisible();
+      expect(stubRequests, 'the preview worker asked the network for the stub first').toBeGreaterThan(0);
+
+      await expectMovedToRoot(page, site, SLOW_MOVE_TIMEOUT_MS);
+      await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
+    });
 
     test('the next deploy replaces the root cache with its own and still plays offline', async ({ page, context, serve }) => {
       const site = await serve(reveal);

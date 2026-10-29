@@ -4,8 +4,23 @@ const isCI = !!process.env['CI'];
 // Off Vite's default preview port (4173), so a stray `npm run preview` is never mistaken for these builds.
 const E2E_URL = 'http://localhost:4317';
 const RELEASE_URL = 'http://localhost:4318';
+/**
+ * PAGES_URL, if set: the live site the `pages` project checks instead of a local one. It must be the http(s) address
+ * of the site's directory, ending in a slash, since every page the tests open is resolved against it.
+ */
+export function livePagesUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const url = URL.canParse(value) ? new URL(value) : undefined;
+  if (url === undefined || !['http:', 'https:'].includes(url.protocol) || !url.pathname.endsWith('/') || url.search !== '' || url.hash !== '') {
+    throw new Error(
+      `PAGES_URL is "${value}", which is not the address of a site's directory: set it to an http(s) address ending in a slash, such as https://example.github.io/cosmic-assault/, or unset it to test dist/ locally`,
+    );
+  }
+  return url.href;
+}
+
 /** The release build as GitHub Pages serves this site, under its project path; PAGES_URL points the project at a live copy instead. */
-const LIVE_PAGES_URL = process.env['PAGES_URL'];
+const LIVE_PAGES_URL = livePagesUrl(process.env['PAGES_URL']);
 const PAGES_URL = LIVE_PAGES_URL ?? 'http://localhost:4319/cosmic-assault/';
 const desktopChrome = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } };
 

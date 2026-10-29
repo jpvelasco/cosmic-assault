@@ -120,6 +120,32 @@ describe('createPagesServer', () => {
     }
   });
 
+  it('matches mounts on the decoded path, so a later mount hides its directory however the address is spelled', async () => {
+    const game = site(GAME);
+    const server = await serve([{ dir: game, at: './' }], '/cosmic-assault/');
+    expect(await (await get(server, '/cosmic-assault/%6Eext/')).text(), 'a spelling of next/ the server decodes').toBe('<h1>Moved</h1>');
+
+    server.setMounts([{ dir: game, at: './' }, { dir: site({}), at: 'next/' }]);
+    for (const path of ['/cosmic-assault/next/', '/cosmic-assault/%6Eext/', '/cosmic-assault/n%65xt/index.html', '/%63osmic-assault/next/']) {
+      const hidden = await get(server, path);
+      expect(hidden.status, path).toBe(404);
+      expect(await hidden.text(), path).toBe(NOT_FOUND_BODY);
+    }
+    const moved = await get(server, '/cosmic-assault/%6Eext');
+    expect(moved.status).toBe(301);
+    expect(moved.headers.get('location')).toBe('/cosmic-assault/%6Eext/');
+  });
+
+  it('refuses an encoded slash, backslash or NUL anywhere in the path', async () => {
+    const server = await serve([{ dir: site(GAME), at: './' }]);
+
+    for (const path of ['/next%2Findex.html', '/next%2findex.html', '/next%5Cindex.html', '/index.html%00', '/%00/index.html', '/assets%2Fapp.js']) {
+      const refused = await get(server, path);
+      expect(refused.status, path).toBe(404);
+      expect(await refused.text(), path).toBe(NOT_FOUND_BODY);
+    }
+  });
+
   it('never serves a file outside the mount, however the path is spelled', async () => {
     const outer = site({ 'secret.txt': 'secret', 'inner/index.html': 'inner' });
     const server = await serve([{ dir: join(outer, 'inner'), at: './' }]);
