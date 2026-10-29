@@ -17,7 +17,7 @@ const DIST_E2E = join(GAME_DIR, 'dist-e2e');
 export const SHOTS_DIR = fileURLToPath(new URL('../../docs/assets/screens/', import.meta.url));
 
 /** The most bytes one still may take, so the README stays light to load. */
-export const SHOT_BYTE_CAP = 250 * 1024;
+export const SHOT_BYTE_CAP = 500 * 1024;
 
 /** Widths a still that is over the cap is scaled down to, in turn, until one fits. */
 const FIT_WIDTHS = [1600, 1280, 1120, 960, 800, 640];
