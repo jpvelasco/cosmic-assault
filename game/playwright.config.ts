@@ -4,17 +4,26 @@ const isCI = !!process.env['CI'];
 // Off Vite's default preview port (4173), so a stray `npm run preview` is never mistaken for these builds.
 const E2E_URL = 'http://localhost:4317';
 const RELEASE_URL = 'http://localhost:4318';
+/** The release build as GitHub Pages serves this site, under its project path; PAGES_URL points the project at a live copy instead. */
+const LIVE_PAGES_URL = process.env['PAGES_URL'];
+const PAGES_URL = LIVE_PAGES_URL ?? 'http://localhost:4319/cosmic-assault/';
 const desktopChrome = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } };
+
+/** A web server at `url`, started by `command` unless one already answers there outside CI. */
+function webServer(command: string, url: string) {
+  return { command, url, reuseExistingServer: !isCI, timeout: 60000 };
+}
 
 /** Serves a built `outDir`. CI builds it in an earlier step; locally, build first so preview is never stale. */
 function previewServer(build: string, outDir: string, url: string) {
   const port = new URL(url).port;
-  return {
-    command: `${isCI ? '' : `npm run ${build} && `}npm run preview -- --outDir ${outDir} --port ${port} --strictPort`,
-    url,
-    reuseExistingServer: !isCI,
-    timeout: 60000,
-  };
+  return webServer(`${isCI ? '' : `npm run ${build} && `}npm run preview -- --outDir ${outDir} --port ${port} --strictPort`, url);
+}
+
+/** Serves dist/ as GitHub Pages would, under the path of `url`. */
+function pagesServer(url: string) {
+  const { pathname, port } = new URL(url);
+  return webServer(`node scripts/serve-pages.mjs --dir dist --prefix ${pathname} --port ${port}`, url);
 }
 
 export default defineConfig({
@@ -55,6 +64,20 @@ export default defineConfig({
       grep: /@release/,
       use: { ...desktopChrome, baseURL: RELEASE_URL },
     },
+    // The release build under the site's project path, as GitHub Pages serves it, and the service workers' lifecycle
+    // across the move from the preview address (pages.spec.ts serves its own sites). The trailing slash in baseURL is
+    // what keeps relative navigation inside the project path.
+    {
+      name: 'pages',
+      testMatch: ['**/pages.spec.ts', '**/release-smoke.spec.ts', '**/install.spec.ts'],
+      grep: [/@release/, /(^| )pages\.spec\.ts( |$)/],
+      use: { ...desktopChrome, baseURL: PAGES_URL },
+    },
   ],
-  webServer: [previewServer('build:e2e', 'dist-e2e', E2E_URL), previewServer('build', 'dist', RELEASE_URL)],
+  webServer: [
+    previewServer('build:e2e', 'dist-e2e', E2E_URL),
+    previewServer('build', 'dist', RELEASE_URL),
+    // After the release preview, which builds dist/ locally before this serves it.
+    ...(LIVE_PAGES_URL === undefined ? [pagesServer(PAGES_URL)] : []),
+  ],
 });

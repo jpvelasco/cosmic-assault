@@ -1,12 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
 import config from '../../playwright.config';
 import { listedTests, listTests, projectMatchers, projectsWithTestIgnore, scriptProjects, specsWithTests, testsNoProjectRuns, unmatchedSpecs } from '../helpers/specCoverage';
 
-const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true });
-const specs = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.spec.ts')).map((entry) => entry.name);
+const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true, recursive: true });
+const isSpec = (entry: (typeof entries)[number]): boolean => entry.isFile() && entry.name.endsWith('.spec.ts');
+const e2eDir = fileURLToPath(new URL('../../e2e/', import.meta.url));
+const specs = entries.filter((entry) => isSpec(entry) && resolve(entry.parentPath) === resolve(e2eDir)).map((entry) => entry.name);
 
 describe('unmatchedSpecs', () => {
   it('names a spec that no pattern matches', () => {
@@ -50,8 +53,8 @@ describe('listedTests', () => {
       ],
     };
     expect(listedTests(report)).toEqual([
-      { file: 'a.spec.ts', title: 'top @phone', project: 'p' },
-      { file: 'a.spec.ts', title: 'group inner', project: 'q' },
+      { file: 'a.spec.ts', title: 'a.spec.ts top @phone', project: 'p' },
+      { file: 'a.spec.ts', title: 'a.spec.ts group inner', project: 'q' },
     ]);
   });
 });
@@ -80,6 +83,12 @@ describe('testsNoProjectRuns', () => {
 
   it('ignores projects the scripts do not run', () => {
     expect(testsNoProjectRuns(tests.slice(0, 3), { projects }, ['desk'])).toEqual(['a.spec.ts › only on a phone @phone']);
+  });
+
+  it('lets a project pick a whole file by its name, as grep sees the file first', () => {
+    const listed = listedTests({ suites: [{ file: 'c.spec.ts', specs: [{ title: 'x', tests: [{ projectName: 'p' }] }] }] });
+    expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: [/@b/, /(^| )c\.spec\.ts( |$)/] }] }, ['p'])).toEqual([]);
+    expect(testsNoProjectRuns(listed, { projects: [{ name: 'p', grep: /(^| )d\.spec\.ts( |$)/ }] }, ['p'])).toEqual(['c.spec.ts › c.spec.ts x']);
   });
 
   it('accepts a list of patterns, any of which selects or drops a test', () => {
@@ -134,6 +143,6 @@ describe('playwright.config.ts', () => {
   });
 
   it('keeps specs directly in e2e/, where the coverage check can see them', () => {
-    expect(entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)).toEqual([]);
+    expect(entries.filter((entry) => isSpec(entry) && resolve(entry.parentPath) !== resolve(e2eDir)).map((entry) => join(entry.parentPath, entry.name))).toEqual([]);
   });
 });

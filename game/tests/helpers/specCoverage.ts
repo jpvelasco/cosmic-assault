@@ -51,7 +51,10 @@ export function specsWithTests(report: { readonly suites?: readonly ListedSuite[
   return (report.suites ?? []).filter(hasTests).map((suite) => suite.file);
 }
 
-/** One test as one project lists it; `title` is what `grep` sees: describe titles, the test title, then its tags. */
+/**
+ * One test as one project lists it; `title` is what `grep` sees: the file, describe titles, the test title, then its
+ * tags. (Playwright's grep also sees the project name first, which is left out so the title is the same in every project.)
+ */
 export interface ListedTest {
   readonly file: string;
   readonly title: string;
@@ -71,7 +74,7 @@ function suiteTests(suite: ListedSuite, titles: readonly string[]): ListedTest[]
 
 /** Every test in `report`, once per project that lists it. */
 export function listedTests(report: { readonly suites?: readonly ListedSuite[] }): ListedTest[] {
-  return (report.suites ?? []).flatMap((suite) => suiteTests(suite, []));
+  return (report.suites ?? []).flatMap((suite) => suiteTests(suite, [suite.file]));
 }
 
 type Patterns = RegExp | readonly RegExp[] | undefined;

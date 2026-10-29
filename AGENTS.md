@@ -373,7 +373,13 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    (Playwright against the e2e build, plus a smoke test of the release build)
    from `game/`; install Chromium first with `npx playwright install chromium`.
    Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
-   4318 (release), clear of Vite's default preview port. `npm run test:perf`
+   4318 (release), clear of Vite's default preview port. Its `pages` project
+   also serves the release build under `/cosmic-assault/` on port 4319 with
+   `scripts/serve-pages.mjs`, which answers like GitHub Pages (`PAGES_URL`
+   points it at a live copy instead), and runs `e2e/pages.spec.ts`, the
+   service workers' lifecycle across the move from the preview address, on
+   sites it serves itself from `e2e/fixtures/pages/` (whose `preview/sw.js` is
+   the published preview worker, kept byte for byte but for its precache list). `npm run test:perf`
    (the `perf` project: 4x CPU slowdown, a busy field and a boss fight, each
    held to the frame-time ceilings in `game/e2e/perfThresholds.ts`, which are
    worked out from eight recorded runs of the CI job spread over hours (runner
@@ -436,7 +442,7 @@ and `tests/test-results/` and are ignored by Git.
   (`npm run test:digests`, one file of the balance suite), release build, base check,
   no-test-bridge check, e2e build, and e2e tests (the `chromium-desktop` and
   `mobile-landscape` projects against `dist-e2e/`, plus the `release-smoke`
-  project against `dist/`);
+  and `pages` projects against `dist/`);
   job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
   `website/`. Job `perf` builds both bundles and runs `npm run test:perf`.
   Job `deploy` runs only on pushes to `main`, and only after `game`, `legacy`

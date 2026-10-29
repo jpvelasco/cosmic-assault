@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint';
 const SIM_PURITY_MESSAGE = 'sim/, content/, meta/ and bot/ must be deterministic and DOM-free: use the injected Rng and dt instead';
 
 export default defineConfig(
-  { ignores: ['dist', 'dist-e2e', 'playwright-report', 'test-results'] },
+  // e2e/fixtures/pages/ holds a built service worker, kept byte for byte as it was published.
+  { ignores: ['dist', 'dist-e2e', 'playwright-report', 'test-results', 'e2e/fixtures/pages/**'] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
