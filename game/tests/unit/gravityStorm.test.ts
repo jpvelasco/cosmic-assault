@@ -7,7 +7,8 @@ import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } 
 import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
-import { clearSpots, cornerClearance, zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
+import { zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
+import { clearSpots, cornerClearance } from '../../src/sim/hazards/placement';
 import { ForceField } from '../../src/sim/hazards/forceField';
 import { stormLayout } from '../../src/sim/hazards/gravityStorm';
 import type { Circle, HazardState, PointHazardState } from '../../src/sim/hazards/hazard';

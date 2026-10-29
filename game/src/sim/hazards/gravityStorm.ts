@@ -1,5 +1,5 @@
 import { GRAVITY_STORM, stormWells, WELL_RADIUS } from '../../content/hazards';
-import { clearSpots, type ClearSpot } from './dangerZone';
+import { clearSpots, type ClearSpot } from './placement';
 import type { WellLayout, WellSpot } from './forceField';
 import type { HazardSetup } from './hazard';
 

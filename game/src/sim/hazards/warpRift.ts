@@ -10,7 +10,7 @@ import { TIME_EPSILON, type Point } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
 import { rescale, wrapDelta, wrapPosition } from '../wrap';
-import { clearSpots } from './dangerZone';
+import { clearSpots } from './placement';
 import type { Bodies, Circle, Hazard, HazardSetup, HazardState, RiftState } from './hazard';
 import { HazardSchedule, ScheduledHazard } from './schedule';
 
