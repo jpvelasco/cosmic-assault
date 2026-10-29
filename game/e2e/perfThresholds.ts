@@ -7,13 +7,29 @@ export interface FrameReading {
   readonly longFrames: number;
 }
 
-/** A scene's ceilings: a run fails past either. */
+/** A scene's p95 and long-frame ceilings: a run fails past either. */
 export type FrameCeiling = FrameReading;
+
+/**
+ * Every ceiling of a scene: its p95 and long-frame ceilings, and the most of its frames that may be slow (over 1.5
+ * display intervals, `slowShare` in src/testApi.d.ts); `slowShare` is null until SLOW_SHARE_READINGS calibrates the
+ * scene, and asserts nothing until then.
+ */
+export interface SceneCeiling extends FrameCeiling {
+  readonly slowShare: number | null;
+}
+
+/** The frame stats the perf spec reads at the end of a scene. */
+type FrameStats = CosmicAssaultTestState['frameStats'];
 
 /** A run's p95 may reach this many times the worst p95 its scene's readings hold. */
 export const P95_HEADROOM = 1.25;
 /** A run may have this many long frames more than the most its scene's readings hold. */
 export const LONG_FRAME_HEADROOM = 2;
+/** A run's share of slow frames may reach this many times the worst share its scene's readings hold... */
+export const SLOW_SHARE_HEADROOM = 1.25;
+/** ...or, when that is less, this much more than the worst: a scene whose readings are all near zero (a boss fight is about 720 frames) would otherwise fail on one slow frame. */
+export const SLOW_SHARE_FLOOR = 0.005;
 /**
  * Readings a ceiling needs before it means anything. A scene's p95 sits near the display's frame step, so a runner a
  * little slower tips it past the step: the same commit has read about 25% slower an hour later, and fewer readings than
@@ -21,11 +37,15 @@ export const LONG_FRAME_HEADROOM = 2;
  */
 export const MIN_READINGS = 8;
 
+function requireReadings(count: number): void {
+  if (count < MIN_READINGS) {
+    throw new RangeError(`A frame-time ceiling needs at least ${String(MIN_READINGS)} readings (got ${String(count)}); record more runs of the perf job first`);
+  }
+}
+
 /** The ceilings `readings` allow: p95 at most P95_HEADROOM times the worst, long frames at most the most plus LONG_FRAME_HEADROOM. */
 export function ceilingFor(readings: readonly FrameReading[]): FrameCeiling {
-  if (readings.length < MIN_READINGS) {
-    throw new RangeError(`A frame-time ceiling needs at least ${String(MIN_READINGS)} readings (got ${String(readings.length)}); record more runs of the perf job first`);
-  }
+  requireReadings(readings.length);
   const worst = (pick: (reading: FrameReading) => number): number => Math.max(...readings.map(pick));
   return { p95Ms: Math.round(P95_HEADROOM * worst((r) => r.p95Ms) * 10) / 10, longFrames: worst((r) => r.longFrames) + LONG_FRAME_HEADROOM };
 }
@@ -59,8 +79,44 @@ export const PERF_READINGS: Readonly<Record<PerfScene, readonly FrameReading[]>>
   ],
 };
 
-/** Each scene's ceilings, from its readings. */
-export const PERF_CEILINGS: Readonly<Record<PerfScene, FrameCeiling>> = {
-  field: ceilingFor(PERF_READINGS.field),
-  bossFight: ceilingFor(PERF_READINGS.bossFight),
+/** The slow-frame share ceiling `shares` allow: the worst plus SLOW_SHARE_HEADROOM's extra or SLOW_SHARE_FLOOR, whichever is more, rounded up to a hundredth of a percent; null with no shares yet. */
+export function slowShareCeilingFor(shares: readonly number[]): number | null {
+  if (shares.length === 0) return null;
+  requireReadings(shares.length);
+  const worst = Math.max(...shares);
+  const ceiling = worst + Math.max((SLOW_SHARE_HEADROOM - 1) * worst, SLOW_SHARE_FLOOR);
+  return Math.ceil(Number((ceiling * 10000).toPrecision(12))) / 10000;
+}
+
+/**
+ * The slow-frame shares each scene's ceiling comes from, read from `slowShare` in the CI `perf` job's perf.json under
+ * the same 4x CPU slowdown: eight runs of the job on GitHub's `ubuntu-24.04` runners over ten hours, all of one commit.
+ * The field's shares swing from 0.2% to 20% with the runner (the p95 readings above swing the same way), so its ceiling
+ * is wide and catches only a large regression; the boss fight's are steadier. Recalibrate the same way when a scene's
+ * content or the renderer changes.
+ */
+export const SLOW_SHARE_READINGS: Readonly<Record<PerfScene, readonly number[]>> = {
+  field: [0.026831785345717233, 0.018499486125385406, 0.001936108422071636, 0.09081196581196581, 0.0019398642095053346, 0.002997002997002997, 0.02405857740585774, 0.1970554926387316],
+  bossFight: [0.002777777777777778, 0.0013908205841446453, 0, 0.008658008658008658, 0, 0.0013850415512465374, 0.003003003003003003, 0.010542168674698794],
 };
+
+function sceneCeiling(scene: PerfScene): SceneCeiling {
+  return { ...ceilingFor(PERF_READINGS[scene]), slowShare: slowShareCeilingFor(SLOW_SHARE_READINGS[scene]) };
+}
+
+/** Each scene's ceilings, from its readings. */
+export const PERF_CEILINGS: Readonly<Record<PerfScene, SceneCeiling>> = { field: sceneCeiling('field'), bossFight: sceneCeiling('bossFight') };
+
+/** Each of `ceiling` that `stats` is over, said with the figure, its ceiling and the file that sets it; empty within all. */
+export function ceilingBreaches({ p95, longFrames, slowShare }: FrameStats, ceiling: SceneCeiling): string[] {
+  const breaches: string[] = [];
+  if (p95 > ceiling.p95Ms) breaches.push(`p95 frame time ${String(p95)} ms is over its ${String(ceiling.p95Ms)} ms ceiling`);
+  if (longFrames > ceiling.longFrames) breaches.push(`${String(longFrames)} long frames are over the ceiling of ${String(ceiling.longFrames)}`);
+  if (ceiling.slowShare !== null && slowShare > ceiling.slowShare) breaches.push(`slow-frame share ${String(slowShare)} is over its ${String(ceiling.slowShare)} ceiling`);
+  return breaches.map((breach) => `${breach} (e2e/perfThresholds.ts)`);
+}
+
+/** A scene's frame figures as perf.json records them: its ceilings, its frame stats and the ceilings they break. */
+export function frameReport(stats: FrameStats, ceiling: SceneCeiling): { readonly ceiling: SceneCeiling; readonly breaches: readonly string[] } & FrameStats {
+  return { ceiling, ...stats, breaches: ceilingBreaches(stats, ceiling) };
+}

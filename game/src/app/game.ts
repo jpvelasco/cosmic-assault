@@ -57,7 +57,7 @@ export interface App {
   /** How much larger than their field size sprites are drawn on this screen. */
   readonly visualScale: VisualScale;
   /** The quality level in force: its index in QUALITY_LEVELS and its settings. */
-  readonly quality: { readonly index: number; readonly level: QualityLevel };
+  readonly quality: { readonly index: number; readonly level: QualityLevel; readonly displayMs: number };
   /** Frame times of the current run, less its first 3 s. */
   readonly frameStats: FrameSummary;
   /** Whether sound is muted (saved across visits). */
@@ -442,7 +442,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
     const visualSeconds = visualFrameSeconds(frameSeconds);
     if (mode === 'playing') {
-      monitor.sample(frameMs);
+      monitor.sample(frameMs, scaler.displayIntervalMs);
       sampleQuality(frameMs);
       const frozen = hitStop.frozen;
       stepRun(readControls(pad), frameSeconds);
@@ -528,7 +528,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       return renderer.visualScale;
     },
     get quality() {
-      return { index: scaler.index, level: scaler.level };
+      return { index: scaler.index, level: scaler.level, displayMs: scaler.displayIntervalMs };
     },
     get frameStats() {
       return monitor.summary();

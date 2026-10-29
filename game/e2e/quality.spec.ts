@@ -20,7 +20,8 @@ function titleCardGlass(page: Page): Promise<{ blur: string; alpha: number }> {
 test('?quality= pins a level, exposes it on the bridge and marks the page lite from low down', async ({ page }) => {
   await openGame(page, { quality: 'low' });
 
-  expect((await gameState(page)).quality).toEqual({ index: 2, name: 'low' });
+  // A pinned level measures nothing, so the display is taken to be 60 Hz.
+  expect((await gameState(page)).quality).toEqual({ index: 2, name: 'low', displayMs: 1000 / 60 });
   await expect(page.locator('body')).toHaveClass(/\blite\b/);
 });
 
@@ -28,8 +29,8 @@ test('the default quality is high with a clean page and empty frame stats', asyn
   await openGame(page);
 
   const state = await gameState(page);
-  expect(state.quality).toEqual({ index: 0, name: 'high' });
-  expect(state.frameStats).toEqual({ count: 0, p50: 0, p95: 0, longFrames: 0 });
+  expect(state.quality).toEqual({ index: 0, name: 'high', displayMs: expect.any(Number) });
+  expect(state.frameStats).toEqual({ count: 0, p50: 0, p95: 0, longFrames: 0, slowShare: 0 });
   await expect(page.locator('body')).not.toHaveClass(/\blite\b/);
 });
 

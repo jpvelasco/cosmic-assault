@@ -83,10 +83,10 @@ interface CosmicAssaultTestState {
   readonly drawCount: number;
   /** How much larger than their field size the ship, rocks, shots and effects are drawn; 1 on a large screen. Hitboxes never change. */
   readonly visualScale: { readonly ship: number; readonly rock: number; readonly shot: number; readonly effect: number };
-  /** The quality level in force: index into the ladder (0 high … 3 lowest) and its name. */
-  readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest' };
-  /** Frame times of the current run in ms, less its first 3 s (or since `restartFrameStats`, less 3 s); zeros until past that. */
-  readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number };
+  /** The quality level in force: index into the ladder (0 high … 3 lowest) and its name, and the display's frame interval in ms as the scaler measured it on idle screens (60 Hz until measured). */
+  readonly quality: { readonly index: number; readonly name: 'high' | 'medium' | 'low' | 'lowest'; readonly displayMs: number };
+  /** Frame times of the current run in ms, less its first 3 s (or since `restartFrameStats`, less 3 s); zeros until past that. `slowShare` is the share of frames over 1.5 display intervals. */
+  readonly frameStats: { readonly count: number; readonly p50: number; readonly p95: number; readonly longFrames: number; readonly slowShare: number };
   /** Whether sound is muted; saved across visits. */
   readonly muted: boolean;
   /** The colour look in force: the last run's galaxy's palette ('drift' before any run). */
@@ -115,7 +115,7 @@ interface CosmicAssaultTestState {
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 8;
+  readonly version: 9;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event

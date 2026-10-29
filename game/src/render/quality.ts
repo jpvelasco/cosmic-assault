@@ -121,6 +121,11 @@ export class QualityScaler {
     return QUALITY_LEVELS[this.current] as QualityLevel;
   }
 
+  /** The display's own frame interval in ms, as last measured on an idle screen and clamped between 60 Hz and 30 Hz; 60 Hz until measured. */
+  get displayIntervalMs(): number {
+    return this.displayMs;
+  }
+
   /** Holds `index` fixed: later samples no longer move it. */
   pin(index: number): void {
     assertLevel(index);

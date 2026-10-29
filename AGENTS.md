@@ -34,7 +34,7 @@
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
   tally, frame-stats restart, sprite-cache use, attract now, attract state) reaches
   `dist/`. The bridge (`testBridge.ts`, typed in `testApi.d.ts`) carries a
-  `BRIDGE_VERSION`, now 8, raised whenever its state changes shape; the specs wait for
+  `BRIDGE_VERSION`, now 9, raised whenever its state changes shape; the specs wait for
   that version. Each hook lives in
   `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
@@ -316,7 +316,11 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    worked out from eight recorded runs of the CI job spread over hours (runner
    speed varies), and both written to
    `game/test-results/perf.json`) is not part of `test:e2e`; CI runs it as the
-   `perf` job, which gates deployment. `npm run test:balance` runs the slow many-seed bot
+   `perf` job, which gates deployment. Besides p95 and long frames, each scene
+   records `slowShare`, the share of its frames longer than 1.5 times the
+   display's frame interval as the quality scaler measured it on the first
+   screen, which is held to a ceiling of its own once `SLOW_SHARE_READINGS`
+   holds eight such runs. `npm run test:balance` runs the slow many-seed bot
    suites in `game/tests/balance/`, which `npm test` leaves out. `targets.ts`
    is the balance matrix: for every level, how long an idle ship lasts (at
    least 20 s in the first, and no longer than in the level before, bar the

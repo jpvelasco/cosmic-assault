@@ -249,6 +249,20 @@ describe('QualityScaler', () => {
       expect(scaler.index).toBe(1);
     });
 
+    it('reports the interval it judges against: 60 Hz until an idle second is measured, then the measured one, clamped', () => {
+      /** A fresh scaler's interval after `ms` of idle frames `frameMs` apart. */
+      const measured = (frameMs: number, ms: number): number => {
+        const scaler = new QualityScaler();
+        idle(scaler, frameMs, ms);
+        return scaler.displayIntervalMs;
+      };
+      expect(new QualityScaler().displayIntervalMs).toBe(VSYNC_60_MS);
+      expect(measured(VSYNC_30_MS, IDLE_SETTLE_MS + IDLE_WINDOW_MS - 100)).toBe(VSYNC_60_MS);
+      expect(measured(VSYNC_30_MS, 2000)).toBeCloseTo(VSYNC_30_MS, 9);
+      expect(measured(200, 3000)).toBe(VSYNC_30_MS);
+      expect(measured(1000 / 120, 2000)).toBe(VSYNC_60_MS);
+    });
+
     it('ignores idle stalls over 250 ms and bad idle times', () => {
       const scaler = new QualityScaler();
       idle(scaler, 300, 3000);

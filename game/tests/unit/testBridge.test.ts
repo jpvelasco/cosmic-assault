@@ -22,8 +22,8 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
     hudRects: [],
     drawCount: 0,
     visualScale: { ship: 1, rock: 1, shot: 1, effect: 1 },
-    quality: { index: 0, level: { name: 'high' } },
-    frameStats: { count: 0, p50: 0, p95: 0, longFrames: 0 },
+    quality: { index: 0, level: { name: 'high' }, displayMs: 1000 / 60 },
+    frameStats: { count: 0, p50: 0, p95: 0, longFrames: 0, slowShare: 0 },
     muted: false,
     ...look,
     settings: {},
@@ -42,7 +42,7 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 describe('the test bridge look and music', () => {
   it('reports the palette and the music theme in force, beside the version-8 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(8);
+    expect(api.version).toBe(9);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
   });
