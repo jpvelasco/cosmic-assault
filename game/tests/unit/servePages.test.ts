@@ -266,9 +266,14 @@ describe('serve-pages.mjs as a command', { timeout: SPAWN_TIMEOUT_MS }, () => {
     }
   });
 
-  it('fails with a usage line when --dir is missing', () => {
-    const { status, output } = runCommand();
+  it.each([
+    ['--dir is missing', [], '--dir is missing'],
+    ['an option is unknown', ['--dir', 'dist', '--nope'], "Unknown option '--nope'"],
+  ])('fails with its usage line, and no stack trace, when %s', (_name, args, reason) => {
+    const { status, output } = runCommand(...args);
     expect(status).toBe(1);
+    expect(output).toContain(reason);
     expect(output).toContain('Usage: node scripts/serve-pages.mjs --dir <dir>');
+    expect(output, 'a stack frame').not.toMatch(/^\s+at /m);
   });
 });

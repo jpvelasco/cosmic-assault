@@ -177,12 +177,9 @@ export async function createPagesServer({ prefix = '/', port = 0, mounts }) {
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const { values } = parseArgs({ options: { dir: { type: 'string' }, prefix: { type: 'string', default: '/' }, port: { type: 'string', default: '0' } } });
-  if (values.dir === undefined) {
-    console.error(USAGE);
-    process.exit(1);
-  }
   try {
+    const { values } = parseArgs({ options: { dir: { type: 'string' }, prefix: { type: 'string', default: '/' }, port: { type: 'string', default: '0' } } });
+    if (values.dir === undefined) throw new Error('--dir is missing');
     const server = await createPagesServer({ prefix: values.prefix, port: Number(values.port), mounts: [{ dir: values.dir, at: './' }] });
     console.log(`Serving ${values.dir} as GitHub Pages would, at ${server.url}`);
   } catch (error) {
