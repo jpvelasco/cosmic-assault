@@ -55,6 +55,15 @@ describe('dailyGalaxy', () => {
     for (const [i, date] of DATES.entries()) expect(JSON.stringify(dailyGalaxy(date)), date).toBe(JSON.stringify(DAILIES[i]));
   }, SWEEP_TIMEOUT_MS);
 
+  it('keeps the last Daily asked for, so asking again builds nothing, and builds another date\'s afresh', () => {
+    const first = dailyGalaxy('2026-10-26');
+    expect(dailyGalaxy('2026-10-26')).toBe(first);
+    expect(dailyGalaxy('2026-10-27').date).toBe('2026-10-27');
+    const again = dailyGalaxy('2026-10-26');
+    expect(again).not.toBe(first);
+    expect(again).toEqual(first);
+  });
+
   it.each(GOLDEN)('builds the pinned Daily for $date', ({ date, seed, twist, anchor, palette, target, events }) => {
     const d = dailyGalaxy(date);
     expect({ seed: d.seed, twist: d.twist, anchor: d.def.id, palette: d.def.palette, target: d.target, events: d.def.events }).toEqual({ seed, twist, anchor, palette, target, events });
@@ -91,7 +100,7 @@ describe('dailyGalaxy', () => {
     for (const { date, def } of DAILIES) {
       expect(DAILY_ANCHORS, date).toContain(def.id);
       expect(def.dimension, date).toBeLessThanOrEqual(2);
-      expect(def).toMatchObject({ kind: 'survival', boss: null, featured: [], label: 'Daily', duration: galaxyById(def.id).duration });
+      expect(def).toMatchObject({ kind: 'survival', boss: null, featured: [], duration: galaxyById(def.id).duration });
       for (const kind of Object.keys(def.kinds) as ThreatKind[]) if (def.kinds[kind].max > 0) expect(fielded, `${date} ${kind}`).toContain(kind);
       for (const e of def.events) {
         expect(['meteorShower', 'gravityWell', 'gravityStorm'], date).toContain(e.type);

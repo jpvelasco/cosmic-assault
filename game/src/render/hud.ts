@@ -260,7 +260,8 @@ export function createHud(initial: Palette): Hud {
     rects = HUD_PILLS.filter((id) => shown[id]).map((id) => boxes[id]);
     timerFill = across(ctx, timer, palette.accent[0], palette.accent[2]);
     comboFill = across(ctx, combo, palette.accent[1], palette.accent[2]);
-    scoreFill = across(ctx, score, palette.accent[1], palette.accent[2]);
+    // Only a Daily's target lights the score pill.
+    scoreFill = target === null ? '' : across(ctx, score, palette.accent[1], palette.accent[2]);
     hpFill = across(ctx, hpTrack, palette.ring, palette.shot);
     dirty = false;
   }

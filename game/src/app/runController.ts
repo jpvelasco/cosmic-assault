@@ -10,7 +10,7 @@ import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
 import { hasEnded, World } from '../sim/world';
-import { twistToast } from '../ui/dailyCopy';
+import { DAILY_LABEL, twistToast } from '../ui/dailyCopy';
 import { CALLOUT_MS } from '../ui/toast';
 import type { FlowCommand } from './commands';
 import { appToday } from './date';
@@ -138,7 +138,8 @@ export function createRunController(deps: RunControllerDeps): RunController {
       throw new Error('Cannot start a run without a galaxy and a mode; start it through the flow, from mode select or galaxy select');
     }
     daily = flow.daily === null ? null : dailyGalaxy(flow.daily);
-    const def = playedGalaxy(played, overrides.storm);
+    // A Daily is named on the HUD by its label, not by the galaxy it is built on.
+    const def = playedGalaxy(daily === null ? played : { ...played, label: DAILY_LABEL }, overrides.storm);
     world = new World({
       seed: runSeed(overrides.seed, daily?.seed ?? null),
       field,
@@ -150,6 +151,16 @@ export function createRunController(deps: RunControllerDeps): RunController {
     notices.newRun();
     deps.onRunStarted(def, daily?.target ?? null);
     if (daily !== null) deps.notify(twistToast(TWISTS_BY_ID[daily.twist].name));
+  }
+
+  /** Whether the Daily of `date` can be built; mode select's card says why one cannot. */
+  function dailyBuilds(date: string): boolean {
+    try {
+      dailyGalaxy(date);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */
@@ -277,6 +288,11 @@ export function createRunController(deps: RunControllerDeps): RunController {
     command(command) {
       // The saved run is being checked, or is playing in another tab: it cannot be resumed here yet.
       if (command.kind === 'resumeRank' && rankLock !== 'free') return;
+      // Today's Daily cannot be built: mode select stays, and the refresh shows its card as unavailable and logs why.
+      if (command.kind === 'chooseMode' && command.mode === 'daily' && !dailyBuilds(today())) {
+        deps.refresh();
+        return;
+      }
       flow.command(command);
     },
     step(dt, controls) {

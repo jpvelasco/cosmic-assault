@@ -7,8 +7,8 @@ import { isGalaxyStartLives, isWorldSeed, MAX_GALAXY_START_LIVES, UINT32_MAX } f
 const DECIMAL_DIGITS = /^\d+$/;
 
 /**
- * Tags every e2e query warning. Only the parsers below use it, so `check:no-bridge` can prove
- * the release build dropped them by finding it in `dist-e2e/` and not in `dist/`.
+ * Tags every e2e query warning. Only the parsers below and `runSeed`'s gated warning use it, so `check:no-bridge` can
+ * prove the release build dropped them by finding it in `dist-e2e/` and not in `dist/`.
  */
 export const E2E_QUERY_MARK = '__E2E_QUERY__';
 

@@ -2,7 +2,6 @@ import { eventSeconds, threatBudget } from '../content/curves';
 import {
   DAILY_ANCHORS,
   DAILY_GRID_SECONDS,
-  DAILY_LABEL,
   DAILY_LOOKS,
   DAILY_MAX_SHOWER_INTENSITY,
   DAILY_SHOWER_COUNTS,
@@ -138,14 +137,22 @@ function targetFor(anchor: GalaxyDef, twist: DailyTwist, spread: number): number
   return Math.round(target / TARGET_ROUNDING) * TARGET_ROUNDING;
 }
 
+/** The last Daily built: mode select, the flow and the run all ask for the same date's, so it is built once. */
+let lastBuilt: DailyGalaxy | null = null;
+
 /**
  * The Daily Galaxy of `date` (`YYYY-MM-DD`): the same for everyone who plays that date, from the date alone. It is a
  * survival galaxy built on an anchor from The Drift or Ion Reach, whose id, Dimension, index, length and ramps it keeps,
  * in a look of its own, with its own showers and hazard and one twist; the twist never repeats two days running. Throws
  * on a date that is not a calendar date, and, naming the date, on a Daily that would break a content rule or leave its
- * twist's set piece out.
+ * twist's set piece out. The last date's Daily is kept, so asking for it again builds nothing.
  */
 export function dailyGalaxy(date: string): DailyGalaxy {
+  if (lastBuilt?.date !== date) lastBuilt = buildDaily(date);
+  return lastBuilt;
+}
+
+function buildDaily(date: string): DailyGalaxy {
   assertCalendarDate(date);
   const rng = dailyStream(date);
   const twist = twistFor(date, rollTwist(rng), rng.next());
@@ -157,7 +164,7 @@ export function dailyGalaxy(date: string): DailyGalaxy {
   const start = rng.next();
   const shower: GalaxyEvent = { at: 0, type: 'meteorShower', intensity: Math.min(DAILY_MAX_SHOWER_INTENSITY, anchor.dimension) as GalaxyEvent['intensity'] };
   const wanted = [...Array<GalaxyEvent>(showerCount).fill(shower), ...(hazard === null ? [] : [hazard])];
-  const base: GalaxyDef = { ...anchor, kinds: scaledRamps(anchor.kinds, twist), events: [], pickups: poolFor(anchor.dimension), featured: [], ...look, label: DAILY_LABEL };
+  const base: GalaxyDef = { ...anchor, kinds: scaledRamps(anchor.kinds, twist), events: [], pickups: poolFor(anchor.dimension), featured: [], ...look };
   const def: GalaxyDef = { ...base, events: placed(base, shuffled(wanted, rng), start) };
   const problems = dailyProblems(def, twist);
   if (problems.length > 0) throw new Error(`The Daily Galaxy for ${date} cannot be built (${problems.join('; ')}): fix the Daily tables in content/daily.ts`);

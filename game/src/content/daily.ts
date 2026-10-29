@@ -63,6 +63,3 @@ export const DAILY_GRID_SECONDS = 5;
 export const TARGET_K = 28;
 export const TARGET_SPREAD = { low: 0.92, width: 0.16 } as const;
 export const TARGET_ROUNDING = 50;
-
-/** What the HUD and the cards call a Daily Galaxy. */
-export const DAILY_LABEL = 'Daily';

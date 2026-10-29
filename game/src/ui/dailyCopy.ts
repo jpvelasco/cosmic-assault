@@ -10,6 +10,9 @@ import { spokenScore as grouped } from './dom';
 /** The Daily's name on mode select and the records card. */
 export const DAILY_NAME = 'Daily Galaxy';
 
+/** What the HUD calls a Daily Galaxy, in place of the galaxy it is built on. */
+export const DAILY_LABEL = 'Daily';
+
 /** The glyph on the Daily's mode card badge. */
 export const DAILY_BADGE = '☼';
 

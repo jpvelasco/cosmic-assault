@@ -318,9 +318,10 @@ export function saveChange(before: FlowState, action: FlowAction, after: FlowSta
       const { galaxy, result } = after;
       if (galaxy === null || result === null) return null;
       const date = before.daily;
+      const best = bestScoreOf(before, action.report);
       // A Daily clear writes the Daily record alone, for the date the run began on.
-      if (date !== null) return { record: (save) => recordDailyClear(save, date, action.report.score), rank: null };
-      const record: Change = (save) => recordClear(save, galaxyById(galaxy), bestScoreOf(before, action.report), action.report.stars);
+      if (date !== null) return { record: (save) => recordDailyClear(save, date, best), rank: null };
+      const record: Change = (save) => recordClear(save, galaxyById(galaxy), best, action.report.stars);
       if (run === null) return { record, rank: null };
       const next = after.rankRun;
       return { record, rank: next === null ? (save) => endRankRun(save, rankEntry(run, result.total, today()), null) : (save) => setRankRun(save, next) };

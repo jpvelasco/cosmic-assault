@@ -150,7 +150,8 @@
   - The Daily Galaxy (`meta/dailyGalaxy.ts`, `content/daily.ts`): every local date
     has one generated survival level, the same for every player. `dailyGalaxy(date)`
     is pure and takes only the date: the World seed is a hash of the date, and the
-    generator draws from that seed's `'daily'` stream. It anchors on a real
+    generator draws from that seed's `'daily'` stream. It keeps the last date's
+    Daily, so mode select, the flow and the run share one build. It anchors on a real
     Dimension 1–2 survival level (`DAILY_ANCHORS`), so the curves, tiers and clear
     bonuses apply unchanged, and builds only from Dimension 1–2 material. Each date
     plays one twist, a data row in `DAILY_TWISTS` (more meteor showers, a gravity
@@ -167,9 +168,11 @@
     once as a run starts and kept for its retries, so a run past midnight counts for
     the day it began. Mode select re-reads the date every time it shows, and a date
     whose Daily cannot be built leaves its card unavailable (and logged) while the
-    other modes play on. Every Daily string lives in `ui/dailyCopy.ts`, and a test
-    holds them all to copy that never presses or speaks of loss. `e2e/daily.spec.ts`
-    plays it through `?today=` and the bridge's `daily` state.
+    other modes play on; choosing it then leaves mode select up and redraws the
+    card so. Every Daily string, the HUD's `Daily` label among them, lives in
+    `ui/dailyCopy.ts`, and a test holds them all to copy that never presses or
+    speaks of loss. `e2e/daily.spec.ts` plays it through `?today=` and the
+    bridge's `daily` state.
   - The streak (`meta/daily.ts`): a date counts on its first Daily clear, never a
     game over, and counting is idempotent. It runs on only when the last counted date
     is the day before, else it starts again at 1; a date on or before the last counted

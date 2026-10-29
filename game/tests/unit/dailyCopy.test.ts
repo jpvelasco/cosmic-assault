@@ -11,6 +11,7 @@ import { PRESSURE } from '../helpers/pressure';
 /** Every line of `ui/dailyCopy.ts`, rendered: the record type makes a new export fail to compile until it is listed here. */
 const RENDERED: Readonly<Record<keyof typeof copy, readonly string[]>> = {
   DAILY_NAME: [copy.DAILY_NAME],
+  DAILY_LABEL: [copy.DAILY_LABEL],
   DAILY_BADGE: [copy.DAILY_BADGE],
   dailyTitle: [copy.dailyTitle('2026-10-26')],
   DAILY_CLEARED: [copy.DAILY_CLEARED],

@@ -4,7 +4,7 @@ import { localDate } from '../../src/app/date';
 import { TWISTS_BY_ID } from '../../src/content/daily';
 import { galaxyById } from '../../src/content/galaxies';
 import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
-import { twistToast } from '../../src/ui/dailyCopy';
+import { DAILY_LABEL, twistToast } from '../../src/ui/dailyCopy';
 import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
@@ -29,13 +29,20 @@ function fakePresence(owner = false): TabPresence {
   return { probe: () => Promise.resolve(owner), own: () => () => undefined, dispose: () => undefined };
 }
 
-function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData, presence = fakePresence(), events: StorageEvents = NO_EVENTS) {
+function setup(
+  overrides: Partial<RunOverrides> = {},
+  field: RunControllerDeps['field'] = () => FIELD,
+  save?: SaveData,
+  presence = fakePresence(),
+  events: StorageEvents = NO_EVENTS,
+  create = createRunController,
+) {
   const storage = memoryStorage(save);
   const refresh = vi.fn();
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
   const notify = vi.fn<(text: string, ms?: number) => void>();
-  const run = createRunController({
+  const run = create({
     storage,
     overrides: { ...NONE, ...overrides },
     log: new RingLog(),
@@ -131,10 +138,10 @@ describe('createRunController', () => {
     it("plays the pinned date's Daily Galaxy on its own World seed, with its target, and names the twist", () => {
       const { run, onRunStarted, notify } = playDaily();
       expect(run.flow).toMatchObject({ screen: 'playing', mode: 'daily', daily: DATE });
-      expect(run.world?.galaxy).toEqual(daily.def);
+      expect(run.world?.galaxy).toEqual({ ...daily.def, label: DAILY_LABEL });
       expect(playsOnSeed(run.world, daily.seed)).toBe(true);
       expect(run.daily).toEqual(daily);
-      expect(onRunStarted).toHaveBeenCalledWith(daily.def, daily.target);
+      expect(onRunStarted).toHaveBeenCalledWith({ ...daily.def, label: DAILY_LABEL }, daily.target);
       expect(notify).toHaveBeenCalledWith(twistToast(TWISTS_BY_ID[daily.twist].name));
     });
 
@@ -150,6 +157,34 @@ describe('createRunController', () => {
       expect(run.today()).toBe(DATE);
       expect(storage.items.has(SAVE_KEY)).toBe(true);
       expect(setup().run.today()).toBe(localDate(new Date()));
+    });
+
+    describe('on a date whose Daily cannot be built', () => {
+      afterEach(() => {
+        vi.doUnmock('../../src/meta/dailyGalaxy');
+        vi.resetModules();
+      });
+
+      it('stays on mode select when it is chosen, and refreshes the cards, so its card shows it as unavailable', async () => {
+        vi.resetModules();
+        vi.doMock('../../src/meta/dailyGalaxy', async (actual) => ({
+          ...(await actual<typeof import('../../src/meta/dailyGalaxy')>()),
+          dailyGalaxy: () => {
+            throw new Error('The Daily Galaxy cannot be built');
+          },
+        }));
+        const { createRunController: withoutDaily } = await import('../../src/app/runController');
+        const tab = setup({ today: DATE }, undefined, undefined, undefined, undefined, withoutDaily);
+        tab.run.command({ kind: 'start' });
+        tab.refresh.mockClear();
+        tab.run.command({ kind: 'chooseMode', mode: 'daily' });
+        expect(tab.run.flow.screen).toBe('modeSelect');
+        expect(tab.run.world).toBeNull();
+        expect(tab.screens).toEqual(['modeSelect']);
+        expect(tab.refresh).toHaveBeenCalledTimes(1);
+        tab.run.command({ kind: 'chooseMode', mode: 'free' });
+        expect(tab.run.flow.screen).toBe('map');
+      });
     });
 
     it('has no Daily outside one', () => {
