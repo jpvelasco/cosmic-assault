@@ -112,8 +112,8 @@ function padWith(buttons: readonly number[] = [], stick: readonly [number, numbe
 const PAD_A = 0;
 
 /** A key event as a browser dispatches it, on a window stand-in. */
-function keyEvent(type: 'keydown' | 'keyup', code: string, { repeat = false, ctrlKey = false } = {}): Event {
-  return Object.assign(new Event(type, { cancelable: true }), { code, repeat, ctrlKey, metaKey: false, altKey: false });
+function keyEvent(type: 'keydown' | 'keyup', code: string, { repeat = false, ctrlKey = false, metaKey = false, altKey = false } = {}): Event {
+  return Object.assign(new Event(type, { cancelable: true }), { code, repeat, ctrlKey, metaKey, altKey });
 }
 
 /**
@@ -201,6 +201,37 @@ describe('the input that ends an attract demo', () => {
     expect(reaches(keyEvent('keyup', 'KeyR'))).toBe(true);
   });
 
+  it.each(['Enter', 'NumpadEnter', 'Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])(
+    'keeps %s, which would act on the page, from its browser action as it ends the demo, with its repeat and release',
+    (code) => {
+      const { reaches } = demoRouter();
+      for (const event of [keyEvent('keydown', code), keyEvent('keydown', code, { repeat: true }), keyEvent('keyup', code)]) {
+        expect(reaches(event), event.type).toBe(false);
+        expect(event.defaultPrevented, event.type).toBe(true);
+      }
+    },
+  );
+
+  it.each(['F5', 'F11', 'F12', 'KeyW', 'KeyM'])('leaves %s its browser action as it ends the demo, but keeps it from the game', (code) => {
+    const { reaches, interrupt, run } = demoRouter();
+    for (const event of [keyEvent('keydown', code), keyEvent('keydown', code, { repeat: true }), keyEvent('keyup', code)]) {
+      expect(reaches(event), event.type).toBe(false);
+      expect(event.defaultPrevented, event.type).toBe(false);
+    }
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(run.flow).not.toHaveBeenCalled();
+  });
+
+  it.each([{ ctrlKey: true }, { metaKey: true }, { altKey: true }])('never lets Enter or Space with a modifier (%o) press the focused button as it ends the demo', (modifier) => {
+    for (const code of ['Enter', 'Space']) {
+      const { reaches, interrupt } = demoRouter();
+      const press = keyEvent('keydown', code, modifier);
+      reaches(press);
+      expect(press.defaultPrevented, code).toBe(true);
+      expect(interrupt).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it('treats a fresh press of a key whose release it missed as a new press', () => {
     const { reaches } = demoRouter();
     reaches(keyEvent('keydown', 'Enter'));
@@ -231,14 +262,14 @@ describe('the input that ends an attract demo', () => {
     expect(reaches(new Event('click'))).toBe(true);
   });
 
-  it('swallows a pad press that ends the demo, and a button still held from it; the next press acts', () => {
+  it('swallows a pad press that ends the demo, and a button still held from it, and says so; the next press acts', () => {
     const { router, run, interrupt } = demoRouter();
-    router.routePad(padWith([PAD_A]), ['confirm'], 0);
+    expect(router.routePad(padWith([PAD_A]), ['confirm'], 0)).toBe(true);
     expect(interrupt).toHaveBeenCalledTimes(1);
-    router.routePad(padWith([PAD_A]), [], 0);
+    expect(router.routePad(padWith([PAD_A]), [], 0)).toBe(false);
     router.routePad(padWith(), [], 0);
     expect(run.flow).not.toHaveBeenCalled();
-    router.routePad(padWith([PAD_A]), ['confirm'], 0);
+    expect(router.routePad(padWith([PAD_A]), ['confirm'], 0)).toBe(false);
     expect(run.flow).toHaveBeenCalledWith({ kind: 'start' });
   });
 

@@ -136,7 +136,10 @@ test('pad A ends the attract demo and presses nothing, held or let go; the next 
   await setButton(page, A, false);
   await nextFrames(page);
   expect((await gameState(page)).screen).toBe('title');
+  // The press that ended the demo spent nothing: the one-time sound hint waits for the A that plays.
+  expect(await toastOf(page).textContent()).toBe('');
   await startRun(page);
+  await expect(toastOf(page)).toHaveText(SOUND_GESTURE_HINT);
 });
 
 test('a stick pushed just past its dead zone ends the attract demo and moves nothing; the next A plays', { tag: '@desktop' }, async ({ page }) => {

@@ -315,6 +315,35 @@ describe('the attract demo', () => {
   });
 });
 
+describe('stopping the attract demo for the session', () => {
+  it('ends a demo playing, puts the palette back and starts none again, with nothing logged', () => {
+    const h = harness();
+    h.frames(ATTRACT_IDLE_SECONDS + 1);
+    expect(h.attract.active).toBe(true);
+    h.attract.stop();
+    expect(h.attract.active).toBe(false);
+    expect(h.attract.halted).toBe(true);
+    expect(h.renderer.palette).toBe(RUN_PALETTE);
+    expect(h.changed).toHaveBeenCalledTimes(2);
+    h.attract.dueNow();
+    expect(h.frames(ATTRACT_IDLE_SECONDS * 2)).toBe(0);
+    expect(h.log.entries()).toEqual([]);
+  });
+
+  it('never throws, even when tidying the demo away does, and logs that instead', () => {
+    const h = harness();
+    h.frames(ATTRACT_IDLE_SECONDS + 1);
+    h.renderer.reset.mockImplementation(() => {
+      throw new Error('reset broke');
+    });
+    expect(() => {
+      h.attract.stop();
+    }).not.toThrow();
+    expect(h.attract.active).toBe(false);
+    expect(h.log.entries()[0]?.message).toMatch(/could not tidy up.*reset broke/is);
+  });
+});
+
 describe('the attract demo and storage', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

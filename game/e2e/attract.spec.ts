@@ -20,6 +20,8 @@ test('the demo plays behind the dimmed title card with its Demo label and no HUD
   const title = page.locator('.overlay--title');
   await expect(title).toHaveClass(/title--attract/);
   await expect(page.getByTestId('demo-label')).toBeVisible();
+  // Decoration only: a screen reader reads the title, not the pill.
+  await expect(page.getByTestId('demo-label')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.getByTestId('play')).toBeVisible();
   // Polled: the card may still be popping in.
   await expect.poll(() => title.locator('.card').evaluate((card) => getComputedStyle(card).opacity)).toBe('0.85');

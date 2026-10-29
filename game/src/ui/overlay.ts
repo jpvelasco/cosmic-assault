@@ -66,6 +66,8 @@ export interface Overlay {
   focusChip(which: CoverChip): void;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
   controls(screen: Screen): HTMLElement[];
+  /** Takes the demo's dimming and label off the title now, without an update: the game has stopped after a crash. */
+  endAttract(): void;
   dispose(): void;
 }
 
@@ -177,6 +179,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const controlsHint = withTestId(element('p', 'hint'), 'controls-hint');
   const demoLabel = withTestId(element('p', 'label demo-label', 'Demo'), 'demo-label');
   demoLabel.hidden = true;
+  // Decoration over the demo behind the card: a screen reader goes straight to the title.
+  demoLabel.setAttribute('aria-hidden', 'true');
   const title = titlePanel(demoLabel, play, titleResumeSlot, titleRow, startHint, controlsHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
   /** The title control that had focus as the demo began, which gets it back as the demo ends. */
@@ -260,6 +264,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
     controls(screen) {
       const panel = panels[screen];
       return panel === undefined ? [] : focusableControls(panel);
+    },
+    endAttract() {
+      showAttract(false, true);
     },
     dispose() {
       for (const panel of all) panel.remove();

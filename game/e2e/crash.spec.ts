@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { SETTINGS_KEY } from '../src/app/settings';
 import { DELIBERATE_CRASH } from '../src/testBridge';
-import { expect, expectMode, gameState, nextFrames, openGame, test, toastOf, waitForBridge } from './fixtures';
+import { attractState, expect, expectMode, gameState, nextFrames, openGame, startAttract, test, toastOf, waitForBridge } from './fixtures';
 
 
 test.use({ allowedErrors: [DELIBERATE_CRASH] });
@@ -35,6 +35,17 @@ test('a crash mid-run shows the recovery card, stops drawing and logs the error'
   await nextFrames(page, 3);
   expect((await gameState(page)).drawCount).toBe(drawn);
   expect(consoleErrors.filter((message) => message.includes(DELIBERATE_CRASH))).toHaveLength(1);
+});
+
+test('a crash during the attract demo stops it, leaving no dimmed title or Demo label under the recovery card', async ({ page }) => {
+  await openGame(page);
+  await startAttract(page);
+  await crash(page);
+
+  await expect(card(page)).toBeVisible();
+  await expect(page.locator('.overlay--title')).not.toHaveClass(/title--attract/);
+  await expect(page.getByTestId('demo-label')).toBeHidden();
+  expect(await attractState(page)).toMatchObject({ active: false, halted: true });
 });
 
 test('a crash silences audio without changing the saved settings', async ({ page }) => {

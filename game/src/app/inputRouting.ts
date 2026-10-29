@@ -129,8 +129,11 @@ export interface InputRouter {
   applyCommand(command: Command, now: number): void;
   /** Acts on the key presses since the last frame. */
   routeKeys(now: number): void;
-  /** Acts on this frame's pad presses (`edges`, from the snapshot `pad` read this frame). */
-  routePad(pad: PadSnapshot | null, edges: readonly PadEdge[], now: number): void;
+  /**
+   * Acts on this frame's pad presses (`edges`, from the snapshot `pad` read this frame). True when the frame ended an
+   * attract demo instead, so its presses must do nothing else.
+   */
+  routePad(pad: PadSnapshot | null, edges: readonly PadEdge[], now: number): boolean;
   dispose(): void;
 }
 
@@ -140,9 +143,23 @@ const NAV_KEYS_CLASS = 'nav-keys';
 /** What a pointer press leads to: none of it may act once that press has ended an attract demo. */
 const POINTER_FOLLOW_UPS = ['mousedown', 'mouseup', 'click'] as const;
 
-/** Keeps `e` from the game's own handlers and from its browser action (a focused button's press, a scroll). */
+/** Keeps `e` from the game's own handlers and from its browser action (a focused button's press). */
 function swallow(e: Event): void {
   e.preventDefault();
+  e.stopImmediatePropagation();
+}
+
+/** The keys whose browser action would act on the page: a focused button's press, a focus move, a scroll. */
+const PAGE_ACTION_KEYS: ReadonlySet<string> = new Set(['Enter', 'NumpadEnter', 'Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+/** The keys that press a focused button, whatever modifier is held with them. */
+const PRESS_KEYS: ReadonlySet<string> = new Set(['Enter', 'NumpadEnter', 'Space']);
+
+/**
+ * Keeps a key from the game's own handlers, and from its browser action where that would act on the page; every other
+ * key (F5, F12, a media key) keeps its browser action.
+ */
+function swallowKey(e: KeyboardEvent): void {
+  if (PAGE_ACTION_KEYS.has(e.code)) e.preventDefault();
   e.stopImmediatePropagation();
 }
 
@@ -160,17 +177,22 @@ function swallowDemoEnders(win: Window, interrupt: () => boolean, onPointerDown:
     pointerPress = false;
     const key = e as KeyboardEvent;
     if (key.repeat && heldKeys.has(key.code)) {
-      swallow(e);
+      swallowKey(key);
       return;
     }
     heldKeys.delete(key.code);
-    // A browser shortcut ends a demo too, but keeps its browser action.
-    if (!interrupt() || hasShortcutModifier(key)) return;
+    if (!interrupt()) return;
+    // A browser shortcut ends a demo too, but keeps its browser action; only a press of the focused button is refused.
+    if (hasShortcutModifier(key)) {
+      if (PRESS_KEYS.has(key.code)) key.preventDefault();
+      return;
+    }
     heldKeys.add(key.code);
-    swallow(e);
+    swallowKey(key);
   };
   const onKeyUp = (e: Event): void => {
-    if (heldKeys.delete((e as KeyboardEvent).code)) swallow(e);
+    const key = e as KeyboardEvent;
+    if (heldKeys.delete(key.code)) swallowKey(key);
   };
   const onPointer = (): void => {
     onPointerDown();
@@ -307,8 +329,9 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
       }
     },
     routePad(pad, edges, now) {
-      if (padInUse(pad) && demoEnders.padTouched()) return;
+      if (padInUse(pad) && demoEnders.padTouched()) return true;
       for (const edge of edges) routePadEdge(edge, now);
+      return false;
     },
     dispose() {
       for (const unlisten of unlisteners) unlisten();

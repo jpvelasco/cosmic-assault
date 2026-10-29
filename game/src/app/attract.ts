@@ -93,6 +93,8 @@ export interface Attract {
   resize(field: Field): void;
   /** Counts the idle stretch as over, so the next frame on the bare title starts a demo. */
   dueNow(): void;
+  /** Stops attract mode for the session, as the game stopping after a crash does: a demo playing ends, and none starts. */
+  stop(): void;
 }
 
 /** One demo's World and the expert flying it. */
@@ -202,17 +204,22 @@ export function createAttract(deps: AttractDeps): Attract {
     return true;
   }
 
-  /** A demo that throws stops attract mode for the session, and the log says why; the title is never blocked. */
-  function halt(error: unknown): void {
+  /** Stops attract mode for the session, never throwing: a failure to tidy the demo away is logged instead. */
+  function stopForSession(): void {
     halted = true;
-    deps.log.add('error', `The attract demo stopped after an error and stays off until the page loads again: ${describeError(error)}`, deps.now());
     try {
       turnOff();
     } catch (failure) {
       active = false;
       run = null;
-      deps.log.add('error', `The attract demo could not tidy up after its error: ${describeError(failure)}`, deps.now());
+      deps.log.add('error', `The attract demo could not tidy up as it stopped: ${describeError(failure)}`, deps.now());
     }
+  }
+
+  /** A demo that throws stops attract mode for the session, and the log says why; the title is never blocked. */
+  function halt(error: unknown): void {
+    deps.log.add('error', `The attract demo stopped after an error and stays off until the page loads again: ${describeError(error)}`, deps.now());
+    stopForSession();
   }
 
   return {
@@ -261,5 +268,6 @@ export function createAttract(deps: AttractDeps): Attract {
     dueNow() {
       state.idleSeconds = ATTRACT_IDLE_SECONDS;
     },
+    stop: stopForSession,
   };
 }
