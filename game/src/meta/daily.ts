@@ -17,6 +17,9 @@ export interface DailySave {
   readonly best: DailyBest | null;
 }
 
+/** Whether `score` reaches a Daily's `target`: at it or above. */
+export const reachesTarget = (score: number, target: number): boolean => score >= target;
+
 export function defaultDaily(): DailySave {
   return { lastCleared: null, streak: 0, bestStreak: 0, best: null };
 }

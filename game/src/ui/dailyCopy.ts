@@ -1,5 +1,4 @@
-import type { DailyBest } from '../meta/daily';
-import { reachesTarget } from '../meta/dailyGalaxy';
+import { reachesTarget, type DailyBest } from '../meta/daily';
 import { spokenScore as grouped } from './dom';
 
 /**

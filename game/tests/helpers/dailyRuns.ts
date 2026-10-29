@@ -2,7 +2,8 @@ import type { BotProfile } from '../../src/bot/create';
 import { runGalaxy, type RunResult } from '../../src/bot/run';
 import { DAILY_TWISTS, type DailyTwistId } from '../../src/content/daily';
 import { nextDate, previousDate } from '../../src/meta/calendar';
-import { dailyGalaxy, reachesTarget, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
+import { reachesTarget } from '../../src/meta/daily';
+import { dailyGalaxy, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { fixed, formatColumns, percent } from './botRuns';
 import { CLOCK_CHANGES, datesFrom } from './dates';
 

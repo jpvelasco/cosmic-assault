@@ -3,7 +3,7 @@ import { clamp } from '../content/curves';
 import { galaxyLabel } from '../content/galaxies';
 import { TIMED_PICKUPS, type TimedPickupId } from '../content/pickups';
 import type { BossId, GalaxyDef } from '../content/types';
-import { reachesTarget } from '../meta/dailyGalaxy';
+import { reachesTarget } from '../meta/daily';
 import type { World } from '../sim/world';
 import { rgba, WHITE } from './color';
 import { BOSS_MIN_W, bossBarWidth, bossNameX, drawBossHp, placeHpTrack } from './hudBoss';
