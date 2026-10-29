@@ -15,9 +15,9 @@ import { expect, test as base } from './fixtures';
  * commit 271163b, with only its precache list replaced by the fixture's own three files.
  *
  * Unlike Pages, the server sends `Cache-Control: no-cache`, so a swap of what it serves is seen at once. Pages sends
- * `max-age=600`, so on a real device a deploy can take up to ten minutes to show. That turns the browser's HTTP cache
- * off for these cases, so one case serves the game as Pages caches it, to prove that the next deploy's page is never
- * taken from that cache.
+ * `max-age=600`, so on a real device a deploy can take up to ten minutes to show. That makes the browser revalidate
+ * every file in these cases, so one case serves the game as Pages caches it, to prove that the next deploy's page is
+ * never taken from that cache.
  *
  * Each test serves its own site on a free port and builds its own state, so a swap here never races another spec and
  * one failing case never hides another.
@@ -34,8 +34,6 @@ const MOVE_TIMEOUT_MS = 10_000;
 const READY_TIMEOUT_MS = 5_000;
 /** Longer than the preview worker's wait for the network (3 s), after which it answers a navigation from its cache. */
 const SLOW_STUB_MS = 5_000;
-/** How long the retiring worker takes to arrive on the slow network. */
-const SLOW_WORKER_MS = 1_000;
 /** The move on a slow network waits for the browser's own update check, which comes in its own time. */
 const SLOW_MOVE_TIMEOUT_MS = 30_000;
 /** Marks the page of the deploy that writeNextDeploy() makes. */
@@ -96,6 +94,12 @@ const nextOf = (site: PagesServer): string => new URL('next/', site.url).href;
 /** The names of the origin's caches that start with `prefix`. */
 const cachesNamed = async (page: Page, prefix: string): Promise<string[]> =>
   (await page.evaluate(() => caches.keys())).filter((name) => name.startsWith(prefix));
+/** The version in the name of the root worker's cache, once the case has checked that there is exactly one. */
+async function rootVersion(page: Page): Promise<string> {
+  const ours = await cachesNamed(page, ROOT_CACHE_PREFIX);
+  expect(ours, `the root worker keeps one cache, named ${ROOT_CACHE_PREFIX}<version>`).toHaveLength(1);
+  return (ours[0] ?? '').slice(ROOT_CACHE_PREFIX.length);
+}
 const registrationScopes = (page: Page): Promise<string[]> =>
   page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((registration) => registration.scope));
 
@@ -245,15 +249,21 @@ for (const prefix of ['/', '/cosmic-assault/']) {
     test('a device that plays at the root keeps the root worker and its cache when it opens next/, and still plays offline', async ({ page, context, serve }) => {
       const site = await serve(reveal);
       await visitRoot(page, site);
-      const ours = await cachesNamed(page, ROOT_CACHE_PREFIX);
-      expect(ours).toHaveLength(1);
+      const ours = `${ROOT_CACHE_PREFIX}${await rootVersion(page)}`;
+      // The root worker has already activated, so only the retiring worker can delete this: its going proves that worker
+      // ran, rather than the stub page's own timed move to the root.
+      const decoy = `${PREVIEW_CACHE_PREFIX}decoy`;
+      await page.evaluate(async (name) => {
+        await caches.open(name);
+      }, decoy);
+      expect(await cachesNamed(page, PREVIEW_CACHE_PREFIX)).toEqual([decoy]);
 
       await page.goto(nextOf(site));
 
       await expectMovedToRoot(page, site);
       await expect.poll(() => registrationScopes(page), { message: 'only the root worker is left registered' }).toEqual([site.url]);
       expect(await readyScope(page), 'the root worker serves the root').toBe(site.url);
-      expect(await cachesNamed(page, ROOT_CACHE_PREFIX), 'the root cache is untouched').toEqual(ours);
+      expect(await cachesNamed(page, ROOT_CACHE_PREFIX), 'the root cache is untouched').toEqual([ours]);
       await context.setOffline(true);
       await page.reload();
       await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
@@ -265,15 +275,12 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await visitPreview(page, site);
       site.setMounts(reveal);
       // The stub comes too late for the preview worker, which answers next/ from its cache instead, so the stub's own
-      // script and redirect never run; the retiring worker is slow to arrive as well. Routes see the workers' requests.
+      // script and redirect never run. Routes see a worker's own fetches, but the browser's update check, which fetches
+      // the retiring worker, may bypass them, so this case routes only the page.
       let stubRequests = 0;
       await context.route(nextOf(site), async (route) => {
         stubRequests += 1;
         await delay(SLOW_STUB_MS);
-        await route.continue().catch(() => undefined);
-      });
-      await context.route(new URL('next/sw.js', site.url).href, async (route) => {
-        await delay(SLOW_WORKER_MS);
         await route.continue().catch(() => undefined);
       });
 
@@ -288,9 +295,7 @@ for (const prefix of ['/', '/cosmic-assault/']) {
     test('the next deploy replaces the root cache with its own and still plays offline', async ({ page, context, serve }) => {
       const site = await serve(reveal);
       await visitRoot(page, site);
-      const ours = await cachesNamed(page, ROOT_CACHE_PREFIX);
-      expect(ours, `the root worker keeps one cache, named ${ROOT_CACHE_PREFIX}<version>`).toHaveLength(1);
-      const version = (ours[0] ?? '').slice(ROOT_CACHE_PREFIX.length);
+      const version = await rootVersion(page);
 
       site.rewrite('sw.js', version, `${version}b`);
       await page.reload();
@@ -308,7 +313,7 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       const cachedAsPages = (dir: string): PagesMount[] => [{ dir, at: './', maxAge: PAGES_MAX_AGE_SECONDS }];
       const site = await serve(cachedAsPages(DIST));
       await visitRoot(page, site);
-      const version = (await cachesNamed(page, ROOT_CACHE_PREFIX))[0]?.slice(ROOT_CACHE_PREFIX.length) ?? '';
+      const version = await rootVersion(page);
       // A link with a query is the game's page too, which the worker answers; the HTTP cache now holds it for ten
       // minutes. Installing the next deploy's worker refreshes only the copies it precaches, never this one.
       const linked = new URL('?from=link', site.url).href;

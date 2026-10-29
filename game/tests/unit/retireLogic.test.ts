@@ -115,8 +115,8 @@ describe.each(SCOPES.map((scope) => [scope.href, scope] as const))('retirePrevie
 });
 
 describe('the retiring worker\'s imports', () => {
-  it('loads its decisions and nothing else, and the decisions load nothing', () => {
-    expect(importClosure('sw/retire.ts')).toEqual(['platform/retireLogic', 'sw/retire']);
+  it('imports its decisions and nothing else, not even a package, and the decisions import nothing', () => {
+    expect(importsOf('sw/retire.ts')).toEqual(['../platform/retireLogic']);
     expect(importsOf('platform/retireLogic.ts')).toEqual([]);
   });
 

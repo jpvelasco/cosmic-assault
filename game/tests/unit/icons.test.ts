@@ -81,7 +81,7 @@ describe('manifest.webmanifest', () => {
     ]);
   });
 
-  it('leaves id out: it would only repeat start_url, which the browser uses when there is none', () => {
+  it('leaves id out, so the app\'s identity follows start_url: a relative id resolves against the origin, not this path', () => {
     expect(manifest).not.toHaveProperty('id');
   });
 
