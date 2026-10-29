@@ -143,6 +143,13 @@ describe('npm run find-seeds', { timeout: FINDER_TIMEOUT_MS }, () => {
     expect(typo.output).toContain('unknown option "--cnt"; the options are --count, --from, --to');
   });
 
+  it('counts --from and --to in days after DATE_EPOCH for a date claim, and says so', () => {
+    const { status, output } = runFinder('daily-clears', '--from', '5', '--to', '5');
+    expect(status).toBe(1);
+    expect(output).toContain('no date from day 5 after DATE_EPOCH keeps "daily-clears"');
+    expect(output).toContain('for a date claim, days after DATE_EPOCH');
+  });
+
   it('prints the seeds that keep an attract demo claim', () => {
     const { status, output } = runFinder('attract-2-2', '--count', '1');
     expect(status).toBe(0);

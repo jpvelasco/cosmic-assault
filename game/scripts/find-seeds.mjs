@@ -1,11 +1,11 @@
 // Lists the lowest World seeds, from 1 up, for which an e2e seed claim holds (see e2e/seeds.ts) or an attract demo's claim
 // does (attract-<galaxy>, see ATTRACT_DEMOS in src/app/attract.ts); for a date claim, the earliest dates from DATE_EPOCH,
-// with --from and --to counted in days from it.
-// Run from game/ with: npm run find-seeds -- <claim> [--count N] [--from SEED] [--to SEED]
+// with --from and --to counted in days after it.
+// Run from game/ with: npm run find-seeds -- <claim> [--count N] [--from N] [--to N]
 // It loads the TypeScript checks the guard tests use (tests/helpers/seedClaims.ts) through Vite, headlessly.
 import { createServer } from 'vite';
 
-const USAGE = 'usage: npm run find-seeds -- <claim> [--count N] [--from SEED] [--to SEED]';
+const USAGE = 'usage: npm run find-seeds -- <claim> [--count N] [--from N] [--to N], where --from and --to are seeds, or for a date claim, days after DATE_EPOCH';
 
 const FLAGS = { count: 1, from: 0, to: 1 };
 
@@ -40,7 +40,8 @@ try {
   const byDate = dateClaims.includes(claim);
   const find = byDate ? findDates : demoClaims.includes(claim) ? findDemoSeeds : findSeeds;
   const found = find(claim, given);
-  if (found.length === 0) fail(`no ${byDate ? 'date' : 'seed'} from ${String(options.from ?? (byDate ? 0 : 1))} keeps "${claim}"; widen the range with --to, or the claim may need rethinking`);
+  const start = byDate ? `date from day ${String(options.from ?? 0)} after DATE_EPOCH` : `seed from ${String(options.from ?? 1)}`;
+  if (found.length === 0) fail(`no ${start} keeps "${claim}"; widen the range with --to, or the claim may need rethinking`);
   console.log(`${claim}: ${found.join(', ')}`);
 } finally {
   await server.close();
