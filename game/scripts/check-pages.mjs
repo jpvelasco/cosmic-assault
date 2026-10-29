@@ -96,21 +96,33 @@ function isOnSite(value) {
   return new URL(value, SITE).href.startsWith(SITE);
 }
 
+const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+
 function manifestProblems() {
   if (!has('manifest.webmanifest')) return [];
   const path = join(dir, 'manifest.webmanifest');
+  const fix = 'fix public/manifest.webmanifest';
   let manifest;
   try {
     manifest = JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
-    return [`${path} is not valid JSON (${error.message}); fix public/manifest.webmanifest`];
+    return [`${path} is not valid JSON (${error.message}); ${fix}`];
   }
+  if (!isObject(manifest)) return [`${path} is not a JSON object; ${fix}`];
   const leaves = (what, value, example) => `manifest.webmanifest ${what} is ${JSON.stringify(value)}, which is absolute or leaves the site; make it relative to the manifest, such as ${example}`;
   const problems = ['start_url', 'scope'].filter((key) => !isOnSite(manifest[key])).map((key) => leaves(key, manifest[key], './'));
   if ('id' in manifest) {
     problems.push("manifest.webmanifest has an id; leave it out so an installed app's identity follows start_url (a relative id resolves against the origin, not the site's path)");
   }
-  for (const { src } of Array.isArray(manifest.icons) ? manifest.icons : []) {
+  if (!Array.isArray(manifest.icons) || manifest.icons.length === 0) {
+    problems.push(`manifest.webmanifest lists no icons, so the app cannot be installed; ${fix} to give it an icons array`);
+  }
+  for (const icon of Array.isArray(manifest.icons) ? manifest.icons : []) {
+    if (!isObject(icon)) {
+      problems.push(`manifest.webmanifest lists the icon ${JSON.stringify(icon)}, which is not an object with a src; ${fix}`);
+      continue;
+    }
+    const { src } = icon;
     if (!isOnSite(src)) {
       problems.push(leaves('icon src', src, 'icons/icon-192.png'));
       continue;

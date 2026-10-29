@@ -176,6 +176,18 @@ describe('check-pages', { timeout: SPAWN_TIMEOUT_MS }, () => {
     expectFailure(dir, `${join(dir, 'manifest.webmanifest')} is not valid JSON`);
   });
 
+  it.each([
+    ['is null', 'null', 'is not a JSON object; fix public/manifest.webmanifest'],
+    ['is an array', '[]', 'is not a JSON object; fix public/manifest.webmanifest'],
+    ['has no icons array', '{"start_url":"./","scope":"./"}', 'lists no icons, so the app cannot be installed; fix public/manifest.webmanifest'],
+    ['has an icon that is not an object', '{"start_url":"./","scope":"./","icons":[null]}', 'lists the icon null, which is not an object with a src; fix public/manifest.webmanifest'],
+  ])('fails with a one-line fix, not a stack trace, when the manifest %s', (_what, text, message) => {
+    const dir = mutant((site) => {
+      writeFileSync(join(site, 'manifest.webmanifest'), text);
+    });
+    expectFailure(dir, message);
+  });
+
   it.each(['game-modular.js', 'modules/core/Game.js', 'style.css'])('fails when the classic site\'s %s is present', (file) => {
     const dir = mutant((site) => {
       writeFiles(site, { [file]: 'classic' });
