@@ -1,35 +1,18 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createPagesServer, NOT_FOUND_BODY, PAGES_MAX_AGE_SECONDS, type PagesMount, type PagesServer } from '../../scripts/serve-pages.mjs';
-import { gameDir, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
+import { gameDir, gameScratch, guardScript, SPAWN_TIMEOUT_MS, writeFiles } from '../helpers/guardScript';
 
-// The server only serves directories inside game/, so the sites under test are written to its ignored test-results/.
-const sitesRoot = join(gameDir, 'test-results');
-const roots: string[] = [];
+const { run: runCommand, tempRoot } = guardScript('serve-pages.mjs', 'serve-pages-');
 const servers: PagesServer[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
 });
-afterAll(() => {
-  for (const root of roots) rmSync(root, { recursive: true, force: true });
-});
 
-/** Writes `files` (relative path → contents) into a fresh directory inside game/. */
-function site(files: Record<string, string>): string {
-  mkdirSync(sitesRoot, { recursive: true });
-  const root = mkdtempSync(join(sitesRoot, 'serve-pages-'));
-  roots.push(root);
-  for (const [path, text] of Object.entries(files)) {
-    const full = join(root, path);
-    mkdirSync(join(full, '..'), { recursive: true });
-    writeFileSync(full, text);
-  }
-  return root;
-}
+/** Writes `files` (relative path → contents) into a fresh directory inside game/, where the server serves from. */
+const site = (files: Record<string, string>): string => writeFiles(tempRoot(gameScratch), files);
 
 async function serve(mounts: readonly PagesMount[], prefix?: string): Promise<PagesServer> {
   const server = await createPagesServer(prefix === undefined ? { mounts } : { prefix, mounts });
@@ -158,8 +141,7 @@ describe('createPagesServer', () => {
   });
 
   it('refuses a directory outside game/, naming it, when created and when the mounts change', async () => {
-    const outside = mkdtempSync(join(tmpdir(), 'serve-pages-outside-'));
-    roots.push(outside);
+    const outside = tempRoot();
 
     await expect(createPagesServer({ mounts: [{ dir: outside, at: './' }] })).rejects.toThrow(`${outside} is not inside game/`);
     await expect(createPagesServer({ mounts: [{ dir: gameDir, at: './' }] })).rejects.toThrow('is not inside game/');
@@ -284,12 +266,9 @@ describe('serve-pages.mjs as a command', { timeout: SPAWN_TIMEOUT_MS }, () => {
     }
   });
 
-  it('fails with a usage line when --dir is missing', async () => {
-    const child = spawn(process.execPath, ['scripts/serve-pages.mjs'], { cwd: gameDir });
-    let output = '';
-    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
-    const code = await new Promise<number | null>((resolve) => child.on('exit', resolve));
-    expect(code).toBe(1);
+  it('fails with a usage line when --dir is missing', () => {
+    const { status, output } = runCommand();
+    expect(status).toBe(1);
     expect(output).toContain('Usage: node scripts/serve-pages.mjs --dir <dir>');
   });
 });

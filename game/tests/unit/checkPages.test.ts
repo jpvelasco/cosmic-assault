@@ -1,7 +1,7 @@
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
+import { guardScript, SPAWN_TIMEOUT_MS, writeFiles } from '../helpers/guardScript';
 import { sharedReleaseBuild } from '../helpers/releaseBuild';
 
 const { run: runGuard, tempRoot } = guardScript('check-pages.mjs', 'check-pages-');
@@ -10,11 +10,6 @@ const PASSED = 'site layout ok: the game at the root, only the moved page and th
 
 /** A real release build, which every case copies and changes in one way. */
 const { dir: built, copy: mutant } = sharedReleaseBuild(tempRoot);
-
-function write(dir: string, path: string, text: string): void {
-  mkdirSync(join(dir, path, '..'), { recursive: true });
-  writeFileSync(join(dir, path), text);
-}
 
 /** The built game script, under its hashed name. */
 function gameScript(dir: string): string {
@@ -79,8 +74,7 @@ describe('check-pages', { timeout: SPAWN_TIMEOUT_MS }, () => {
 
   it('fails when next/ holds anything but the moved page and the retiring worker, naming each extra file', () => {
     const dir = mutant((site) => {
-      write(site, 'next/preview.js', 'go()');
-      write(site, 'next/assets/old.js', 'go()');
+      writeFiles(site, { 'next/preview.js': 'go()', 'next/assets/old.js': 'go()' });
     });
     expectFailure(
       dir,
@@ -182,7 +176,7 @@ describe('check-pages', { timeout: SPAWN_TIMEOUT_MS }, () => {
 
   it.each(['game-modular.js', 'modules/core/Game.js', 'style.css'])('fails when the classic site\'s %s is present', (file) => {
     const dir = mutant((site) => {
-      write(site, file, 'classic');
+      writeFiles(site, { [file]: 'classic' });
     });
     const name = file.split('/')[0] ?? file;
     expectFailure(dir, `${dir} has ${name} from the classic site;`, 'without copying the classic site into it');
@@ -191,7 +185,7 @@ describe('check-pages', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('reports every problem in one run', () => {
     const dir = mutant((site) => {
       rmSync(join(site, 'next', 'sw.js'));
-      write(site, 'style.css', 'classic');
+      writeFiles(site, { 'style.css': 'classic' });
     });
     expectFailure(dir, `${dir} has no next/sw.js;`, `${dir} has style.css from the classic site;`);
   });

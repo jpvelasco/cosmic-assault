@@ -1,10 +1,10 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Script } from 'node:vm';
 import type { Plugin } from 'vite';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { injectPrecache, NOT_PRECACHED, RETIRE_FILE_NAME, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
+import { tempDirs } from '../helpers/guardScript';
 import { buildRelease, PUBLIC_DIR } from '../helpers/releaseBuild';
 
 const WORKER_CODE = 'const a=__PRECACHE__,b=__VERSION__;self.addEventListener("install",()=>caches.open(b).then(c=>c.addAll(a)));';
@@ -97,13 +97,7 @@ describe('injectPrecache', () => {
 });
 
 describe('the release build', () => {
-  const tempDirs: string[] = [];
-
-  function tempDir(prefix: string): string {
-    const dir = mkdtempSync(join(tmpdir(), prefix));
-    tempDirs.push(dir);
-    return dir;
-  }
+  const tempDir = tempDirs();
 
   interface Built {
     outDir: string;
@@ -137,9 +131,6 @@ describe('the release build', () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
-  });
-  afterAll(() => {
-    for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
   });
 
   it('writes sw.js as one classic script with the list and version filled in', { timeout: 60000 }, async () => {

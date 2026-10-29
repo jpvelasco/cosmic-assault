@@ -1,7 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { gameDir, guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
+import { gameDir, guardScript, SPAWN_TIMEOUT_MS, writeFiles } from '../helpers/guardScript';
 
 const { run: runGuard, tempRoot } = guardScript('check-workflow.mjs', 'check-workflow-');
 const realWorkflow = join(gameDir, '..', '.github', 'workflows', 'ci.yml');
@@ -15,16 +15,11 @@ const TARGET_FILES = [...[1, 2, 3, 4, 5].map((d) => `d${String(d)}-targets.test.
  * included, returning the workflow path.
  */
 function writeFixture(text: string, balanceFiles: string[] = TARGET_FILES): string {
-  const root = tempRoot();
-  mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
-  mkdirSync(join(root, 'game', 'tests', 'balance'), { recursive: true });
-  for (const file of balanceFiles) {
-    mkdirSync(dirname(join(root, 'game', 'tests', 'balance', file)), { recursive: true });
-    writeFileSync(join(root, 'game', 'tests', 'balance', file), '');
-  }
-  const workflowPath = join(root, '.github', 'workflows', 'ci.yml');
-  writeFileSync(workflowPath, text);
-  return workflowPath;
+  const root = writeFiles(tempRoot(), {
+    '.github/workflows/ci.yml': text,
+    ...Object.fromEntries(balanceFiles.map((file) => [`game/tests/balance/${file}`, ''])),
+  });
+  return join(root, '.github', 'workflows', 'ci.yml');
 }
 
 /** Replaces the first occurrence of `from`; throws so a stale mutation cannot pass silently. */

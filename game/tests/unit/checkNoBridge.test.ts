@@ -1,7 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
+import { guardScript, SPAWN_TIMEOUT_MS, writeFiles } from '../helpers/guardScript';
 
 const { run: runGuard, tempRoot } = guardScript('check-no-bridge.mjs', 'check-no-bridge-');
 
@@ -20,15 +19,7 @@ const ALL_HOOKS = `${HOOK};${FAST_FORWARD};${DAMAGE_BOSS};${GRANT_PICKUP};${EVEN
 const PASSED = 'e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant, event-tally, frame-stats-restart, sprite-cache, attract-now and attract-state hooks';
 
 /** Writes `files` (relative path → contents) into a fresh temp build directory. */
-function writeDist(files: Record<string, string>): string {
-  const root = tempRoot();
-  for (const [path, text] of Object.entries(files)) {
-    const full = join(root, path);
-    mkdirSync(join(full, '..'), { recursive: true });
-    writeFileSync(full, text);
-  }
-  return root;
-}
+const writeDist = (files: Record<string, string>): string => writeFiles(tempRoot(), files);
 
 describe('check-no-bridge (release build)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('passes a build without the bridge or the e2e query parsing', () => {

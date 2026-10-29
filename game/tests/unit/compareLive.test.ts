@@ -2,16 +2,14 @@ import { appendFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createPagesServer, type PagesServer } from '../../scripts/serve-pages.mjs';
-import { gameTestResults, guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
+import { gameScratch, guardScript, SPAWN_TIMEOUT_MS } from '../helpers/guardScript';
 import { sharedReleaseBuild } from '../helpers/releaseBuild';
 
 const { runAsync: compare, tempRoot } = guardScript('compare-live.mjs', 'compare-live-');
 const USAGE = 'Usage: node scripts/compare-live.mjs <dist> <url>';
 
-// The Pages server only serves directories inside game/, so every site here is written to its ignored test-results/.
-
 /** A real release build, which every live site here serves or copies. */
-const { dir: built, copy: copyOfBuild } = sharedReleaseBuild(() => tempRoot(gameTestResults));
+const { dir: built, copy: copyOfBuild } = sharedReleaseBuild(() => tempRoot(gameScratch));
 
 const servers: PagesServer[] = [];
 afterEach(async () => {
