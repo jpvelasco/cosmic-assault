@@ -16,7 +16,7 @@ export interface RampScale {
  */
 export interface DailyTwist {
   readonly id: DailyTwistId;
-  /** Its name in the game, in sentence case: "Today's twist: Gravity storm". */
+  /** Its name in the game, in sentence case: "Twist: Gravity storm". */
   readonly name: string;
   readonly blurb: string;
   readonly minDimension: Dimension;

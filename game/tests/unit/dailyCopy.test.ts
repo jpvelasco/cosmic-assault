@@ -41,7 +41,8 @@ describe('the Daily copy', () => {
   it('reads as the cards show it', () => {
     expect(copy.dailyTitle('2026-10-26')).toBe('Daily Galaxy · 2026-10-26');
     expect(copy.dailyCardLine('Gravity storm', 14500)).toBe('Gravity storm · Target\u00a014,500');
-    expect(copy.twistToast('Gravity storm')).toBe("Today's twist: Gravity storm");
+    // A retry after midnight plays a date that is no longer today, so the toast never says "today".
+    expect(copy.twistToast('Gravity storm')).toBe('Twist: Gravity storm');
     expect(copy.streakText(3)).toBe('Streak 3');
     expect(copy.dailyBestText({ date: '2026-10-26', score: 12345 })).toBe('Best on 2026-10-26: 12,345');
   });

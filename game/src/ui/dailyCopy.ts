@@ -33,8 +33,8 @@ export const streakText = (streak: number): string => `Streak ${String(streak)}`
 /** The longest streak so far, on the records card. */
 export const bestStreakText = (streak: number): string => `Best streak ${String(streak)}`;
 
-/** The toast as a Daily starts. */
-export const twistToast = (twist: string): string => `Today's twist: ${twist}`;
+/** The toast as a Daily starts, or a retry of it after midnight, so it names the twist and never "today". */
+export const twistToast = (twist: string): string => `Twist: ${twist}`;
 
 /** The end card's target line: "Target 14,500 · beaten" once the score reaches it, else the target alone. */
 export const targetLine = (target: number, score: number): string => (reachesTarget(score, target) ? `${targetText(target)} · beaten` : targetText(target));
