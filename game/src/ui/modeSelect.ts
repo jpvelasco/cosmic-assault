@@ -1,9 +1,10 @@
 import { TWISTS_BY_ID } from '../content/daily';
 import { shownStreak } from '../meta/daily';
-import { dailyGalaxy } from '../meta/dailyGalaxy';
+import { dailyGalaxy, type DailyGalaxy } from '../meta/dailyGalaxy';
 import type { SaveData } from '../meta/save';
+import { errorMessage, type RingLog } from '../platform/log';
 import type { GalaxyMode } from '../sim/scoring';
-import { DAILY_BADGE, DAILY_NAME, dailyCardLine, streakText } from './dailyCopy';
+import { DAILY_BADGE, DAILY_NAME, DAILY_UNAVAILABLE, dailyCardLine, streakText } from './dailyCopy';
 import { button, element, menuCard, PRIMARY_BUTTON, withTestId, type Act, type MenuCard } from './dom';
 
 export interface ModeSelect {
@@ -38,12 +39,33 @@ const DAILY_MODE: ModeSpec = { mode: 'daily', name: DAILY_NAME, text: '', badge:
 /** The streak the Daily card shows from. */
 const CARD_STREAK_FROM = 2;
 
-/** What the Daily card shows on `today`: its twist and target, the twist's blurb, and the streak from 2 on ('' below). */
-export function dailyCardView(save: SaveData, today: string): { readonly line: string; readonly blurb: string; readonly streak: string } {
-  const { twist, target } = dailyGalaxy(today);
-  const { name, blurb } = TWISTS_BY_ID[twist];
+/** What the Daily card shows. */
+export interface DailyCardView {
+  readonly line: string;
+  readonly blurb: string;
+  readonly streak: string;
+  /** Why the date's Daily cannot be built, as a log line, which leaves the card unavailable; null when it can be played. */
+  readonly problem: string | null;
+}
+
+/** What the Daily card needs of a date's Daily. */
+type DailyBuild = (date: string) => Pick<DailyGalaxy, 'twist' | 'target'>;
+
+/**
+ * What the Daily card shows on `today`: its twist and target, the twist's blurb, and the streak from 2 on ('' below).
+ * A date `build` cannot make a Daily of shows the card as unavailable instead, so mode select still offers every other mode.
+ */
+export function dailyCardView(save: SaveData, today: string, build: DailyBuild = dailyGalaxy): DailyCardView {
+  let daily: ReturnType<DailyBuild>;
+  try {
+    daily = build(today);
+  } catch (error) {
+    const problem = `The Daily Galaxy of ${today} could not be built (${errorMessage(error)}), so its card shows it as unavailable; Rank and Free play are unaffected. Check that the device's date is right, then open mode select again.`;
+    return { line: DAILY_UNAVAILABLE, blurb: '', streak: '', problem };
+  }
+  const { name, blurb } = TWISTS_BY_ID[daily.twist];
   const streak = shownStreak(save, today);
-  return { line: dailyCardLine(name, target), blurb, streak: streak >= CARD_STREAK_FROM ? streakText(streak) : '' };
+  return { line: dailyCardLine(name, daily.target), blurb, streak: streak >= CARD_STREAK_FROM ? streakText(streak) : '', problem: null };
 }
 
 /**
@@ -68,8 +90,11 @@ function modeCard(spec: ModeSpec, act: Act, ...extra: HTMLElement[]): { readonly
   return { card, text };
 }
 
-/** Mode select (three large cards, Rank, Free play and the Daily) and the card that confirms a new Rank run over a saved one. */
-export function createModeSelect(act: Act): ModeSelect {
+/**
+ * Mode select (three large cards, Rank, Free play and the Daily) and the card that confirms a new Rank run over a saved one.
+ * A date whose Daily cannot be built is written to `log`, once per date.
+ */
+export function createModeSelect(act: Act, log: Pick<RingLog, 'add'>): ModeSelect {
   const hint = element('p', 'hint');
   const resumeSlot = element('div', 'resume-slot');
   const blurb = element('span', 'mode-card__blurb');
@@ -80,6 +105,8 @@ export function createModeSelect(act: Act): ModeSelect {
   const start = withTestId(button(PRIMARY_BUTTON, 'Start new run', act({ kind: 'chooseMode', mode: 'rank' })), 'confirm-new-rank');
   const chipRow = element('div', 'chips');
   let shown: { readonly save: SaveData; readonly today: string } | null = null;
+  /** The last date whose Daily could not be built, already logged. */
+  let loggedFor: string | null = null;
   return {
     modeSelect: menuCard('modes', 'Choose a mode', resumeSlot, cards, hint, chipRow),
     confirmNewRank: menuCard('confirm', 'Start a new run?', element('p', 'hint', 'Your saved run will end.'), start),
@@ -96,6 +123,11 @@ export function createModeSelect(act: Act): ModeSelect {
       blurb.textContent = view.blurb;
       streak.textContent = view.streak;
       streak.hidden = view.streak === '';
+      dailyCard.card.disabled = view.problem !== null;
+      if (view.problem !== null && loggedFor !== today) {
+        loggedFor = today;
+        log.add('error', view.problem, performance.now());
+      }
     },
   };
 }

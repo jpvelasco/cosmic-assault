@@ -174,7 +174,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       hangar.show();
     },
     install: installPrompt.install,
-  });
+  }, log);
   // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
   const prefs = createSettingsController(root, {
     storage,

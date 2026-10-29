@@ -6,6 +6,7 @@ import type { SaveData } from '../meta/save';
 import type { RankLock } from '../app/runController';
 import { galaxyLabel } from '../content/galaxies';
 import type { InstallOffer } from '../platform/install';
+import type { RingLog } from '../platform/log';
 import type { SimEvent } from '../sim/events';
 import { createBossAnnouncer } from './bossAnnouncer';
 import { createDimensionMap } from './dimensionMap';
@@ -136,7 +137,7 @@ function keepIn(host: HTMLElement | undefined, el: HTMLElement): void {
  * router's cover table and the end-card guard apply to taps as to keys. The end cards act only on their buttons, so
  * taps that were aimed at the ship cannot skip the score.
  */
-export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
+export function createOverlay(root: HTMLElement, actions: OverlayActions, log: Pick<RingLog, 'add'>): Overlay {
   const send: Act = (command: Command) => (): void => {
     actions.command(command);
   };
@@ -151,7 +152,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const titleResumeSlot = element('div', 'resume-slot');
   // One shared Back, moved into the menu card shown, so its test id stays unique.
   const back = withTestId(button('menu-button', 'Back', send({ kind: 'back' })), 'back');
-  const modes = createModeSelect(send);
+  const modes = createModeSelect(send, log);
   const dimensionMap = createDimensionMap(send);
   const galaxySelect = createGalaxySelect(send);
   const results = createResultsCard(send);

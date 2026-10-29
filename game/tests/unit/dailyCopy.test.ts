@@ -5,9 +5,8 @@ import { defaultSave, type SaveData } from '../../src/meta/save';
 import * as copy from '../../src/ui/dailyCopy';
 import { dailyCardView } from '../../src/ui/modeSelect';
 import { dailyRecordLines } from '../../src/ui/recordsCard';
+import { PRESSURE } from '../helpers/pressure';
 
-/** Words that speak of loss, missing out or urgency, which the Daily never uses, with straight or curly apostrophes. */
-const PRESSURE = /lose|lost|miss|break|broke|don['’]t|hurry|last chance|expire|before it['’]?s gone/i;
 
 /** Every line of `ui/dailyCopy.ts`, rendered: the record type makes a new export fail to compile until it is listed here. */
 const RENDERED: Readonly<Record<keyof typeof copy, readonly string[]>> = {
@@ -23,6 +22,7 @@ const RENDERED: Readonly<Record<keyof typeof copy, readonly string[]>> = {
   targetLine: [copy.targetLine(14500, 14499), copy.targetLine(14500, 14500), copy.targetLine(14500, 0)],
   dailyBestText: [copy.dailyBestText({ date: '2026-10-26', score: 12345 })],
   NO_DAILY_YET: [copy.NO_DAILY_YET],
+  DAILY_UNAVAILABLE: [copy.DAILY_UNAVAILABLE],
 };
 
 describe('the Daily copy', () => {
@@ -40,16 +40,21 @@ describe('the Daily copy', () => {
 
   it('reads as the cards show it', () => {
     expect(copy.dailyTitle('2026-10-26')).toBe('Daily Galaxy · 2026-10-26');
-    expect(copy.dailyCardLine('Gravity storm', 14500)).toBe('Gravity storm · Target 14,500');
+    expect(copy.dailyCardLine('Gravity storm', 14500)).toBe('Gravity storm · Target\u00a014,500');
     expect(copy.twistToast('Gravity storm')).toBe("Today's twist: Gravity storm");
     expect(copy.streakText(3)).toBe('Streak 3');
     expect(copy.dailyBestText({ date: '2026-10-26', score: 12345 })).toBe('Best on 2026-10-26: 12,345');
   });
 
   it('marks the target beaten once the score reaches it', () => {
-    expect(copy.targetLine(14500, 14499)).toBe('Target 14,500');
-    expect(copy.targetLine(14500, 14500)).toBe('Target 14,500 · beaten');
-    expect(copy.targetLine(14500, 20000)).toBe('Target 14,500 · beaten');
+    expect(copy.targetLine(14500, 14499)).toBe('Target\u00a014,500');
+    expect(copy.targetLine(14500, 14500)).toBe('Target\u00a014,500 · beaten');
+    expect(copy.targetLine(14500, 20000)).toBe('Target\u00a014,500 · beaten');
+  });
+
+  it('keeps the target on one line with its number, which never wraps alone', () => {
+    expect(copy.targetText(14500)).toBe('Target\u00a014,500');
+    expect(copy.targetText(14500)).not.toMatch(/ /);
   });
 });
 
@@ -69,6 +74,21 @@ describe('the Daily mode card', () => {
     expect(dailyCardView(withDaily({ lastCleared: '2026-10-25', streak: 2, bestStreak: 2 }), TODAY).streak).toBe('Streak 2');
     expect(dailyCardView(withDaily({ lastCleared: TODAY, streak: 5, bestStreak: 5 }), TODAY).streak).toBe('Streak 5');
     expect(dailyCardView(withDaily({ lastCleared: '2026-10-20', streak: 5, bestStreak: 5 }), TODAY).streak).toBe('');
+  });
+
+  it('can be played, with no problem to log, on a date the generator builds', () => {
+    expect(dailyCardView(defaultSave(), TODAY).problem).toBeNull();
+  });
+
+  it('shows the Daily as unavailable when the generator throws, naming the date and the fault in the problem it logs', () => {
+    const fails = (date: string): never => {
+      throw new Error(`no anchor for ${date}`);
+    };
+    const view = dailyCardView(withDaily({ lastCleared: TODAY, streak: 5, bestStreak: 5 }), TODAY, fails);
+    expect(view).toMatchObject({ line: copy.DAILY_UNAVAILABLE, blurb: '', streak: '' });
+    expect(view.problem).toContain(TODAY);
+    expect(view.problem).toContain(`no anchor for ${TODAY}`);
+    expect(view.problem).toMatch(/Rank and Free play/);
   });
 });
 

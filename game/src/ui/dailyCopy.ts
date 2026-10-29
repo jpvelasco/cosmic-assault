@@ -19,8 +19,8 @@ export const dailyTitle = (date: string): string => `${DAILY_NAME} · ${date}`;
 /** The results heading of a Daily clear. */
 export const DAILY_CLEARED = 'Daily cleared';
 
-/** "Target 14,500". */
-export const targetText = (target: number): string => `Target ${grouped(target)}`;
+/** "Target 14,500", its number joined to the word by a no-break space so it never wraps onto a line alone. */
+export const targetText = (target: number): string => `Target\u00a0${grouped(target)}`;
 
 /** The mode card's line: today's twist and its target. */
 export const dailyCardLine = (twist: string, target: number): string => `${twist} · ${targetText(target)}`;
@@ -42,3 +42,6 @@ export const dailyBestText = ({ date, score }: DailyBest): string => `Best on ${
 
 /** The records card's Daily block before any Daily is cleared. */
 export const NO_DAILY_YET = 'Clear a Daily Galaxy and its streak and best show here.';
+
+/** The mode card's line when the day's Daily cannot be built: the other modes play on. */
+export const DAILY_UNAVAILABLE = 'Daily unavailable';
