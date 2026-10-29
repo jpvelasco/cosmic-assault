@@ -56,7 +56,7 @@
   and look-unlock rules; `app/` owns the screen flow (`flow.ts`, pure), the run
   controller (save, World and Rank wiring), commands, hit-stop, frame monitor,
   settings and attract mode; `render/` owns drawing; `audio/` owns sound; `input/`
-  owns keyboard, touch and gamepad input and menu focus; `ui/` owns the DOM
+  owns keyboard, mouse fire, touch and gamepad input and menu focus; `ui/` owns the DOM
   cards (title, mode select, the level map and level select, results and game
   over, pause, settings, records, the Hangar, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
@@ -228,9 +228,19 @@
   - Ship controls (input, thrust, fire, turn, the volley and the frame loop)
     are tested with real input, never with bridge shortcuts: change any of them
     only with `e2e/keyboard.spec.ts` (every thrust, fire and turn chord, in both
-    directions, on arrows and WASD, plus Space, Shift, Z and X) and the touch and
-    gamepad specs passing, and add a chord case for any new binding. A held
-    turn key always turns the ship.
+    directions, on arrows and WASD, plus Space, Shift, Z, X and the mouse button)
+    and the touch and gamepad specs passing, and add a chord case for any new
+    binding. A held turn key always turns the ship.
+  - Mouse fire (`input/mouseFire.ts`): the primary mouse button held on the
+    canvas in play fires, a second way round key ghosting beside Z and X; it
+    only fires, and `mergeControls` ORs it with the other sources. Only a press
+    that lands on the canvas while playing, with no cover up, counts: a button,
+    a card, the pause button or the touch layer never passes a press to it, a
+    press held from before the run never fires, and a finger or a pen is the
+    touch layer's. The press is captured, and it lets go on its release, a
+    cancel, a lost capture, the primary button let go under another, the
+    context menu, a lost focus, a hidden tab, and any screen change or new run,
+    so it never sticks: a button still held fires again only once pressed again.
   - Game key handling stands down while a form control has focus
     (`input/keyEvent.ts`), so sliders and radios keep their keys. `F` requests
     full screen synchronously in its keydown handler, because Safari and

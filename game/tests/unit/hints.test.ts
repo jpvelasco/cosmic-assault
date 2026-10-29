@@ -16,7 +16,7 @@ describe('hintCopy', () => {
       start: 'Press Space to start',
       restart: 'Press R to play again',
       choose: 'Arrow keys to choose, Enter to go',
-      controls: 'Fly with the arrows or WASD · fire with Space, Z or X',
+      controls: 'Fly with the arrows or WASD · fire with Space, Z, X or the mouse button',
       resumeKey: 'Esc',
       paused: 'Esc or P to resume',
       pauseTip: 'Pause (Esc or P)',

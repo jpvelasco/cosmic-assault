@@ -31,11 +31,12 @@
 
 **Desktop**
 
-| Action | Keys |
+| Action | Control |
 | --- | --- |
 | Turn | `←` `→` or `A` `D` |
 | Thrust | `↑` or `W` |
-| Fire | `Space` or `Shift` |
+| Fire | `Space`, `Shift`, `Z` or `X`, or hold the left mouse button |
+| Pause | `Esc` or `P`, or the **II** pause button at the top right |
 | Start | Press a key (for example `Space`) on the title screen |
 | Restart | `R` after game over |
 
@@ -45,12 +46,13 @@
 | --- | --- |
 | Steer and thrust | Virtual joystick: push the way you want to fly |
 | Fire | **FIRE** button |
+| Pause | **II** button at the top right |
 | Start | Tap the screen |
 | Restart | **RESTART** button after game over |
 
 Phones play in landscape; the game asks you to rotate if you hold it upright.
 
-> **Tip:** some keyboards drop `Space` while two arrow keys are held (keyboard ghosting). Fly with **WASD + Space**, or keep the arrows and fire with **Shift**. The game spots this and suggests the same.
+> **Tip:** some keyboards drop `Space` while two arrow keys are held (keyboard ghosting). Fly with **WASD + Space**, or keep the arrows and fire with **Z**, **X** or the mouse button. The title screen names them too.
 
 ## ✨ Features
 

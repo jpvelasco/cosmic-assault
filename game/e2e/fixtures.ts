@@ -203,6 +203,11 @@ export function gameState(page: Page): Promise<CosmicAssaultTestState> {
   });
 }
 
+/** Shots the run in play has fired so far, from the bridge's event tally. */
+export async function shotsFired(page: Page): Promise<number> {
+  return (await gameState(page)).events.shot ?? 0;
+}
+
 /** Shots in the next volley: steps until the ship fires, then returns how many shots that one step added. The fire key must be held. */
 export function shotsPerVolley(page: Page): Promise<number> {
   return page.evaluate((step) => {

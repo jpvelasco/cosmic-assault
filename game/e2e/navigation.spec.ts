@@ -11,6 +11,7 @@ import {
   openGameOverRun,
   openModeSelect,
   PAD,
+  shotsFired,
   startRun,
   tapPad,
   test,
@@ -36,8 +37,6 @@ async function playByPointer(page: Page, isMobile: boolean): Promise<void> {
   await expectMode(page, 'playing');
 }
 
-const shots = async (page: Page): Promise<number> => (await gameState(page)).events.shot ?? 0;
-
 test('the Pause button shows in play on every device, clear of the HUD, and a press on it pauses without a shot', async ({ page, isMobile }) => {
   await openGame(page);
   await expect(pauseButton(page)).toBeHidden();
@@ -62,7 +61,7 @@ test('the Pause button shows in play on every device, clear of the HUD, and a pr
   await expectMode(page, 'paused');
   await expect(pauseButton(page)).toBeHidden();
   await nextFrames(page, 3);
-  expect(await shots(page)).toBe(0);
+  expect(await shotsFired(page)).toBe(0);
   if (!isMobile) await expect(resume(page)).toBeFocused();
   await expect(quit(page)).toHaveText('Quit to title');
 
@@ -92,14 +91,14 @@ test('the pause card opens with Resume focused, so Enter or Space resumes, from 
   await page.keyboard.press('Space');
   await expectMode(page, 'playing');
   await nextFrames(page, 3);
-  expect(await shots(page), 'the Space that resumed fired nothing').toBe(0);
+  expect(await shotsFired(page), 'the Space that resumed fired nothing').toBe(0);
 });
 
 test('Space held as the run pauses does not resume when let go, and leaves no fire held @desktop', async ({ page }) => {
   await openGame(page);
   await playByPointer(page, false);
   await page.keyboard.down('Space');
-  await expect.poll(() => shots(page)).toBeGreaterThan(0);
+  await expect.poll(() => shotsFired(page)).toBeGreaterThan(0);
 
   await page.keyboard.press('Escape');
   await expectMode(page, 'paused');
@@ -113,9 +112,9 @@ test('Space held as the run pauses does not resume when let go, and leaves no fi
   await page.keyboard.press('Enter');
   await expectMode(page, 'playing');
   await nextFrames(page, 3);
-  const before = await shots(page);
+  const before = await shotsFired(page);
   await nextFrames(page, 30);
-  expect(await shots(page), 'no fire is held after the pause').toBe(before);
+  expect(await shotsFired(page), 'no fire is held after the pause').toBe(before);
 });
 
 test('a Rank Quit asks twice, and Esc takes the question back without resuming', async ({ page, isMobile }) => {

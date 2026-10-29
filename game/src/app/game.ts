@@ -9,6 +9,7 @@ import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
 import { mergeControls } from '../input/mergeControls';
+import { attachMouseFire } from '../input/mouseFire';
 import { attachTouchControls } from '../input/touchControls';
 import { createCrashGuard } from '../platform/crashGuard';
 import { createFullscreen } from '../platform/fullscreen';
@@ -100,6 +101,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   );
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pauseByPlayer);
+  // A press on the bare field in play: a button, a card or the touch layer above the canvas never reaches it.
+  const mouseFire = attachMouseFire(canvas, window, document, () => mode === 'playing' && !anyCoverUp(coversUp()));
   const log = new RingLog();
   const readPad = createPadReader(
     () => navigator.getGamepads(),
@@ -317,6 +320,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     log.add('mode', next, now);
     if (END_SCREENS.includes(next)) runEndedAt = now;
     if (MENU_SCREENS.includes(next)) hitStop.clear();
+    if (next !== 'playing') mouseFire.release();
     audio.setScreen(next);
     redrawPending = true;
     view.armIdleCursor();
@@ -339,6 +343,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette, with its target) and frame stats for it. */
   function onRunStarted(galaxy: GalaxyDef, target: number | null): void {
     startKeys.latch(keyboard.held);
+    mouseFire.release();
     padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
@@ -394,7 +399,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
 
   function readControls(pad: PadSnapshot | null): Controls {
     const keys = controlsFromKeys(startKeys.active(keyboard.held));
-    return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)));
+    return mergeControls(keys, touch, padFire.apply(controlsFromPad(pad)), mouseFire);
   }
 
   /** Steps the run; a clear or game over moves the flow to its end card, after which the steps do nothing. */
@@ -583,6 +588,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       keyboard.dispose();
       inputKind.dispose();
       touch.dispose();
+      mouseFire.dispose();
       router.dispose();
       view.dispose();
       overlay.dispose();
