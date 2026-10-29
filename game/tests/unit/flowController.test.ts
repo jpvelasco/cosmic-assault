@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { STALE_NEW_RUN_NOTICE, STALE_RUN_NOTICE } from '../../src/app/flowController';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
+import type { NewBest } from '../../src/meta/bests';
 import { setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, type SaveData } from '../../src/meta/save';
@@ -162,11 +163,46 @@ describe('createFlowController: events', () => {
     expect(flow.state.result?.newLooks ?? []).toEqual([]);
   });
 
-  it('never calls a debug run a new best: its store never writes, so it keeps no record to beat', () => {
-    const { flow } = setup({ save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1', writes: false });
-    flow.command({ kind: 'start' });
-    playUntilEnd(flow, '1-1');
-    expect(flow.state.newBest).toBeNull();
+  describe.each<{ readonly kind: NewBest['kind']; readonly rig: Omit<FlowRigOptions, 'today'>; readonly play: (flow: ReturnType<typeof setup>['flow']) => void }>([
+    {
+      kind: 'galaxy',
+      rig: { save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1' },
+      play: (flow) => {
+        flow.command({ kind: 'start' });
+        flow.handle([{ type: 'galaxyCleared', score: 500, bonus: 0, deaths: 0, stars: 1 }], { lives: 3, weaponTier: 0 });
+      },
+    },
+    {
+      kind: 'rankRun',
+      rig: { save: { ...defaultSave(), rankBoard: [{ score: 1, reached: 'D1 · G1', date: TODAY, continued: false }] } },
+      play: (flow) => {
+        flow.command({ kind: 'start' });
+        flow.command({ kind: 'chooseMode', mode: 'rank' });
+        flow.handle([{ type: 'gameOver', score: 500 }], { lives: 0, weaponTier: 0 });
+      },
+    },
+    {
+      kind: 'daily',
+      rig: { save: { ...defaultSave(), daily: { lastCleared: TODAY, streak: 1, bestStreak: 1, best: { date: TODAY, score: 1 } } } },
+      play: (flow) => {
+        flow.command({ kind: 'start' });
+        flow.command({ kind: 'chooseMode', mode: 'daily' });
+        flow.handle([{ type: 'galaxyCleared', score: 500, bonus: 0, deaths: 0, stars: 1 }], { lives: 3, weaponTier: 0 });
+      },
+    },
+  ])('a $kind record the score beats', ({ kind, rig, play }) => {
+    it('is a new best in a run that saves', () => {
+      const { flow } = setup(rig);
+      play(flow);
+      expect(flow.state.newBest?.kind).toBe(kind);
+    });
+
+    it('is never a new best in a debug run, whose store never writes and so keeps no record to beat', () => {
+      const { flow } = setup({ ...rig, writes: false });
+      play(flow);
+      expect(['results', 'gameOver']).toContain(flow.state.screen);
+      expect(flow.state.newBest).toBeNull();
+    });
   });
 
   it('Resume Rank works from mode select too', () => {

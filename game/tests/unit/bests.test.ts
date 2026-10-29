@@ -15,20 +15,20 @@ const galaxy = (record: number | null): BestsBefore => ({ ...NO_BESTS, galaxy: r
 const rankTop = (record: number | null): BestsBefore => ({ ...NO_BESTS, rankTop: record });
 const daily = (record: number | null): BestsBefore => ({ ...NO_BESTS, daily: record });
 
-/** Every kind of record against the outcomes a run can have: a first record, a tie, a beat, a debug run and an empty board. */
+/**
+ * Every kind of record against the outcomes a run can have: a first record, a tie, a beat and an empty board. A debug
+ * run's gate is the flow controller's (tests/unit/flowController.test.ts).
+ */
 const CASES: readonly Case[] = [
   { name: 'galaxy, first record', before: galaxy(null), outcome: { kind: 'galaxy', score: SCORE }, expected: null },
   { name: 'galaxy, tie', before: galaxy(SCORE), outcome: { kind: 'galaxy', score: SCORE }, expected: null },
   { name: 'galaxy, beat', before: galaxy(SCORE), outcome: { kind: 'galaxy', score: SCORE + 1 }, expected: { kind: 'galaxy', score: SCORE + 1 } },
-  { name: 'galaxy, debug run', before: NO_BESTS, outcome: { kind: 'galaxy', score: SCORE + 1 }, expected: null },
   { name: 'Rank run, empty board', before: rankTop(null), outcome: { kind: 'rankRun', score: SCORE }, expected: null },
   { name: 'Rank run, tie', before: rankTop(SCORE), outcome: { kind: 'rankRun', score: SCORE }, expected: null },
   { name: 'Rank run, beat', before: rankTop(SCORE), outcome: { kind: 'rankRun', score: SCORE + 1 }, expected: { kind: 'rankRun', score: SCORE + 1 } },
-  { name: 'Rank run, debug run', before: NO_BESTS, outcome: { kind: 'rankRun', score: SCORE + 1 }, expected: null },
   { name: 'Daily, first record', before: daily(null), outcome: { kind: 'daily', score: SCORE }, expected: null },
   { name: 'Daily, tie', before: daily(SCORE), outcome: { kind: 'daily', score: SCORE }, expected: null },
   { name: 'Daily, beat', before: daily(SCORE), outcome: { kind: 'daily', score: SCORE + 1 }, expected: { kind: 'daily', score: SCORE + 1 } },
-  { name: 'Daily, debug run', before: NO_BESTS, outcome: { kind: 'daily', score: SCORE + 1 }, expected: null },
 ];
 
 describe('newBest', () => {
