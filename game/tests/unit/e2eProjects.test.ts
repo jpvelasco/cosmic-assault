@@ -8,8 +8,9 @@ import { listedTests, listTests, projectMatchers, projectsWithTestIgnore, script
 
 const entries = readdirSync(new URL('../../e2e/', import.meta.url), { withFileTypes: true, recursive: true });
 const isSpec = (entry: (typeof entries)[number]): boolean => entry.isFile() && entry.name.endsWith('.spec.ts');
-const e2eDir = fileURLToPath(new URL('../../e2e/', import.meta.url));
-const specs = entries.filter((entry) => isSpec(entry) && resolve(entry.parentPath) === resolve(e2eDir)).map((entry) => entry.name);
+const e2eDir = resolve(fileURLToPath(new URL('../../e2e/', import.meta.url)));
+const isTopLevel = (entry: (typeof entries)[number]): boolean => resolve(entry.parentPath) === e2eDir;
+const specs = entries.filter((entry) => isSpec(entry) && isTopLevel(entry)).map((entry) => entry.name);
 
 describe('unmatchedSpecs', () => {
   it('names a spec that no pattern matches', () => {
@@ -157,6 +158,6 @@ describe('playwright.config.ts', () => {
   });
 
   it('keeps specs directly in e2e/, where the coverage check can see them', () => {
-    expect(entries.filter((entry) => isSpec(entry) && resolve(entry.parentPath) !== resolve(e2eDir)).map((entry) => join(entry.parentPath, entry.name))).toEqual([]);
+    expect(entries.filter((entry) => isSpec(entry) && !isTopLevel(entry)).map((entry) => join(entry.parentPath, entry.name))).toEqual([]);
   });
 });

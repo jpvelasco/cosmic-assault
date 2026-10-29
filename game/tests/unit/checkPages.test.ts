@@ -18,9 +18,11 @@ function gameScript(dir: string): string {
   return `assets/${name}`;
 }
 
-function editManifest(dir: string, edit: (manifest: Record<string, unknown> & { icons: { src: string }[] }) => void): void {
+type Manifest = Record<string, unknown> & { icons: { src: string }[] };
+
+function editManifest(dir: string, edit: (manifest: Manifest) => void): void {
   const path = join(dir, 'manifest.webmanifest');
-  const manifest = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown> & { icons: { src: string }[] };
+  const manifest = JSON.parse(readFileSync(path, 'utf8')) as Manifest;
   edit(manifest);
   writeFileSync(path, JSON.stringify(manifest));
 }
