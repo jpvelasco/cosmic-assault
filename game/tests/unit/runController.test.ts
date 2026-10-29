@@ -5,7 +5,8 @@ import { TWISTS_BY_ID } from '../../src/content/daily';
 import { galaxyById } from '../../src/content/galaxies';
 import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { DAILY_LABEL, twistToast } from '../../src/ui/dailyCopy';
-import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
+import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunController, type RunControllerDeps } from '../../src/app/runController';
+import type { PickupId } from '../../src/content/types';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
 import { setRankRun } from '../../src/meta/progress';
@@ -57,6 +58,18 @@ function setup(
   });
   return { run, storage, screens, onRunStarted, refresh, notify };
 }
+
+/** Lays a pickup of `kind` on the ship of the run in play, as a drop would, and steps once, which collects it. */
+function collectOnShip(run: RunController, kind: PickupId): void {
+  const world = run.world;
+  if (world === null) throw new Error('the run must have started');
+  const { x, y } = world.ship;
+  world['run']?.['pickupField'].list.push({ id: 90, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
+  run.step(STEP_SECONDS, NO_CONTROLS);
+}
+
+/** The save as `storage` holds it. */
+const storedIn = (storage: ReturnType<typeof memoryStorage>): SaveData => JSON.parse(storage.items.get(SAVE_KEY) ?? '{}') as SaveData;
 
 describe('createRunController', () => {
   it('loads the save and imports the classic score once, writing only outside debug runs', () => {
@@ -188,14 +201,9 @@ describe('createRunController', () => {
     it('marks a first pickup seen, the one write outside the Daily record a Daily makes', () => {
       const progress: SaveData = { ...setRankRun(defaultSave(), startRank(DATE)), frontier: '1-3', galaxies: { '1-1': { bestScore: 1800, stars: 3 } }, classicBest: 4321 };
       const { run, storage } = playDaily({}, progress);
-      const stored = (): SaveData => JSON.parse(storage.items.get(SAVE_KEY) ?? '{}') as SaveData;
-      const before = stored();
-      const world = run.world;
-      if (world === null) throw new Error('the Daily must have started');
-      const { x, y } = world.ship;
-      world['run']?.['pickupField'].list.push({ id: 90, kind: 'doubleShot', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
-      run.step(STEP_SECONDS, NO_CONTROLS);
-      expect(stored()).toEqual({ ...before, seenPickups: ['doubleShot'] });
+      const before = storedIn(storage);
+      collectOnShip(run, 'doubleShot');
+      expect(storedIn(storage)).toEqual({ ...before, seenPickups: ['doubleShot'] });
       expect(before).toMatchObject({ frontier: '1-3', classicBest: 4321, rankRun: progress.rankRun });
     });
 
@@ -241,12 +249,7 @@ describe('createRunController', () => {
     it('counts a kind as seen once collected, and keeps its callout quiet after that', () => {
       const { run, notify } = setup({ galaxy: '1-1', seed: 5, startLives: 5 });
       run.command({ kind: 'start' });
-      const world = run.world;
-      if (world === null) throw new Error('the run must have started');
-      // Lay a Shield on the ship, as a drop would have.
-      const { x, y } = world.ship;
-      world['run']?.['pickupField'].list.push({ id: 90, kind: 'shield', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
-      run.step(STEP_SECONDS, NO_CONTROLS);
+      collectOnShip(run, 'shield');
       expect(run.save.seenPickups).toEqual(['shield']);
       run.step(STEP_SECONDS, NO_CONTROLS);
       expect(notify).not.toHaveBeenCalledWith(expect.stringContaining('Shield'));
@@ -260,12 +263,8 @@ describe('createRunController', () => {
     it('writes the kind to the saved game outside debug runs', () => {
       const { run, storage } = setup({}, () => FIELD, armed(0));
       run.command({ kind: 'resumeRank' });
-      const world = run.world;
-      if (world === null) throw new Error('the run must have started');
-      const { x, y } = world.ship;
-      world['run']?.['pickupField'].list.push({ id: 90, kind: 'doubleShot', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
-      run.step(STEP_SECONDS, NO_CONTROLS);
-      expect(JSON.parse(storage.items.get(SAVE_KEY) ?? '{}')).toMatchObject({ seenPickups: ['doubleShot'] });
+      collectOnShip(run, 'doubleShot');
+      expect(storedIn(storage)).toMatchObject({ seenPickups: ['doubleShot'] });
     });
   });
 
