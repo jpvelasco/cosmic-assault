@@ -35,7 +35,7 @@ const FULL_SAVE: SaveData = {
   daily: { lastCleared: '2026-10-25', streak: 3, bestStreak: 5, best: { date: '2026-10-25', score: 7000 } },
 };
 
-/** Every field of `save` but `daily`, as stored text: the part a Daily must never touch. */
+/** Every field of `save` but `daily`, as stored text: the part a Daily's flow never writes (a first pickup's notice marker aside). */
 const outsideDaily = (save: SaveData): string => JSON.stringify({ ...save, daily: null });
 
 describe('transition: into the Daily', () => {
@@ -114,7 +114,7 @@ function written(save: SaveData, state: FlowState, action: FlowAction): { change
   return { change, save: change === null ? save : applySaveChange(save, change, save.rankSeq).save };
 }
 
-describe('saveChange: the Daily is sealed off from every other record', () => {
+describe('saveChange: the Daily writes no progress but its own record', () => {
   const results = transition(dailyOn('playing'), clear());
   const over = transition(dailyOn('playing'), DIE);
   const cases: readonly { readonly name: string; readonly state: FlowState; readonly action: FlowAction }[] = [

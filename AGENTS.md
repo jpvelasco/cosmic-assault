@@ -163,11 +163,12 @@
     content tests) makes the generator throw, naming the date; a unit test builds
     every date from 1970 through 2099 to prove none does, and a few dates are pinned
     to their exact output. Mode `'daily'` starts like Free play and never touches
-    Rank: a Daily run writes only the save's `daily` record (the streak and the best
-    score on the latest date played), never a level's record, stars, unlocks, the
-    Rank run or its board. Its results show the target, not stars. The date is read
-    once as a run starts and kept for its retries, so a run past midnight counts for
-    the day it began. Mode select re-reads the date every time it shows, and a date
+    Rank: a Daily writes no progress (stars, frontier, unlocks, Rank and bests)
+    beyond the save's `daily` record (the streak and the best score on the latest
+    date played). It may write the notice marker `seenPickups`, as any run does: a
+    first pickup's callout is not progress. Its results show the target, not
+    stars. The date is read once as a run starts and kept for its retries, so a run
+    past midnight counts for the day it began. Mode select re-reads the date every time it shows, and a date
     whose Daily cannot be built leaves its card unavailable (and logged) while the
     other modes play on; choosing it then leaves mode select up and redraws the
     card so. Every Daily string, the HUD's `Daily` label among them, lives in

@@ -8,6 +8,7 @@ import { PRESSURE } from '../tests/helpers/pressure';
 import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
 import {
   clickPastGuard,
+  collectPickup,
   expect,
   expectMode,
   fastForward,
@@ -81,7 +82,7 @@ test('the Daily card names the day\'s twist and target, and Enter on it plays th
   await expect(toastOf(page)).toHaveText(twistToast(twist.name));
 });
 
-test('a Daily clear shows its target and no stars, writes the Daily record alone, and Retry plays the same date @desktop', async ({ page }) => {
+test('a Daily clear shows its target and no stars, writes no progress but the Daily record, and Retry plays the same date @desktop', async ({ page }) => {
   const daily = dailyGalaxy(CLEAR_DATE);
   await seedSave(page, PROGRESS);
   // Played on the project's own 1280×720 field, where the date's idle ship clears it.
@@ -109,6 +110,15 @@ test('a Daily clear shows its target and no stars, writes the Daily record alone
 
   await clickPastGuard(page, 'results-retry', 'playing');
   expect((await gameState(page)).daily?.date).toBe(CLEAR_DATE);
+});
+
+test('a Daily that collects a first pickup marks it seen, and writes nothing else outside the Daily record @desktop', async ({ page }) => {
+  await seedSave(page, PROGRESS);
+  await openDaily(page, CLEAR_DATE);
+  await playDaily(page);
+  await collectPickup(page, 'doubleShot');
+  await expect.poll(async () => outsideDaily(await storedSave(page))).toEqual(outsideDaily({ ...PROGRESS, seenPickups: ['doubleShot'] }));
+  expect((await storedSave(page)).daily).toEqual(PROGRESS.daily);
 });
 
 test('a Daily game over writes nothing; R plays the same date again and Escape goes to the title @desktop', async ({ page }) => {

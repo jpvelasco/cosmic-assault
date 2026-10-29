@@ -128,8 +128,8 @@ describe('createRunController', () => {
       }
       return world !== null && twin.asteroids.length > 0 && rocks(world) === rocks(twin);
     };
-    const playDaily = (overrides: Partial<RunOverrides> = {}) => {
-      const tab = setup({ today: DATE, ...overrides });
+    const playDaily = (overrides: Partial<RunOverrides> = {}, save?: SaveData) => {
+      const tab = setup({ today: DATE, ...overrides }, undefined, save);
       tab.run.command({ kind: 'start' });
       tab.run.command({ kind: 'chooseMode', mode: 'daily' });
       return tab;
@@ -183,6 +183,20 @@ describe('createRunController', () => {
         tab.run.command({ kind: 'chooseMode', mode: 'free' });
         expect(tab.run.flow.screen).toBe('map');
       });
+    });
+
+    it('marks a first pickup seen, the one write outside the Daily record a Daily makes', () => {
+      const progress: SaveData = { ...setRankRun(defaultSave(), startRank(DATE)), frontier: '1-3', galaxies: { '1-1': { bestScore: 1800, stars: 3 } }, classicBest: 4321 };
+      const { run, storage } = playDaily({}, progress);
+      const stored = (): SaveData => JSON.parse(storage.items.get(SAVE_KEY) ?? '{}') as SaveData;
+      const before = stored();
+      const world = run.world;
+      if (world === null) throw new Error('the Daily must have started');
+      const { x, y } = world.ship;
+      world['run']?.['pickupField'].list.push({ id: 90, kind: 'doubleShot', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
+      run.step(STEP_SECONDS, NO_CONTROLS);
+      expect(stored()).toEqual({ ...before, seenPickups: ['doubleShot'] });
+      expect(before).toMatchObject({ frontier: '1-3', classicBest: 4321, rankRun: progress.rankRun });
     });
 
     it('has no Daily outside one', () => {

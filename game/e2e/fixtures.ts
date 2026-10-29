@@ -228,6 +228,12 @@ export function grantPickup(page: Page, kind: PickupId): Promise<void> {
   }, kind);
 }
 
+/** Drops `kind` onto the ship and steps once, which collects it. */
+export async function collectPickup(page: Page, kind: PickupId): Promise<void> {
+  await grantPickup(page, kind);
+  await fastForward(page, STEP_SECONDS);
+}
+
 /** Restarts the frame stats, warm-up included (see `restartFrameStats` in src/testApi.d.ts). */
 export function restartFrameStats(page: Page): Promise<void> {
   return page.evaluate(() => {
