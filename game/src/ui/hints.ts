@@ -21,6 +21,14 @@ export interface HintCopy {
   readonly paused: string;
   /** The pause button's tooltip in play, naming its keys, or empty where a tooltip never shows. */
   readonly pauseTip: string;
+  /** The key worn by the button Enter or pad A takes (an end card's first), or empty. */
+  readonly confirmKey: string;
+  /** The key worn by an end card's Retry when it is not the first button, or empty. */
+  readonly retryKey: string;
+  /** The key worn by the button Back leads through (Back, or an end card's Map or Title), or empty. */
+  readonly backKey: string;
+  /** A Rank end card's line on the run that Back leaves saved, or empty. */
+  readonly suspend: string;
 }
 
 const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
@@ -32,6 +40,10 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
     resumeKey: 'Esc',
     paused: 'Esc or P to resume',
     pauseTip: 'Pause (Esc or P)',
+    confirmKey: 'Enter',
+    retryKey: 'R',
+    backKey: 'Esc',
+    suspend: 'Esc suspends the run: pick it up from the title',
   },
   pad: {
     start: 'Press A to start',
@@ -41,6 +53,10 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
     resumeKey: 'Start',
     paused: 'Start or B to resume',
     pauseTip: 'Pause (Start or B)',
+    confirmKey: 'A',
+    retryKey: '',
+    backKey: 'B',
+    suspend: 'B suspends the run: pick it up from the title',
   },
   touch: {
     start: 'Tap to start',
@@ -50,6 +66,10 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
     resumeKey: '',
     paused: '',
     pauseTip: '',
+    confirmKey: '',
+    retryKey: '',
+    backKey: '',
+    suspend: '',
   },
 };
 

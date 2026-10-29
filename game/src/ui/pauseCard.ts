@@ -1,5 +1,5 @@
 import type { GalaxyMode } from '../sim/scoring';
-import { button, cardPanel, element, PRIMARY_BUTTON, withTestId } from './dom';
+import { button, cardPanel, element, PRIMARY_BUTTON, wearKey, withTestId } from './dom';
 import type { HintCopy } from './hints';
 
 /** Where the pause card's Quit stands: in Rank a first press arms it, and only a press while it is armed quits. */
@@ -29,12 +29,9 @@ export interface PauseCard {
 /** The pause card: Resume, a Quit that asks twice in Rank, a line on the keys that resume, and the chip row `chips`. */
 export function createPauseCard(actions: { readonly resume: () => void; readonly quit: () => void }, chips: HTMLElement): PauseCard {
   const { panel, card } = cardPanel('pause');
-  const resumeKey = element('span', 'key-hint');
-  // Drawn only: the button's name stays "Resume", and aria-keyshortcuts names its keys.
-  resumeKey.setAttribute('aria-hidden', 'true');
   const resume = withTestId(button(PRIMARY_BUTTON, 'Resume', actions.resume), 'resume');
   resume.setAttribute('aria-keyshortcuts', 'Escape P');
-  resume.append(resumeKey);
+  const showResumeKey = wearKey(resume);
   let mode: GalaxyMode | null = null;
   let step: QuitStep = 'ready';
   const quit = withTestId(
@@ -59,8 +56,7 @@ export function createPauseCard(actions: { readonly resume: () => void; readonly
     update(runMode, hints) {
       mode = runMode;
       showQuit();
-      resumeKey.textContent = hints.resumeKey;
-      resumeKey.hidden = hints.resumeKey === '';
+      showResumeKey(hints.resumeKey);
       hint.textContent = hints.paused;
       hint.hidden = hints.paused === '';
     },

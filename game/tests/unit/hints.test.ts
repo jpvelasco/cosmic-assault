@@ -20,6 +20,10 @@ describe('hintCopy', () => {
       resumeKey: 'Esc',
       paused: 'Esc or P to resume',
       pauseTip: 'Pause (Esc or P)',
+      confirmKey: 'Enter',
+      retryKey: 'R',
+      backKey: 'Esc',
+      suspend: 'Esc suspends the run: pick it up from the title',
     });
   });
 
@@ -32,6 +36,10 @@ describe('hintCopy', () => {
       resumeKey: 'Start',
       paused: 'Start or B to resume',
       pauseTip: 'Pause (Start or B)',
+      confirmKey: 'A',
+      retryKey: '',
+      backKey: 'B',
+      suspend: 'B suspends the run: pick it up from the title',
     });
   });
 
@@ -44,6 +52,10 @@ describe('hintCopy', () => {
       resumeKey: '',
       paused: '',
       pauseTip: '',
+      confirmKey: '',
+      retryKey: '',
+      backKey: '',
+      suspend: '',
     });
   });
 

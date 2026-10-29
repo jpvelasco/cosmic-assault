@@ -135,6 +135,20 @@ export function withTestId<T extends HTMLElement>(el: T, testId: string): T {
   return el;
 }
 
+/**
+ * Gives `host` a key worn beside its label, drawn only: the button's name stays its label, and `aria-keyshortcuts`
+ * names its keys. Returns the setter for the key shown; an empty key hides the mark.
+ */
+export function wearKey(host: HTMLElement): (key: string) => void {
+  const mark = element('span', 'key-hint');
+  mark.setAttribute('aria-hidden', 'true');
+  host.append(mark);
+  return (key) => {
+    mark.textContent = key;
+    mark.hidden = key === '';
+  };
+}
+
 /** A glass chip with the classes `chip` and `className` and a test id (the class unless given). */
 export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
   return withTestId(button(`chip ${className}`, '', onClick), testId);
