@@ -19,6 +19,8 @@ export interface FlowRigOptions {
   readonly writes?: boolean;
   /** The date the flow reads as today until `setToday` changes it. */
   readonly today: string;
+  /** Whether a date's Daily can be built; every date's can by default. */
+  readonly dailyBuilds?: (date: string) => boolean;
 }
 
 /**
@@ -38,6 +40,7 @@ export function flowRig(options: FlowRigOptions) {
     store,
     overrides: { galaxy: options.galaxy, startLives: options.startLives },
     today: () => today,
+    dailyBuilds: options.dailyBuilds ?? (() => true),
     startRun: (state) => started.push(state),
     showScreen: (screen) => screens.push(screen),
     notify,

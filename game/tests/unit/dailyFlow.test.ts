@@ -179,6 +179,33 @@ describe('createFlowController: the Daily', () => {
     expect(started).toEqual([at('playing', { mode: 'daily', galaxy: dailyGalaxy(NEXT_DAY).def.id, daily: NEXT_DAY, runs: 1 })]);
   });
 
+  it('checks the very date it plays, so a midnight between the two cannot play a date never checked', () => {
+    const checked: string[] = [];
+    const { flow, started, setToday } = flowRig({
+      today: DATE,
+      dailyBuilds: (date) => {
+        checked.push(date);
+        setToday(NEXT_DAY);
+        return true;
+      },
+    });
+    flow.command({ kind: 'start' });
+    flow.command({ kind: 'chooseMode', mode: 'daily' });
+    expect(checked).toEqual([DATE]);
+    expect(started.map((state) => state.daily)).toEqual([DATE]);
+  });
+
+  it("stays on mode select when the date's Daily cannot be built, and Free play still opens", () => {
+    const { flow, started, screens } = flowRig({ today: DATE, dailyBuilds: () => false });
+    flow.command({ kind: 'start' });
+    flow.command({ kind: 'chooseMode', mode: 'daily' });
+    expect(flow.state.screen).toBe('modeSelect');
+    expect(started).toEqual([]);
+    expect(screens).toEqual(['modeSelect']);
+    flow.command({ kind: 'chooseMode', mode: 'free' });
+    expect(flow.state.screen).toBe('map');
+  });
+
   it('keeps the date a run began on across midnight and its retries, and mode select reads today again', () => {
     const { flow, store, started, setToday } = setup();
     flow.command({ kind: 'start' });

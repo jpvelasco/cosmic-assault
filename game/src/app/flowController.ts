@@ -22,6 +22,8 @@ export interface FlowControllerDeps {
   readonly overrides: Pick<RunOverrides, 'galaxy' | 'startLives'>;
   /** The local date, `YYYY-MM-DD`, or the date `?today=` pins in e2e and dev builds. */
   today(): string;
+  /** Whether the Daily of `date` can be built; when it cannot, choosing the Daily leaves mode select up. */
+  dailyBuilds(date: string): boolean;
   /** The flow has just started a run of `flow.galaxy`: build its World. Called before `showScreen('playing')`. */
   startRun(flow: FlowState): void;
   showScreen(screen: Screen): void;
@@ -138,10 +140,16 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     return state.screen === 'modeSelect' && store.save.rankRun !== null ? { kind: 'askNewRank' } : { kind: 'startRank', run: newRank() };
   }
 
-  /** A mode card: Rank (asking first over a saved run), Free play's map, or the Daily of today as read now. */
-  function chooseMode(mode: GalaxyMode): FlowAction {
+  /** The Daily of today, read once, so the date checked is the date played; none when that date's cannot be built. */
+  function chooseDaily(): FlowAction | null {
+    const date = deps.today();
+    return deps.dailyBuilds(date) ? { kind: 'playDaily', date } : null;
+  }
+
+  /** A mode card: Rank (asking first over a saved run), Free play's map, or the Daily of today. */
+  function chooseMode(mode: GalaxyMode): FlowAction | null {
     if (mode === 'rank') return chooseRank();
-    return mode === 'daily' ? { kind: 'playDaily', date: deps.today() } : { kind: 'chooseFree' };
+    return mode === 'daily' ? chooseDaily() : { kind: 'chooseFree' };
   }
 
   function actionFor(command: FlowCommand): FlowAction | null {

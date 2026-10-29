@@ -1,6 +1,6 @@
 import { TWISTS_BY_ID } from '../content/daily';
 import { shownStreak } from '../meta/daily';
-import { dailyGalaxy, type DailyGalaxy } from '../meta/dailyGalaxy';
+import { tryDailyGalaxy, type DailyOutcome } from '../meta/dailyGalaxy';
 import type { SaveData } from '../meta/save';
 import { errorMessage, type RingLog } from '../platform/log';
 import type { GalaxyMode } from '../sim/scoring';
@@ -48,24 +48,22 @@ export interface DailyCardView {
   readonly problem: string | null;
 }
 
-/** What the Daily card needs of a date's Daily. */
-type DailyBuild = (date: string) => Pick<DailyGalaxy, 'twist' | 'target'>;
+/** Builds a date's Daily, or says why it cannot be built. */
+type DailyBuild = (date: string) => DailyOutcome;
 
 /**
  * What the Daily card shows on `today`: its twist and target, the twist's blurb, and the streak from 2 on ('' below).
  * A date `build` cannot make a Daily of shows the card as unavailable instead, so mode select still offers every other mode.
  */
-export function dailyCardView(save: SaveData, today: string, build: DailyBuild = dailyGalaxy): DailyCardView {
-  let daily: ReturnType<DailyBuild>;
-  try {
-    daily = build(today);
-  } catch (error) {
-    const problem = `The Daily Galaxy of ${today} could not be built (${errorMessage(error)}), so its card shows it as unavailable; Rank and Free play are unaffected. Check that the device's date is right, then open mode select again.`;
+export function dailyCardView(save: SaveData, today: string, build: DailyBuild = tryDailyGalaxy): DailyCardView {
+  const built = build(today);
+  if (built.daily === null) {
+    const problem = `The Daily Galaxy of ${today} could not be built (${errorMessage(built.error)}), so its card shows it as unavailable; Rank and Free play are unaffected. Check that the device's date is right, then open mode select again.`;
     return { line: DAILY_UNAVAILABLE, blurb: '', streak: '', problem };
   }
-  const { name, blurb } = TWISTS_BY_ID[daily.twist];
+  const { name, blurb } = TWISTS_BY_ID[built.daily.twist];
   const streak = shownStreak(save, today);
-  return { line: dailyCardLine(name, daily.target), blurb, streak: streak >= CARD_STREAK_FROM ? streakText(streak) : '', problem: null };
+  return { line: dailyCardLine(name, built.daily.target), blurb, streak: streak >= CARD_STREAK_FROM ? streakText(streak) : '', problem: null };
 }
 
 /**
@@ -92,9 +90,9 @@ function modeCard(spec: ModeSpec, act: Act, ...extra: HTMLElement[]): { readonly
 
 /**
  * Mode select (three large cards, Rank, Free play and the Daily) and the card that confirms a new Rank run over a saved one.
- * A date whose Daily cannot be built is written to `log`, once per date.
+ * A date whose Daily `build` cannot make is written to `log`, once per date.
  */
-export function createModeSelect(act: Act, log: Pick<RingLog, 'add'>): ModeSelect {
+export function createModeSelect(act: Act, log: Pick<RingLog, 'add'>, build: DailyBuild = tryDailyGalaxy): ModeSelect {
   const hint = element('p', 'hint');
   const resumeSlot = element('div', 'resume-slot');
   const blurb = element('span', 'mode-card__blurb');
@@ -118,7 +116,7 @@ export function createModeSelect(act: Act, log: Pick<RingLog, 'add'>): ModeSelec
     update(save, today) {
       if (shown?.save === save && shown.today === today) return;
       shown = { save, today };
-      const view = dailyCardView(save, today);
+      const view = dailyCardView(save, today, build);
       dailyCard.text.textContent = view.line;
       blurb.textContent = view.blurb;
       streak.textContent = view.streak;

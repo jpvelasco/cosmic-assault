@@ -169,9 +169,7 @@ describe('createRunController', () => {
         vi.resetModules();
         vi.doMock('../../src/meta/dailyGalaxy', async (actual) => ({
           ...(await actual<typeof import('../../src/meta/dailyGalaxy')>()),
-          dailyGalaxy: () => {
-            throw new Error('The Daily Galaxy cannot be built');
-          },
+          tryDailyGalaxy: () => ({ daily: null, error: new Error('The Daily Galaxy cannot be built') }),
         }));
         const { createRunController: withoutDaily } = await import('../../src/app/runController');
         const tab = setup({ today: DATE }, undefined, undefined, undefined, undefined, withoutDaily);

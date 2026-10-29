@@ -9,7 +9,7 @@ import { poolFor } from '../../src/content/pickups';
 import type { GalaxyDef, GalaxyEvent, ThreatKind } from '../../src/content/types';
 import { galaxyProblems } from '../../src/content/validity';
 import { compareDates, dayNumber, nextDate } from '../../src/meta/calendar';
-import { dailyGalaxy, rolledTwist, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
+import { dailyGalaxy, rolledTwist, tryDailyGalaxy, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { hashString } from '../../src/sim/rng';
 import { datesFrom } from '../helpers/dates';
 import { importClosure } from '../helpers/sourceImports';
@@ -238,6 +238,16 @@ describe('dailyGalaxy', () => {
   }, RANGE_TIMEOUT_MS);
 });
 
+describe('tryDailyGalaxy', () => {
+  it('gives the very Daily the generator builds, on a date it can build', () => {
+    expect(tryDailyGalaxy('2026-10-26')).toEqual({ daily: dailyGalaxy('2026-10-26') });
+  });
+
+  it('gives the error instead of throwing, on a date it cannot', () => {
+    expect(tryDailyGalaxy('2026-02-30')).toEqual({ daily: null, error: expect.any(Error) as Error });
+  });
+});
+
 describe('a Daily that breaks a content rule', () => {
   afterEach(() => {
     vi.doUnmock('../../src/content/daily');
@@ -251,8 +261,11 @@ describe('a Daily that breaks a content rule', () => {
       const real: typeof import('../../src/content/daily') = await actual();
       return { ...real, DAILY_TWISTS: real.DAILY_TWISTS.map((t) => ({ ...t, rampScale: { large: { times: 3, cap: 2 } } })) };
     });
-    const { dailyGalaxy: broken } = await import('../../src/meta/dailyGalaxy');
+    const { dailyGalaxy: broken, tryDailyGalaxy: tryBroken } = await import('../../src/meta/dailyGalaxy');
     expect(() => broken('2026-10-26')).toThrow(/2026-10-26.*large ramp.*content\/daily\.ts/);
+    const outcome = tryBroken('2026-10-26');
+    expect(outcome.daily).toBeNull();
+    expect('error' in outcome && outcome.error).toEqual(expect.objectContaining({ message: expect.stringMatching(/2026-10-26.*large ramp/) as string }));
   });
 
   it('is refused when its twist\'s set piece finds no time, naming the date and the twist', async () => {

@@ -152,6 +152,18 @@ export function dailyGalaxy(date: string): DailyGalaxy {
   return lastBuilt;
 }
 
+/** A date's Daily, or the error that keeps it from being built. */
+export type DailyOutcome = { readonly daily: DailyGalaxy } | { readonly daily: null; readonly error: unknown };
+
+/** `dailyGalaxy(date)`, or why it cannot be built: the one check of whether a date's Daily can be offered. */
+export function tryDailyGalaxy(date: string): DailyOutcome {
+  try {
+    return { daily: dailyGalaxy(date) };
+  } catch (error) {
+    return { daily: null, error };
+  }
+}
+
 function buildDaily(date: string): DailyGalaxy {
   assertCalendarDate(date);
   const rng = dailyStream(date);

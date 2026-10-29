@@ -1,6 +1,6 @@
 import { TWISTS_BY_ID } from '../content/daily';
 import type { GalaxyDef } from '../content/types';
-import { dailyGalaxy, type DailyGalaxy } from '../meta/dailyGalaxy';
+import { dailyGalaxy, tryDailyGalaxy, type DailyGalaxy } from '../meta/dailyGalaxy';
 import { recordPickupSeen } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import type { RingLog } from '../platform/log';
@@ -153,14 +153,11 @@ export function createRunController(deps: RunControllerDeps): RunController {
     if (daily !== null) deps.notify(twistToast(TWISTS_BY_ID[daily.twist].name));
   }
 
-  /** Whether the Daily of `date` can be built; mode select's card says why one cannot. */
+  /** Whether the Daily of `date` can be built; when not, the refresh redraws mode select's card unavailable and logs why. */
   function dailyBuilds(date: string): boolean {
-    try {
-      dailyGalaxy(date);
-      return true;
-    } catch {
-      return false;
-    }
+    const builds = tryDailyGalaxy(date).daily !== null;
+    if (!builds) deps.refresh();
+    return builds;
   }
 
   /** Ends and forgets the run, if there is one; the canvas keeps its last frame under the menu. */
@@ -174,6 +171,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
     store,
     overrides,
     today,
+    dailyBuilds,
     startRun,
     showScreen: (screen) => {
       if (MENU_SCREENS.includes(screen)) dropRun();
@@ -288,11 +286,6 @@ export function createRunController(deps: RunControllerDeps): RunController {
     command(command) {
       // The saved run is being checked, or is playing in another tab: it cannot be resumed here yet.
       if (command.kind === 'resumeRank' && rankLock !== 'free') return;
-      // Today's Daily cannot be built: mode select stays, and the refresh shows its card as unavailable and logs why.
-      if (command.kind === 'chooseMode' && command.mode === 'daily' && !dailyBuilds(today())) {
-        deps.refresh();
-        return;
-      }
       flow.command(command);
     },
     step(dt, controls) {

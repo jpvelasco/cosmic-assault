@@ -7,7 +7,6 @@ import { dailyCardView } from '../../src/ui/modeSelect';
 import { dailyRecordLines } from '../../src/ui/recordsCard';
 import { PRESSURE } from '../helpers/pressure';
 
-
 /** Every line of `ui/dailyCopy.ts`, rendered: the record type makes a new export fail to compile until it is listed here. */
 const RENDERED: Readonly<Record<keyof typeof copy, readonly string[]>> = {
   DAILY_NAME: [copy.DAILY_NAME],
@@ -82,9 +81,7 @@ describe('the Daily mode card', () => {
   });
 
   it('shows the Daily as unavailable when the generator throws, naming the date and the fault in the problem it logs', () => {
-    const fails = (date: string): never => {
-      throw new Error(`no anchor for ${date}`);
-    };
+    const fails = (date: string) => ({ daily: null, error: new Error(`no anchor for ${date}`) });
     const view = dailyCardView(withDaily({ lastCleared: TODAY, streak: 5, bestStreak: 5 }), TODAY, fails);
     expect(view).toMatchObject({ line: copy.DAILY_UNAVAILABLE, blurb: '', streak: '' });
     expect(view.problem).toContain(TODAY);
