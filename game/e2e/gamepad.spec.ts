@@ -3,7 +3,7 @@ import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
 import { defaultSave } from '../src/meta/save';
 import { DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
-import { expect, expectDemoEndedOnTitle, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, startAttract, test, toastOf, waitOutGameOverGuard } from './fixtures';
+import { expect, expectDemoEndedOnTitle, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, startAttract, test, threeStarSave, toastOf, waitOutGameOverGuard } from './fixtures';
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -203,7 +203,10 @@ test('the D-pad walks from Play down to Settings and across to Records, A opens 
   await expectMode(page, 'title');
 });
 
-test('the D-pad reaches the Hangar after Records, A opens it, the D-pad moves within it, and B closes it', { tag: '@desktop' }, async ({ page }) => {
+test('the D-pad reaches the Hangar after Records, A opens it, the D-pad moves within it, A picks a look, and B closes it', { tag: '@desktop' }, async ({ page }) => {
+  // Fifteen stars: the Comet trail is unlocked, and not yet chosen.
+  await seedSave(page, threeStarSave(['1-1', '1-2', '1-3', '1-4', '1-5']));
+  await openGame(page);
   await tap(page, DPAD_DOWN);
   await tap(page, DPAD_DOWN);
   await expect(page.getByTestId('settings-open')).toBeFocused();
@@ -217,9 +220,16 @@ test('the D-pad reaches the Hangar after Records, A opens it, the D-pad moves wi
   await expect(page.getByTestId('hangar-skin-classic')).toBeFocused();
   await tap(page, DPAD_DOWN);
   await expect(page.getByTestId('hangar-trail-standard')).toBeFocused();
-  // A picks the focused look, which is the unlocked default here, and B closes the card with focus back on its chip.
+  // The D-pad moves focus onto the Comet without choosing it, so only A can.
+  await tap(page, DPAD_RIGHT);
+  const comet = page.getByTestId('hangar-trail-comet');
+  await expect(comet).toBeFocused();
+  expect((await gameState(page)).settings.trail).toBe('standard');
   await tap(page, A);
-  await expect.poll(async () => (await gameState(page)).settings.trail).toBe('standard');
+  await expect.poll(async () => (await gameState(page)).settings.trail).toBe('comet');
+  await expect(comet).toBeChecked();
+  await expect(hangar).toBeVisible();
+  // B closes the card with focus back on its chip.
   await tap(page, B);
   await expect(hangar).toBeHidden();
   await expect(page.getByTestId('hangar-open')).toBeFocused();
