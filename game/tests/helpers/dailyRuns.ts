@@ -3,16 +3,8 @@ import { DAILY_TWISTS, type DailyTwistId } from '../../src/content/daily';
 import { nextDate, previousDate } from '../../src/meta/calendar';
 import { dailyGalaxy, reachesTarget, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { fixed, formatColumns, percent } from './botRuns';
+import { CLOCK_CHANGES, datesFrom } from './dates';
 
-/** `count` consecutive dates from `from`. */
-export function datesFrom(from: string, count: number): string[] {
-  const dates = [from];
-  while (dates.length < count) dates.push(nextDate(dates[dates.length - 1] ?? from));
-  return dates;
-}
-
-/** The days the streak tests cross a clock change on, in New York, London and Lord Howe. */
-const CLOCK_CHANGES: readonly string[] = ['2026-03-08', '2026-11-01', '2026-03-29', '2026-10-25', '2026-04-05', '2026-10-04'];
 const RUN = datesFrom('2027-01-01', 200);
 /**
  * The calendar's edges: every month's end in 2027, the next leap day, and each clock change with the days either side of
@@ -21,7 +13,7 @@ const RUN = datesFrom('2027-01-01', 200);
 const EDGES: readonly string[] = [
   ...datesFrom('2027-01-01', 365).filter((date) => nextDate(date).endsWith('-01')),
   '2028-02-29',
-  ...CLOCK_CHANGES.flatMap((day) => [previousDate(day), day, nextDate(day)]),
+  ...CLOCK_CHANGES.flatMap(({ day }) => [previousDate(day), day, nextDate(day)]),
 ];
 
 /** The dates the Daily suite plays: 200 running from 2027-01-01, and the calendar's edges. */

@@ -11,7 +11,7 @@ import { galaxyProblems } from '../../src/content/validity';
 import { compareDates, dayNumber, nextDate } from '../../src/meta/calendar';
 import { dailyGalaxy, rolledTwist, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { hashString } from '../../src/sim/rng';
-import { datesFrom } from '../helpers/dailyRuns';
+import { datesFrom } from '../helpers/dates';
 import { importClosure } from '../helpers/sourceImports';
 
 const DATES = datesFrom('2026-01-01', 1000);
@@ -247,7 +247,8 @@ describe('a Daily that breaks a content rule', () => {
   });
 
   it('is refused when its twist\'s set piece finds no time, naming the date and the twist', async () => {
-    const date = ofTwist('gravityStorm')[0]?.date ?? '';
+    const date = ofTwist('gravityStorm')[0]?.date;
+    if (date === undefined) throw new Error('no Gravity storm Daily built');
     vi.resetModules();
     vi.doMock('../../src/content/hazards', async (actual) => {
       const real: typeof import('../../src/content/hazards') = await actual();

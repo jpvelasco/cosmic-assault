@@ -63,7 +63,7 @@ describe('the e2e date table', () => {
   });
 });
 
-/** A demo claim plays the expert for the demo's length on three field shapes: about half a second, more on a loaded host. */
+/** A demo claim plays the expert for the demo's length on three field shapes, which a loaded host slows. */
 const DEMO_CLAIM_TIMEOUT_MS = 15_000;
 
 describe('the attract demo seeds', { timeout: DEMO_CLAIM_TIMEOUT_MS }, () => {
@@ -77,7 +77,7 @@ describe('the attract demo seeds', { timeout: DEMO_CLAIM_TIMEOUT_MS }, () => {
   });
 
   it('refuses a seed whose expert loses a life within the demo at one aspect', () => {
-    // Seed 1's expert in 1-3 is hit about 19 s in on the 4:3 field, though it lives through the 16:9 and 21:9 ones.
+    // Seed 1's expert in 1-3 is hit within the demo on the 4:3 field, though it lives through the 16:9 and 21:9 ones.
     expect(demoClaimHolds(1, '1-3')).toBe(false);
   });
 

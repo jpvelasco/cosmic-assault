@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { localDate } from '../../src/app/date';
 import { compareDates, dayNumber, isCalendarDate, nextDate, previousDate } from '../../src/meta/calendar';
-import { inZone } from '../helpers/timeZone';
+import { CLOCK_CHANGES, inZone } from '../helpers/dates';
 
 const HOUR_MS = 3_600_000;
 
@@ -121,27 +121,19 @@ describe('malformed dates', () => {
 });
 
 describe('localDate across daylight saving changes', () => {
-  /** Each change: the day before, the change day, the day after, and the change day's length in hours. */
-  const CHANGES = [
-    { zone: 'America/New_York', before: '2026-03-07', day: '2026-03-08', after: '2026-03-09', hours: 23 },
-    { zone: 'America/New_York', before: '2026-10-31', day: '2026-11-01', after: '2026-11-02', hours: 25 },
-    { zone: 'Europe/London', before: '2026-03-28', day: '2026-03-29', after: '2026-03-30', hours: 23 },
-    { zone: 'Europe/London', before: '2026-10-24', day: '2026-10-25', after: '2026-10-26', hours: 25 },
-    { zone: 'Australia/Lord_Howe', before: '2026-04-04', day: '2026-04-05', after: '2026-04-06', hours: 24.5 },
-    { zone: 'Australia/Lord_Howe', before: '2026-10-03', day: '2026-10-04', after: '2026-10-05', hours: 23.5 },
-  ] as const;
 
   /** A local wall-clock time; a date-time with no offset is read as local time. */
   const at = (day: string, time: string): Date => new Date(`${day}T${time}`);
 
-  it.each(CHANGES)('$zone: the clocks really change on $day, and 23:30 and 00:30 either side fall on the right dates', (change) => {
-    inZone(change.zone, () => {
-      const hoursInDay = (at(change.after, '00:00').getTime() - at(change.day, '00:00').getTime()) / HOUR_MS;
-      expect(hoursInDay).toBe(change.hours);
-      expect(localDate(at(change.before, '23:30'))).toBe(change.before);
-      expect(localDate(at(change.day, '00:30'))).toBe(change.day);
-      expect(localDate(at(change.day, '23:30'))).toBe(change.day);
-      expect(localDate(at(change.after, '00:30'))).toBe(change.after);
+  it.each(CLOCK_CHANGES)('$zone: the clocks really change on $day, and 23:30 and 00:30 either side fall on the right dates', ({ zone, day, hours }) => {
+    const [before, after] = [previousDate(day), nextDate(day)];
+    inZone(zone, () => {
+      const hoursInDay = (at(after, '00:00').getTime() - at(day, '00:00').getTime()) / HOUR_MS;
+      expect(hoursInDay).toBe(hours);
+      expect(localDate(at(before, '23:30'))).toBe(before);
+      expect(localDate(at(day, '00:30'))).toBe(day);
+      expect(localDate(at(day, '23:30'))).toBe(day);
+      expect(localDate(at(after, '00:30'))).toBe(after);
     });
   });
 });

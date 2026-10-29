@@ -4,7 +4,7 @@ import { nextDate, previousDate } from '../../src/meta/calendar';
 import { dailyBestBefore, recordDailyClear, shownStreak } from '../../src/meta/daily';
 import { defaultSave, mergeSaves, type SaveData } from '../../src/meta/save';
 import { createRng, type Rng } from '../../src/sim/rng';
-import { inZone } from '../helpers/timeZone';
+import { CLOCK_CHANGES, inZone } from '../helpers/dates';
 
 /** Clears each date in turn, all scoring 100. */
 function clearAll(dates: readonly string[], save: SaveData = defaultSave()): SaveData {
@@ -204,27 +204,17 @@ describe('merging the daily record', () => {
 });
 
 describe('the streak across daylight saving changes', () => {
-  const ZONES: readonly (readonly [zone: string, changes: readonly string[]])[] = [
-    ['America/New_York', ['2026-03-08', '2026-11-01']],
-    ['Europe/London', ['2026-03-29', '2026-10-25']],
-    ['Australia/Lord_Howe', ['2026-04-05', '2026-10-04']],
-  ];
-
-  for (const [zone, changes] of ZONES) {
-    for (const day of changes) {
-      it(`${zone}: clears either side of ${day} at 23:30 and 00:30 make one unbroken streak`, () => {
-        inZone(zone, () => {
-          const dayBefore = localDate(new Date(`${previousDate(day)}T23:30`));
-          const changeDay = localDate(new Date(`${day}T00:30`));
-          const sameDayLater = localDate(new Date(`${day}T23:30`));
-          const dayAfter = localDate(new Date(`${nextDate(day)}T00:30`));
-          expect([dayBefore, changeDay, dayAfter]).toEqual([previousDate(day), day, nextDate(day)]);
-          const save = clearAll([dayBefore, changeDay]);
-          expect(save.daily).toMatchObject({ lastCleared: day, streak: 2 });
-          expect(recordDailyClear(save, sameDayLater, 100)).toBe(save);
-          expect(clearAll([dayBefore, changeDay, dayAfter]).daily).toMatchObject({ streak: 3, bestStreak: 3 });
-        });
-      });
-    }
-  }
+  it.each(CLOCK_CHANGES)('$zone: clears either side of $day at 23:30 and 00:30 make one unbroken streak', ({ zone, day }) => {
+    inZone(zone, () => {
+      const dayBefore = localDate(new Date(`${previousDate(day)}T23:30`));
+      const changeDay = localDate(new Date(`${day}T00:30`));
+      const sameDayLater = localDate(new Date(`${day}T23:30`));
+      const dayAfter = localDate(new Date(`${nextDate(day)}T00:30`));
+      expect([dayBefore, changeDay, dayAfter]).toEqual([previousDate(day), day, nextDate(day)]);
+      const save = clearAll([dayBefore, changeDay]);
+      expect(save.daily).toMatchObject({ lastCleared: day, streak: 2 });
+      expect(recordDailyClear(save, sameDayLater, 100)).toBe(save);
+      expect(clearAll([dayBefore, changeDay, dayAfter]).daily).toMatchObject({ streak: 3, bestStreak: 3 });
+    });
+  });
 });

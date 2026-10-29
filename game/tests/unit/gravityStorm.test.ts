@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { playedGalaxy } from '../../src/app/seed';
 import { galaxyById, GALAXIES } from '../../src/content/galaxies';
-import { GRAVITY_STORM, HAZARD_RULES, MAX_SHIP_PULL, WELL_RADIUS, WELL_SPEED_CAP } from '../../src/content/hazards';
+import { GRAVITY_STORM, HAZARD_RULES, MAX_SHIP_PULL, stormWells as plannedWells, WELL_RADIUS, WELL_SPEED_CAP } from '../../src/content/hazards';
 import type { GalaxyEvent, HazardType } from '../../src/content/types';
 import { ASTEROID, FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, PLAYER, STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -375,7 +375,7 @@ describe('a gravity storm\'s telegraph and scope', () => {
       const storms = pairs.filter((p) => p.kind === 'gravityStorm');
       // Every well the storm placed turned hostile, and on this open field it placed them all.
       expect(storms.length, `seed ${String(seed)}`).toBe(hazardsShownIn(log)({ at: 30, type: 'gravityStorm', intensity: 2 }).length);
-      expect(storms.length, `seed ${String(seed)}`).toBe(GRAVITY_STORM.maxWells);
+      expect(storms.length, `seed ${String(seed)}`).toBe(plannedWells(2));
       // All warned together, by the one storm.
       expect(new Set(storms.map((p) => p.warned)).size, `seed ${String(seed)}`).toBe(1);
       expect(pairs.filter((p) => p.kind === 'gravityWell').length, `seed ${String(seed)}`).toBeGreaterThanOrEqual(1);
