@@ -3,7 +3,6 @@ import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, padInUs
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { pad } from '../helpers/padSnapshot';
 
-
 describe('controlsFromPad', () => {
   it('maps no pad and a resting pad to neutral controls', () => {
     expect(controlsFromPad(null)).toEqual(NO_CONTROLS);

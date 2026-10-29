@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
 import { defaultSave } from '../src/meta/save';
-import { DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
+import { DAILY_GAME_OVER_SECONDS, dateFor, PHONE_PORTRAIT_VIEWPORT } from './seeds';
 import { expect, expectDemoEndedOnTitle, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, startAttract, test, threeStarSave, toastOf, waitOutGameOverGuard } from './fixtures';
 
 /** Standard-mapping button indices. */
@@ -328,7 +328,7 @@ test('behind the settings card the pad can only reach the card, and Start does n
 });
 
 test('the rotate prompt covers every card: the pad focuses nothing and cannot start a run', { tag: '@phone' }, async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
   await expect(page.getByTestId('rotate-prompt')).toBeVisible();
 
   await tap(page, DPAD_DOWN);

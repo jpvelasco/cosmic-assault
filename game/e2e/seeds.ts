@@ -165,6 +165,9 @@ export const DAILY_CLEAR_SECONDS = 150;
 /** A phone on its side at 844×390: the size the layouts are checked at, and the phone field `daily-clears` is vouched for. */
 export const PHONE_VIEWPORT = { width: 844, height: 390 } as const;
 
+/** The same phone held upright at 390×844, where the rotate prompt covers the game. */
+export const PHONE_PORTRAIT_VIEWPORT = { width: 390, height: 844 } as const;
+
 /** Sim seconds into a boss galaxy by which its boss is fighting: the approach, the intro, and half a second. */
 export const TO_BOSS_FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 0.5;
 

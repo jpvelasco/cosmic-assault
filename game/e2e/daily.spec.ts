@@ -5,7 +5,7 @@ import { dailyGalaxy } from '../src/meta/dailyGalaxy';
 import { defaultSave, type SaveData } from '../src/meta/save';
 import { DAILY_CLEARED, dailyCardLine, dailyTitle, targetLine, twistToast } from '../src/ui/dailyCopy';
 import { PRESSURE } from '../tests/helpers/pressure';
-import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor, PHONE_VIEWPORT } from './seeds';
+import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor, PHONE_PORTRAIT_VIEWPORT, PHONE_VIEWPORT } from './seeds';
 import {
   clickPastGuard,
   collectPickup,
@@ -172,7 +172,7 @@ test('a tap on the Daily card plays it, and the three cards fit a phone on its s
 test('held upright, a phone shows the rotate prompt over mode select @phone', async ({ page }) => {
   await openDaily(page, CLEAR_DATE);
   await openModeSelect(page, 'tap');
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
   await expect(page.getByTestId('rotate-prompt')).toBeVisible();
 });
 

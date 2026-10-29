@@ -1,10 +1,9 @@
 import type { Page } from '@playwright/test';
 import { DELIBERATE_CRASH } from '../src/testBridge';
 import { expect, expectMode, gameState, nextFrames, openGame, openGameOverRun, startRun, test, waitForGameOver } from './fixtures';
-import { PHONE_VIEWPORT } from './seeds';
+import { PHONE_PORTRAIT_VIEWPORT, PHONE_VIEWPORT } from './seeds';
 
 const rotatePrompt = (page: Page) => page.getByTestId('rotate-prompt');
-const PORTRAIT = { width: 390, height: 844 };
 const IDLE_CURSOR_WAIT_MS = 2300;
 
 const inert = (page: Page, selector: string) => page.locator(selector).evaluate((el: HTMLElement) => el.inert);
@@ -41,7 +40,7 @@ test.describe('on a phone', () => {
     await expect(rotatePrompt(page)).toBeHidden();
     await startRun(page, true);
 
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await expect(rotatePrompt(page)).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Rotate your phone to play' })).toBeVisible();
     await expectMode(page, 'paused');
@@ -57,7 +56,7 @@ test.describe('on a phone', () => {
   });
 
   test('held upright on the title, it covers the card until the phone is turned', async ({ page }) => {
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await openGame(page);
     await expect(rotatePrompt(page)).toBeVisible();
     expect(await inert(page, '.overlay--title'), 'the title card is inert behind the prompt').toBe(true);
@@ -71,7 +70,7 @@ test.describe('on a phone', () => {
   });
 
   test('keys do not start a run behind the prompt', async ({ page }) => {
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await openGame(page);
     await page.keyboard.press('Space');
     await nextFrames(page, 3);
@@ -81,7 +80,7 @@ test.describe('on a phone', () => {
   test('a run paused by the prompt does not resume from the keyboard behind it', async ({ page }) => {
     await openGame(page);
     await startRun(page, true);
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await expectMode(page, 'paused');
 
     await page.keyboard.press('KeyP');
@@ -97,7 +96,7 @@ test.describe('a crash behind the prompt', () => {
   test('shows the recovery card alone, and the prompt does not come back', async ({ page }) => {
     await openGame(page);
     await startRun(page, true);
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await expect(rotatePrompt(page)).toBeVisible();
 
     await page.evaluate(() => {
@@ -107,7 +106,7 @@ test.describe('a crash behind the prompt', () => {
     await expect(rotatePrompt(page)).toBeHidden();
 
     await page.setViewportSize(PHONE_VIEWPORT);
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await nextFrames(page, 3);
     await expect(rotatePrompt(page)).toBeHidden();
   });
@@ -117,7 +116,7 @@ test.describe('on a desktop', () => {
   test.skip(({ isMobile }) => isMobile, 'These need a mouse');
 
   test('a tall window never asks for a turn', async ({ page }) => {
-    await page.setViewportSize(PORTRAIT);
+    await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
     await openGame(page);
     await startRun(page, false);
 
