@@ -1,8 +1,12 @@
-/** How the player is most likely to be controlling the game; it decides which hints name keys and which name taps. */
-export type InputStyle = 'touch' | 'keys';
+import type { InputKind } from '../input/inputKind';
 
-/** The one media query that decides the style: a screen with no hover and a coarse pointer is a phone or tablet. */
-export const TOUCH_STYLE_QUERY = '(hover: none) and (pointer: coarse)';
+/** Which inputs the hints name: keys (also for a mouse, which sits beside a keyboard), taps, or pad buttons. */
+export type InputStyle = 'touch' | 'keys' | 'pad';
+
+/** The hint style for the input kind used last. */
+export function inputStyle(kind: InputKind): InputStyle {
+  return kind === 'mouse' ? 'keys' : kind;
+}
 
 export interface HintCopy {
   readonly start: string;
@@ -29,7 +33,24 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
     paused: 'Esc or P to resume',
     pauseTip: 'Pause (Esc or P)',
   },
-  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode', controls: '', resumeKey: '', paused: '', pauseTip: '' },
+  pad: {
+    start: 'Press A to start',
+    restart: 'Press A to play again',
+    choose: 'D-pad to choose, A to go, B back',
+    controls: 'Fly with the left stick or D-pad · fire with A, RB or RT',
+    resumeKey: 'Start',
+    paused: 'Start or B to resume',
+    pauseTip: 'Pause (Start or B)',
+  },
+  touch: {
+    start: 'Tap to start',
+    restart: 'Tap Retry or Continue to play again',
+    choose: 'Tap a mode',
+    controls: '',
+    resumeKey: '',
+    paused: '',
+    pauseTip: '',
+  },
 };
 
 export function hintCopy(style: InputStyle): HintCopy {

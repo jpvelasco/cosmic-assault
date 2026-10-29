@@ -4,6 +4,7 @@ import { currentBuildLabel } from '../buildLabel';
 import type { Look } from '../content/cosmetics';
 import type { GalaxyDef, PaletteId } from '../content/types';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
+import { TOUCH_STYLE_QUERY, trackInputKind } from '../input/inputKind';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
@@ -88,6 +89,15 @@ export interface App {
 export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
   const keyboard = attachKeyboard(window);
+  const touchGuess = window.matchMedia(TOUCH_STYLE_QUERY);
+  // Before the router, so a key or pointer the router swallows still counts.
+  const inputKind = trackInputKind(
+    window,
+    () => touchGuess.matches,
+    () => {
+      hintsDue = true;
+    },
+  );
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pauseByPlayer);
   const log = new RingLog();
@@ -148,6 +158,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let frameId = 0;
   /** The sound hint is given once a visit: a pad-only player needs it once, and a toast on every A would nag. */
   let soundHintGiven = false;
+  /** The input kind changed: the next frame redraws the cards in its hints, never mid-press. */
+  let hintsDue = false;
   const applyNow = (command: Command): void => {
     router.applyCommand(command, performance.now());
   };
@@ -232,6 +244,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       attract: attract.active,
     }),
     covered: () => anyCoverUp(coversUp()),
+    inputKind: inputKind.read,
     screen: () => mode,
     tripped: () => guard.tripped,
     onTurnUpright: pause,
@@ -427,8 +440,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const edges = padEdges(previousPad, pad);
     previousPad = pad;
     // The press that ends a demo does nothing else, and spends no hint.
+    if (edges.length > 0) inputKind.notePad();
     if (!router.routePad(pad, edges, now)) hintSoundGesture(edges);
     router.routeKeys(now);
+    if (hintsDue) {
+      hintsDue = false;
+      view.sync();
+    }
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
     const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
@@ -563,6 +581,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       cancelAnimationFrame(frameId);
       for (const unlisten of unlisteners) unlisten();
       keyboard.dispose();
+      inputKind.dispose();
       touch.dispose();
       router.dispose();
       view.dispose();

@@ -1,9 +1,10 @@
 import type { Look } from '../content/cosmetics';
+import { TOUCH_STYLE_QUERY, type InputKind } from '../input/inputKind';
 import type { TouchControls } from '../input/touchControls';
 import type { CornerBox } from '../render/hud';
 import type { Renderer } from '../render/renderer';
 import { listen } from '../ui/dom';
-import { hintCopy, TOUCH_STYLE_QUERY, type InputStyle } from '../ui/hints';
+import { hintCopy, inputStyle } from '../ui/hints';
 import type { Overlay, OverlayState } from '../ui/overlay';
 import type { RotatePrompt } from '../ui/rotatePrompt';
 import { createSafeAreaProbe } from '../ui/safeArea';
@@ -37,6 +38,8 @@ export interface ViewSyncDeps {
   read(): ViewState;
   /** Whether anything covers the screens' cards: a cover card or the rotate prompt. */
   covered(): boolean;
+  /** The input the player used last, whose style the hints take. */
+  inputKind(): InputKind;
   screen(): Screen;
   /** After a crash the recovery card owns the screen and the view stays as it was. */
   tripped(): boolean;
@@ -84,7 +87,7 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     if (deps.tripped()) return;
     const { settings, look, ...state } = deps.read();
     const rotating = needsRotation();
-    const style: InputStyle = touchStyle.matches ? 'touch' : 'keys';
+    const style = inputStyle(deps.inputKind());
     overlay.update({ ...state, covered: deps.covered(), inputStyle: style });
     settingsCard.update(settings, coarsePointer.matches);
     records.card.update(state.save, state.today);
