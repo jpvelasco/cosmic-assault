@@ -62,6 +62,8 @@ const inPerf = (t: string, from: string, to: string) => {
 const matrixEntry = (shard: string, label: string) => `          - { shard: ${shard}, label: ${label} }\n`;
 const d5Entry = matrixEntry('d5-', 'Dimension 5');
 const dailyEntry = matrixEntry('daily', 'Daily');
+const failFastLine = '      fail-fast: false\n';
+const includeLine = '        include:\n';
 const rollUpNeeds = '    needs: [balance-dimension]\n';
 const rollUpAlways = '    if: always()\n';
 const rollUpCheck = '        run: test "$SHARDS" = success\n';
@@ -146,6 +148,19 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
     (t) => t.slice(0, t.indexOf('  balance-dimension:\n')) + t.slice(t.indexOf('  balance:\n')),
     'missing job balance-dimension:',
   ],
+  [
+    'continue-on-error on the balance shards',
+    (t) => replaceOnce(t, '  balance-dimension:\n', '  balance-dimension:\n    continue-on-error: true\n'),
+    'continue-on-error is not allowed in the balance-dimension job',
+  ],
+  [
+    'a balance shard run left to continue on error',
+    (t) => replaceOnce(t, balanceStep, `${balanceStep}        continue-on-error: true\n`),
+    'continue-on-error is not allowed in the balance-dimension job',
+  ],
+  ['balance shards that fail fast', (t) => replaceOnce(t, failFastLine, '      fail-fast: true\n'), 'must set fail-fast: false'],
+  ['balance shards with no fail-fast', (t) => replaceOnce(t, failFastLine, ''), 'must set fail-fast: false'],
+  ['balance shards listed under exclude', (t) => replaceOnce(t, includeLine, '        exclude:\n'), 'must list its shards under include:'],
   ['roll-up not waiting for the shards', (t) => replaceOnce(t, rollUpNeeds, ''), 'balance must declare needs: [balance-dimension]'],
   ['roll-up skipped when a shard fails', (t) => replaceOnce(t, `${rollUpNeeds}${rollUpAlways}`, rollUpNeeds), 'balance must declare if: always()'],
   ['roll-up passing whatever the shards did', (t) => replaceOnce(t, rollUpCheck, '        run: true\n'), 'balance must pass only when every shard did'],
