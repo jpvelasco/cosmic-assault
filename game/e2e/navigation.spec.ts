@@ -1,5 +1,23 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
+import { hintCopy } from '../src/ui/hints';
+import {
+  expect,
+  expectMode,
+  fastForward,
+  gameState,
+  installFakePad,
+  nextFrames,
+  openGame,
+  openGameOverRun,
+  openModeSelect,
+  PAD,
+  startRun,
+  tapPad,
+  test,
+  waitForGameOver,
+  waitOutGameOverGuard,
+} from './fixtures';
+import { FREE_GAME_OVER_SECONDS, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 // One way to pause and one pause card on every device: these run on the desktop and the phone alike.
 
@@ -61,8 +79,9 @@ test('the pause card opens with Resume focused, so Enter or Space resumes, from 
   await expect(resume(page)).toBeFocused();
   // The key beside Resume is for keys only; its name stays "Resume".
   await expect(resume(page)).toHaveAccessibleName('Resume');
-  await expect(resume(page).locator('.key-hint')).toBeVisible({ visible: !isMobile });
-  await expect(page.getByTestId('pause-hint')).toBeVisible({ visible: !isMobile });
+  // Esc was the last input, so the keys show beside Resume and under it, on a phone too.
+  await expect(resume(page).locator('.key-hint')).toHaveText('Esc');
+  await expect(page.getByTestId('pause-hint')).toHaveText('Esc or P to resume');
   await page.keyboard.press('Enter');
   await expectMode(page, 'playing');
 
@@ -139,8 +158,7 @@ test('with keys, a Rank Quit keeps its focus between the two presses @desktop', 
 
 test('Settings opens from mode select and closes back to it, focus on its chip', async ({ page, isMobile }) => {
   await openGame(page, { galaxy: null });
-  await press(page.getByTestId('play'), isMobile);
-  await expectMode(page, 'modeSelect');
+  await openModeSelect(page, isMobile ? 'tap' : 'click');
 
   await press(settingsChip(page), isMobile);
   await expect(settingsCard(page)).toBeVisible();
@@ -159,4 +177,165 @@ test('Settings opens from mode select and closes back to it, focus on its chip',
   await nextFrames(page, 3);
   await expectMode(page, 'modeSelect');
   await expect(settingsChip(page)).toBeFocused();
+});
+
+/** The ways back from a screen, each of which must land where the others do. */
+const BACK_WAYS: readonly (readonly [name: string, goBack: (page: Page, isMobile: boolean) => Promise<void>])[] = [
+  ['Esc', (page) => page.keyboard.press('Escape')],
+  ['pad B', (page) => tapPad(page, PAD.B)],
+  ['the Back button', (page, isMobile) => press(page.getByTestId('back'), isMobile)],
+];
+
+for (const [way, goBack] of BACK_WAYS) {
+  test(`${way} goes back one screen from galaxy select, the map and mode select, focus on the button that left each`, async ({ page, isMobile }) => {
+    await installFakePad(page);
+    await openGame(page, { galaxy: null });
+    await openModeSelect(page, isMobile ? 'tap' : 'click');
+    await press(page.getByTestId('mode-free'), isMobile);
+    await expectMode(page, 'map');
+    await press(page.getByTestId('dimension-1'), isMobile);
+    await expectMode(page, 'galaxySelect');
+
+    await goBack(page, isMobile);
+    await expectMode(page, 'map');
+    await expect(page.getByTestId('dimension-1')).toBeFocused();
+    await goBack(page, isMobile);
+    await expectMode(page, 'modeSelect');
+    await expect(page.getByTestId('mode-free')).toBeFocused();
+    await goBack(page, isMobile);
+    await expectMode(page, 'title');
+    await expect(page.getByTestId('play')).toBeFocused();
+  });
+}
+
+test('Esc and pad B on the title go nowhere', async ({ page }) => {
+  await installFakePad(page);
+  await openGame(page, { galaxy: null });
+  await page.keyboard.press('Escape');
+  await tapPad(page, PAD.B);
+  await nextFrames(page, 3);
+  await expectMode(page, 'title');
+});
+
+const COVER_CHIPS = [
+  ['settings-open', 'Settings'],
+  ['records-open', 'Records'],
+  ['hangar-open', 'Hangar'],
+] as const;
+
+for (const [chipId, name] of COVER_CHIPS) {
+  test(`over mode select, Esc closes the ${name} card alone, a held Esc closes nothing more, and pad B closes it too`, async ({ page, isMobile }) => {
+    await installFakePad(page);
+    await openGame(page, { galaxy: null });
+    await openModeSelect(page, isMobile ? 'tap' : 'click');
+    const chip = page.getByTestId(chipId);
+    const dialog = page.getByRole('dialog', { name });
+
+    await press(chip, isMobile);
+    await expect(dialog).toBeVisible();
+    // A second keydown of a held key is its auto-repeat: the card closes on the first, and the repeat leaves mode select be.
+    await page.keyboard.down('Escape');
+    await page.keyboard.down('Escape');
+    await page.keyboard.up('Escape');
+    await expect(dialog).toBeHidden();
+    await nextFrames(page, 3);
+    await expectMode(page, 'modeSelect');
+    await expect(chip).toBeFocused();
+
+    await press(chip, isMobile);
+    await expect(dialog).toBeVisible();
+    await tapPad(page, PAD.B);
+    await expect(dialog).toBeHidden();
+    await nextFrames(page, 3);
+    await expectMode(page, 'modeSelect');
+    await expect(chip).toBeFocused();
+
+    // With no card up, the next Esc goes back a screen.
+    await page.keyboard.press('Escape');
+    await expectMode(page, 'title');
+  });
+}
+
+const titleHint = (page: Page, text: string) => page.locator('.overlay--title').getByText(text, { exact: true });
+
+test('the hints follow the input used last: the screen only guesses until a key, a pad or a pointer is used', async ({ page, isMobile }) => {
+  await installFakePad(page);
+  await openGame(page);
+  const keys = hintCopy('keys');
+  const pad = hintCopy('pad');
+  await expect(titleHint(page, hintCopy(isMobile ? 'touch' : 'keys').start)).toBeVisible();
+
+  await tapPad(page, PAD.DPAD_DOWN);
+  await expect(titleHint(page, pad.start)).toBeVisible();
+  await expect(page.getByTestId('controls-hint')).toHaveText(pad.controls);
+
+  await page.keyboard.press('ArrowDown');
+  await expect(titleHint(page, keys.start)).toBeVisible();
+  await expect(page.getByTestId('controls-hint')).toHaveText(keys.controls);
+
+  // A tap names taps; a mouse sits beside a keyboard, so a click keeps the keys.
+  await press(page.getByTestId('sound-toggle'), isMobile);
+  await expect(titleHint(page, hintCopy(isMobile ? 'touch' : 'keys').start)).toBeVisible();
+  await expect(page.getByTestId('controls-hint')).toBeVisible({ visible: !isMobile });
+
+  // A pad player starts with A, and pad B in play pauses, as Esc does.
+  await tapPad(page, PAD.A);
+  await expectMode(page, 'playing');
+  await expect(pauseButton(page)).toHaveAttribute('title', pad.pauseTip);
+  await tapPad(page, PAD.B);
+  await expectMode(page, 'paused');
+  await expect(resume(page).locator('.key-hint')).toHaveText(pad.resumeKey);
+  await expect(page.getByTestId('pause-hint')).toHaveText(pad.paused);
+  await tapPad(page, PAD.B);
+  await expectMode(page, 'playing');
+});
+
+/** How an end card is left, the input style that names it, and the mark the button it takes wears in that style. */
+const END_WAYS: readonly (readonly [name: string, useStyle: (page: Page) => Promise<void>, leave: (page: Page, isMobile: boolean) => Promise<void>, mark: string])[] = [
+  ['Esc', (page) => page.keyboard.press('Shift'), (page) => page.keyboard.press('Escape'), 'Esc'],
+  ['pad B', (page) => tapPad(page, PAD.DPAD_DOWN), (page) => tapPad(page, PAD.B), 'B'],
+  ['its Title button', (page) => page.keyboard.press('Shift'), (page, isMobile) => press(page.getByTestId('rank-title'), isMobile), 'Esc'],
+];
+
+for (const [way, useStyle, leave, mark] of END_WAYS) {
+  test(`a Rank game over marks the button Back takes, says the run is kept, and ${way} leaves by it for the title`, async ({ page, isMobile }) => {
+    await installFakePad(page);
+    await openGameOverRun(page);
+    await startRun(page, isMobile);
+    await waitForGameOver(page);
+    await waitOutGameOverGuard(page);
+    const title = page.getByTestId('rank-title');
+    const suspend = page.getByTestId('end-suspend');
+    // A finger started the run on a phone: the card names no key.
+    if (isMobile) {
+      await expect(title.locator('.key-hint')).toBeHidden();
+      await expect(suspend).toBeHidden();
+    }
+
+    await useStyle(page);
+    await expect(title.locator('.key-hint')).toHaveText(mark);
+    await expect(title).toHaveAccessibleName('Title');
+    await expect(page.getByTestId('rank-continue').locator('.key-hint')).toHaveText(mark === 'B' ? 'A' : 'Enter');
+    await expect(suspend).toHaveText(mark === 'B' ? hintCopy('pad').suspend : hintCopy('keys').suspend);
+
+    await leave(page, isMobile);
+    await expectMode(page, 'title');
+    await expect(page.getByTestId('play')).toBeFocused();
+  });
+}
+
+test('a Free play game over marks Map as where Esc goes, Retry as Enter\'s, and Esc lands on the map @desktop', async ({ page }) => {
+  await openGame(page, { galaxy: GAME_OVER_GALAXY, seed: seedFor('free-game-over') });
+  await page.keyboard.press('Space');
+  await expectMode(page, 'playing');
+  await fastForward(page, FREE_GAME_OVER_SECONDS);
+  await expectMode(page, 'gameOver');
+  await waitOutGameOverGuard(page);
+  await expect(page.getByTestId('results-map').locator('.key-hint')).toHaveText('Esc');
+  await expect(page.getByTestId('results-retry').locator('.key-hint')).toHaveText('Enter');
+  await expect(page.getByTestId('end-suspend')).toBeHidden();
+
+  await page.keyboard.press('Escape');
+  await expectMode(page, 'map');
+  await expect(page.getByTestId('dimension-1')).toBeFocused();
 });
