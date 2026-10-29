@@ -11,6 +11,8 @@ export interface HintCopy {
   readonly choose: string;
   /** Title: how to fly and fire, or empty where the touch controls speak for themselves. */
   readonly controls: string;
+  /** The pause button's tooltip in play, naming its keys, or empty where a tooltip never shows. */
+  readonly pauseTip: string;
 }
 
 const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
@@ -19,8 +21,9 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
     restart: 'Press R to play again',
     choose: 'Arrow keys to choose, Enter to go',
     controls: 'Fly with the arrows or WASD · fire with Space, Z or X',
+    pauseTip: 'Pause (Esc or P)',
   },
-  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode', controls: '' },
+  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode', controls: '', pauseTip: '' },
 };
 
 export function hintCopy(style: InputStyle): HintCopy {

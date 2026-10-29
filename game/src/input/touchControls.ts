@@ -63,13 +63,19 @@ export function touchControlBoxes(cssWidth: number, cssHeight: number, leftHande
   return { stick: box('stick'), fire: box('fire'), pause: box('pause') };
 }
 
+/** What the layer shows: nothing, the pause button alone (play with a mouse or keys), or the joystick and FIRE as well. */
+export type TouchShown = 'none' | 'pause' | 'all';
+
 export interface TouchControls {
   /** Current drag, or null while the joystick is released. */
   readonly stick: Stick | null;
   readonly fire: boolean;
-  /** The pause button's viewport box in CSS px, or null while the touch layer is hidden. */
+  /** The pause button's viewport box in CSS px, or null while it is hidden. */
   pauseRect(): DOMRect | null;
-  show(visible: boolean): void;
+  /** Shows what `shown` names; a control that hides lets go of its finger. */
+  show(shown: TouchShown): void;
+  /** The pause button's tooltip; empty for none. */
+  setPauseTip(text: string): void;
   /** Puts the joystick on the right and FIRE on the left (or back); the pause button stays top right. */
   setLeftHanded(on: boolean): void;
   dispose(): void;
@@ -161,18 +167,23 @@ function anchorTo(el: HTMLElement, control: Control, leftHanded: boolean): void 
   el.style.right = side === 'right' ? cssGap(control, 'right') : '';
 }
 
-function pauseButton(): HTMLButtonElement {
+/** The pause button; a click from the keyboard (Enter on it once Tab has reached it) pauses too, as a press does. */
+function pauseButton(onPause: () => void): HTMLButtonElement {
   const button = styled('button', 'touch-pause', PAUSE_CSS, 'touch-pause');
   button.type = 'button';
   button.textContent = 'II';
   button.setAttribute('aria-label', 'Pause');
+  button.setAttribute('aria-keyshortcuts', 'Escape P');
+  button.addEventListener('click', (e) => {
+    if (e.detail === 0) onPause();
+  });
   return button;
 }
 
 /**
- * Joystick, FIRE and a pause button. `onPause` runs as a finger lands on the pause button: on
- * pointerdown rather than click, because a phone sends no click for a second finger while the
- * thumb is on the stick.
+ * Joystick, FIRE and a pause button. `onPause` runs as a finger or the mouse lands on the pause
+ * button: on pointerdown rather than click, because a phone sends no click for a second finger
+ * while the thumb is on the stick.
  */
 export function attachTouchControls(root: HTMLElement, onPause: () => void): TouchControls {
   const layer = styled('div', '', LAYER_CSS);
@@ -180,9 +191,12 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
   const handle = styled('div', 'touch-knob', HANDLE_CSS);
   const fireButton = styled('div', 'touch-fire', FIRE_CSS, 'touch-fire');
   fireButton.textContent = 'FIRE';
-  const pause = pauseButton();
+  const pause = pauseButton(onPause);
+  // The joystick and FIRE share a box of their own, so the pause button can show without them; the layer places all three.
+  const sticks = document.createElement('div');
   base.append(handle);
-  layer.append(base, fireButton, pause);
+  sticks.append(base, fireButton);
+  layer.append(sticks, pause);
   root.append(layer);
 
   let stick: Stick | null = null;
@@ -223,16 +237,17 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
   const releaseAll = (): void => {
     for (const tracker of trackers) tracker.release();
   };
-  const show = (visible: boolean): void => {
-    layer.style.display = visible ? '' : 'none';
-    if (!visible) releaseAll();
+  const show = (shown: TouchShown): void => {
+    layer.style.display = shown === 'none' ? 'none' : '';
+    sticks.style.display = shown === 'all' ? '' : 'none';
+    if (shown !== 'all') releaseAll();
   };
   const setLeftHanded = (on: boolean): void => {
     anchorTo(base, 'stick', on);
     anchorTo(fireButton, 'fire', on);
   };
   setLeftHanded(false);
-  show(window.matchMedia('(pointer: coarse)').matches);
+  show('none');
 
   return {
     get stick() {
@@ -245,6 +260,9 @@ export function attachTouchControls(root: HTMLElement, onPause: () => void): Tou
       return layer.style.display === 'none' ? null : pause.getBoundingClientRect();
     },
     show,
+    setPauseTip(text) {
+      pause.title = text;
+    },
     setLeftHanded,
     dispose() {
       for (const tracker of trackers) tracker.detach();

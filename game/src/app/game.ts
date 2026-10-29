@@ -402,7 +402,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     overlay.endAttract();
     // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
     run.dispose();
-    touch.show(false);
+    touch.show('none');
     prefs.card.hide();
     rotatePrompt.show(false);
     view.armIdleCursor();
