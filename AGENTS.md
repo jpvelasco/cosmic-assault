@@ -2,24 +2,19 @@
 
 ## Current structure
 
-- `website/` is the deployable static HTML, CSS, and JavaScript site. It has no
-  package manifest, bundler, or build step. Serve it over HTTP for ES modules.
-- `website/index.html` loads `game-modular.js`, which initializes
-  `modules/core/Game.js`. Keep game orchestration and state in `modules/core/`,
-  game objects in `modules/entities/`, input/audio/spawning/effects/collision
-  systems in `modules/systems/`, and existing shared utilities in `modules/utils/`.
-- `tests/` is a separate npm package containing Playwright specs and helpers.
-  `tests/helpers/game-helper.js` uses the browser API exposed by
-  `website/modules/core/TestAPI.js`. Preserve that contract when changing gameplay.
-- `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
-  Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
-  Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
+- `game/` is the only npm package: the game, in TypeScript (Vite, Vitest,
+  ESLint, Playwright). Its release build, `dist/`, is the whole GitHub Pages site
+  (see "Deployment context"). Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
   carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=`/`?storm=`/`?today=` URL overrides,
   and checks that it does), `check:no-bridge` (fails if the release `dist/`
-  contains the bridge or that URL parsing), and `record:parity` (records the
-  parity traces), `icons` (re-renders the committed PNG icons in
+  contains the bridge or that URL parsing), `check:pages` (fails unless `dist/`
+  is laid out as the site to publish), `icons` (re-renders the committed PNG icons in
   `game/public/icons/` from `game/assets-src/icon.svg` with Playwright's
-  Chromium; run it after editing the SVG and commit the PNGs), and `find-seeds`
+  Chromium; run it after editing the SVG and commit the PNGs), `readme-shots`
+  (builds the e2e build and re-renders the README's stills in
+  `docs/assets/screens/` with Playwright's Chromium, each kept under the byte cap
+  that `tests/unit/readmeShots.test.ts` checks; run it after a visible change to
+  the title, a palette, the HUD or a boss shown there, and commit the PNGs), and `find-seeds`
   (re-picks an e2e seed: every seed a Playwright spec depends on is listed with its
   claim in `game/e2e/seeds.ts`, a unit test guards each claim, and a failing guard
   prints the `npm run find-seeds -- <claim>` command to run; a new seed gets a
@@ -46,9 +41,10 @@
   same), so its runs write the save. `?seed=` does not apply to the Daily, whose
   date fixes its World seed.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
-  enforces it. Ship handling is pinned to recorded traces of the live game in
-  `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
-  without owner approval.
+  enforces it. Ship handling is pinned to traces recorded from the classic game
+  in `game/tests/fixtures/parity/`, and they are frozen: this tree no longer has
+  the classic game or the recorder. Re-recording them needs the owner's approval
+  and a checkout of the classic game's tag, `v1.0.0`, whose tree holds both.
 - In `game/src/`, `content/` holds the level tables (levels grouped in sets,
   each set ending in a boss level), the difficulty curves, the pacing rules and
   the bosses as typed data, plus the Daily's twists and the ship's looks;
@@ -349,27 +345,31 @@
     `prefers-reduced-motion`), left-handed touch controls, and the ship's skin and
     engine trail. Loading sanitizes
     field by field and never throws. New stored data must use the `cosmic-assault.v2.`
-    prefix, because the legacy site shares the origin.
-- There is no root npm package or workspace. Run npm commands from `game/` or
-  `tests/`, whichever package you are changing. `ReadMe.md` is the README's
-  exact filename.
+    prefix: the origin (`jpvelasco.github.io`) is shared with other projects, and
+    the classic game's keys stay where they are (its `cosmicAssaultHighScore` is
+    read once as "Classic best" and never deleted), so nothing may clear or
+    reuse them.
+- There is no root npm package or workspace. Run npm commands from `game/`.
+  `ReadMe.md` is the README's exact filename, and `CHANGELOG.md` lists each
+  release.
 
 ## Local development and validation
 
 Use Node.js 24 (the version in `.nvmrc`; local ≥22.12 works). Install locked
-dependencies with `npm ci` in `game/` or `tests/`, whichever package you are
-changing.
+dependencies with `npm ci` in `game/`.
 
-For the website, run `npm run serve` from `tests/` after installing its
-dependencies, then open `http://localhost:8080`.
+For development, run `npm run dev` from `game/` and open `http://localhost:5173`;
+dev builds honour the URL overrides but never register the service worker. To
+try the release build, run `npm run build && npm run preview`, or, for the
+layout GitHub Pages serves under the project path, `npm run build` then
+`node scripts/serve-pages.mjs --dir dist --prefix /cosmic-assault/` (it prints
+the address; pass `--port` to choose one).
 
 Run applicable checks in this order: lint, typecheck, tests, verification.
 
-1. **Lint:** For `game/` changes, run `npm run lint` from `game/`. `tests/` has
-   no lint script; report its lint as unavailable rather than inventing a gate.
-2. **Typecheck:** For `game/` changes, run `npm run typecheck` from `game/`.
-   `tests/` has no typecheck script.
-3. **Tests:** For `game/` changes, run `npm test` (Vitest) and `npm run test:e2e`
+1. **Lint:** run `npm run lint` from `game/`.
+2. **Typecheck:** run `npm run typecheck` from `game/`.
+3. **Tests:** run `npm test` (Vitest) and `npm run test:e2e`
    (Playwright against the e2e build, plus a smoke test of the release build)
    from `game/`; install Chromium first with `npx playwright install chromium`.
    Locally, `test:e2e` builds both before serving them on ports 4317 (e2e) and
@@ -404,22 +404,20 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    balance file that holds no shard's filter or more than one's; pass
    `-- d3-` to run one Dimension, or `-- daily` for the Daily. Run it after any change
    to level content, difficulty curves, pacing, boss stats, the Daily generator or the bots, and
-   before changing a target; CI runs it as the non-required `balance` check. For changes to
-   `website/` gameplay, UI, or the legacy tests, install Chromium with
-   `npx playwright install chromium` from `tests/`, then run
-   `npm test -- --project=chromium-desktop`. Linux hosts may need Playwright's
-   browser system dependencies installed separately.
+   before changing a target; CI runs it as the non-required `balance` check.
+   Linux hosts may need Playwright's browser system dependencies installed
+   separately. The Playwright suites, `test:perf` and the full `test:balance`
+   are heavy: when the local machine should stay light, push the branch and let
+   CI run them, and run locally only lint, typecheck, `check:workflow`,
+   `test:digests`, single Vitest files and the build checks.
 4. **Verification:** For game changes, check the affected desktop
    and mobile behavior in a browser, including browser console errors.
    For documentation-only changes, verify referenced paths and commands and run
    `git diff --check`; application suites are unnecessary.
 
-In `tests/`, Playwright starts the local server automatically unless `TEST_URL`
-is set. Set `TEST_URL` to test an existing deployed site. The full `npm test` suite includes
-Chromium, Firefox, WebKit, mobile Chrome, and mobile Safari; install the corresponding
-browsers before running it. CI currently runs only `chromium-desktop`, with one
-worker and retries. Reports and failure artifacts live under `tests/playwright-report/`
-and `tests/test-results/` and are ignored by Git.
+Playwright starts the servers it needs itself. Reports and failure artifacts
+live under `game/playwright-report/` and `game/test-results/` and are ignored by
+Git.
 
 ## Change workflow
 
@@ -436,17 +434,18 @@ and `tests/test-results/` and are ignored by Git.
   analysis as unavailable and continue. `.codacy.yml` only lists
   exclusions; the repository is not currently analysed on Codacy. No Codecov
   configuration or coverage upload is currently committed.
-- `.github/workflows/ci.yml` is the only workflow. It runs on pull requests to
+- There are two workflows. `.github/workflows/octopus.yml` posts AI review
+  comments when a pull request to `main` is opened or updated; it gates nothing.
+  `.github/workflows/ci.yml` runs on pull requests to
   `main`, pushes to `main`, and manual dispatch. Job `game` runs the `game/`
   workflow guard, lint, typecheck, unit tests, the expert D1–D2 digests
   (`npm run test:digests`, one file of the balance suite), release build, base check,
-  no-test-bridge check, e2e build, and e2e tests (the `chromium-desktop` and
+  no-test-bridge check, site layout check, e2e build, and e2e tests (the `chromium-desktop` and
   `mobile-landscape` projects against `dist-e2e/`, plus the `release-smoke`
-  and `pages` projects against `dist/`);
-  job `legacy` runs the `tests/` Playwright suite in `chromium-desktop` against
-  `website/`. Job `perf` builds both bundles and runs `npm run test:perf`.
-  Job `deploy` runs only on pushes to `main`, and only after `game`, `legacy`
-  and `perf` pass, so a frame-time regression cannot ship; `npm run
+  and `pages` projects against `dist/`), and uploads `dist/` as the
+  `game-dist` artifact. Job `perf` builds both bundles and runs `npm run test:perf`.
+  Job `deploy` runs only on pushes to `main`, and only after `game` and `perf`
+  pass, so a frame-time regression cannot ship; `npm run
   check:workflow` in `game/` guards that gate. `perf` is not a required check,
   so a pull request may merge before it passes. Job
   `balance-dimension` runs `npm run test:balance -- <shard>` as a matrix over
@@ -468,21 +467,41 @@ and `tests/test-results/` and are ignored by Git.
 ## Deployment context
 
 GitHub Pages is the only deployment, published by the `deploy` job in
-`.github/workflows/ci.yml`. Pages serves `website/` at the root and `game/dist`
-at `next/`. The job fails if the published root differs from `website/`.
-There are no other hosting paths.
+`.github/workflows/ci.yml`. The site is `game/dist/`, byte for byte: `deploy`
+downloads the `game-dist` artifact into `_site`, runs `check-base`,
+`check-no-bridge` and `check-pages` on it, and publishes it unchanged. There
+are no other hosting paths.
 
 The `game/` build is an installable, offline-capable web app. `vite/precache.ts`
 emits `src/sw/worker.ts` as `sw.js` with the list of every built file but the two
 512 px icons (`NOT_PRECACHED`), which the browser fetches itself when it installs
-the app; `tests/unit/icons.test.ts` caps the precached icons' bytes. The worker
-registers from `./sw.js` with its default scope, so it controls only `/next/`
-and never the legacy root; it is never registered by the Vite dev server. Within
-its scope it never answers for a `next` directory below it (`shouldHandle` in
-`platform/swLogic.ts`), and its cached page answers only navigations to the
-game's own address (`./` or `./index.html`, any query), so any other page keeps
-the host's answer, a 404 included. Its caches are named `cosmic-assault-v2-`
-plus the build's version; each deploy gets a new version, and when the new
-worker activates it deletes older `cosmic-assault-v2-*` caches and every
-`cosmic-assault-next-*` cache the preview's earlier worker left. It deletes no
-other cache.
+the app, and everything under `next/`; `tests/unit/icons.test.ts` caps the
+precached icons' bytes. The worker registers from `./sw.js` with its default
+scope, the site's root directory (`/cosmic-assault/` on Pages), so it never
+controls another project on the shared origin; it is never registered by the
+Vite dev server. Within its scope it never answers for `next` or anything under
+it (`shouldHandle` in `platform/swLogic.ts`), and its cached page answers only
+navigations to the game's own address (`./` or `./index.html`, any query), so
+any other page keeps the host's answer, a 404 included. Its caches are named
+`cosmic-assault-v2-` plus the build's version; each deploy gets a new version,
+and when the new worker activates it deletes older `cosmic-assault-v2-*` caches
+and every `cosmic-assault-next-*` cache the preview's earlier worker left. It
+deletes no other cache.
+
+`next/` is the retired preview address, and it keeps exactly two files, for
+good: a device that comes back after they are gone would stay on the preview's
+old offline copy.
+- `next/index.html` (from `public/next/index.html`) is a static page saying the
+  game has moved, with a link and a refresh to `../`. It registers `./sw.js`
+  there and sends the visitor to `../` after 2 s.
+- `next/sw.js`, the kill switch, is built from `src/sw/retire.ts` (its decisions
+  are in `platform/retireLogic.ts`, which imports nothing). A device that ran
+  the preview's worker fetches it as that worker's update. It has no fetch
+  handler; it takes over, deletes only `cosmic-assault-next-*` caches, sends
+  the preview's open pages to `../`, and unregisters itself. It never touches
+  `localStorage` or another registration.
+
+Neither worker imports the other's module, and the kill switch must never
+delete a `cosmic-assault-v2-*` cache. Nothing else may go under `next/`:
+`check-pages` fails the build if it does, and `e2e/pages.spec.ts` covers both
+workers' lifecycle at the site root and under `/cosmic-assault/`.

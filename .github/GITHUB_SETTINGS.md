@@ -114,15 +114,19 @@ EOF
 - Auto-delete head branches: enabled
 
 ### Branch protection (`main`)
+- Ruleset name: `protect-main`
 - Require PR before merging: yes
 - Required approvals: 0
-- Dismiss stale reviews on push: yes
-- Require review from code owners: yes
+- Dismiss stale reviews on push: no
+- Require review from code owners: no
 - Require conversation resolution: yes
 - Require branch up to date: yes
+- Required status checks: `Game (lint, typecheck, unit, build, e2e)`.
+  `Performance (gates deploy)` and `Bot balance (non-blocking)` run on every
+  pull request but are not required; the deploy job needs `Performance` anyway.
 - Block force pushes: yes
 - Allow deletions: no
-- Enforce on admins: yes
+- Enforce on admins: yes (no bypass actors)
 
 ### Tag protection (`v*`)
 - Ruleset name: `protect-version-tags`
