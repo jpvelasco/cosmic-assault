@@ -144,10 +144,10 @@ jobs:
           if-no-files-found: ignore
 
   # Report only: the bots' many-seed boss kill rates and clear rates (game/tests/balance), one shard a job: each
-  # Dimension's d<N>-*.test.ts files, and the Daily's daily*.test.ts. They are not required checks and deploy does not
-  # need them.
+  # Dimension's d<N>-*.test.ts files, and the Daily's daily*.test.ts. A shard runs every file whose path holds its
+  # filter, which check:workflow keeps to one shard a file. They are not required checks and deploy does not need them.
   balance-dimension:
-    name: Bot balance, ${{ matrix.shard }} (non-blocking)
+    name: Bot balance, ${{ matrix.label }} (non-blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -155,7 +155,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [d1-, d2-, d3-, d4-, d5-, daily]
+        include:
+          - { shard: d1-, label: Dimension 1 }
+          - { shard: d2-, label: Dimension 2 }
+          - { shard: d3-, label: Dimension 3 }
+          - { shard: d4-, label: Dimension 4 }
+          - { shard: d5-, label: Dimension 5 }
+          - { shard: daily, label: Daily }
     defaults:
       run:
         working-directory: game

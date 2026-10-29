@@ -59,7 +59,9 @@ const inPerf = (t: string, from: string, to: string) => {
   const job = perfJob(t);
   return t.replace(job, () => replaceOnce(job, from, to));
 };
-const matrixLine = '        shard: [d1-, d2-, d3-, d4-, d5-, daily]\n';
+const matrixEntry = (shard: string, label: string) => `          - { shard: ${shard}, label: ${label} }\n`;
+const d5Entry = matrixEntry('d5-', 'Dimension 5');
+const dailyEntry = matrixEntry('daily', 'Daily');
 const rollUpNeeds = '    needs: [balance-dimension]\n';
 const rollUpAlways = '    if: always()\n';
 const rollUpCheck = '        run: test "$SHARDS" = success\n';
@@ -135,8 +137,10 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
     (t) => t.slice(0, balanceNode(t)) + t.slice(balanceNode(t) + nodeVersionLine.length),
     'balance-dimension must set up Node with node-version-file: .nvmrc',
   ],
-  ['a Dimension dropped from the matrix', (t) => replaceOnce(t, matrixLine, '        shard: [d1-, d2-, d3-, d4-, daily]\n'), 'must run a matrix of shard: [d1-, d2-, d3-, d4-, d5-, daily]'],
-  ['the Daily dropped from the matrix', (t) => replaceOnce(t, matrixLine, '        shard: [d1-, d2-, d3-, d4-, d5-]\n'), 'must run a matrix of shard: [d1-, d2-, d3-, d4-, d5-, daily]'],
+  ['a Dimension dropped from the matrix', (t) => replaceOnce(t, d5Entry, ''), "the balance-dimension job's matrix must include exactly"],
+  ['the Daily dropped from the matrix', (t) => replaceOnce(t, dailyEntry, ''), "the balance-dimension job's matrix must include exactly"],
+  ['a shard out of order', (t) => replaceOnce(replaceOnce(t, dailyEntry, ''), d5Entry, `${dailyEntry}${d5Entry}`), "the balance-dimension job's matrix must include exactly"],
+  ['a shard filter mislabelled', (t) => replaceOnce(t, dailyEntry, matrixEntry('daily', 'd1-')), "the balance-dimension job's matrix must include exactly"],
   [
     'removed balance shards',
     (t) => t.slice(0, t.indexOf('  balance-dimension:\n')) + t.slice(t.indexOf('  balance:\n')),
@@ -146,9 +150,10 @@ const failingCases: [name: string, mutate: (text: string) => string, message: st
   ['roll-up skipped when a shard fails', (t) => replaceOnce(t, `${rollUpNeeds}${rollUpAlways}`, rollUpNeeds), 'balance must declare if: always()'],
   ['roll-up passing whatever the shards did', (t) => replaceOnce(t, rollUpCheck, '        run: true\n'), 'balance must pass only when every shard did'],
   ['a Dimension without its targets file', (t) => t, 'd3-targets.test.ts is missing', [], TARGET_FILES.filter((f) => !f.startsWith('d3-'))],
-  ['no Daily suite in the balance tests', (t) => t, 'holds no daily*.test.ts file', [], TARGET_FILES.filter((f) => !f.startsWith('daily')).concat('dailyRuns.ts', 'd2-daily.test.ts')],
+  ['no Daily suite in the balance tests', (t) => t, 'holds no test file the daily shard picks', [], TARGET_FILES.filter((f) => !f.startsWith('daily')).concat('dailyRuns.ts')],
+  ['a balance test two shards pick', (t) => t, 'game/tests/balance/d2-daily.test.ts runs in the d2- and daily shards', [], [...TARGET_FILES, 'd2-daily.test.ts']],
+  ['a nested balance test whose folder names another shard', (t) => t, 'game/tests/balance/daily/d3-pace.test.ts runs in the d3- and daily shards', [], [...TARGET_FILES, 'daily/d3-pace.test.ts']],
   ['a balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'pace.test.ts', 'targets.ts']],
-  ['a balance test that plays the Daily under another name', (t) => t, 'game/tests/balance/theDaily.test.ts runs in no balance shard', [], [...TARGET_FILES, 'theDaily.test.ts']],
   ['a nested balance test in no Dimension\'s shard', (t) => t, 'game/tests/balance/bosses/pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'bosses/pace.test.ts', 'bosses/d3-pace.test.ts']],
   ['a balance test named for a Dimension past the fifth', (t) => t, 'game/tests/balance/d6-pace.test.ts runs in no balance shard', [], [...TARGET_FILES, 'd6-pace.test.ts']],
   ['deploy waiting for balance', (t) => replaceOnce(t, needsLine, '    needs: [game, legacy, perf, balance]\n'), 'never waits for the report-only balance jobs'],
@@ -198,8 +203,8 @@ describe('check-workflow guard', { timeout: SPAWN_TIMEOUT_MS }, () => {
     expect(status).toBe(0);
   });
 
-  it('accepts the Daily\'s suites beside the Dimensions\' files', () => {
-    const { status, output } = runGuard(writeFixture(realText, [], [...TARGET_FILES, 'daily-edges.test.ts', 'dailyRuns.ts']));
+  it('accepts the Daily\'s suites beside the Dimensions\' files, the shard picking a file by any part of its path in any case', () => {
+    const { status, output } = runGuard(writeFixture(realText, [], [...TARGET_FILES, 'daily-edges.test.ts', 'theDaily.test.ts', 'dailyRuns.ts']));
     expect(output).toContain('workflow ok');
     expect(status).toBe(0);
   });

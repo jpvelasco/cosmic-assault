@@ -33,11 +33,12 @@ const inOrder = (id, first, second) => {
   return a === -1 || b === -1 || a < b;
 };
 
-/** The balance suite's shards: one per Dimension, each running its d<N>-*.test.ts files, and the Daily's daily*.test.ts. */
+/** The balance suite's shards, each a Vitest file filter and its job's label: one per Dimension, then the Daily's. */
 const DIMENSIONS = [1, 2, 3, 4, 5];
 const DAILY_SHARD = 'daily';
-const SHARDS = [...DIMENSIONS.map((d) => `d${String(d)}-`), DAILY_SHARD];
+const SHARDS = [...DIMENSIONS.map((d) => ({ filter: `d${String(d)}-`, label: `Dimension ${String(d)}` })), { filter: DAILY_SHARD, label: 'Daily' }];
 const BALANCE_SHARD = '${{ matrix.shard }}';
+const MATRIX_ENTRIES = SHARDS.map(({ filter, label }) => `- { shard: ${filter}, label: ${label} }`);
 
 const problems = Object.entries(jobs)
   .filter(([, block]) => block === undefined)
@@ -90,8 +91,8 @@ const checks = [
     'ci.yml: the legacy job must run the Playwright suite (npx playwright test …); restore the step'],
   [hasLine('balance-dimension', `run: npm run test:balance -- ${BALANCE_SHARD}`),
     `ci.yml: the balance-dimension job must run "npm run test:balance -- ${BALANCE_SHARD}"; restore the step so each shard's bot kill and clear rates are reported`],
-  [hasLine('balance-dimension', `shard: [${SHARDS.join(', ')}]`),
-    `ci.yml: the balance-dimension job must run a matrix of shard: [${SHARDS.join(', ')}], one per Dimension and one for the Daily; restore every shard`],
+  [(jobs['balance-dimension'] ?? []).map((line) => line.trim()).filter((line) => line.startsWith('- { shard:')).join('\n') === MATRIX_ENTRIES.join('\n'),
+    `ci.yml: the balance-dimension job's matrix must include exactly ${MATRIX_ENTRIES.join(', ')}, in that order: one shard per Dimension and one for the Daily; restore every shard`],
   [hasJobKey('balance', 'needs: [balance-dimension]'),
     'ci.yml: balance must declare needs: [balance-dimension] (job level), so the one check the ruleset sees waits for every shard'],
   [hasJobKey('balance', 'if: always()'),
@@ -106,13 +107,17 @@ const balanceDir = resolve(repoRoot, 'game', 'tests', 'balance');
 const balanceFiles = existsSync(balanceDir) ? readdirSync(balanceDir, { recursive: true }).map((path) => path.split(sep).join('/')) : [];
 problems.push(...DIMENSIONS.filter((d) => !balanceFiles.includes(`d${String(d)}-targets.test.ts`)).map((d) =>
   `game/tests/balance/d${String(d)}-targets.test.ts is missing, so the Dimension ${String(d)} balance shard pins no targets; restore it`));
-const inShard = (file) => SHARDS.some((shard) => basename(file).startsWith(shard));
+// A shard runs the files `npm run test:balance -- <filter>` picks: Vitest keeps a file when its path from game/ holds the
+// filter anywhere, ignoring case. So a file must hold exactly one shard's filter, or it runs in none or in several.
+const shardsOf = (file) => SHARDS.filter(({ filter }) => `tests/balance/${file}`.toLowerCase().includes(filter.toLowerCase())).map(({ filter }) => filter);
 const testFiles = balanceFiles.filter((file) => file.endsWith('.test.ts'));
-if (!testFiles.some((file) => basename(file).startsWith(DAILY_SHARD))) {
-  problems.push(`game/tests/balance/ holds no ${DAILY_SHARD}*.test.ts file, so the ${DAILY_SHARD} balance shard plays no Daily; restore daily.test.ts`);
+if (!testFiles.some((file) => shardsOf(file).includes(DAILY_SHARD))) {
+  problems.push(`game/tests/balance/ holds no test file the ${DAILY_SHARD} shard picks, so it plays no Daily; restore daily.test.ts`);
 }
-problems.push(...testFiles.filter((file) => !inShard(file)).map((file) =>
-  `game/tests/balance/${file} runs in no balance shard, since each shard runs only its own files; give it the d<N>- prefix of the Dimension it plays, N from ${String(DIMENSIONS[0])} to ${String(DIMENSIONS.at(-1))}, or the ${DAILY_SHARD} prefix if it plays the Daily`));
+problems.push(...testFiles.filter((file) => shardsOf(file).length === 0).map((file) =>
+  `game/tests/balance/${file} runs in no balance shard, since each shard runs only the files whose path holds its filter; give it the d<N>- prefix of the Dimension it plays, N from ${String(DIMENSIONS[0])} to ${String(DIMENSIONS.at(-1))}, or the ${DAILY_SHARD} prefix if it plays the Daily`));
+problems.push(...testFiles.filter((file) => shardsOf(file).length > 1).map((file) =>
+  `game/tests/balance/${file} runs in the ${shardsOf(file).join(' and ')} shards, since Vitest picks a file by any part of its path; rename it so its path holds only one shard's filter`));
 
 const nextPaths = readdirSync(resolve(repoRoot, 'website'), { recursive: true })
   .filter((path) => basename(path) === 'next');

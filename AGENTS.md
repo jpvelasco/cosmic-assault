@@ -319,7 +319,9 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    its `d<N>-targets.test.ts`, and every balance file carries a `d<N>-` prefix
    or, for the Daily's suite (`daily.test.ts`: many dates, each on its own seed, the
    expert clearing every one, the casual's clear rate in band for every twist, and
-   the target in reach), the `daily` prefix, which `check:workflow` guards; pass
+   the target in reach), the `daily` prefix. A shard runs every file whose path
+   holds its filter anywhere, as Vitest filters, so `check:workflow` fails a
+   balance file that holds no shard's filter or more than one's; pass
    `-- d3-` to run one Dimension, or `-- daily` for the Daily. Run it after any change
    to level content, difficulty curves, pacing, boss stats, the Daily generator or the bots, and
    before changing a target; CI runs it as the non-required `balance` check. For changes to
