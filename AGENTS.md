@@ -236,24 +236,56 @@
     full screen synchronously in its keydown handler, because Safari and
     Firefox refuse a deferred request.
   - Gamepads use the standard mapping: the left stick steers like the touch
-    joystick, the D-pad turns and thrusts, A/RB/RT fire, Start pauses, and on
-    menus the D-pad moves focus, A confirms and B goes back.
+    joystick, the D-pad turns and thrusts, A/RB/RT fire, Start pauses, B does
+    what Esc does everywhere (in play it pauses), and on menus the D-pad moves
+    focus and A confirms.
+  - One Back model: `backTarget(screen, mode)` in `app/flow.ts` is the one
+    answer for where Esc, pad B and every button that goes back (Back, and the
+    end cards' Map or Title) lead: one screen back on the menus, the map from a
+    Free play end card and the title from a Rank or Daily one, nowhere from the
+    title, and in play and on the pause card Esc and pad B pause and resume
+    instead. The flow's `back` action moves there. With keys or a pad, the
+    button Back takes wears its key (Esc or B), an end card's first button
+    Enter's or A's, a Retry after it R's (`endKeys` in `ui/resultsCard.ts`,
+    drawn with `wearKey` in `ui/dom.ts`), and a Rank end card whose run stays
+    saved says Esc suspends it. Focus goes back in one place
+    (`restoreFocus` in `ui/overlay.ts`): a screen Back returns to focuses the
+    button that left it while it is still there, else its first control, and
+    a closing cover card focuses its chip.
+  - The cover cards (settings, records, the Hangar) are one table,
+    `COVER_CARD_SCREENS` in `app/cardToggle.ts` (each card and the screens its
+    chip opens it on), and `createCoverCards` holds which is up; the router,
+    the game and the view read it, and a new card needs only a row there and
+    its columns in `ACTS_UNDER` (`app/inputRouting.ts`). Esc and pad B close
+    the topmost card, once: the router takes Esc in the capture phase, ahead of
+    the game's key handling and of any focused slider, so the same press never
+    also resumes or goes back, and its repeats close nothing more. Under the
+    rotate prompt a card stays up.
+  - Hints follow the input used last (`input/inputKind.ts`): a key press, a
+    pointer as it lets go (mouse, or touch and pen), or a pad press the frame
+    reads. Before any input the media query `(hover: none) and (pointer:
+    coarse)` guesses touch or keys. `inputStyle` in `ui/hints.ts` turns the
+    kind into the copy's style (`keys`, which a mouse shares, `touch` or `pad`),
+    and a change of kind redraws the cards on the next frame, never mid-press.
+    Only the words follow it: the joystick and FIRE still show for
+    `(pointer: coarse)`, and the rotate prompt for a phone held upright.
   - Pausing and leaving a run look the same on every device. In play the pause
     button (`input/touchControls.ts`) shows top right whatever the pointer, and
     the HUD always keeps clear of its corner; only the joystick and FIRE are
     touch-only. It pauses on pointerdown, never fires the ship, and with keys
-    its tooltip names Esc and P. The pause card (`ui/pauseCard.ts`) focuses
+    its tooltip names its keys. The pause card (`ui/pauseCard.ts`) focuses
     Resume each time it is entered, the auto-pause on blur or a hidden tab
-    included, so Enter, Space and pad A resume, and with keys it names Esc
-    beside Resume. Its Quit reads "Quit to title" in Free play and the Daily;
+    included, so Enter, Space and pad A resume, and it names the key that
+    resumes beside Resume (Esc, or Start with a pad). Its Quit reads "Quit to title" in Free play and the Daily;
     in Rank it asks twice ("Really quit? Costs a life"), and Esc, P or the
     pad's Back or Start takes the question back without resuming
     (`cancelQuit` in `ui/overlay.ts`). A key held down onto a focused card
     button presses nothing, and its release reaches the game (`ui/dom.ts`).
     Settings opens from the title, mode select and the pause card
-    (`SETTINGS_SCREENS` in `app/cardToggle.ts`), and closing it puts focus back
-    on its chip. `e2e/navigation.spec.ts` covers all of this on the desktop and
-    the phone.
+    (`COVER_CARD_SCREENS` in `app/cardToggle.ts`), and closing it puts focus
+    back on its chip. `e2e/navigation.spec.ts` covers all of this, the Back
+    model, the cover cards and the hints' input kind, on the desktop and the
+    phone.
   - The crash guard wraps each frame. A crash shows a recovery card with
     *Try again* and *Copy report*; the report comes from an in-memory ring log
     and nothing is sent anywhere.
