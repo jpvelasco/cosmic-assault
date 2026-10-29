@@ -184,8 +184,12 @@ describe('the attract demo', () => {
     const h = harness();
     h.scene.field = null;
     expect(h.frames(ATTRACT_IDLE_SECONDS + 1)).toBe(0);
+    // Nothing is drawn yet, so the title keeps its own look.
+    expect(h.attract.active).toBe(false);
+    expect(h.changed).not.toHaveBeenCalled();
     h.scene.field = FIELD;
     expect(h.frames(FRAME * 2)).toBeGreaterThan(0);
+    expect(h.attract.active).toBe(true);
   });
 
   it('ends on an input, which it reports so the input can be swallowed, and puts the palette back', () => {
@@ -237,6 +241,22 @@ describe('the attract demo', () => {
     const wide = { width: 1600, height: 720 };
     h.attract.resize(wide);
     expect(drawnWorld(h).field).toEqual(wide);
+  });
+
+  it('stops for the session and writes the log, without throwing, when resizing the demo World throws', () => {
+    const h = harness();
+    h.attract.dueNow();
+    h.frames(FRAME * 2);
+    vi.spyOn(drawnWorld(h), 'resize').mockImplementation(() => {
+      throw new Error('resize broke');
+    });
+    expect(() => {
+      h.attract.resize({ width: 1600, height: 720 });
+    }).not.toThrow();
+    expect(h.attract.active).toBe(false);
+    expect(h.attract.halted).toBe(true);
+    expect(h.changed).toHaveBeenCalledTimes(2);
+    expect(h.log.entries()[0]?.message).toMatch(/attract demo stopped.*resize broke/is);
   });
 
   it(
@@ -325,6 +345,8 @@ describe('the attract demo', () => {
       expect(() => h.frames(FRAME * 3)).not.toThrow();
       expect(h.attract.active).toBe(false);
       expect(h.attract.halted).toBe(true);
+      // The title has its own look back, though the tidying failed.
+      expect(h.changed).toHaveBeenCalledTimes(2);
       expect(h.log.entries().map((e) => e.message)).toEqual([
         expect.stringMatching(/attract demo stopped.*draw broke/is),
         expect.stringMatching(/could not tidy up.*reset broke/is),
@@ -348,6 +370,7 @@ describe('the attract demo', () => {
       }).not.toThrow();
       expect(h.attract.active).toBe(false);
       expect(h.attract.halted).toBe(true);
+      expect(h.changed).toHaveBeenCalledTimes(2);
       expect(h.log.entries()[0]?.message).toMatch(/attract demo stopped.*palette broke/is);
     });
   });
@@ -378,6 +401,7 @@ describe('stopping the attract demo for the session', () => {
       h.attract.stop();
     }).not.toThrow();
     expect(h.attract.active).toBe(false);
+    expect(h.changed).toHaveBeenCalledTimes(2);
     expect(h.log.entries()[0]?.message).toMatch(/could not tidy up.*reset broke/is);
   });
 });

@@ -174,15 +174,17 @@ export function createAttract(deps: AttractDeps): Attract {
     deps.activeChanged();
   }
 
+  /** Puts the title's own look back first, so a throw in tidying the demo away never leaves the title dimmed over it. */
   function turnOff(): void {
     if (!active) return;
     active = false;
-    run?.world.endRun();
+    const ended = run;
     run = null;
     gapLeft = 0;
+    deps.activeChanged();
+    ended?.world.endRun();
     renderer.reset();
     renderer.setPalette(paletteBefore);
-    deps.activeChanged();
   }
 
   /** Steps the demo for `dt`, or holds it still through the pause after it, then draws it without the HUD. */
@@ -218,7 +220,8 @@ export function createAttract(deps: AttractDeps): Attract {
     }
     if (!active) {
       state.idleSeconds += dt;
-      if (!attractDue(now)) return false;
+      // Without a field there is no demo to draw, so the title keeps its own look.
+      if (!attractDue(now) || deps.field() === null) return false;
       turnOn();
     }
     return playFrame(dt);
@@ -240,8 +243,6 @@ export function createAttract(deps: AttractDeps): Attract {
     try {
       turnOff();
     } catch (failure) {
-      active = false;
-      run = null;
       deps.log.add('error', `The attract demo could not tidy up as it stopped: ${describeError(failure)}`, deps.now());
     }
   }
@@ -275,7 +276,7 @@ export function createAttract(deps: AttractDeps): Attract {
       return ended;
     },
     resize(field) {
-      run?.world.resize(field);
+      guarded(() => run?.world.resize(field), undefined);
     },
     dueNow() {
       state.idleSeconds = ATTRACT_IDLE_SECONDS;
