@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BOSSES } from '../../src/content/bosses';
 import { DIMENSIONS, GALAXIES, galaxyById, galaxyLabel, furthest, galaxyOrdinal, isGalaxyId, nextGalaxyId, tierOf } from '../../src/content/galaxies';
 import { EFFECT_SECONDS, INSTANT_PICKUPS, isTimed, PICKUP_IDS, PICKUPS, TIMED_PICKUPS } from '../../src/content/pickups';
@@ -324,6 +324,36 @@ describe('galaxyProblems', () => {
     expect(galaxyProblems(scheduled('4-4', event('repulsionField', 20), event('repulsionField', 35)))).toEqual(['repulsionField at 35 s is warned at 33 s, before the one at 20 s ends at 34 s: start it later']);
     expect(galaxyProblems(scheduled('2-4', event('gravityWell', 20), event('gravityStorm', 37)))).toEqual([]);
     expect(galaxyProblems(scheduled('2-4', event('gravityWell', 20), event('gravityStorm', 36)))).toEqual(['gravityWell at 20 s pulls while the gravityStorm at 36 s runs: a storm is the only pull on the field, so move one of them']);
+  });
+});
+
+describe("a gravity storm's intensities", () => {
+  afterEach(() => {
+    vi.doUnmock('../../src/content/hazards');
+    vi.resetModules();
+  });
+
+  /** The validity rules, loaded afresh over a GRAVITY_STORM capped at `maxWells`. */
+  async function rulesWithMaxWells(maxWells: number): Promise<typeof import('../../src/content/validity')> {
+    vi.resetModules();
+    vi.doMock('../../src/content/hazards', async (actual) => {
+      const real: typeof import('../../src/content/hazards') = await actual();
+      const storm = { ...real.GRAVITY_STORM, maxWells };
+      return { ...real, GRAVITY_STORM: storm, stormWells: (i: GalaxyEvent['intensity']) => Math.min(storm.baseWells + i, storm.maxWells) };
+    });
+    return import('../../src/content/validity');
+  }
+
+  /** 2-4 with one gravity storm of `intensity`. */
+  const storm = (intensity: GalaxyEvent['intensity']): GalaxyDef => ({ ...galaxyById('2-4'), events: [{ at: 20, type: 'gravityStorm', intensity }] });
+
+  it('are the ones that each place more wells than the intensity below, as GRAVITY_STORM says, and a refusal names them', async () => {
+    const wider = await rulesWithMaxWells(5);
+    expect(wider.STORM_INTENSITIES).toEqual([1, 2, 3]);
+    expect(wider.galaxyProblems(storm(3))).toEqual([]);
+    const narrower = await rulesWithMaxWells(3);
+    expect(narrower.STORM_INTENSITIES).toEqual([1]);
+    expect(narrower.galaxyProblems(storm(2))).toContainEqual(expect.stringMatching(/has intensity 2, but a storm comes at intensity 1: lower it/));
   });
 });
 

@@ -1,6 +1,6 @@
 import { eventSeconds, warningSeconds } from './curves';
 import { FOES } from './foes';
-import { HAZARD_RULES, pullsShip } from './hazards';
+import { HAZARD_RULES, pullsShip, stormWells } from './hazards';
 import { lullStart, OPENING_SECONDS } from './pacingRules';
 import { isPickupId, PICKUPS } from './pickups';
 import { galaxyIdOf, type FoeKind, type GalaxyDef, type GalaxyEvent, type ThreatKind } from './types';
@@ -9,8 +9,12 @@ import { galaxyIdOf, type FoeKind, type GalaxyDef, type GalaxyEvent, type Threat
 export const EVENT_SPACING_SECONDS = 10;
 /** The most scheduled events running at once, showers included, each from its warning to its end. */
 export const MAX_EVENTS_AT_ONCE = 2;
-/** A gravity storm's intensities: a third would place no more wells than the second. */
-export const STORM_INTENSITIES: readonly GalaxyEvent['intensity'][] = [1, 2];
+const INTENSITIES: readonly GalaxyEvent['intensity'][] = [1, 2, 3];
+/** A gravity storm's intensities: each places more wells than the one below, up to GRAVITY_STORM's `maxWells`. */
+export const STORM_INTENSITIES: readonly GalaxyEvent['intensity'][] = INTENSITIES.filter((intensity, n) => {
+  const below = INTENSITIES[n - 1];
+  return below === undefined || stormWells(intensity) > stormWells(below);
+});
 
 const s = (seconds: number): string => `${String(seconds)} s`;
 const named = (e: GalaxyEvent): string => `${e.type} at ${s(e.at)}`;
@@ -31,7 +35,7 @@ function identityProblems(def: GalaxyDef): string[] {
   return problems;
 }
 
-/** Each event in order, apart from the last, inside the opening and the lull, and from its Dimension on. */
+/** Each event in order and spaced from the one before, inside the opening and the lull, and from its Dimension on. */
 function timingProblems(def: GalaxyDef): string[] {
   const problems: string[] = [];
   const lull = lullStart(def);
@@ -48,7 +52,7 @@ function timingProblems(def: GalaxyDef): string[] {
     if (e.type !== 'meteorShower' && HAZARD_RULES[e.type].from > def.dimension) {
       problems.push(`${named(e)} is a hazard of Dimension ${String(HAZARD_RULES[e.type].from)} on, not of Dimension ${String(def.dimension)}: drop it`);
     }
-    if (e.type === 'gravityStorm' && !STORM_INTENSITIES.includes(e.intensity)) problems.push(`${named(e)} has intensity ${String(e.intensity)}, but a storm comes at intensity 1 or 2: lower it`);
+    if (e.type === 'gravityStorm' && !STORM_INTENSITIES.includes(e.intensity)) problems.push(`${named(e)} has intensity ${String(e.intensity)}, but a storm comes at intensity ${STORM_INTENSITIES.join(' or ')}: lower it`);
   });
   return problems;
 }
