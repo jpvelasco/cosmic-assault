@@ -201,6 +201,7 @@ for (const prefix of ['/', '/cosmic-assault/']) {
     });
 
     test('an old link to next/ on a device that never ran the preview lands on the root', async ({ page, serve }) => {
+      // The stub page's own timed leave is enough to pass this; the decoy case below is the proof that the kill switch runs.
       const site = await serve(reveal);
       await page.goto(nextOf(site));
 
@@ -214,9 +215,17 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       test('the root worker never answers for next/: once it is gone, next/ is the host\'s 404 online and an error offline', async ({ page, context, serve }, testInfo) => {
         const site = await serve(reveal);
         await visitRoot(page, site);
+        // A fetch, unlike a navigation, would reach the worker's cache-first branch, which would keep the moved page it
+        // answered with and serve it again once next/ is gone.
+        const fetchNext = () => page.evaluate(async () => {
+          const response = await fetch('next/');
+          return { status: response.status, body: await response.text() };
+        });
+        expect((await fetchNext()).status, 'a fetch of next/ gets the moved page while it is served').toBe(200);
         const hidden = testInfo.outputPath('hidden-next');
         mkdirSync(hidden, { recursive: true });
         site.setMounts([...reveal, { dir: hidden, at: 'next/' }]);
+        expect(await fetchNext(), 'a fetch of next/ gets the host\'s 404, not a copy the root worker kept').toEqual({ status: 404, body: NOT_FOUND_BODY });
 
         const missing = await page.goto(nextOf(site));
         expect(missing?.status(), 'next/ answers the host\'s 404, not the cached game').toBe(404);
@@ -308,7 +317,7 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
     });
 
-    test('after the next deploy, the game page comes from it, even while the HTTP cache still holds the last one', async ({ page, serve }, testInfo) => {
+    test('after the next deploy, the game page comes from it, even while the HTTP cache still holds the last one', async ({ page, context, serve }, testInfo) => {
       const cachedAsPages = (dir: string): PagesMount[] => [{ dir, at: './', maxAge: PAGES_MAX_AGE_SECONDS }];
       const site = await serve(cachedAsPages(DIST));
       await visitRoot(page, site);
@@ -329,12 +338,19 @@ for (const prefix of ['/', '/cosmic-assault/']) {
         `${ROOT_CACHE_PREFIX}${version}b`,
       ]);
 
+      // The next deploy's precached page carries the mark too, so only the worker's own request for the link shows the
+      // page came from the host rather than the worker's fallback. A route would turn the HTTP cache off, so this listens.
+      let linkedFetches = 0;
+      context.on('request', (request) => {
+        if (request.serviceWorker() !== null && request.url() === linked) linkedFetches += 1;
+      });
       // Ordinary navigations, each to an address other than the current one: a reload would revalidate by itself.
       for (const address of [site.url, linked]) {
         await page.goto(address);
         await expect(page.locator('meta[name="deploy"]'), `${address} shows the next deploy's page`).toHaveAttribute('content', 'next');
         await expect(page.getByRole('heading', { name: 'Cosmic Assault' })).toBeVisible();
       }
+      expect(linkedFetches, 'the worker asked the host for the linked page').toBeGreaterThan(0);
     });
 
     test('restoring the classic site with a self-removing root worker leaves no root worker or cache', async ({ page, serve }, testInfo) => {
@@ -351,6 +367,10 @@ for (const prefix of ['/', '/cosmic-assault/']) {
       await page.reload();
 
       await expect(page.getByRole('heading', { name: 'Classic site' })).toBeVisible();
+      // A browser checks a worker for an update at most once a day on navigation; ask for the check it would make.
+      await page.evaluate(async () => {
+        await (await navigator.serviceWorker.getRegistration('./'))?.update();
+      });
       await expect.poll(() => registrationScopes(page), { message: 'no worker is left registered for the root' }).not.toContain(site.url);
       await expect.poll(() => cachesNamed(page, ROOT_CACHE_PREFIX), { message: 'no root cache is left' }).toEqual([]);
     });
