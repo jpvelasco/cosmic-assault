@@ -47,3 +47,17 @@ export function nudge(body: Moving, dvx: number, dvy: number, cap: number): void
     body.vy *= limit / after;
   }
 }
+
+/** The one of `points` nearest `to`, the first of those as near; null when there are none. */
+export function nearestPoint<P extends Readonly<Point>>(points: readonly P[], to: Readonly<Point>): P | null {
+  let best: P | null = null;
+  let bestDistance = Infinity;
+  for (const point of points) {
+    const distance = Math.hypot(point.x - to.x, point.y - to.y);
+    if (distance < bestDistance) {
+      best = point;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}

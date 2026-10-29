@@ -40,7 +40,7 @@ export interface RunControllerDeps {
   notify(text: string, ms?: number): void;
   /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
   onEvents(events: readonly SimEvent[], world: World): void;
-  /** Something the cards show changed outside a screen change: another tab's save, or the Rank lock. */
+  /** Something the cards show changed outside a screen change: another tab's save, the Rank lock, or the day. */
   refresh(): void;
   /** Which tab plays a Rank galaxy; defaults to one over `BroadcastChannel`. */
   readonly presence?: TabPresence;
@@ -179,6 +179,9 @@ export function createRunController(deps: RunControllerDeps): RunController {
     },
     notify: (text) => {
       deps.notify(text);
+    },
+    refresh: () => {
+      deps.refresh();
     },
     liveRun: (runSeq) => {
       if (runSeq === ownedSeq) return;

@@ -12,7 +12,11 @@ export type Command =
   /** The title's Play: mode select, or straight into a `?galaxy=` run. */
   | { readonly kind: 'start' }
   | { readonly kind: 'resumeRank' }
-  | { readonly kind: 'chooseMode'; readonly mode: GalaxyMode }
+  /**
+   * A mode card. A Daily press carries the date its card shows: a card left showing an earlier day is redrawn instead of
+   * played, so the player plays what the card shows. Without one, the Daily of today plays.
+   */
+  | { readonly kind: 'chooseMode'; readonly mode: GalaxyMode; readonly date?: string }
   | { readonly kind: 'openDimension'; readonly dimension: Dimension }
   | { readonly kind: 'openGalaxy'; readonly id: GalaxyId }
   | { readonly kind: EndCommandKind }

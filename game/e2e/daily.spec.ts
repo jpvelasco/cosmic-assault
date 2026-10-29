@@ -14,9 +14,11 @@ import {
   fastForward,
   gameState,
   openDaily,
+  openFreshGame,
   openModeSelect,
   playDaily,
   seedSave,
+  setPageHidden,
   storedSave,
   test,
   toastOf,
@@ -80,6 +82,47 @@ test('the Daily card names the day\'s twist and target, and Enter on it plays th
   expect(state.galaxy).toBe(daily.def.id);
   expect(state.palette).toBe(daily.def.palette);
   await expect(toastOf(page)).toHaveText(twistToast(twist.name));
+});
+
+/** The line the Daily card shows for `date`'s twist and target. */
+function cardLineOf(date: string): string {
+  const daily = dailyGalaxy(date);
+  return dailyCardLine(TWISTS_BY_ID[daily.twist].name, daily.target);
+}
+
+/** Noon on `date` in the browser's time zone: half a day from either midnight. */
+const noonOn = (date: string): Date => new Date(`${date}T12:00:00`);
+
+test('a Daily card resting across midnight shows the new day once the page is back in view or focus, and a press on a stale card redraws it, keeping focus, before anything plays @desktop', async ({ page }) => {
+  const first = CLEAR_DATE;
+  const second = nextDate(first);
+  const third = nextDate(second);
+  const fourth = nextDate(third);
+  // Each step can only tell that the card moved on if no two days show the same line.
+  expect(new Set([first, second, third, fourth].map(cardLineOf)).size).toBe(4);
+  // No `?today=`: the game reads the device's clock, which only `Date` is faked for, so the game loop runs as normal.
+  await page.clock.setFixedTime(noonOn(first));
+  await openFreshGame(page);
+  await openModeSelect(page);
+  await expect(dailyCard(page)).toContainText(cardLineOf(first));
+
+  await page.clock.setFixedTime(noonOn(second));
+  await setPageHidden(page, false);
+  await expect(dailyCard(page)).toContainText(cardLineOf(second));
+
+  await page.clock.setFixedTime(noonOn(third));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(dailyCard(page)).toContainText(cardLineOf(third));
+
+  await page.clock.setFixedTime(noonOn(fourth));
+  await dailyCard(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(dailyCard(page)).toContainText(cardLineOf(fourth));
+  await expect(dailyCard(page)).toBeFocused();
+  await expectMode(page, 'modeSelect');
+  await page.keyboard.press('Enter');
+  await expectMode(page, 'playing');
+  expect((await gameState(page)).daily?.date).toBe(fourth);
 });
 
 test('a Daily clear shows its target and no stars, writes no progress but the Daily record, and Retry plays the same date @desktop', async ({ page }) => {

@@ -2,6 +2,7 @@ import { DANGER_ZONE, HAZARD_RULES } from '../../content/hazards';
 import type { GalaxyEvent } from '../../content/types';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
+import { nearestPoint } from '../math';
 import type { Rng } from '../rng';
 import { wrapDelta } from '../wrap';
 import type { Circle, Hazard, HazardSetup, HazardState, ZoneState } from './hazard';
@@ -53,7 +54,8 @@ interface Zone extends ZoneState {
  * A galaxy's danger zones, an event at a time: each shows one zone per intensity (at most two), rectangles 120 to 220
  * a side, drawn as a warning for 2 s and lethal to touch for 10 s. The Shield absorbs a hit from one, as from anything.
  * They are placed inside the field, clear of each other and of every keep-out as they warn (the field's centre, the
- * spot a respawn takes with nothing in the way, and the ship), from their own stream.
+ * spot a respawn takes with nothing in the way, and the ship), from their own stream. A resize that leaves one over a
+ * corner, or out of the field, moves it to the nearest place clear of them all (`refit`).
  */
 export class DangerZones extends ScheduledHazard<Zone> implements Hazard {
   private readonly rng: Rng;
@@ -106,10 +108,7 @@ export class DangerZones extends ScheduledHazard<Zone> implements Hazard {
    */
   private place(event: GalaxyEvent, elapsed: number, field: Field, placed: readonly Zone[]): Zone | null {
     const [low, high] = DANGER_ZONE.side;
-    const keepOuts = this.keepOuts(field);
-    const corners = zoneKeepOutBoxes(field);
-    const clear = (box: ZoneBox): boolean =>
-      !keepOuts.some((c) => zoneClearance(field, box, c.x, c.y) < c.r) && !corners.some((c) => boxesOverlap(box, c)) && !placed.some((other) => boxesOverlap(box, other));
+    const clear = this.clearOf(field, placed);
     const zone = (box: ZoneBox): Zone => ({ id: this.nextId(), type: 'dangerZone', stage: 'warning', intensity: event.intensity, remaining: event.at - elapsed, ...box });
     for (let i = 0; i < TRIES; i++) {
       const top = high - ((high - low) * i) / TRIES;
@@ -118,12 +117,40 @@ export class DangerZones extends ScheduledHazard<Zone> implements Hazard {
       const box = { x: this.rng.range(w / 2, field.width - w / 2), y: this.rng.range(h / 2, field.height - h / 2), w, h };
       if (clear(box)) return zone(box);
     }
-    for (let y = low / 2; y <= field.height - low / 2; y += GRID_STEP) {
-      for (let x = low / 2; x <= field.width - low / 2; x += GRID_STEP) {
-        const box = { x, y, w: low, h: low };
-        if (clear(box)) return zone(box);
-      }
-    }
+    for (const box of gridBoxes(field, low, low)) if (clear(box)) return zone(box);
     return null;
+  }
+
+  /** Whether a box lies clear of the keep-out circles, the HUD and thumb corners and the `placed` zones. */
+  private clearOf(field: Field, placed: readonly ZoneBox[]): (box: ZoneBox) => boolean {
+    const keepOuts = this.keepOuts(field);
+    const corners = zoneKeepOutBoxes(field);
+    return (box) => !keepOuts.some((c) => zoneClearance(field, box, c.x, c.y) < c.r) && !corners.some((c) => boxesOverlap(box, c)) && !placed.some((other) => boxesOverlap(box, other));
+  }
+
+  /**
+   * After a resize: a zone the stretch left over a HUD or thumb corner or out of the field moves to the nearest spot of a
+   * `GRID_STEP` grid where it lies clear of everything it is placed clear of, at its size or else at the least size. A
+   * zone with nowhere to go stays. It draws nothing.
+   */
+  refit(field: Field): void {
+    const corners = zoneKeepOutBoxes(field);
+    const zones = this.schedule.live;
+    for (const zone of zones) {
+      const inField = zone.x >= zone.w / 2 && zone.x <= field.width - zone.w / 2 && zone.y >= zone.h / 2 && zone.y <= field.height - zone.h / 2;
+      if (inField && !corners.some((c) => boxesOverlap(zone, c))) continue;
+      const clear = this.clearOf(field, zones.filter((other) => other !== zone));
+      const nearest = (w: number, h: number): ZoneBox | null => nearestPoint([...gridBoxes(field, w, h)].filter(clear), zone);
+      const least = DANGER_ZONE.side[0];
+      const box = nearest(zone.w, zone.h) ?? nearest(least, least);
+      if (box !== null) Object.assign(zone, box);
+    }
+  }
+}
+
+/** The boxes `w` by `h` centred on a `GRID_STEP` grid that lie inside `field`, row by row from the top. */
+function* gridBoxes(field: Field, w: number, h: number): Generator<ZoneBox> {
+  for (let y = h / 2; y <= field.height - h / 2; y += GRID_STEP) {
+    for (let x = w / 2; x <= field.width - w / 2; x += GRID_STEP) yield { x, y, w, h };
   }
 }

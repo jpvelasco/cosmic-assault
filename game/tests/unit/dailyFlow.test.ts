@@ -195,6 +195,19 @@ describe('createFlowController: the Daily', () => {
     expect(started.map((state) => state.daily)).toEqual([DATE]);
   });
 
+  it('a press on a card still showing an earlier day redraws the card and plays nothing; the next press plays the day shown', () => {
+    const { flow, started, refresh, setToday } = setup();
+    flow.command({ kind: 'start' });
+    setToday(NEXT_DAY);
+    flow.command({ kind: 'chooseMode', mode: 'daily', date: DATE });
+    expect(flow.state.screen).toBe('modeSelect');
+    expect(started).toEqual([]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    flow.command({ kind: 'chooseMode', mode: 'daily', date: NEXT_DAY });
+    expect(started.map((state) => state.daily)).toEqual([NEXT_DAY]);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("stays on mode select when the date's Daily cannot be built, and Free play still opens", () => {
     const { flow, started, screens } = flowRig({ today: DATE, dailyBuilds: () => false });
     flow.command({ kind: 'start' });

@@ -148,8 +148,14 @@ export class HazardField {
     return circles;
   }
 
+  /**
+   * Stretches every hazard to the new field, then refits them: only once all have their new places, so a rift keeps out
+   * of the re-centred hole. A field of the same size refits nothing, so a run is the same however often it is told so.
+   */
   resize(old: Field, field: Field): void {
     for (const hazard of this.hazards) hazard.resize(old, field);
+    if (old.width === field.width && old.height === field.height) return;
+    for (const hazard of this.hazards) hazard.refit?.(field);
   }
 
   stop(): void {
