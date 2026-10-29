@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { SaveData } from '../src/meta/save';
 import { expect, expectMode, gameState, openFreshGame, openGame, seedLook, seedSave, test, threeStarSave, waitForBridge } from './fixtures';
+import { PHONE_VIEWPORT } from './seeds';
 
 const openChip = (page: Page) => page.getByTestId('hangar-open');
 const card = (page: Page) => page.getByTestId('hangar');
@@ -156,10 +157,7 @@ test('a phone taps the Hangar open, picks a trim, and taps Back @phone', async (
 });
 
 /** Phones on their side: the size the layout is drawn for, and the shortest the phone project runs, the Pixel 5's. */
-const PHONE_VIEWPORTS = [
-  { width: 844, height: 390 },
-  { width: 802, height: 293 },
-] as const;
+const PHONE_VIEWPORTS = [PHONE_VIEWPORT, { width: 802, height: 293 }] as const;
 
 for (const viewport of PHONE_VIEWPORTS) {
   const size = `${String(viewport.width)}x${String(viewport.height)}`;

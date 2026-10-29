@@ -162,6 +162,9 @@ export const DAILY_GAME_OVER_SECONDS = 60;
 /** Sim seconds that outlast any Daily: its galaxy's length and the warp, with room to spare. */
 export const DAILY_CLEAR_SECONDS = 150;
 
+/** A phone on its side at 844×390: the size the layouts are checked at, and the phone field `daily-clears` is vouched for. */
+export const PHONE_VIEWPORT = { width: 844, height: 390 } as const;
+
 /** Sim seconds into a boss galaxy by which its boss is fighting: the approach, the intro, and half a second. */
 export const TO_BOSS_FIGHT_SECONDS = BOSS_APPROACH_SECONDS + BOSS_INTRO_SECONDS + 0.5;
 

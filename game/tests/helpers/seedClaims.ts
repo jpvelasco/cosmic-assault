@@ -6,6 +6,7 @@ import {
   DAILY_CLEAR_SECONDS,
   DAILY_GAME_OVER_SECONDS,
   DATE_EPOCH,
+  PHONE_VIEWPORT,
   E2E_DATES,
   WATCH_LIVES,
   CRIMSON_WATCH_SECONDS,
@@ -531,8 +532,8 @@ export function findDemoSeeds(claim: DemoClaimId, options: FindOptions = {}): nu
   return lowestHolding((seed) => demoClaimHolds(seed, galaxy), options);
 }
 
-/** The field of a phone on its side at 844×390, where the Daily spec plays its phone clear. */
-const PHONE_DAILY_FIELD = fieldForViewport(844, 390);
+/** The field of a phone on its side, where the Daily spec plays its phone clear. */
+const PHONE_DAILY_FIELD = fieldForViewport(PHONE_VIEWPORT.width, PHONE_VIEWPORT.height);
 
 /** An idle ship in the Daily of `date`, on its own World seed, on `field`, played until it ends or `seconds` pass. */
 function idleDaily(date: string, seconds: number, field: Field = DESKTOP_FIELD): World {

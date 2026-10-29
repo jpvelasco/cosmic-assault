@@ -1,10 +1,10 @@
 import type { Page } from '@playwright/test';
 import { DELIBERATE_CRASH } from '../src/testBridge';
 import { expect, expectMode, gameState, nextFrames, openGame, openGameOverRun, startRun, test, waitForGameOver } from './fixtures';
+import { PHONE_VIEWPORT } from './seeds';
 
 const rotatePrompt = (page: Page) => page.getByTestId('rotate-prompt');
 const PORTRAIT = { width: 390, height: 844 };
-const LANDSCAPE = { width: 844, height: 390 };
 const IDLE_CURSOR_WAIT_MS = 2300;
 
 const inert = (page: Page, selector: string) => page.locator(selector).evaluate((el: HTMLElement) => el.inert);
@@ -47,7 +47,7 @@ test.describe('on a phone', () => {
     await expectMode(page, 'paused');
     expect(await inert(page, '.overlay--pause'), 'the pause card is inert behind the prompt').toBe(true);
 
-    await page.setViewportSize(LANDSCAPE);
+    await page.setViewportSize(PHONE_VIEWPORT);
     await expect(rotatePrompt(page)).toBeHidden();
     expect(await inert(page, '.overlay--pause')).toBe(false);
     await nextFrames(page, 3);
@@ -64,7 +64,7 @@ test.describe('on a phone', () => {
     for (let i = 0; i < 12; i++) await page.keyboard.press('Tab');
     await expect(page.locator('.overlay--title :focus')).toHaveCount(0);
 
-    await page.setViewportSize(LANDSCAPE);
+    await page.setViewportSize(PHONE_VIEWPORT);
     await expect(rotatePrompt(page)).toBeHidden();
     expect(await inert(page, '.overlay--title')).toBe(false);
     await expectMode(page, 'title');
@@ -106,7 +106,7 @@ test.describe('a crash behind the prompt', () => {
     await expect(page.getByRole('alertdialog', { name: 'Something went wrong' })).toBeVisible();
     await expect(rotatePrompt(page)).toBeHidden();
 
-    await page.setViewportSize(LANDSCAPE);
+    await page.setViewportSize(PHONE_VIEWPORT);
     await page.setViewportSize(PORTRAIT);
     await nextFrames(page, 3);
     await expect(rotatePrompt(page)).toBeHidden();

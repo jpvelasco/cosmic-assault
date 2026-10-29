@@ -228,6 +228,15 @@ export function grantPickup(page: Page, kind: PickupId): Promise<void> {
   }, kind);
 }
 
+/** Makes the page report itself hidden or visible, and tells it, as a tab sent to the background and back would. */
+export function setPageHidden(page: Page, hidden: boolean): Promise<void> {
+  return page.evaluate((h) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
 /** Drops `kind` onto the ship and steps once, which collects it. */
 export async function collectPickup(page: Page, kind: PickupId): Promise<void> {
   await grantPickup(page, kind);

@@ -1,15 +1,13 @@
 import type { Page } from '@playwright/test';
 import { ATTRACT_IDLE_SECONDS } from '../src/app/attract';
-import { ATTRACT_IDLE_TIMEOUT_MS, askForAttract, attractState, expect, expectDemoEndedOnTitle, expectMode, gameState, nextFrames, openGame, startAttract, test } from './fixtures';
+import { ATTRACT_IDLE_TIMEOUT_MS, askForAttract, attractState, expect, expectDemoEndedOnTitle, expectMode, gameState, nextFrames, openGame, setPageHidden, startAttract, test } from './fixtures';
+import { PHONE_VIEWPORT } from './seeds';
 
 /** The demo the cycle plays first. */
 const FIRST_DEMO = '1-3';
 
 /** Every key `localStorage` holds, with its value. */
 const storageOf = (page: Page) => page.evaluate(() => JSON.stringify(Object.entries(localStorage).sort()));
-
-/** The phone size the owner checks layouts at, on its side. */
-const PHONE_VIEWPORT = { width: 844, height: 390 };
 
 /** How much earlier than ATTRACT_IDLE_SECONDS after the page is ready the demo may start: the idle count starts as the app does, a little before. */
 const IDLE_START_SLACK_MS = 2000;
@@ -51,15 +49,6 @@ function sfxConnections(page: Page): Promise<number> {
     if (master === undefined || bus === undefined) throw new Error('No sound-effects bus was wired: unlock sound with a key press first');
     return edges.filter(([, to]) => to === bus).length;
   });
-}
-
-/** Makes the page report itself hidden or visible, and tells it, as a tab sent to the background and back would. */
-function setPageHidden(page: Page, hidden: boolean): Promise<void> {
-  return page.evaluate((h) => {
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
-    document.dispatchEvent(new Event('visibilitychange'));
-  }, hidden);
 }
 
 test('the demo plays behind the dimmed title card with its Demo label and no HUD, and leaves storage as it was', async ({ page, isMobile }, testInfo) => {

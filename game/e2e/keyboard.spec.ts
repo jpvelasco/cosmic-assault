@@ -1,6 +1,6 @@
 import type { JSHandle, Page } from '@playwright/test';
 import { PLAYER } from '../src/sim/config';
-import { expect, expectMode, gameState, grantPickup, nextFrames, openGame, shipState, shotsPerVolley, speed, test } from './fixtures';
+import { expect, expectMode, gameState, grantPickup, nextFrames, openGame, setPageHidden, shipState, shotsPerVolley, speed, test } from './fixtures';
 
 /** Starts a run with Space, then releases it so the start-key latch lets Space fire again. */
 async function startWithSpace(page: Page): Promise<void> {
@@ -115,11 +115,7 @@ test('losing focus pauses and forgets a held key', async ({ page }) => {
 });
 
 test('hiding the tab pauses the run', async ({ page }) => {
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
-    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
+  await setPageHidden(page, true);
 
   await expectMode(page, 'paused');
 });

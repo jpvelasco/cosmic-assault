@@ -5,7 +5,7 @@ import { dailyGalaxy } from '../src/meta/dailyGalaxy';
 import { defaultSave, type SaveData } from '../src/meta/save';
 import { DAILY_CLEARED, dailyCardLine, dailyTitle, targetLine, twistToast } from '../src/ui/dailyCopy';
 import { PRESSURE } from '../tests/helpers/pressure';
-import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
+import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor, PHONE_VIEWPORT } from './seeds';
 import {
   clickPastGuard,
   collectPickup,
@@ -155,13 +155,13 @@ test('the mode select streak shows from 2, and the records card shows the Daily 
 });
 
 test('a tap on the Daily card plays it, and the three cards fit a phone on its side @phone', async ({ page }) => {
-  await page.setViewportSize({ width: 844, height: 390 });
+  await page.setViewportSize(PHONE_VIEWPORT);
   await openDaily(page, CLEAR_DATE);
   await openModeSelect(page, 'tap');
   await expect(page.locator('.mode-card')).toHaveCount(3);
   expect(await cardProblems(page)).toEqual([]);
   const back = await page.getByTestId('back').boundingBox();
-  expect((back?.y ?? Infinity) + (back?.height ?? 0)).toBeLessThanOrEqual(390);
+  expect((back?.y ?? Infinity) + (back?.height ?? 0)).toBeLessThanOrEqual(PHONE_VIEWPORT.height);
   await page.screenshot({ path: test.info().outputPath('daily-modes-844x390.png') });
 
   await dailyCard(page).tap();
@@ -177,14 +177,14 @@ test('held upright, a phone shows the rotate prompt over mode select @phone', as
 });
 
 test('the Daily results card fits a phone on its side @phone', async ({ page }) => {
-  await page.setViewportSize({ width: 844, height: 390 });
+  await page.setViewportSize(PHONE_VIEWPORT);
   await openDaily(page, CLEAR_DATE);
   await playDaily(page, 'tap');
   await fastForward(page, DAILY_CLEAR_SECONDS);
   await expectMode(page, 'results');
   await expect(page.getByRole('heading', { name: DAILY_CLEARED })).toBeVisible();
   const retry = await page.getByTestId('results-retry').boundingBox();
-  expect((retry?.y ?? Infinity) + (retry?.height ?? 0)).toBeLessThanOrEqual(390);
+  expect((retry?.y ?? Infinity) + (retry?.height ?? 0)).toBeLessThanOrEqual(PHONE_VIEWPORT.height);
   await page.screenshot({ path: test.info().outputPath('daily-results-844x390.png') });
 });
 

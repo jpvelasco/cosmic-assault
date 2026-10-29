@@ -19,7 +19,7 @@ import {
   storedSave,
   test,
 } from './fixtures';
-import { CLEAR_1_1_SECONDS, DAILY_CLEAR_SECONDS, dateFor, GAME_OVER_GALAXY, seedFor } from './seeds';
+import { CLEAR_1_1_SECONDS, DAILY_CLEAR_SECONDS, dateFor, GAME_OVER_GALAXY, PHONE_VIEWPORT, seedFor } from './seeds';
 
 /** Fast-forward steps of a second allowed before a Free run is down to its last life. */
 const FREE_LIFE_STEPS_LIMIT = 120;
@@ -241,7 +241,7 @@ test.describe('"New best!"', () => {
 
   test('a first clear of a date shows no badge, as there was no best to beat @phone', async ({ page }) => {
     // The phone field the 'daily-clears' date is vouched for.
-    await page.setViewportSize({ width: 844, height: 390 });
+    await page.setViewportSize(PHONE_VIEWPORT);
     await openDaily(page, dateFor('daily-clears'));
     await playDaily(page, 'tap');
     await fastForward(page, DAILY_CLEAR_SECONDS);
