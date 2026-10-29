@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import type { Plugin } from 'vite';
+import { RETIRED_PREVIEW_DIR } from '../src/platform/swLogic.ts';
 
 export const SW_FILE_NAME = 'sw.js';
 const WORKER_ENTRY = 'src/sw/worker.ts';
+/** The worker left at the retired preview address, which removes itself and the preview's caches. */
+export const RETIRE_FILE_NAME = `${RETIRED_PREVIEW_DIR}/${SW_FILE_NAME}`;
+const RETIRE_ENTRY = 'src/sw/retire.ts';
 
 /** The part of a Rolldown output bundle entry this plugin reads; the worker's `code` is rewritten in place. */
 export type BundleEntry =
@@ -29,10 +33,15 @@ function contentHash(files: readonly PublicFile[]): string {
   return hash.digest('hex').slice(0, 12);
 }
 
+/** True for a file the worker leaves to the network: `NOT_PRECACHED`, and everything at the retired preview address. */
+function isLeftToNetwork(fileName: string): boolean {
+  return NOT_PRECACHED.includes(fileName) || fileName.startsWith(`${RETIRED_PREVIEW_DIR}/`);
+}
+
 /**
- * Writes the precache list and version into the bundled worker: the list is every other built file but `NOT_PRECACHED`,
- * plus `./` and `index.html`, relative to the worker; the version is `sha` (the commit) or else a hash of every built
- * file's contents.
+ * Writes the precache list and version into the bundled worker: the list is every other built file but those left to
+ * the network, plus `./` and `index.html`, relative to the worker; the version is `sha` (the commit) or else a hash of
+ * every built file's contents.
  */
 export function injectPrecache(
   bundle: Record<string, BundleEntry>,
@@ -51,7 +60,7 @@ export function injectPrecache(
   ]
     .map((file) => ({ ...file, fileName: file.fileName.replaceAll('\\', '/') }))
     .sort((a, b) => a.fileName.localeCompare(b.fileName));
-  const list = [...new Set(['./', 'index.html', ...files.map((file) => file.fileName).filter((name) => !NOT_PRECACHED.includes(name))])].sort();
+  const list = [...new Set(['./', 'index.html', ...files.map((file) => file.fileName).filter((name) => !isLeftToNetwork(name))])].sort();
   const version = sha || contentHash(files);
   const literals = { __PRECACHE__: JSON.stringify(list), __VERSION__: JSON.stringify(version) };
   for (const [placeholder, literal] of Object.entries(literals)) {
@@ -71,9 +80,13 @@ function readPublicFiles(dir: string): PublicFile[] {
     .map((path) => ({ fileName: relative(dir, path), source: readFileSync(path) }));
 }
 
-/** Builds `src/sw/worker.ts` into an unhashed `sw.js` and fills in its precache list and version. */
+/**
+ * Builds `src/sw/worker.ts` into an unhashed `sw.js` and fills in its precache list and version, and builds
+ * `src/sw/retire.ts` into `next/sw.js`.
+ */
 export function precachePlugin(): Plugin {
   let workerEntry = WORKER_ENTRY;
+  let retireEntry = RETIRE_ENTRY;
   let publicDir = '';
   let copyPublicDir = true;
   return {
@@ -81,11 +94,13 @@ export function precachePlugin(): Plugin {
     apply: 'build',
     configResolved(config) {
       workerEntry = resolve(config.root, WORKER_ENTRY);
+      retireEntry = resolve(config.root, RETIRE_ENTRY);
       ({ publicDir } = config);
       copyPublicDir = config.build.copyPublicDir;
     },
     buildStart() {
       this.emitFile({ type: 'chunk', id: workerEntry, fileName: SW_FILE_NAME });
+      this.emitFile({ type: 'chunk', id: retireEntry, fileName: RETIRE_FILE_NAME });
     },
     generateBundle: {
       // After Vite's own hooks, which emit index.html and drop or add files: the list and hash must see the final bundle.

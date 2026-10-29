@@ -1,11 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
 import { build, type Plugin } from 'vite';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { injectPrecache, NOT_PRECACHED, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
+import { injectPrecache, NOT_PRECACHED, RETIRE_FILE_NAME, SW_FILE_NAME, type BundleEntry } from '../../vite/precache';
 
 const WORKER_CODE = 'const a=__PRECACHE__,b=__VERSION__;self.addEventListener("install",()=>caches.open(b).then(c=>c.addAll(a)));';
 
@@ -52,6 +52,19 @@ describe('injectPrecache', () => {
     expect(injectPrecache(bundle, [], 'sha1').list).toEqual(['./', 'assets/index-a1b2.js', 'assets/testBridge-c3d4.js', 'index.html']);
   });
 
+  it('leaves the retired preview address out of the list, but still versions by it', () => {
+    const withPreview = (stub: string, worker = 'self.onactivate=()=>{}') => {
+      const bundle = fakeBundle();
+      bundle[RETIRE_FILE_NAME] = { type: 'chunk', fileName: RETIRE_FILE_NAME, code: worker };
+      return injectPrecache(bundle, [...PUBLIC, { fileName: 'next/index.html', source: stub }, { fileName: 'nextlevel.png', source: 'x' }], '');
+    };
+    const { list, version } = withPreview('<h1>Moved</h1>');
+    expect(list).toEqual(['./', 'assets/index-a1b2.js', 'assets/testBridge-c3d4.js', 'icons/icon-192.png', 'index.html', 'nextlevel.png']);
+    expect(withPreview('<h1>Moved on</h1>').version).not.toBe(version);
+    expect(withPreview('<h1>Moved</h1>', 'self.onactivate=null').version).not.toBe(version);
+    expect(withPreview('<h1>Moved</h1>').version).toBe(version);
+  });
+
   it('replaces both placeholders in the worker with literals', () => {
     const bundle = fakeBundle();
     const { list } = injectPrecache(bundle, PUBLIC, 'deadbeef');
@@ -84,23 +97,51 @@ describe('injectPrecache', () => {
 });
 
 describe('the release build', () => {
-  const outDirs: string[] = [];
+  const tempDirs: string[] = [];
   const configFile = fileURLToPath(new URL('../../vite.config.ts', import.meta.url));
+  const publicDir = fileURLToPath(new URL('../../public/', import.meta.url));
 
-  /** Builds into a fresh temp directory with a fixed build date, so only `plugins` can make two builds differ. */
-  async function buildOnce(plugins: Plugin[] = []): Promise<{ outDir: string; code: string; list: string[]; version: string }> {
-    const outDir = mkdtempSync(join(tmpdir(), 'precache-build-'));
-    outDirs.push(outDir);
+  function tempDir(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  interface Built {
+    outDir: string;
+    code: string;
+    retireCode: string;
+    list: string[];
+    version: string;
+  }
+
+  /**
+   * Builds into a fresh temp directory with a fixed build date, so only `plugins` and the public directory can make two
+   * builds differ.
+   */
+  async function buildOnce(plugins: Plugin[] = [], fromPublic = publicDir): Promise<Built> {
+    const outDir = tempDir('precache-build-');
     await build({
       configFile,
       logLevel: 'silent',
       plugins,
+      publicDir: fromPublic,
       define: { __BUILD_DATE__: JSON.stringify('2026-01-01T00:00:00.000Z') },
       build: { outDir, emptyOutDir: true },
     });
     const code = readFileSync(join(outDir, SW_FILE_NAME), 'utf8');
+    const retireCode = readFileSync(join(outDir, RETIRE_FILE_NAME), 'utf8');
     const list = JSON.parse(/\["\.\/"[^\]]*\]/.exec(code)?.[0] ?? '[]') as string[];
-    return { outDir, code, list, version: /"([0-9a-f]{12})"/.exec(code)?.[1] ?? '' };
+    return { outDir, code, retireCode, list, version: /"([0-9a-f]{12})"/.exec(code)?.[1] ?? '' };
+  }
+
+  /** A copy of public/ whose retired preview page has one more line. */
+  function editedPublic(): string {
+    const dir = tempDir('precache-public-');
+    cpSync(publicDir, dir, { recursive: true });
+    const stub = join(dir, 'next', 'index.html');
+    writeFileSync(stub, `${readFileSync(stub, 'utf8')}<!-- edited -->\n`);
+    return dir;
   }
 
   beforeEach(() => {
@@ -110,7 +151,7 @@ describe('the release build', () => {
     vi.unstubAllEnvs();
   });
   afterAll(() => {
-    for (const dir of outDirs) rmSync(dir, { recursive: true, force: true });
+    for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
   });
 
   it('writes sw.js as one classic script with the list and version filled in', { timeout: 60000 }, async () => {
@@ -132,14 +173,38 @@ describe('the release build', () => {
     for (const entry of [...list.filter((name) => name !== './'), ...NOT_PRECACHED]) expect(existsSync(join(outDir, entry)), entry).toBe(true);
   });
 
-  it('versions by every emitted file, index.html included, so a change to the page alone changes the version', { timeout: 60000 }, async () => {
+  it('writes next/sw.js as its own classic script, with no fetch handler, and keeps the retired address out of the list', { timeout: 60000 }, async () => {
+    const { outDir, code, retireCode, list } = await buildOnce();
+
+    expect(() => new Script(retireCode)).not.toThrow();
+    expect(retireCode).not.toMatch(/\bimport\s*\(/);
+    expect(retireCode).toContain('cosmic-assault-next-');
+    expect(retireCode, 'it never serves a request').not.toMatch(/["'`]fetch["'`]|respondWith/);
+    expect(retireCode, 'it never touches the game\'s cache').not.toContain('cosmic-assault-v2-');
+    // Neither worker can load a shared chunk (both compile as classic scripts), and neither carries the other's code.
+    expect(code, 'the game\'s worker never unregisters').not.toContain('unregister');
+    expect(retireCode, 'the retiring worker never fills a cache').not.toMatch(/addAll|__PRECACHE__/);
+    expect(existsSync(join(outDir, 'next', 'index.html'))).toBe(true);
+    expect(list.filter((entry) => entry.startsWith('next'))).toEqual([]);
+  });
+
+  it('versions by every emitted file, index.html and the retired address included, so a change to any one changes the version', { timeout: 120000 }, async () => {
     const editPage: Plugin = { name: 'edit-page', transformIndexHtml: (html) => html.replace('</body>', '<!-- edited --></body>') };
+    const editRetire: Plugin = {
+      name: 'edit-retire',
+      transform: (source, id) => (id.endsWith('src/sw/retire.ts') ? `${source}\nconsole.info('edited');\n` : undefined),
+    };
     const first = await buildOnce();
     const again = await buildOnce();
     const edited = await buildOnce([editPage]);
+    const retireEdited = await buildOnce([editRetire]);
+    const stubEdited = await buildOnce([], editedPublic());
 
     expect(again.version, 'the same sources give the same version').toBe(first.version);
-    expect(edited.list, 'only the page changed').toEqual(first.list);
-    expect(edited.version).not.toBe(first.version);
+    expect(retireEdited.retireCode, 'the edit reached next/sw.js').toContain('edited');
+    for (const [name, build] of Object.entries({ edited, retireEdited, stubEdited })) {
+      expect(build.list, `${name}: the list stays`).toEqual(first.list);
+      expect(build.version, `${name}: the version changes`).not.toBe(first.version);
+    }
   });
 });
