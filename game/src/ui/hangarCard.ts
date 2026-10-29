@@ -176,6 +176,11 @@ export function createHangarCard(root: HTMLElement, actions: HangarCardActions):
 
   return {
     ...cover,
+    /** Focus lands on the trim drawn, so the arrows step on from it rather than moving the choice to the first. */
+    show() {
+      cover.show();
+      cover.card.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.focus();
+    },
     update(save, look) {
       const unlocked = unlockedLooks(save);
       const drawn = effectiveLook(look, save);
