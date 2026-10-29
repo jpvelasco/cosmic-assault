@@ -2,16 +2,15 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DRIFT } from '../../src/render/palette';
 import { NOT_PRECACHED } from '../../vite/precache';
+import { readPng } from '../helpers/png';
 
 const PUBLIC = new URL('../../public/', import.meta.url);
 const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
-/** Width and height from a PNG's IHDR chunk, which always follows the 8-byte signature. */
+/** Width and height of the PNG at `path` in public/. */
 function pngSize(path: string): { width: number; height: number } {
-  const bytes = readFileSync(new URL(path, PUBLIC));
-  expect(bytes.subarray(0, 8).toString('hex'), `${path} is a PNG`).toBe('89504e470d0a1a0a');
-  expect(bytes.subarray(12, 16).toString('ascii')).toBe('IHDR');
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  const { width, height } = readPng(new URL(path, PUBLIC));
+  return { width, height };
 }
 
 interface ManifestIcon {
