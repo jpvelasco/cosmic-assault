@@ -70,12 +70,12 @@ export function commandForKey(screen: Screen, code: string): Command | null {
 }
 
 /**
- * What a pad button asks for on `screen` when no menu button is focused. Back does what Esc does, except in play, where
- * a stray B must not pause. A and Start play from the title and take an end card's first button; in play and on the
- * pause card Start pauses and resumes. On the menu cards A and Start ask for nothing: A then focuses the first button.
+ * What a pad button asks for on `screen` when no menu button is focused. B does what Esc does everywhere, so in play it
+ * pauses. A and Start play from the title and take an end card's first button; in play and on the pause card Start
+ * pauses and resumes. On the menu cards A and Start ask for nothing: A then focuses the first button.
  */
 export function commandForPad(screen: Screen, button: PadButton): Command | null {
-  if (button === 'back') return screen === 'playing' ? null : commandForKey(screen, BACK_KEY);
+  if (button === 'back') return commandForKey(screen, BACK_KEY);
   switch (screen) {
     case 'title':
       return START;
