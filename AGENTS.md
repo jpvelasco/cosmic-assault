@@ -376,7 +376,9 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    4318 (release), clear of Vite's default preview port. Its `pages` project
    also serves the release build under `/cosmic-assault/` on port 4319 with
    `scripts/serve-pages.mjs`, which answers like GitHub Pages (`PAGES_URL`
-   points it at a live copy instead), and runs `e2e/pages.spec.ts`, the
+   points it at a live copy instead), runs the `@release` tests of
+   `e2e/release-smoke.spec.ts` and `e2e/install.spec.ts` there, and runs
+   `e2e/pages.spec.ts`, the
    service workers' lifecycle across the move from the preview address, on
    sites it serves itself from `e2e/fixtures/pages/` (whose `preview/sw.js` is
    the published preview worker, kept byte for byte but for its precache list). `npm run test:perf`
@@ -473,9 +475,9 @@ downloads the `game-dist` artifact into `_site`, runs `check-base`,
 are no other hosting paths.
 
 The `game/` build is an installable, offline-capable web app. `vite/precache.ts`
-emits `src/sw/worker.ts` as `sw.js` with the list of every built file but the two
-512 px icons (`NOT_PRECACHED`), which the browser fetches itself when it installs
-the app, and everything under `next/`; `tests/unit/icons.test.ts` caps the
+emits `src/sw/worker.ts` as `sw.js` with the list of every built file but
+everything under `next/` and the two 512 px icons (`NOT_PRECACHED`), which the
+browser fetches itself when it installs the app; `tests/unit/icons.test.ts` caps the
 precached icons' bytes. The worker registers from `./sw.js` with its default
 scope, the site's root directory (`/cosmic-assault/` on Pages), so it never
 controls another project on the shared origin; it is never registered by the
@@ -503,5 +505,6 @@ old offline copy.
 
 Neither worker imports the other's module, and the kill switch must never
 delete a `cosmic-assault-v2-*` cache. Nothing else may go under `next/`:
-`check-pages` fails the build if it does, and `e2e/pages.spec.ts` covers both
+`check-pages` fails the `game` job and `deploy` if it does (it is not part of
+`npm run build`), and `e2e/pages.spec.ts` covers both
 workers' lifecycle at the site root and under `/cosmic-assault/`.

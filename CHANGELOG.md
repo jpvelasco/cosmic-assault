@@ -14,8 +14,8 @@ Cosmic Assault 2.0: the game, rebuilt.
 - Five Dimensions of six galaxies each, thirty in all, with a boss at the end of every Dimension: the Monolith, the
   Hive Carrier, the Warden, the Leviathan and the Eclipse. Bosses fight in phases, and every attack winds up with a
   visible tell before it can hurt you.
-- New foes (splitters, drones, gunships, mines, phasers and armoured rocks), new hazards (danger zones, warp rifts and
-  a black hole, alongside gravity wells and repulsion fields), and new pickups (Weapon Core, Spread Laser, Piercing
+- New foes (splitters, drones, gunships, mines, phasers and armoured rocks), new hazards (warp rifts and a black hole,
+  alongside gravity wells, repulsion fields and danger zones), and new pickups (Weapon Core, Spread Laser, Piercing
   Beam, Homing Missiles, Wingman, Nova and Time Warp, alongside Shield, Double Shot, Rapid Fire and Field Bomb). Each
   hazard shows a harmless warning before it turns hostile, and a pickup's first drop is announced.
 - Three ways to play: Rank, one campaign from the first galaxy to the last boss that saves between galaxies; Free play,
