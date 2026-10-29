@@ -3,12 +3,15 @@ import { ATTRACT_IDLE_SECONDS } from '../src/app/attract';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
 import { SETTINGS_KEY } from '../src/app/settings';
 import type { Look } from '../src/content/cosmetics';
+import { TWISTS_BY_ID } from '../src/content/daily';
 import { GALAXIES } from '../src/content/galaxies';
 import type { GalaxyId, PickupId } from '../src/content/types';
+import { dailyGalaxy } from '../src/meta/dailyGalaxy';
 import { RANK_START_LIVES } from '../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { BRIDGE_VERSION } from '../src/testBridge';
+import { dailyCardLine } from '../src/ui/dailyCopy';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
 
 /**
@@ -41,8 +44,14 @@ export { expect };
 /** The toast: the one status region the player sees (the boss announcer is a visually hidden status region too). */
 export const toastOf = (page: Page) => page.getByRole('status').and(page.locator('.toast'));
 
-/** The title screen's build label in a `vite preview` build. */
+/** The build label of a built game, on the title screen and in the crash report; the specs' one owner of its format. */
 export const BUILD_LABEL = /^preview · (local|[0-9a-f]{7}) · \d{4}-\d{2}-\d{2}$/;
+
+/** The line the Daily card shows for `date`'s twist and target. */
+export function dailyCardLineOf(date: string): string {
+  const { twist, target } = dailyGalaxy(date);
+  return dailyCardLine(TWISTS_BY_ID[twist].name, target);
+}
 
 /** The e2e-only URL overrides (see src/app/seed.ts). */
 export interface GameQuery {
