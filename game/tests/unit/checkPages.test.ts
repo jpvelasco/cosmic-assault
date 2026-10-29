@@ -185,7 +185,7 @@ describe('check-pages', { timeout: SPAWN_TIMEOUT_MS }, () => {
       write(site, file, 'classic');
     });
     const name = file.split('/')[0] ?? file;
-    expectFailure(dir, `${dir} has ${name} from the classic site;`, 'without copying website/ into it');
+    expectFailure(dir, `${dir} has ${name} from the classic site;`, 'without copying the classic site into it');
   });
 
   it('reports every problem in one run', () => {

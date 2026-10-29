@@ -22,8 +22,7 @@
     "check:pages": "node scripts/check-pages.mjs",
     "check:workflow": "node scripts/check-workflow.mjs",
     "find-seeds": "node scripts/find-seeds.mjs",
-    "icons": "node scripts/render-icons.mjs",
-    "record:parity": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/record-parity-traces.mjs"
+    "icons": "node scripts/render-icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

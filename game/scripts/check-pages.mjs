@@ -124,7 +124,7 @@ function manifestProblems() {
 
 function classicFiles() {
   return CLASSIC_FILES.filter((name) => existsSync(join(dir, name))).map(
-    (name) => `${dir} has ${name} from the classic site; publish the game build alone, without copying website/ into it`,
+    (name) => `${dir} has ${name} from the classic site; publish the game build alone, without copying the classic site into it`,
   );
 }
 

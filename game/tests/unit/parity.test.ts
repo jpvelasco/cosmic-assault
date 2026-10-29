@@ -78,7 +78,7 @@ function expectShotsClose(actual: readonly Shot[], expected: readonly Shot[]): v
   });
 }
 
-describe('trace parity with the live game', () => {
+describe('trace parity with the classic game', () => {
   it('loads every recorded scenario', () => {
     expect(FIXTURES.map((f) => f.scenario)).toEqual([
       'fire-held',

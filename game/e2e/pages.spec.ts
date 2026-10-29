@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
 import { createPagesServer, NOT_FOUND_BODY, PAGES_MAX_AGE_SECONDS, type PagesMount, type PagesServer } from '../scripts/serve-pages.mjs';
 import { defaultSave, SAVE_KEY } from '../src/meta/save';
+import { PREVIEW_CACHE_PREFIX } from '../src/platform/swLogic';
 import { expect, test as base } from './fixtures';
 
 /*
@@ -25,8 +26,6 @@ import { expect, test as base } from './fixtures';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/pages/', import.meta.url));
 const DIST = fileURLToPath(new URL('../dist/', import.meta.url));
-/** The preview worker's caches: a name frozen in every device that ran the preview. */
-const PREVIEW_CACHE_PREFIX = 'cosmic-assault-next-';
 /** The root worker's caches, which a cleanup of the preview's never matches. */
 const ROOT_CACHE_PREFIX = 'cosmic-assault-v2-';
 const MOVE_TIMEOUT_MS = 10_000;
