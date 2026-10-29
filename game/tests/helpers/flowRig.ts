@@ -36,6 +36,7 @@ export function flowRig(options: FlowRigOptions) {
   const screens: Screen[] = [];
   const live: (number | null)[] = [];
   const notify = vi.fn<(text: string) => void>();
+  const refresh = vi.fn<() => void>();
   const flow = createFlowController({
     store,
     overrides: { galaxy: options.galaxy, startLives: options.startLives },
@@ -44,6 +45,7 @@ export function flowRig(options: FlowRigOptions) {
     startRun: (state) => started.push(state),
     showScreen: (screen) => screens.push(screen),
     notify,
+    refresh,
     liveRun: (runSeq) => live.push(runSeq),
   });
   return {
@@ -54,6 +56,7 @@ export function flowRig(options: FlowRigOptions) {
     screens,
     live,
     notify,
+    refresh,
     setToday: (date: string) => {
       today = date;
     },

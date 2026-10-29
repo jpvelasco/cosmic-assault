@@ -43,7 +43,11 @@ export interface ViewSyncDeps {
 }
 
 export interface ViewSync {
-  /** Brings the cards (the settings, records and Hangar cards too), their `inert` covers, the rotate prompt, the touch layer, the ship's look and the HUD bounds in line with the state. */
+  /**
+   * Brings the cards (the settings, records and Hangar cards too), their `inert` covers, the rotate prompt, the touch
+   * layer, the ship's look and the HUD bounds in line with the state. It runs again whenever the page comes back into
+   * view or focus, so a card resting across midnight shows the new day.
+   */
   sync(): void;
   /** A phone held upright: the game needs the wide screen, so it asks for a turn instead of playing. */
   needsRotation(): boolean;
@@ -107,7 +111,13 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
     if (needsRotation()) deps.onTurnUpright();
     sync();
   };
+  /** The page is back in view or in focus, perhaps on a new day: the cards read today again, so the Daily card shows it. */
+  const onReturn = (): void => {
+    if (document.visibilityState === 'visible') sync();
+  };
   const unlisteners = [
+    listen(document, 'visibilitychange', onReturn),
+    listen(window, 'focus', onReturn),
     listen(touchStyle, 'change', onPlatformChange),
     listen(coarsePointer, 'change', onPlatformChange),
     listen(portrait, 'change', onPlatformChange),

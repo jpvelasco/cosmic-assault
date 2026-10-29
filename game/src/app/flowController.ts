@@ -5,7 +5,6 @@ import { forfeitRankRun, isUnlocked } from '../meta/progress';
 import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
 import type { SaveData } from '../meta/save';
 import type { SimEvent } from '../sim/events';
-import type { GalaxyMode } from '../sim/scoring';
 import type { World } from '../sim/world';
 import type { FlowCommand } from './commands';
 import { applySaveChange, INITIAL_FLOW, saveChange, toTitle, transition, type FlowAction, type FlowState, type SaveChange, type Screen } from './flow';
@@ -29,6 +28,8 @@ export interface FlowControllerDeps {
   showScreen(screen: Screen): void;
   /** Tells the player something in a toast. */
   notify(text: string): void;
+  /** Redraws the cards: the Daily card was pressed showing a day that is no longer today. */
+  refresh(): void;
   /** After each move: the `rankSeq` of the Rank galaxy this tab is now playing, or null when it plays none. */
   liveRun?(runSeq: number | null): void;
 }
@@ -140,16 +141,24 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     return state.screen === 'modeSelect' && store.save.rankRun !== null ? { kind: 'askNewRank' } : { kind: 'startRank', run: newRank() };
   }
 
-  /** The Daily of today, read once, so the date checked is the date played; none when that date's cannot be built. */
-  function chooseDaily(): FlowAction | null {
+  /**
+   * The Daily of today, read once, so the date checked is the date played; none when that date's cannot be built. A press
+   * on a card `shown` showing an earlier day plays nothing: the card is redrawn in place, and the next press plays the day
+   * it shows then.
+   */
+  function chooseDaily(shown: string | undefined): FlowAction | null {
     const date = deps.today();
+    if (shown !== undefined && shown !== date) {
+      deps.refresh();
+      return null;
+    }
     return deps.dailyBuilds(date) ? { kind: 'playDaily', date } : null;
   }
 
   /** A mode card: Rank (asking first over a saved run), Free play's map, or the Daily of today. */
-  function chooseMode(mode: GalaxyMode): FlowAction | null {
+  function chooseMode({ mode, date }: Extract<FlowCommand, { kind: 'chooseMode' }>): FlowAction | null {
     if (mode === 'rank') return chooseRank();
-    return mode === 'daily' ? chooseDaily() : { kind: 'chooseFree' };
+    return mode === 'daily' ? chooseDaily(date) : { kind: 'chooseFree' };
   }
 
   function actionFor(command: FlowCommand): FlowAction | null {
@@ -159,7 +168,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
       case 'resumeRank':
         return resume();
       case 'chooseMode':
-        return chooseMode(command.mode);
+        return chooseMode(command);
       case 'openDimension':
         return isUnlocked(store.save, galaxyIdOf(command.dimension, 1)) ? command : null;
       case 'openGalaxy':

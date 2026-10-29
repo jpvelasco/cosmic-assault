@@ -67,12 +67,12 @@ export function dailyCardView(save: SaveData, today: string, build: DailyBuild =
 }
 
 /**
- * A large glass card for `spec`, named by its title alone and described by its line and any `extra` lines, so its
- * accessible name stays the mode's. Returns the card and its line.
+ * A large glass card for `spec`, pressed with `press`, named by its title alone and described by its line and any `extra`
+ * lines, so its accessible name stays the mode's. Returns the card and its line.
  */
-function modeCard(spec: ModeSpec, act: Act, ...extra: HTMLElement[]): { readonly card: HTMLButtonElement; readonly text: HTMLElement } {
+function modeCard(spec: ModeSpec, press: () => void, ...extra: HTMLElement[]): { readonly card: HTMLButtonElement; readonly text: HTMLElement } {
   const id = `mode-${spec.mode}`;
-  const card = withTestId(button(`mode-card mode-card--${spec.mode}`, '', act({ kind: 'chooseMode', mode: spec.mode })), id);
+  const card = withTestId(button(`mode-card mode-card--${spec.mode}`, '', press), id);
   const name = element('span', 'mode-card__name', spec.name);
   const text = element('span', 'mode-card__text', spec.text);
   name.id = `${id}-name`;
@@ -97,12 +97,16 @@ export function createModeSelect(act: Act, log: Pick<RingLog, 'add'>, build: Dai
   const resumeSlot = element('div', 'resume-slot');
   const blurb = element('span', 'mode-card__blurb');
   const streak = withTestId(element('span', 'mode-card__streak'), 'daily-streak');
-  const dailyCard = modeCard(DAILY_MODE, act, blurb, streak);
+  let shown: { readonly save: SaveData; readonly today: string } | null = null;
+  // The Daily card's press names the date it shows, read as it is pressed.
+  const pressDaily = (): void => {
+    act(shown === null ? { kind: 'chooseMode', mode: 'daily' } : { kind: 'chooseMode', mode: 'daily', date: shown.today })();
+  };
+  const dailyCard = modeCard(DAILY_MODE, pressDaily, blurb, streak);
   const cards = element('div', 'mode-cards');
-  cards.append(...MODES.map((spec) => modeCard(spec, act).card), dailyCard.card);
+  cards.append(...MODES.map((spec) => modeCard(spec, act({ kind: 'chooseMode', mode: spec.mode })).card), dailyCard.card);
   const start = withTestId(button(PRIMARY_BUTTON, 'Start new run', act({ kind: 'chooseMode', mode: 'rank' })), 'confirm-new-rank');
   const chipRow = element('div', 'chips');
-  let shown: { readonly save: SaveData; readonly today: string } | null = null;
   /** The last date whose Daily could not be built, already logged. */
   let loggedFor: string | null = null;
   return {

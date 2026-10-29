@@ -22,13 +22,21 @@ export class FakeElement {
     this.children.push(...nodes);
   }
 
-  /** Attributes and listeners are taken and dropped: the tests read what a card shows, not how it is labelled or wired. */
+  private readonly clicks: (() => void)[] = [];
+
+  /** Attributes are taken and dropped: the tests read what a card shows, not how it is labelled. */
   setAttribute(): void {
     // Nothing to keep.
   }
 
-  addEventListener(): void {
-    // Nothing to keep.
+  /** Keeps the click listeners, for `click`; any other listener is dropped. */
+  addEventListener(type: string, listener: () => void): void {
+    if (type === 'click') this.clicks.push(listener);
+  }
+
+  /** Presses it, as a tap or a key on its focus does. */
+  click(): void {
+    for (const listener of this.clicks) listener();
   }
 
   /** This element or the first one under it with the `data-testid` `testId`. */
