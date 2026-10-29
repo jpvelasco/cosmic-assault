@@ -42,6 +42,7 @@ import { fieldForViewport, type Field } from '../../src/sim/field';
 import type { GalaxyMode } from '../../src/sim/scoring';
 import type { SimEvent } from '../../src/sim/events';
 import { hasEnded, World } from '../../src/sim/world';
+import { datesFrom } from './dates';
 
 /** The fire assertions finish within about 1 s of a run starting; this leaves slow CI hosts headroom. */
 const GUARD_SECONDS = 2.5;
@@ -463,11 +464,11 @@ export interface FindOptions {
   readonly to?: number;
 }
 
-/** The lowest seeds from `from` (and below `to`) for which `holds`, lowest first. */
-function lowestSeeds(holds: (seed: number) => boolean, { from = 1, count = 5, to = 2000 }: FindOptions): number[] {
+/** The lowest numbers from `from` (and below `to`) for which `holds`, lowest first: seeds, or days after DATE_EPOCH. */
+function lowestHolding(holds: (n: number) => boolean, { from = 1, count = 5, to = 2000 }: FindOptions): number[] {
   const found: number[] = [];
-  for (let seed = from; seed < to && found.length < count; seed++) {
-    if (holds(seed)) found.push(seed);
+  for (let n = from; n < to && found.length < count; n++) {
+    if (holds(n)) found.push(n);
   }
   return found;
 }
@@ -475,7 +476,7 @@ function lowestSeeds(holds: (seed: number) => boolean, { from = 1, count = 5, to
 /** The lowest seeds from `from` for which `claim` holds in its table galaxy, lowest first. */
 export function findSeeds(claim: ClaimId, options: FindOptions = {}): number[] {
   const { galaxy } = entryFor(claim);
-  return lowestSeeds((seed) => CLAIMS[claim].holds(seed, galaxy), options);
+  return lowestHolding((seed) => CLAIMS[claim].holds(seed, galaxy), options);
 }
 
 /** The claim an attract demo's seed makes, named after its galaxy. */
@@ -527,7 +528,7 @@ export function unmetDemoClaimMessage({ seed, galaxy }: AttractDemo): string {
 /** The lowest seeds from `from` that keep a demo claim, lowest first. */
 export function findDemoSeeds(claim: DemoClaimId, options: FindOptions = {}): number[] {
   const galaxy = demoGalaxy(claim);
-  return lowestSeeds((seed) => demoClaimHolds(seed, galaxy), options);
+  return lowestHolding((seed) => demoClaimHolds(seed, galaxy), options);
 }
 
 /** The field of a phone on its side at 844×390, where the Daily spec plays its phone clear. */
@@ -577,10 +578,7 @@ export function dateClaimIds(): DateClaimId[] {
 
 /** The earliest dates `from` days after DATE_EPOCH (and before day `to`) whose Daily keeps `claim`, earliest first. */
 export function findDates(claim: DateClaimId, { from = 0, count = 5, to = 2000 }: FindOptions = {}): string[] {
-  const found: string[] = [];
-  let date = DATE_EPOCH;
-  for (let day = 0; day < to && found.length < count; day++, date = nextDate(date)) {
-    if (day >= from && DATE_CLAIMS[claim].holds(date)) found.push(date);
-  }
-  return found;
+  const dates = datesFrom(DATE_EPOCH, to);
+  const dateOn = (day: number): string => dates[day] ?? DATE_EPOCH;
+  return lowestHolding((day) => DATE_CLAIMS[claim].holds(dateOn(day)), { from, count, to }).map(dateOn);
 }
