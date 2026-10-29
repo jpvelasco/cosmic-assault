@@ -60,7 +60,6 @@ function leftStick(pad: PadSnapshot): readonly [x: number, y: number] {
   return [pad.axes[0] ?? 0, pad.axes[1] ?? 0];
 }
 
-
 /** Controls from a pad: the left stick steers like the touch stick, the D-pad turns and thrusts, A, RB and RT fire. */
 export function controlsFromPad(pad: PadSnapshot | null): Controls {
   if (pad === null) return NO_CONTROLS;

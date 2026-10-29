@@ -149,7 +149,7 @@ test('stops when the window turns upright', { tag: '@desktop' }, async ({ page }
   expect((await gameState(page)).screen).toBe('title');
 });
 
-test('after 10 s on the title without input, the demo starts by itself and plays on', async ({ page }) => {
+test(`after ${String(ATTRACT_IDLE_SECONDS)} s on the title without input, the demo starts by itself and plays on`, async ({ page }) => {
   test.setTimeout(ATTRACT_IDLE_TIMEOUT_MS + 15_000);
   await openGame(page);
   const ready = Date.now();

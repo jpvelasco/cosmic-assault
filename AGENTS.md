@@ -28,7 +28,7 @@
   spec that plays a Daily picks a date, each with a claim (`daily-clears`,
   `daily-streak`, `daily-game-over`) that `find-seeds` re-picks by scanning dates from
   `DATE_EPOCH`. Each attract demo's seed carries an `attract-<level>` claim (the
-  expert loses no life in its first 45 s at 16:9, 4:3 and 21:9), which the guard checks
+  expert loses no life in its first `DEMO_SECONDS` at 16:9, 4:3 and 21:9), which the guard checks
   and `find-seeds` re-picks too. Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
@@ -172,8 +172,8 @@
     whose Daily cannot be built leaves its card unavailable (and logged) while the
     other modes play on; choosing it then leaves mode select up and redraws the
     card so. Every Daily string, the HUD's `Daily` label among them, lives in
-    `ui/dailyCopy.ts`, and a test holds them all to copy that never presses or
-    speaks of loss. `e2e/daily.spec.ts` plays it through `?today=` and the
+    `ui/dailyCopy.ts`, bar the twist names and blurbs in `content/daily.ts`, and a
+    test holds them all to copy that never presses or speaks of loss. `e2e/daily.spec.ts` plays it through `?today=` and the
     bridge's `daily` state.
   - The streak (`meta/daily.ts`): a date counts on its first Daily clear, never a
     game over, and counting is idempotent. It runs on only when the last counted date
@@ -182,9 +182,10 @@
     goes down, mode select shows the streak from 2, and nothing ever mentions a
     streak ending: once it stops running it is simply not shown.
   - Dates (`meta/calendar.ts`) are `YYYY-MM-DD` strings with pure calendar
-    arithmetic through `Date.UTC`, never by adding milliseconds. Dates are injected:
-    everything takes "today" as a `() => string`, and only `app/date.ts` turns a
-    `Date` into a local date.
+    arithmetic on whole days from the civil-calendar formulas, never `Date` and
+    never by adding milliseconds. Dates are injected: the app reads "today" through
+    a `() => string` and hands the date it read to what draws it (mode select, the
+    records card), and only `app/date.ts` turns a `Date` into a local date.
   - "New best!" has one owner, `meta/bests.ts`: it needs an earlier record to beat
     (a first clear or an empty board never shows it) and never shows on a debug
     run. A level's best is judged at Free play scale; a Rank run's entry against the
@@ -206,9 +207,9 @@
     settings at once, and focus opens on the trim drawn. The ship's sprite key is
     `ship|<palette>:<skin>|0`, which `e2e/hangar.spec.ts` reads from the bridge's
     `spriteCache` keys.
-  - Attract mode (`app/attract.ts`): after 10 s without input on the bare title, the
-    expert bot plays a demo level behind the dimmed card (`ATTRACT_DEMOS`, each for
-    up to 45 s, a second apart). It never starts under `prefers-reduced-motion`, in
+  - Attract mode (`app/attract.ts`): after `ATTRACT_IDLE_SECONDS` without input on
+    the bare title, the expert bot plays a demo level behind the dimmed card
+    (`ATTRACT_DEMOS`, each for up to `DEMO_SECONDS`, `DEMO_GAP_SECONDS` apart). It never starts under `prefers-reduced-motion`, in
     a hidden tab, upright, or with a card over the title (settings, records, the
     Hangar, the rotate prompt, the crash card, the install prompt). It is isolated
     by its dependencies: it has no save store, flow, notices or audio, so a demo

@@ -218,7 +218,7 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
     }
   }
 
-  // Added ahead of the F key's listener, which a demo-ending F must never reach.
+  // Listens in the capture phase, so a demo-ending F is swallowed before the F key's own (bubble-phase) listener sees it.
   const demoEnders = swallowDemoEnders(win, () => deps.interrupt(), hideNavFocus);
   const unlisteners = [
     demoEnders.dispose,

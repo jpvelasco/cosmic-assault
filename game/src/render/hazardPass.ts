@@ -314,8 +314,8 @@ export function createHazardPass(ctx: CanvasRenderingContext2D, pen: FieldPen, s
 
   /**
    * A gravity storm's art, under its wells: every pair of them linked, and while they warn one dotted ring round their
-   * middle. A field has at most one storm in play, so every storm well is the same storm's. Walks the list by index, so
-   * a frame allocates nothing; under reduced motion the links and ring hold their alpha still.
+   * middle. A field has at most one storm in play, so every storm well is the same storm's. Under reduced motion the
+   * links and ring hold their alpha still.
    */
   function drawStorm(hazards: readonly Readonly<HazardState>[], { time, still }: SceneLook): void {
     let count = 0;

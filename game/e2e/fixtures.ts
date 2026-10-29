@@ -342,7 +342,7 @@ export function askForAttract(page: Page): Promise<void> {
 /** How long a spec waits for the attract demo to start by itself: the idle stretch, with room for a slow host. */
 export const ATTRACT_IDLE_TIMEOUT_MS = (ATTRACT_IDLE_SECONDS + 15) * 1000;
 
-/** Starts the attract demo on the bare title now, as 10 s without input would, and waits until it has drawn a few frames. */
+/** Starts the attract demo on the bare title now, as ATTRACT_IDLE_SECONDS without input would, and waits until it has drawn a few frames. */
 export async function startAttract(page: Page): Promise<void> {
   await askForAttract(page);
   await expect.poll(async () => (await attractState(page)).frames).toBeGreaterThan(5);

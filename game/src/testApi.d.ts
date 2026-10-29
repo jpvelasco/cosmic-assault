@@ -108,7 +108,7 @@ interface CosmicAssaultTestState {
   /** The sprite cache's use: the sprites it holds now and their keys (`kind|name|size`, a ship's name `palette:skin`), and how many it has evicted to stay within its capacity. */
   readonly spriteCache: import('./render/sprites').CacheUse | null;
   /**
-   * The attract demo behind the title: whether it is on (a demo playing, or the second before the next), the galaxy of the
+   * The attract demo behind the title: whether it is on (a demo playing, or the pause before the next), the galaxy of the
    * demo, the demo frames drawn since it turned on, and whether a demo crash has stopped it for the session.
    */
   readonly attract: import('./app/e2eHooks').AttractState | null;
@@ -136,7 +136,7 @@ interface CosmicAssaultTestApi {
   grantPickup(kind: import('./content/types').PickupId): void;
   /** Restarts `frameStats` as a run start does, its 3 s warm-up included, leaving the run and the quality level alone. */
   restartFrameStats(): void;
-  /** Counts the title's idle stretch as over, so the next frame on the bare title starts the attract demo, as 10 s without input would. */
+  /** Counts the title's idle stretch as over, so the next frame on the bare title starts the attract demo, as ATTRACT_IDLE_SECONDS without input would. */
   attractNow(): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
