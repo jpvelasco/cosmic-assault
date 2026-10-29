@@ -1,6 +1,6 @@
 import type { JSHandle, Page } from '@playwright/test';
 import { PLAYER } from '../src/sim/config';
-import { expect, expectMode, gameState, grantPickup, nextFrames, openGame, setPageHidden, shipState, shotsPerVolley, speed, test } from './fixtures';
+import { expect, expectMode, gameState, grantPickup, nextFrames, openGame, setPageHidden, shipState, shotsFired, shotsPerVolley, speed, test } from './fixtures';
 
 /** Starts a run with Space, then releases it so the start-key latch lets Space fire again. */
 async function startWithSpace(page: Page): Promise<void> {
@@ -187,7 +187,113 @@ test('with the Wingman beside it, a thrust, fire and turn chord still turns both
   expect(rightTurn.turned).toBeGreaterThan(0.8);
 });
 
-test('the title names the fire keys that avoid key ghosting', async ({ page }) => {
+/** Puts the mouse on the bare field, a quarter of the way across and clear of the pause button. */
+async function pointAtField(page: Page): Promise<void> {
+  const box = await page.locator('#game').boundingBox();
+  if (box === null) throw new Error('The game canvas has no layout box; start a run first');
+  await page.mouse.move(box.x + box.width / 4, box.y + box.height / 2);
+}
+
+/** `chord` with the mouse button held on the field as well, pressed first; `shots` counts those fired while it was held. */
+async function mouseChord(page: Page, keys: readonly string[], ms: number): Promise<{ turned: number; thrusting: boolean; shots: number }> {
+  await pointAtField(page);
+  const before = await shotsFired(page);
+  await page.mouse.down();
+  const held = await chord(page, keys, ms);
+  await page.mouse.up();
+  return { ...held, shots: (await shotsFired(page)) - before };
+}
+
+// The mouse button is the other way round key ghosting: held on the field, it fires through every thrust and turn chord.
+for (const [thrust, left, right] of [
+  ['ArrowUp', 'ArrowLeft', 'ArrowRight'],
+  ['KeyW', 'KeyA', 'KeyD'],
+] as const) {
+  test(`thrusting with ${thrust} and firing with the mouse button still turns both ways`, async ({ page }) => {
+    const leftTurn = await mouseChord(page, [thrust, left], 400);
+    expect(leftTurn.thrusting).toBe(true);
+    expect(leftTurn.shots).toBeGreaterThan(0);
+    expect(leftTurn.turned).toBeLessThan(-0.8);
+
+    const rightTurn = await mouseChord(page, [thrust, right], 400);
+    expect(rightTurn.shots).toBeGreaterThan(0);
+    expect(rightTurn.turned).toBeGreaterThan(0.8);
+  });
+
+  test(`the mouse button fires beside ${thrust} alone, and beside ${left} or ${right} alone`, async ({ page }) => {
+    const thrusting = await mouseChord(page, [thrust], 400);
+    expect(thrusting.thrusting).toBe(true);
+    expect(thrusting.shots).toBeGreaterThan(0);
+
+    const leftTurn = await mouseChord(page, [left], 400);
+    expect(leftTurn.thrusting).toBe(false);
+    expect(leftTurn.shots).toBeGreaterThan(0);
+    expect(leftTurn.turned).toBeLessThan(-0.8);
+
+    const rightTurn = await mouseChord(page, [right], 400);
+    expect(rightTurn.shots).toBeGreaterThan(0);
+    expect(rightTurn.turned).toBeGreaterThan(0.8);
+  });
+}
+
+test('letting go of the mouse button stops fire while the keys still thrust and turn', async ({ page }) => {
+  await pointAtField(page);
+  await page.mouse.down();
+  await page.keyboard.down('ArrowUp');
+  await page.keyboard.down('ArrowLeft');
+  await expect.poll(() => shotsFired(page)).toBeGreaterThan(0);
+
+  await page.mouse.up();
+  await nextFrames(page, 2);
+  const before = await shipState(page);
+  const shots = await shotsFired(page);
+  // Deliberate wait: longer than the fire interval, so a fire still held would shoot in it.
+  await page.waitForTimeout(500);
+  const after = await shipState(page);
+  expect(await shotsFired(page), 'no shot once the button is let go').toBe(shots);
+  expect(after.thrusting).toBe(true);
+  expect(after.angle - before.angle).toBeLessThan(-0.8);
+  await page.keyboard.up('ArrowLeft');
+  await page.keyboard.up('ArrowUp');
+});
+
+test('a click on the Pause button pauses without a shot, after the mouse button has fired', async ({ page }) => {
+  expect((await mouseChord(page, [], 400)).shots).toBeGreaterThan(0);
+  const shots = await shotsFired(page);
+
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expectMode(page, 'paused');
+  await page.keyboard.press('Escape');
+  await expectMode(page, 'playing');
+  await nextFrames(page, 30);
+  expect(await shotsFired(page), 'the click on Pause fired nothing, then or after').toBe(shots);
+});
+
+for (const [cause, pauseRun] of [
+  ['Escape', (page: Page) => page.keyboard.press('Escape')],
+  ['a lost focus', (page: Page) => page.evaluate(() => window.dispatchEvent(new Event('blur')))],
+  ['a hidden tab', (page: Page) => setPageHidden(page, true)],
+] as const) {
+  test(`the mouse button held through a pause by ${cause} fires no more once the run resumes`, async ({ page }) => {
+    await pointAtField(page);
+    await page.mouse.down();
+    await expect.poll(() => shotsFired(page)).toBeGreaterThan(0);
+
+    await pauseRun(page);
+    await expectMode(page, 'paused');
+    // The hidden tab shows again; the other pauses never hid it.
+    await setPageHidden(page, false);
+    await page.keyboard.press('Escape');
+    await expectMode(page, 'playing');
+    await nextFrames(page, 3);
+    const shots = await shotsFired(page);
+    await nextFrames(page, 30);
+    expect(await shotsFired(page), 'no fire is held after the pause').toBe(shots);
+    await page.mouse.up();
+  });
+}
+
+test('the title names the fire keys and the mouse button that avoid key ghosting', async ({ page }) => {
   await openGame(page);
-  await expect(page.getByTestId('controls-hint')).toHaveText('Fly with the arrows or WASD · fire with Space, Z or X');
+  await expect(page.getByTestId('controls-hint')).toHaveText('Fly with the arrows or WASD · fire with Space, Z, X or the mouse button');
 });
