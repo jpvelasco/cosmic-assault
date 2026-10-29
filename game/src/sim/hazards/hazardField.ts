@@ -11,19 +11,20 @@ import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
 import { BlackHole } from './blackHole';
 import { DangerZones } from './dangerZone';
-import { ForceField } from './forceField';
+import { ForceField, inBand } from './forceField';
+import { stormLayout } from './gravityStorm';
 import type { Bodies, Circle, Hazard, HazardBolts, HazardFactory, HazardFoes, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
 import { WarpRifts } from './warpRift';
 
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
-  gravityWell: (setup) => new ForceField('gravityWell', setup),
-  repulsionField: (setup) => new ForceField('repulsionField', setup),
+  gravityWell: (setup) => new ForceField('gravityWell', setup, inBand('gravityWell', setup.rng)),
+  repulsionField: (setup) => new ForceField('repulsionField', setup, inBand('repulsionField', setup.rng)),
   dangerZone: (setup) => new DangerZones(setup),
   warpRift: (setup) => new WarpRifts(setup),
   blackHole: (setup) => new BlackHole(setup),
-  gravityStorm: (setup) => new ForceField('gravityStorm', setup),
+  gravityStorm: (setup) => new ForceField('gravityStorm', setup, stormLayout(setup)),
 };
 
 /** The stream a hazard type draws from: the gravity wells keep the `'hazards'` stream they first drew from, so Ion Reach does not move. */

@@ -1,6 +1,5 @@
 import { GRAVITY_STORM, stormWells, WELL_RADIUS } from '../../content/hazards';
-import type { Point } from '../math';
-import { clearSpots, cornerClearance, zoneKeepOutBoxes } from './dangerZone';
+import { clearSpots, type ClearSpot } from './dangerZone';
 import type { WellLayout, WellSpot } from './forceField';
 import type { HazardSetup } from './hazard';
 
@@ -10,37 +9,33 @@ import type { HazardSetup } from './hazard';
  */
 const CORNER_RUNGS: readonly number[] = [WELL_RADIUS, WELL_RADIUS / 2];
 
-/** A spot a well may take, and its clearance from the nearest corner box. */
-type Candidate = Point & { readonly clearance: number };
-
 /**
  * A gravity storm's wells: `baseWells` plus the event's intensity, at most `maxWells`, each a gravity well of intensity 1,
- * from the storm's own stream. Each sits on the shared grid with its art inside the field, clear of every keep-out circle
+ * from the storm's own stream. Each sits on the shared grid its drawn radius inside the field, clear of every keep-out circle
  * (the centre, the spot a respawn takes, the ship) and of the corner boxes, and at least `spacing` of the field's width
  * from the others; it is picked at random among the free spots on the first corner rung that has one, else it takes the
  * clearest free spot. A storm places fewer wells where the keep-outs leave no room.
  */
 export function stormLayout({ rng, keepOuts }: Pick<HazardSetup, 'rng' | 'keepOuts'>): WellLayout {
   return (event, field) => {
-    const boxes = zoneKeepOutBoxes(field);
-    const candidates: Candidate[] = clearSpots(field, keepOuts(field), { inset: WELL_RADIUS, reach: 0, corners: 0 }).map((s) => ({ ...s, clearance: cornerClearance(field, boxes, s.x, s.y) }));
+    const candidates = clearSpots(field, keepOuts(field), { inset: WELL_RADIUS, reach: 0, corners: 0 });
     const apart = GRAVITY_STORM.spacing * field.width;
     const wells: WellSpot[] = [];
     const count = stormWells(event.intensity);
     while (wells.length < count) {
       const free = candidates.filter((c) => wells.every((w) => Math.hypot(c.x - w.x, c.y - w.y) >= apart));
       const rung = CORNER_RUNGS.map((least) => free.filter((c) => c.clearance >= least)).find((spots) => spots.length > 0);
-      const spot = rung === undefined ? clearest(free) : rung[rng.int(0, rung.length)];
+      const spot = rung === undefined ? clearest(free) : rng.pick(rung);
       if (spot === undefined) break;
-      wells.push({ x: spot.x, y: spot.y, intensity: 1 });
+      wells.push({ type: 'gravityWell', x: spot.x, y: spot.y, intensity: 1, storm: true });
     }
     return wells;
   };
 }
 
 /** The spot of `candidates` clearest of the corners, the first found among equals; undefined if there is none. */
-function clearest(candidates: readonly Candidate[]): Candidate | undefined {
-  let best: Candidate | undefined;
+function clearest(candidates: readonly ClearSpot[]): ClearSpot | undefined {
+  let best: ClearSpot | undefined;
   for (const c of candidates) if (best === undefined || c.clearance > best.clearance) best = c;
   return best;
 }

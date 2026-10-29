@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withStorm } from '../../src/app/seed';
+import { playedGalaxy } from '../../src/app/seed';
 import { galaxyById, GALAXIES } from '../../src/content/galaxies';
 import { GRAVITY_STORM, HAZARD_RULES, MAX_SHIP_PULL, WELL_RADIUS, WELL_SPEED_CAP } from '../../src/content/hazards';
 import type { GalaxyEvent, HazardType } from '../../src/content/types';
@@ -9,6 +9,7 @@ import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { clearSpots, cornerClearance, zoneKeepOutBoxes } from '../../src/sim/hazards/dangerZone';
 import { ForceField } from '../../src/sim/hazards/forceField';
+import { stormLayout } from '../../src/sim/hazards/gravityStorm';
 import type { Circle, HazardState, PointHazardState } from '../../src/sim/hazards/hazard';
 import { HazardField, hazardStreams } from '../../src/sim/hazards/hazardField';
 import { shipPullAt } from '../../src/sim/hazards/shipPull';
@@ -67,7 +68,8 @@ function placementAt(events: readonly GalaxyEvent[], seed: number, field: Field,
 /** A storm stepped alone into its warning, keeping out of `circles` only: no centre, no ship. */
 function stormWithin(field: Field, circles: readonly Circle[], intensity: GalaxyEvent['intensity'] = 2, seed = 1): PointHazardState[] {
   let last = 0;
-  const hazard = new ForceField('gravityStorm', { events: [storm(intensity)], rng: createRng(seed), nextId: () => ++last, keepOuts: () => circles, inPlay: () => [] });
+  const setup = { events: [storm(intensity)], rng: createRng(seed), nextId: () => ++last, keepOuts: () => circles, inPlay: () => [] };
+  const hazard = new ForceField('gravityStorm', setup, stormLayout(setup));
   hazard.step(AT - TELEGRAPH, field, []);
   return wellsOf(hazard.states);
 }
@@ -112,7 +114,7 @@ describe('a gravity storm\'s placement', () => {
     }
   });
 
-  it('keeps every well clear of the centre, the ship at warning time and the corners, its art inside the field', () => {
+  it('keeps every well clear of the centre, the ship at warning time and the corners, its drawn radius inside the field', () => {
     for (const field of ASPECTS) {
       for (const seed of SEEDS) {
         // The ship off the centre, so its keep-out is not the centre's.
@@ -191,7 +193,7 @@ describe('a gravity storm\'s placement', () => {
     expect(placementAt([well, storm(2)], seed, FIELD_169, 59)).toEqual(wellAlone);
   });
 
-  it('draws its places from its own stream, \'hazards:gravityStorm\', alone, and no other stream is touched', () => {
+  it('draws its places from its own stream, \'hazards:gravityStorm\'', () => {
     const seed = 9;
     const own = createRng(deriveSeed(seed, 'hazards:gravityStorm'));
     let draws = 0;
@@ -364,7 +366,7 @@ describe('a gravity storm\'s telegraph and scope', () => {
 
   it('pairs every warning with its telegraph in a galaxy run, the storm apart from the well 2-2 already has', () => {
     for (const seed of [1, 2, 3]) {
-      const world = new World({ seed, field: FIELD_169, rules: { kind: 'galaxy', galaxy: withStorm(galaxyById('2-2'), 30), mode: 'free' } });
+      const world = new World({ seed, field: FIELD_169, rules: { kind: 'galaxy', galaxy: playedGalaxy(galaxyById('2-2'), 30), mode: 'free' } });
       const log: Timed[] = [];
       for (let t = DT; t <= 120 && !hasEnded(world.status); t += DT) {
         for (const event of world.step(DT, NO_CONTROLS)) log.push({ at: t, event: { ...event } });

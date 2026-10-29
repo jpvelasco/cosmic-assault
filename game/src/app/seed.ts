@@ -105,7 +105,7 @@ export function isDebugRun({ seed, startLives, galaxy, storm }: RunOverrides): b
 }
 
 /** `def` with a gravity storm of intensity 2 added at `at` seconds, its events kept in time order. */
-export function withStorm(def: GalaxyDef, at: number): GalaxyDef {
+function withStorm(def: GalaxyDef, at: number): GalaxyDef {
   const events = [...def.events, { at, type: 'gravityStorm' as const, intensity: 2 as const }].sort((a, b) => a.at - b.at);
   return { ...def, events };
 }

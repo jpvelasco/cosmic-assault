@@ -57,15 +57,18 @@ export interface SpotRule {
   readonly corners: number;
 }
 
+/** A spot `clearSpots` found, and its clearance from the nearest HUD or thumb corner box. */
+export type ClearSpot = Point & { readonly clearance: number };
+
 /** The points of a `GRID_STEP` grid over `field` that keep `rule` clear of the edges, `circles` and the HUD and thumb corners, row by row from the top. */
-export function clearSpots(field: Field, circles: readonly Circle[], { inset, reach, corners }: SpotRule): Point[] {
+export function clearSpots(field: Field, circles: readonly Circle[], { inset, reach, corners }: SpotRule): ClearSpot[] {
   const boxes = zoneKeepOutBoxes(field);
-  const spots: Point[] = [];
+  const spots: ClearSpot[] = [];
   for (let y = inset; y <= field.height - inset; y += GRID_STEP) {
     for (let x = inset; x <= field.width - inset; x += GRID_STEP) {
       if (circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r + reach)) continue;
-      if (cornerClearance(field, boxes, x, y) < corners) continue;
-      spots.push({ x, y });
+      const clearance = cornerClearance(field, boxes, x, y);
+      if (clearance >= corners) spots.push({ x, y, clearance });
     }
   }
   return spots;

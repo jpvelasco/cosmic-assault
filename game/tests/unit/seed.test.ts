@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clockSeed, E2E_QUERY_MARK, isDebugRun, parseGalaxy, parseLives, parseQuality, parseSeed, parseStorm, parseToday, playedGalaxy, runSeed, withStorm } from '../../src/app/seed';
+import { clockSeed, E2E_QUERY_MARK, isDebugRun, parseGalaxy, parseLives, parseQuality, parseSeed, parseStorm, parseToday, playedGalaxy, runSeed } from '../../src/app/seed';
 import { galaxyById } from '../../src/content/galaxies';
+import type { GalaxyDef, GalaxyEvent } from '../../src/content/types';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -155,7 +156,7 @@ describe('the ?storm= override', () => {
 
   it('adds one gravity storm of intensity 2, in time order, and leaves the authored galaxy untouched', () => {
     const def = galaxyById('2-2');
-    const played = withStorm(def, 4);
+    const played = playedGalaxy(def, 4);
     expect(played.events.filter((e) => e.type === 'gravityStorm')).toEqual([{ at: 4, type: 'gravityStorm', intensity: 2 }]);
     expect(played.events.map((e) => e.at)).toEqual(played.events.map((e) => e.at).sort((a, b) => a - b));
     expect(played.events.length).toBe(def.events.length + 1);
@@ -164,11 +165,12 @@ describe('the ?storm= override', () => {
 
   it('plays the galaxy with the storm in a dev or e2e build, and as it is with no storm given', () => {
     const def = galaxyById('2-2');
+    const storms = (played: GalaxyDef): GalaxyEvent[] => played.events.filter((e) => e.type === 'gravityStorm');
     expect(playedGalaxy(def, undefined)).toBe(def);
-    expect(playedGalaxy(def, 4)).toEqual(withStorm(def, 4));
+    expect(storms(playedGalaxy(def, 4))).toEqual([{ at: 4, type: 'gravityStorm', intensity: 2 }]);
     vi.stubEnv('DEV', false);
     vi.stubEnv('MODE', 'e2e');
-    expect(playedGalaxy(def, 4)).toEqual(withStorm(def, 4));
+    expect(storms(playedGalaxy(def, 4))).toEqual([{ at: 4, type: 'gravityStorm', intensity: 2 }]);
   });
 
   it('never adds the storm in a release build, which returns the galaxy before it reads the override', () => {

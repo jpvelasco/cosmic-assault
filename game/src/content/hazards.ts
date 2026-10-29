@@ -93,7 +93,8 @@ export const stormWells = (intensity: GalaxyEvent['intensity']): number => Math.
 
 /**
  * A gravity well's drawn radius at intensity 1, in field units; its pull reaches the whole field and has no edge. A storm
- * keeps its wells' art inside the field and, where the field leaves room, out from under the HUD and thumb corners.
+ * keeps its wells this far inside the field and, where the field leaves room, this far clear of the HUD and thumb
+ * corners. A warning outline starts wider and closes onto the well, so its rim may still reach past either.
  */
 export const WELL_RADIUS = 90;
 
