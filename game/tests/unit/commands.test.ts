@@ -8,7 +8,7 @@ const TOGGLE_PAUSE = { kind: 'togglePause' };
 const BACK = { kind: 'back' };
 const CONFIRM = { kind: 'confirm' };
 const RETRY = { kind: 'retry' };
-const MENUS: readonly Screen[] = ['modeSelect', 'map', 'galaxySelect'];
+const MENUS: readonly Screen[] = ['modeSelect', 'confirmNewRank', 'map', 'galaxySelect'];
 const ENDS: readonly Screen[] = ['results', 'gameOver', 'rankComplete'];
 const SCREENS: readonly Screen[] = ['title', ...MENUS, 'playing', 'paused', ...ENDS];
 
@@ -90,13 +90,17 @@ describe('commandForPad', () => {
     ['modeSelect', BACK],
     ['map', BACK],
     ['galaxySelect', BACK],
-    ['playing', null],
+    ['playing', TOGGLE_PAUSE],
     ['paused', TOGGLE_PAUSE],
     ['results', BACK],
     ['gameOver', BACK],
     ['rankComplete', BACK],
   ])('back on %s', (screen, command) => {
     expect(commandForPad(screen, 'back')).toEqual(command);
+  });
+
+  it.each(SCREENS)('B asks for what Esc does on %s, in play a pause', (screen) => {
+    expect(commandForPad(screen, 'back')).toEqual(commandForKey(screen, 'Escape'));
   });
 
   it.each<[Screen, unknown]>([

@@ -1,8 +1,12 @@
-/** How the player is most likely to be controlling the game; it decides which hints name keys and which name taps. */
-export type InputStyle = 'touch' | 'keys';
+import type { InputKind } from '../input/inputKind';
 
-/** The one media query that decides the style: a screen with no hover and a coarse pointer is a phone or tablet. */
-export const TOUCH_STYLE_QUERY = '(hover: none) and (pointer: coarse)';
+/** Which inputs the hints name: keys (also for a mouse, which sits beside a keyboard), taps, or pad buttons. */
+export type InputStyle = 'touch' | 'keys' | 'pad';
+
+/** The hint style for the input kind used last. */
+export function inputStyle(kind: InputKind): InputStyle {
+  return kind === 'mouse' ? 'keys' : kind;
+}
 
 export interface HintCopy {
   readonly start: string;
@@ -17,6 +21,14 @@ export interface HintCopy {
   readonly paused: string;
   /** The pause button's tooltip in play, naming its keys, or empty where a tooltip never shows. */
   readonly pauseTip: string;
+  /** The key worn by the button Enter or pad A takes (an end card's first), or empty. */
+  readonly confirmKey: string;
+  /** The key worn by an end card's Retry when it is not the first button, or empty. */
+  readonly retryKey: string;
+  /** The key worn by the button Back leads through (Back, or an end card's Map or Title), or empty. */
+  readonly backKey: string;
+  /** A Rank end card's line on the run that Back leaves saved, or empty. */
+  readonly suspend: string;
 }
 
 const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
@@ -28,12 +40,46 @@ const HINTS: Readonly<Record<InputStyle, HintCopy>> = {
     resumeKey: 'Esc',
     paused: 'Esc or P to resume',
     pauseTip: 'Pause (Esc or P)',
+    confirmKey: 'Enter',
+    retryKey: 'R',
+    backKey: 'Esc',
+    suspend: 'Esc suspends the run: pick it up from the title',
   },
-  touch: { start: 'Tap to start', restart: 'Tap Retry or Continue to play again', choose: 'Tap a mode', controls: '', resumeKey: '', paused: '', pauseTip: '' },
+  pad: {
+    start: 'Press A to start',
+    restart: 'Press A to play again',
+    choose: 'D-pad to choose, A to go, B back',
+    controls: 'Fly with the left stick or D-pad · fire with A, RB or RT',
+    resumeKey: 'Start',
+    paused: 'Start or B to resume',
+    pauseTip: 'Pause (Start or B)',
+    confirmKey: 'A',
+    retryKey: '',
+    backKey: 'B',
+    suspend: 'B suspends the run: pick it up from the title',
+  },
+  touch: {
+    start: 'Tap to start',
+    restart: 'Tap Retry or Continue to play again',
+    choose: 'Tap a mode',
+    controls: '',
+    resumeKey: '',
+    paused: '',
+    pauseTip: '',
+    confirmKey: '',
+    retryKey: '',
+    backKey: '',
+    suspend: '',
+  },
 };
 
 export function hintCopy(style: InputStyle): HintCopy {
   return HINTS[style];
+}
+
+/** What `pick` reads from the copy of every style: the texts a line may show, whose space it keeps (`reserveSpace`). */
+export function hintVariants(pick: (hints: HintCopy) => string): string[] {
+  return Object.values(HINTS).map(pick);
 }
 
 /** iOS Safari cannot install from a button, so the title card names the steps instead. */

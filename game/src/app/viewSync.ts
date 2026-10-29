@@ -1,13 +1,15 @@
 import type { Look } from '../content/cosmetics';
+import { TOUCH_STYLE_QUERY, type InputKind } from '../input/inputKind';
 import type { TouchControls } from '../input/touchControls';
 import type { CornerBox } from '../render/hud';
 import type { Renderer } from '../render/renderer';
 import { listen } from '../ui/dom';
-import { hintCopy, TOUCH_STYLE_QUERY, type InputStyle } from '../ui/hints';
+import { hintCopy, inputStyle } from '../ui/hints';
 import type { Overlay, OverlayState } from '../ui/overlay';
 import type { RotatePrompt } from '../ui/rotatePrompt';
 import { createSafeAreaProbe } from '../ui/safeArea';
 import type { SettingsCard } from '../ui/settingsCard';
+import type { CoverCards } from './cardToggle';
 import type { Screen } from './flow';
 import type { Hangar } from './hangar';
 import type { Records } from './records';
@@ -16,25 +18,28 @@ import type { Settings } from './settings';
 /** How long the pointer must rest during play before the cursor is hidden. */
 const IDLE_CURSOR_MS = 2000;
 
-/** What the screens show; the view works out the covers, the input style and the touch layer from it. */
+/** What the screens show; the view works out the input style and the touch layer from it. */
 export type ViewState = Omit<OverlayState, 'covered' | 'inputStyle'> & {
   readonly settings: Settings;
-  readonly settingsOpen: boolean;
   /** The skin and trail the ship draws, with unlocks applied. */
   readonly look: Look;
 };
 
 export interface ViewSyncDeps {
   readonly overlay: Overlay;
+  /** The cover cards, which the rotate prompt covers. */
+  readonly coverCards: Pick<CoverCards, 'cover'>;
   readonly settingsCard: SettingsCard;
-  /** The records card, and whether it is up. */
-  readonly records: Pick<Records, 'card' | 'open'>;
-  /** The Hangar card, and whether it is up. */
-  readonly hangar: Pick<Hangar, 'card' | 'open'>;
+  readonly records: Pick<Records, 'card'>;
+  readonly hangar: Pick<Hangar, 'card'>;
   readonly rotatePrompt: RotatePrompt;
   readonly touch: TouchControls;
   readonly renderer: Pick<Renderer, 'setHudBounds' | 'setLook'>;
   read(): ViewState;
+  /** Whether anything covers the screens' cards: a cover card or the rotate prompt. */
+  covered(): boolean;
+  /** The input the player used last, whose style the hints take. */
+  inputKind(): InputKind;
   screen(): Screen;
   /** After a crash the recovery card owns the screen and the view stays as it was. */
   tripped(): boolean;
@@ -61,7 +66,7 @@ export interface ViewSync {
 }
 
 export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync {
-  const { overlay, settingsCard, records, hangar, rotatePrompt, touch, renderer } = deps;
+  const { overlay, coverCards, settingsCard, records, hangar, rotatePrompt, touch, renderer } = deps;
   const safeArea = createSafeAreaProbe(root);
   const coarsePointer = window.matchMedia('(pointer: coarse)');
   const touchStyle = window.matchMedia(TOUCH_STYLE_QUERY);
@@ -80,19 +85,19 @@ export function createViewSync(root: HTMLElement, deps: ViewSyncDeps): ViewSync 
 
   function sync(): void {
     if (deps.tripped()) return;
-    const { settings, settingsOpen, look, ...state } = deps.read();
+    const { settings, look, ...state } = deps.read();
     const rotating = needsRotation();
-    const inputStyle: InputStyle = touchStyle.matches ? 'touch' : 'keys';
-    overlay.update({ ...state, covered: settingsOpen || records.open || hangar.open || rotating, inputStyle });
+    const style = inputStyle(deps.inputKind());
+    overlay.update({ ...state, covered: deps.covered(), inputStyle: style });
     settingsCard.update(settings, coarsePointer.matches);
     records.card.update(state.save, state.today);
     hangar.card.update(state.save, settings);
-    for (const card of [settingsCard, records.card, hangar.card]) card.cover(rotating);
+    coverCards.cover(rotating);
     renderer.setLook(look);
     rotatePrompt.show(rotating);
     // The pause button shows in play on every device; the joystick and FIRE only for a finger.
     touch.show(state.flow.screen !== 'playing' ? 'none' : coarsePointer.matches ? 'all' : 'pause');
-    touch.setPauseTip(hintCopy(inputStyle).pauseTip);
+    touch.setPauseTip(hintCopy(style).pauseTip);
     syncHudBounds();
   }
 

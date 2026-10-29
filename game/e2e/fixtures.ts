@@ -359,3 +359,46 @@ export async function expectDemoEndedOnTitle(page: Page): Promise<void> {
 export async function waitOutGameOverGuard(page: Page): Promise<void> {
   await page.waitForTimeout(GAME_OVER_GUARD_MS + 100);
 }
+
+/** The fake pad's standard-mapping button indices. */
+export const PAD = { A: 0, B: 1, RT: 7, START: 9, DPAD_UP: 12, DPAD_DOWN: 13, DPAD_LEFT: 14, DPAD_RIGHT: 15 } as const;
+
+/** The pad `installFakePad` puts on `window.__fakePad`, which a test works by changing its flags. */
+export interface FakePad {
+  connected: boolean;
+  buttons: { pressed: boolean }[];
+  axes: number[];
+}
+
+/** Puts a connected standard-mapping pad, nothing pressed, behind `navigator.getGamepads` for every navigation of `page`. */
+export async function installFakePad(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const fake: FakePad = {
+      connected: true,
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false })),
+      axes: [0, 0, 0, 0],
+    };
+    const pad = { id: 'fake', index: 0, mapping: 'standard', connected: true, axes: fake.axes, buttons: fake.buttons };
+    (window as unknown as { __fakePad: FakePad }).__fakePad = fake;
+    navigator.getGamepads = () => (fake.connected ? [pad as unknown as Gamepad, null, null, null] : [null, null, null, null]);
+  });
+}
+
+export function setPadButton(page: Page, index: number, pressed: boolean): Promise<void> {
+  return page.evaluate(
+    ([i, down]) => {
+      const pad = (window as unknown as { __fakePad: FakePad }).__fakePad;
+      const button = pad.buttons[i as number];
+      if (button !== undefined) button.pressed = down as boolean;
+    },
+    [index, pressed],
+  );
+}
+
+/** Presses and releases a pad button, leaving a frame on each side so the game sees both. */
+export async function tapPad(page: Page, index: number): Promise<void> {
+  await setPadButton(page, index, true);
+  await nextFrames(page);
+  await setPadButton(page, index, false);
+  await nextFrames(page);
+}

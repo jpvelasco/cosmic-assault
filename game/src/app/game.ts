@@ -4,6 +4,7 @@ import { currentBuildLabel } from '../buildLabel';
 import type { Look } from '../content/cosmetics';
 import type { GalaxyDef, PaletteId } from '../content/types';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
+import { TOUCH_STYLE_QUERY, trackInputKind } from '../input/inputKind';
 import { controlsFromKeys } from '../input/keyboard';
 import { createKeyLatch } from '../input/keyLatch';
 import { attachKeyboard } from '../input/keyboardSource';
@@ -26,17 +27,17 @@ import { applyAccents } from '../ui/accents';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
-import { createOverlay, type CoverChip } from '../ui/overlay';
+import { createOverlay } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
-import type { CardToggleDeps } from './cardToggle';
+import { COVER_CARD_IDS, createCoverCards, type CardToggleDeps, type CoverCardId } from './cardToggle';
 import { createAttract } from './attract';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
 import { installE2eHooks, type E2eHooks } from './e2eHooks';
 import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
-import { anyCoverUp, coversFor, createInputRouter, type Cover } from './inputRouting';
+import { anyCoverUp, coversFor, createInputRouter, noCoversUp, type Cover } from './inputRouting';
 import { createHangar } from './hangar';
 import { createRunController, type RunController } from './runController';
 import { runOverrides } from './seed';
@@ -88,6 +89,15 @@ export interface App {
 export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
   const keyboard = attachKeyboard(window);
+  const touchGuess = window.matchMedia(TOUCH_STYLE_QUERY);
+  // Before the router, so a key or pointer the router swallows still counts.
+  const inputKind = trackInputKind(
+    window,
+    () => touchGuess.matches,
+    () => {
+      hintsDue = true;
+    },
+  );
   const startKeys = createKeyLatch();
   const touch = attachTouchControls(root, pauseByPlayer);
   const log = new RingLog();
@@ -148,6 +158,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   let frameId = 0;
   /** The sound hint is given once a visit: a pad-only player needs it once, and a toast on every A would nag. */
   let soundHintGiven = false;
+  /** The input kind changed: the next frame redraws the cards in its hints, never mid-press. */
+  let hintsDue = false;
   const applyNow = (command: Command): void => {
     router.applyCommand(command, performance.now());
   };
@@ -162,7 +174,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       applyNow(TOGGLE_FULLSCREEN);
     },
     openSettings: () => {
-      prefs.openSettings();
+      prefs.toggle.show();
     },
     openRecords: () => {
       records.show();
@@ -191,8 +203,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     toast,
   });
   const guard = createCrashGuard(log, stopAfterCrash);
-  /** The cards a player opens over the title, mode select or pause; the menu keys go to the one that is up. */
-  const coverCards = [prefs, records, hangar] as const;
+  /** The cards a player opens over the title, mode select or pause; Esc, pad B and the menu keys go to the one on top. */
+  const coverCards = createCoverCards({ settings: prefs.toggle, records, hangar });
   const attract = createAttract({
     renderer,
     log,
@@ -210,7 +222,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   });
   const view = createViewSync(root, {
     overlay,
-    settingsCard: prefs.card,
+    coverCards,
+    settingsCard: prefs.toggle.card,
     records,
     hangar,
     rotatePrompt,
@@ -227,10 +240,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       fullscreen: fullscreen.supported ? fullscreen.active : null,
       installOffer: installPrompt.offer,
       settings: prefs.settings,
-      settingsOpen: prefs.open,
       look: look(),
       attract: attract.active,
     }),
+    covered: () => anyCoverUp(coversUp()),
+    inputKind: inputKind.read,
     screen: () => mode,
     tripped: () => guard.tripped,
     onTurnUpright: pause,
@@ -253,29 +267,23 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     screen: () => mode,
     covers,
     msSinceRunEnd: (now) => now - runEndedAt,
-    menuControls: () => coverCards.find((cover) => cover.open)?.card.controls() ?? overlay.controls(mode),
-    closeCard: () => {
-      prefs.closeSettings();
-      records.close();
-      hangar.close();
-    },
+    menuControls: () => coverCards.top()?.card.controls() ?? overlay.controls(mode),
+    closeCard: coverCards.closeTop,
     interrupt: () => attract.interrupt(),
   });
 
   /** What the settings, records or Hangar card needs to open and close over the screens, its focus going back to its chip. */
-  function coverCardDeps(chip: CoverChip): Omit<CardToggleDeps, 'opensOn'> {
+  function coverCardDeps(chip: CoverCardId): CardToggleDeps {
     const focusOpener = (): void => {
       overlay.focusChip(chip);
     };
-    return { screen: () => mode, covers, syncView, focusOpener };
+    return { screen: () => mode, syncView, focusOpener };
   }
 
   /** Which covers are up right now, refilled in place, so the attract demo can ask on every frame. */
-  const up = { settings: false, records: false, hangar: false, rotate: false, crash: false };
+  const up = noCoversUp();
   function coversUp(): typeof up {
-    up.settings = prefs.open;
-    up.records = records.open;
-    up.hangar = hangar.open;
+    for (const id of COVER_CARD_IDS) up[id] = coverCards.isOpen(id);
     up.rotate = view.needsRotation();
     up.crash = guard.tripped;
     return up;
@@ -406,7 +414,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
     run.dispose();
     touch.show('none');
-    prefs.card.hide();
+    prefs.toggle.card.hide();
     rotatePrompt.show(false);
     view.armIdleCursor();
     crashCard.show();
@@ -432,8 +440,13 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const edges = padEdges(previousPad, pad);
     previousPad = pad;
     // The press that ends a demo does nothing else, and spends no hint.
+    if (edges.length > 0) inputKind.notePad();
     if (!router.routePad(pad, edges, now)) hintSoundGesture(edges);
     router.routeKeys(now);
+    if (hintsDue) {
+      hintsDue = false;
+      view.sync();
+    }
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
     const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
@@ -568,6 +581,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       cancelAnimationFrame(frameId);
       for (const unlisten of unlisteners) unlisten();
       keyboard.dispose();
+      inputKind.dispose();
       touch.dispose();
       router.dispose();
       view.dispose();

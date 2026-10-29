@@ -5,7 +5,8 @@ import type { SaveData } from '../meta/save';
 import { errorMessage, type RingLog } from '../platform/log';
 import type { GalaxyMode } from '../sim/scoring';
 import { DAILY_BADGE, DAILY_NAME, DAILY_UNAVAILABLE, dailyCardLine, streakText } from './dailyCopy';
-import { button, element, menuCard, PRIMARY_BUTTON, withTestId, type Act, type MenuCard } from './dom';
+import { button, element, menuCard, PRIMARY_BUTTON, reserveSpace, withTestId, type Act, type MenuCard } from './dom';
+import { hintVariants } from './hints';
 
 export interface ModeSelect {
   readonly modeSelect: MenuCard;
@@ -110,7 +111,7 @@ export function createModeSelect(act: Act, log: Pick<RingLog, 'add'>, build: Dai
   /** The last date whose Daily could not be built, already logged. */
   let loggedFor: string | null = null;
   return {
-    modeSelect: menuCard('modes', 'Choose a mode', resumeSlot, cards, hint, chipRow),
+    modeSelect: menuCard('modes', 'Choose a mode', resumeSlot, cards, reserveSpace(hint, hintVariants((hints) => hints.choose)), chipRow),
     confirmNewRank: menuCard('confirm', 'Start a new run?', element('p', 'hint', 'Your saved run will end.'), start),
     resumeSlot,
     chipRow,

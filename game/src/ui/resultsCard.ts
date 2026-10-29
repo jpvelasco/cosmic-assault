@@ -1,17 +1,18 @@
 import type { EndCommandKind } from '../app/commands';
-import { freeNext, runDef, type ClearResult, type FlowState } from '../app/flow';
+import { backTarget, freeNext, runDef, type ClearResult, type FlowState } from '../app/flow';
 import { galaxyLabel } from '../content/galaxies';
 import type { NewBest } from '../meta/bests';
 import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
 import { DAILY_CLEARED, dailyTitle, targetLine } from './dailyCopy';
-import { button, cardPanel, element, PRIMARY, starRow, withTestId, type Act } from './dom';
+import { button, cardPanel, element, PRIMARY, reserveSpace, starRow, wearKey, withTestId, type Act } from './dom';
+import { hintVariants, type HintCopy } from './hints';
 
 export interface ResultsState {
   readonly flow: FlowState;
   /** The galaxy's score: the clear's total on results, what was won before the last life went on game over. */
   readonly score: number;
-  /** The line on how to play again after a game over, for keys or taps. */
-  readonly restartHint: string;
+  /** The hints in the style of the input used last: how to play again after a game over, and the buttons' keys. */
+  readonly hints: HintCopy;
   /** The score the run set to beat (a Daily's target); null for none. */
   readonly target: number | null;
 }
@@ -89,10 +90,37 @@ const END_BUTTONS: readonly EndButton[] = [
 /** The test ids of the buttons the end card shows for `flow`, in order. */
 export const endButtons = (flow: FlowState): string[] => END_BUTTONS.filter(({ shows }) => shows(flow)).map(({ testId }) => testId);
 
+/** The shortcut an end button answers to: Back (Esc, pad B), the first button's confirm (Enter, pad A) or R's retry. */
+export type EndKey = 'back' | 'confirm' | 'retry';
+
+/** The keys each `EndKey` is pressed with, for `aria-keyshortcuts`. */
+const ARIA_KEYS: Readonly<Record<EndKey, string>> = { back: 'Escape', confirm: 'Enter', retry: 'R' };
+
+/**
+ * The shortcut each button shown for `flow` wears, by test id: the one Back leads through (where `backTarget` goes)
+ * wears Back's, so the player can tell where Esc goes; else the first wears confirm's, and a Retry after it R's.
+ */
+export function endKeys(flow: FlowState): ReadonlyMap<string, EndKey> {
+  const target = backTarget(flow.screen, flow.mode);
+  const keys = new Map<string, EndKey>();
+  END_BUTTONS.filter(({ shows }) => shows(flow)).forEach(({ kind, testId }, i) => {
+    if (kind === target) keys.set(testId, 'back');
+    else if (i === 0) keys.set(testId, 'confirm');
+    else if (kind === 'retry') keys.set(testId, 'retry');
+  });
+  return keys;
+}
+
+/** The key `hints` name for each `EndKey`, or empty where they name none. */
+const keyText = (hints: HintCopy, key: EndKey): string => ({ back: hints.backKey, confirm: hints.confirmKey, retry: hints.retryKey })[key];
+
+/** A Rank run that Back leaves saved (between galaxies, or lost and waiting for a Continue) says so. */
+export const suspends = ({ mode, rankRun }: FlowState): boolean => mode === 'rank' && rankRun !== null;
+
 /**
  * The end of a run: the galaxy (or the Daily), the heading, the stars won (lit one after another as the card pops in), the
  * score, a Daily's target, a "New best!" badge, the bonus lines, the Rank run's total, and the buttons for what comes next. Enter and pad A take
- * the first button shown, so that one wears the primary style.
+ * the first button shown, so that one wears the primary style; with keys or a pad, the buttons wear their keys (`endKeys`).
  */
 export function createResultsCard(act: Act): ResultsCard {
   const { panel, card } = cardPanel('game-over');
@@ -111,12 +139,18 @@ export function createResultsCard(act: Act): ResultsCard {
   runTotal.el.classList.add('end-line--total');
   const target = withTestId(element('p', 'end-target'), 'end-target');
   const hint = element('p', 'hint');
-  const buttons = END_BUTTONS.map(({ kind, label, testId, shows }) => [withTestId(button('menu-button', label, act({ kind })), testId), shows] as const);
+  const hintLine = reserveSpace(hint, hintVariants((hints) => hints.restart));
+  const suspendHint = withTestId(element('p', 'hint'), 'end-suspend');
+  const suspendLine = reserveSpace(suspendHint, hintVariants((hints) => hints.suspend));
+  const buttons = END_BUTTONS.map(({ kind, label, testId, shows }) => {
+    const el = withTestId(button('menu-button', label, act({ kind })), testId);
+    return { el, testId, shows, showKey: wearKey(el) };
+  });
   const row = element('div', 'end-buttons');
-  row.append(...buttons.map(([el]) => el));
+  row.append(...buttons.map(({ el }) => el));
   const receipt = element('div', 'end-lines');
   receipt.append(points.el, clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
-  card.append(galaxy, heading, stars.el, score, target, newBest, newLook, receipt, hint, row);
+  card.append(galaxy, heading, stars.el, score, target, newBest, newLook, receipt, hintLine, suspendLine, row);
 
   /**
    * The clear's bonuses and, in Rank, the Dimension's multiplier and the run total. After a game over only a Rank run
@@ -146,7 +180,7 @@ export function createResultsCard(act: Act): ResultsCard {
 
   return {
     panel,
-    update({ flow, score: value, restartHint, target: toBeat }) {
+    update({ flow, score: value, hints, target: toBeat }) {
       const { screen, result } = flow;
       const won = screen !== 'gameOver' && result !== null;
       heading.textContent = endHeading(flow);
@@ -161,13 +195,22 @@ export function createResultsCard(act: Act): ResultsCard {
       newLook.textContent = won ? newLookLabel(result) : '';
       newLook.hidden = newLook.textContent === '';
       setLines(flow, value);
-      hint.textContent = screen === 'gameOver' ? restartHint : '';
-      hint.hidden = hint.textContent === '';
+      // Each line shows or goes by the card's state alone; its space holds its longest wording in any input style.
+      hintLine.hidden = screen !== 'gameOver';
+      hint.textContent = hints.restart;
+      suspendLine.hidden = !suspends(flow);
+      suspendHint.textContent = hints.suspend;
+      suspendHint.hidden = hints.suspend === '';
+      const keys = endKeys(flow);
       let first = true;
-      for (const [el, shows] of buttons) {
+      for (const { el, testId, shows, showKey } of buttons) {
         el.hidden = !shows(flow);
         el.classList.toggle(PRIMARY, first && !el.hidden);
         if (!el.hidden) first = false;
+        const key = keys.get(testId);
+        showKey(key === undefined ? '' : keyText(hints, key));
+        if (key === undefined) el.removeAttribute('aria-keyshortcuts');
+        else el.setAttribute('aria-keyshortcuts', ARIA_KEYS[key]);
       }
     },
   };

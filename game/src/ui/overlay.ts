@@ -1,5 +1,6 @@
+import type { CoverCardId } from '../app/cardToggle';
 import type { Command } from '../app/commands';
-import type { FlowState, Screen } from '../app/flow';
+import { backTarget, type FlowState, type Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
 import type { DailyGalaxy } from '../meta/dailyGalaxy';
 import type { SaveData } from '../meta/save';
@@ -8,11 +9,12 @@ import { galaxyLabel } from '../content/galaxies';
 import type { InstallOffer } from '../platform/install';
 import type { RingLog } from '../platform/log';
 import type { SimEvent } from '../sim/events';
+import type { GalaxyMode } from '../sim/scoring';
 import { createBossAnnouncer } from './bossAnnouncer';
 import { createDimensionMap } from './dimensionMap';
-import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_BUTTON, showSoundState, withTestId, type Act, type MenuCard } from './dom';
+import { button, cardPanel, chip, element, focusableControls, PRIMARY, PRIMARY_BUTTON, reserveSpace, showSoundState, wearKey, withTestId, type Act, type MenuCard } from './dom';
 import { createGalaxySelect } from './galaxySelect';
-import { hintCopy, IOS_INSTALL_HINT, type InputStyle } from './hints';
+import { hintCopy, hintVariants, IOS_INSTALL_HINT, type InputStyle } from './hints';
 import { createModeSelect } from './modeSelect';
 import { createPauseCard } from './pauseCard';
 import { createResultsCard } from './resultsCard';
@@ -50,7 +52,7 @@ export interface OverlayState {
   readonly fullscreen: boolean | null;
   /** While another card (settings, records, Hangar or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
   readonly covered: boolean;
-  /** Decides whether the start and restart hints name keys or taps. */
+  /** Decides whether the hints name keys, taps or pad buttons: the style of the input used last. */
   readonly inputStyle: InputStyle;
   /** What the title card offers for installing the game: an Install chip, the iOS steps, or nothing. */
   readonly installOffer: InstallOffer;
@@ -58,15 +60,12 @@ export interface OverlayState {
   readonly attract: boolean;
 }
 
-/** The chips that open a card over the title or mode select, and take focus back when it closes. */
-export type CoverChip = 'settings' | 'records' | 'hangar';
-
 export interface Overlay {
   update(state: OverlayState): void;
   /** One step's events: a boss's arrival, phases and fall are announced to screen readers. */
   handle(events: readonly SimEvent[]): void;
-  /** Puts keyboard focus on the visible card's Settings, Records or Hangar chip, as the card it opened closes. */
-  focusChip(which: CoverChip): void;
+  /** Puts keyboard focus on the visible card's Settings, Records or Hangar chip, as the card it opened closes; else on its first control. */
+  focusChip(which: CoverCardId): void;
   /** Takes back a Rank Quit that asks to be pressed again; true if one did. Esc, P and the pad's Back and Start do this instead of resuming. */
   cancelQuit(): boolean;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
@@ -107,7 +106,8 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
 function titlePanel(demoLabel: HTMLElement, play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(demoLabel, element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
+  const lines = [reserveSpace(startHint, hintVariants((hints) => hints.start)), reserveSpace(controlsHint, hintVariants((hints) => hints.controls))];
+  card.append(demoLabel, element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, ...lines, chipRow, build);
   return panel;
 }
 
@@ -147,6 +147,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   const titleResumeSlot = element('div', 'resume-slot');
   // One shared Back, moved into the menu card shown, so its test id stays unique.
   const back = withTestId(button('menu-button', 'Back', send({ kind: 'back' })), 'back');
+  back.setAttribute('aria-keyshortcuts', 'Escape');
+  const showBackKey = wearKey(back);
   const modes = createModeSelect(send, log);
   const dimensionMap = createDimensionMap(send);
   const galaxySelect = createGalaxySelect(send);
@@ -163,7 +165,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   records.textContent = 'Records';
   const hangar = chip('hangar-open', actions.openHangar);
   hangar.textContent = 'Hangar';
-  const coverChips: Readonly<Record<CoverChip, HTMLButtonElement>> = { settings, records, hangar };
+  /** The chips that open each cover card, and take focus back as it closes. */
+  const coverChips: Readonly<Record<CoverCardId, HTMLButtonElement>> = { settings, records, hangar };
   // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
   const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
   installChip.textContent = 'Install';
@@ -182,22 +185,43 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   onTapOutsideButtons(title, send({ kind: 'start' }));
   /** The title control that had focus as the demo began, which gets it back as the demo ends. */
   let focusBeforeDemo: Element | null = null;
-  /** The screen the last update showed, so entering the pause card can be told from staying on it. */
-  let shownScreen: Screen | null = null;
-  /** Resume takes focus as the pause card shows, or once a cover over it (the rotate prompt) goes. */
-  let resumeFocusDue = false;
+  /** The screen the last update showed, and its mode, so a screen entered can be told from one stayed on, and Back from forward. */
+  let shown: { readonly screen: Screen; readonly mode: GalaxyMode | null } | null = null;
+  /** The focus a screen entered asks for, given once nothing covers its card. */
+  let focusDue: (() => void) | null = null;
 
-  /** Entering the pause card puts Quit back to its first step; Resume takes focus whenever the card can take it. */
-  function enterScreen(screen: Screen, covered: boolean): void {
-    if (screen !== shownScreen) {
-      shownScreen = screen;
-      resumeFocusDue = screen === 'paused';
-      if (resumeFocusDue) pauseCard.disarm();
-    }
-    if (!resumeFocusDue || covered) return;
-    resumeFocusDue = false;
-    pauseCard.focusResume();
+  /**
+   * Entering the pause card puts Quit back to its first step and asks for focus on Resume. A screen Back returns to (by
+   * Esc, pad B or a button) asks for focus on the button that left it, if it is still there.
+   */
+  function enterScreen({ screen, mode }: FlowState): void {
+    if (screen === shown?.screen) return;
+    const cameBack = shown !== null && backTarget(shown.screen, shown.mode) === screen;
+    shown = { screen, mode };
+    if (screen === 'paused') {
+      pauseCard.disarm();
+      focusDue = () => {
+        pauseCard.focusResume();
+      };
+    } else if (cameBack) {
+      const opener = openers.get(panels[screen]);
+      focusDue = () => {
+        restoreFocus(screen, opener);
+      };
+    } else focusDue = null;
   }
+
+  /** The one place focus goes back: to `control` while the card for `screen` still offers it, else to its first control. */
+  function restoreFocus(screen: Screen, control: HTMLElement | undefined): void {
+    const controls = overlayControls(screen);
+    const target = control !== undefined && controls.includes(control) ? control : controls[0];
+    target?.focus({ preventScroll: true });
+  }
+
+  const overlayControls = (screen: Screen): HTMLElement[] => {
+    const panel = panels[screen];
+    return panel === undefined ? [] : focusableControls(panel);
+  };
 
   /** Dims the title card over the demo and shows its label; as the demo ends, focus goes back where it was on the title. */
   function showAttract(attract: boolean, covered: boolean): void {
@@ -222,6 +246,20 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
   for (const [screen, menu] of Object.entries(menus) as [Screen, MenuCard][]) panels[screen] = menu.panel;
   const all = [...new Set(Object.values(panels))];
   root.append(...all);
+  /** The button last pressed on each card, by tap, click, Enter or pad A: Back to the card puts focus back on it. */
+  const openers = new Map<HTMLElement | undefined, HTMLElement>();
+  for (const panel of all) {
+    // In the capture phase: the press may change the screen before the event bubbles back up.
+    panel.addEventListener(
+      'click',
+      (e) => {
+        const pressed = e.target instanceof Element ? e.target.closest('button') : null;
+        if (pressed === null) openers.delete(panel);
+        else openers.set(panel, pressed);
+      },
+      true,
+    );
+  }
   const announcer = createBossAnnouncer(root);
 
   return {
@@ -259,7 +297,8 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
       elsewhere.hidden = rankLock !== 'elsewhere';
       const hints = hintCopy(inputStyle);
       pauseCard.update(flow.mode, hints);
-      enterScreen(screen, covered);
+      enterScreen(flow);
+      showBackKey(hints.backKey);
       startHint.textContent = hints.start;
       controlsHint.textContent = hints.controls;
       controlsHint.hidden = hints.controls === '';
@@ -267,21 +306,24 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions, log: P
       if (screen === 'modeSelect') modes.update(save, today);
       dimensionMap.update(save);
       galaxySelect.update(flow.dimension, save);
-      results.update({ flow, score, restartHint: hints.restart, target: daily?.target ?? null });
+      results.update({ flow, score, hints, target: daily?.target ?? null });
+      // Last, once the card shows what it will: the control to focus may only now be there.
+      if (focusDue !== null && !covered) {
+        const focus = focusDue;
+        focusDue = null;
+        focus();
+      }
     },
     handle(events) {
       announcer.handle(events);
     },
     focusChip(which) {
-      coverChips[which].focus();
+      if (shown !== null) restoreFocus(shown.screen, coverChips[which]);
     },
     cancelQuit() {
       return pauseCard.disarm();
     },
-    controls(screen) {
-      const panel = panels[screen];
-      return panel === undefined ? [] : focusableControls(panel);
-    },
+    controls: overlayControls,
     endAttract() {
       showAttract(false, true);
     },

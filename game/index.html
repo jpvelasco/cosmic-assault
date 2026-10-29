@@ -323,14 +323,38 @@
         min-width: 168px;
         padding: 10px 24px;
       }
-      /* The key that does a button's action, worn beside its label (src/ui/pauseCard.ts). */
+      /*
+       * The key that does a button's action, worn in the right padding the button keeps whether a key shows or not, so
+       * the input kind never moves or resizes it (`wearKey` in src/ui/dom.ts).
+       */
+      .menu-button.wears-key {
+        position: relative;
+        padding-inline: 58px;
+      }
       .key-hint {
-        margin-left: 10px;
-        padding: 1px 7px;
+        position: absolute;
+        top: 50%;
+        right: 12px;
+        transform: translateY(-50%);
+        padding: 0 5px;
         border: 1px solid currentColor;
         border-radius: 6px;
-        font-size: 0.75em;
+        font-size: 0.7em;
+        line-height: 1.5;
         opacity: 0.8;
+      }
+      /* A line as large as every wording it may take, the others stacked under it unseen (`reserveSpace` in src/ui/dom.ts). */
+      .reserve {
+        display: grid;
+      }
+      .reserve > * {
+        grid-area: 1 / 1;
+      }
+      .reserve__copy {
+        visibility: hidden;
+      }
+      .reserve__copy::before {
+        content: attr(data-text);
       }
       .chip {
         display: inline-flex;

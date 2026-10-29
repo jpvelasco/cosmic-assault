@@ -94,7 +94,7 @@ export type FlowAction =
   | { readonly kind: 'continue' }
   | { readonly kind: 'map' }
   | { readonly kind: 'title' }
-  /** Esc, pad B or a Back button: one screen back. */
+  /** Esc, pad B or a Back button: to the screen `backTarget` names. */
   | { readonly kind: 'back' };
 
 export const INITIAL_FLOW: FlowState = { screen: 'title', mode: null, dimension: 1, galaxy: null, rankRun: null, daily: null, result: null, newBest: null, runs: 0 };
@@ -178,7 +178,6 @@ function freeEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
     case 'retry':
       return playFree(state, galaxy);
     case 'map':
-    case 'back':
       return toMap(state);
     case 'title':
       return toTitle(state);
@@ -190,16 +189,16 @@ function freeEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
 /** Where an end screen's action leads in Rank: on from results, Continue after a game over, the title from any. */
 function rankEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
   const { rankRun } = state;
-  if (kind === 'title' || kind === 'back') return toTitle(state);
+  if (kind === 'title') return toTitle(state);
   if (rankRun === null) return kind === 'confirm' ? toTitle(state) : state;
   if (state.screen === 'results') return kind === 'next' || kind === 'confirm' ? playRank(state, rankRun) : state;
   return kind === 'continue' || kind === 'confirm' || kind === 'retry' ? playRank(state, afterGameOver(rankRun)) : state;
 }
 
-/** Where an end screen's action leads in the Daily: Enter, R and pad A play the same date again, Title and Back go to the title. */
+/** Where an end screen's action leads in the Daily: Enter, R and pad A play the same date again, Title goes to the title. */
 function dailyEnd(state: FlowState, kind: FlowAction['kind']): FlowState {
   const { daily } = state;
-  if (kind === 'title' || kind === 'back') return toTitle(state);
+  if (kind === 'title') return toTitle(state);
   return daily !== null && (kind === 'confirm' || kind === 'retry') ? playDaily(state, daily) : state;
 }
 
@@ -219,17 +218,13 @@ function menuMove(state: FlowState, action: FlowAction): FlowState {
       if (action.kind === 'startRank' || action.kind === 'resumeRank') return playRank(state, action.run);
       if (action.kind === 'askNewRank') return { ...state, screen: 'confirmNewRank' };
       if (action.kind === 'chooseFree') return { ...state, screen: 'map', mode: 'free' };
-      if (action.kind === 'playDaily') return playDaily(state, action.date);
-      return action.kind === 'back' ? { ...state, screen: 'title', mode: null } : state;
+      return action.kind === 'playDaily' ? playDaily(state, action.date) : state;
     case 'confirmNewRank':
-      if (action.kind === 'startRank') return playRank(state, action.run);
-      return action.kind === 'back' ? { ...state, screen: 'modeSelect' } : state;
+      return action.kind === 'startRank' ? playRank(state, action.run) : state;
     case 'map':
-      if (action.kind === 'openDimension') return { ...state, screen: 'galaxySelect', dimension: action.dimension };
-      return action.kind === 'back' ? { ...state, screen: 'modeSelect', mode: null } : state;
+      return action.kind === 'openDimension' ? { ...state, screen: 'galaxySelect', dimension: action.dimension } : state;
     case 'galaxySelect':
-      if (action.kind === 'playGalaxy') return playFree(state, action.id);
-      return action.kind === 'back' ? { ...state, screen: 'map' } : state;
+      return action.kind === 'playGalaxy' ? playFree(state, action.id) : state;
     default:
       return state;
   }
@@ -266,11 +261,49 @@ function hit(state: FlowState, livesLeft: number, weaponTier: WeaponTier): FlowS
   return { ...state, rankRun: afterHit(rankRun, livesLeft, weaponTier) };
 }
 
+/** The screens Back can lead to. */
+export type BackTarget = 'title' | 'modeSelect' | 'map';
+
+/**
+ * Where Back leads from `screen` in `mode`: the one answer for Esc, pad B and every button that goes back (Back, and the
+ * end cards' Map or Title). One screen back on the menus; from an end card, the map in Free play and the title in Rank
+ * and the Daily. Null on the title, which has nowhere to go back to, and in play and on the pause card, where Esc and
+ * pad B pause and resume instead.
+ */
+export function backTarget(screen: Screen, mode: GalaxyMode | null): BackTarget | null {
+  switch (screen) {
+    case 'modeSelect':
+      return 'title';
+    case 'confirmNewRank':
+    case 'map':
+      return 'modeSelect';
+    case 'galaxySelect':
+      return 'map';
+    case 'results':
+    case 'gameOver':
+    case 'rankComplete':
+      return (mode ?? 'free') === 'free' ? 'map' : 'title';
+    default:
+      return null;
+  }
+}
+
+/** How Back enters each screen it leads to. */
+const BACK_MOVES: Readonly<Record<BackTarget, (state: FlowState) => FlowState>> = {
+  title: toTitle,
+  modeSelect: (state) => ({ ...state, screen: 'modeSelect', mode: null }),
+  map: toMap,
+};
+
 /**
  * The screen flow: title → mode select → map → galaxy select → playing → results or game over → on, again or back.
  * Pure: it never reads the clock or the save. An action a screen does not offer returns `state` itself.
  */
 export function transition(state: FlowState, action: FlowAction): FlowState {
+  if (action.kind === 'back') {
+    const target = backTarget(state.screen, state.mode);
+    return target === null ? state : BACK_MOVES[target](state);
+  }
   switch (state.screen) {
     case 'playing':
     case 'paused':

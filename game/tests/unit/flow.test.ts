@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { appToday, localDate } from '../../src/app/date';
-import { applySaveChange, freeNext, INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState, type SaveChange } from '../../src/app/flow';
+import { applySaveChange, backTarget, freeNext, INITIAL_FLOW, saveChange, transition, type FlowAction, type FlowState, type SaveChange } from '../../src/app/flow';
 import type { GalaxyId } from '../../src/content/types';
 import { NO_BESTS } from '../../src/meta/bests';
 import { startRank, type RankRun } from '../../src/meta/rankRun';
@@ -99,7 +99,48 @@ describe('transition: Back', () => {
   });
 
   it('does nothing on the title or in play', () => {
-    for (const state of [INITIAL_FLOW, freeOn('playing', '1-1')]) expect(transition(state, { kind: 'back' })).toBe(state);
+    for (const state of [INITIAL_FLOW, freeOn('playing', '1-1'), freeOn('paused', '1-1')]) expect(transition(state, { kind: 'back' })).toBe(state);
+  });
+
+  it('from mode select lands on the title with nothing chosen', () => {
+    expect(transition(at('modeSelect', { dimension: 3, galaxy: '3-2', runs: 2 }), { kind: 'back' })).toEqual(at('title', { runs: 2 }));
+  });
+});
+
+describe('backTarget', () => {
+  it.each<[FlowState['screen'], FlowState['mode'], ReturnType<typeof backTarget>]>([
+    ['title', null, null],
+    ['modeSelect', null, 'title'],
+    ['confirmNewRank', null, 'modeSelect'],
+    ['map', 'free', 'modeSelect'],
+    ['galaxySelect', 'free', 'map'],
+    ['playing', 'free', null],
+    ['paused', 'rank', null],
+    ['results', 'free', 'map'],
+    ['gameOver', 'free', 'map'],
+    ['results', 'rank', 'title'],
+    ['gameOver', 'rank', 'title'],
+    ['rankComplete', 'rank', 'title'],
+    ['results', 'daily', 'title'],
+    ['gameOver', 'daily', 'title'],
+  ])('from %s in %s leads to %s', (screen, mode, target) => {
+    expect(backTarget(screen, mode)).toBe(target);
+  });
+
+  it('is where Back goes from every screen, end cards in every mode included', () => {
+    const states: FlowState[] = [
+      at('modeSelect'),
+      at('confirmNewRank'),
+      at('map', { mode: 'free' }),
+      at('galaxySelect', { mode: 'free', dimension: 2 }),
+      freeOn('results', '1-2', { result: { report: REPORT, total: REPORT.score } }),
+      freeOn('gameOver', '1-2'),
+      rankOn('results', RUN),
+      rankOn('gameOver', RUN),
+      at('rankComplete', { mode: 'rank', galaxy: '5-6', runs: 1 }),
+      at('results', { mode: 'daily', daily: TODAY, galaxy: '1-1', runs: 1 }),
+    ];
+    for (const state of states) expect(transition(state, { kind: 'back' }).screen, state.screen).toBe(backTarget(state.screen, state.mode));
   });
 });
 

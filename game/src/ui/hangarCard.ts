@@ -160,7 +160,7 @@ function choiceGroup<T extends string>(legend: string, name: string, onPick: (id
  * Back, Esc and pad B close it; the arrow keys move within a group, which keeps them from moving the menu.
  */
 export function createHangarCard(root: HTMLElement, actions: HangarCardActions): HangarCard {
-  const cover = createCoverCard(root, 'hangar', 'Hangar', actions.back);
+  const cover = createCoverCard(root, 'hangar', 'Hangar');
   withTestId(cover.card, 'hangar');
   const preview = createPreview();
   const stars = element('p', 'hint hangar-stars');

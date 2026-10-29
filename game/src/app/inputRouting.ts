@@ -4,14 +4,16 @@ import { isFormControlTarget } from '../input/keyEvent';
 import type { KeyLatch } from '../input/keyLatch';
 import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachFullscreenKey } from '../platform/fullscreen';
+import { listen } from '../ui/dom';
 import { focusedControl, moveFocus, nudgeSlider } from '../ui/menuNav';
+import { COVER_CARD_IDS, type CoverCardId } from './cardToggle';
 import { commandForKey, commandForPad, TOGGLE_FULLSCREEN, type Command, type FlowCommand } from './commands';
 import { swallowDemoEnders } from './demoEnders';
 import type { Screen } from './flow';
 import { passesGameOverGuard } from './gameOverGuard';
 
-/** What can sit over the game's cards: nothing, the settings, records or Hangar card, the rotate prompt or the crash card. */
-export type Cover = 'none' | 'settings' | 'records' | 'hangar' | 'rotate' | 'crash';
+/** What can sit over the game's cards: nothing, a cover card (settings, records, Hangar), the rotate prompt or the crash card. */
+export type Cover = 'none' | CoverCardId | 'rotate' | 'crash';
 
 /** The inputs the router hands on: the commands, grouped (and a pause toggle split by screen), and the menu's own inputs. */
 export type RoutedInput =
@@ -27,7 +29,7 @@ export type RoutedInput =
   | 'navigate'
   /** Pad A pressing the focused control. */
   | 'pressFocused'
-  /** Esc, pad Back, Done or Back closing the settings, records or Hangar card. */
+  /** Esc, pad B, Done or Back closing the settings, records or Hangar card. */
   | 'closeCard';
 
 const Y = true;
@@ -49,14 +51,17 @@ const ACTS_UNDER: Readonly<Record<RoutedInput, Readonly<Record<Cover, boolean>>>
   closeCard: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
 };
 
-/** The cover cards a player opens and closes: pad Back closes the one that is up. */
-const CARD_COVERS: readonly Cover[] = ['settings', 'records', 'hangar'];
+/** Every cover, bottom first: the cover cards, then the rotate prompt and the crash card over them. */
+const COVERS = [...COVER_CARD_IDS, 'rotate', 'crash'] as const;
 
-/** Every cover, bottom first. */
-const COVERS = ['settings', 'records', 'hangar', 'rotate', 'crash'] as const;
+const isCoverCard = (cover: Cover): cover is CoverCardId => (COVER_CARD_IDS as readonly Cover[]).includes(cover);
 
 /** Which covers are up. */
 export type CoversUp = Readonly<Record<Exclude<Cover, 'none'>, boolean>>;
+
+/** A table with no cover up, for a caller to refill in place. */
+export const noCoversUp = (): Record<Exclude<Cover, 'none'>, boolean> =>
+  Object.fromEntries(COVERS.map((cover) => [cover, false])) as Record<Exclude<Cover, 'none'>, boolean>;
 
 /** The covers that are up, bottom first; `['none']` when the cards are uncovered. */
 export function coversFor(up: CoversUp): Cover[] {
@@ -113,9 +118,9 @@ export interface InputRouterDeps {
   covers(): readonly Cover[];
   /** Milliseconds since the run on the end card ended. */
   msSinceRunEnd(now: number): number;
-  /** The controls menu focus moves among: an open settings or records card's, else the card for the screen. */
+  /** The controls menu focus moves among: the top cover card's, else the card for the screen. */
   menuControls(): HTMLElement[];
-  /** Closes the settings or records card, whichever is open. */
+  /** Closes the topmost cover card. */
   closeCard(): void;
   /**
    * Hears every key press, pointer press and pad touch: restarts the attract demo's idle count, and ends a demo that is
@@ -144,7 +149,7 @@ const NAV_KEYS_CLASS = 'nav-keys';
  * Turns keys, pad presses and the synchronous F key into commands and menu moves, through the one cover table.
  * Listens on `win` for F (full screen must be asked for inside the key handler), for the pointer press that hides the
  * pad's focus ring, and, ahead of every other handler, for the key, pointer or pad input that ends an attract demo,
- * which it swallows (`swallowDemoEnders`).
+ * which it swallows (`swallowDemoEnders`), and for the Esc that closes a cover card.
  */
 export function createInputRouter(win: Window, deps: InputRouterDeps): InputRouter {
   const { keyboard, startKeys, run } = deps;
@@ -186,6 +191,24 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
     moveFocus(controls, dir);
   }
 
+  const cardUp = (): boolean => deps.covers().some(isCoverCard);
+  /** Esc and pad B with a cover card up close it, unless the rotate prompt is over it too. */
+  const closeTopCard = (): void => {
+    if (acts('closeCard')) deps.closeCard();
+  };
+
+  /**
+   * Esc with a cover card up closes that card alone, from any focus (a focused slider's too). It is taken ahead of the
+   * game's own key handling, which never hears it, so the same press cannot also resume or go back; its repeats close
+   * nothing more.
+   */
+  const onEscape = (e: Event): void => {
+    const { code, repeat } = e as KeyboardEvent;
+    if (code !== 'Escape' || !cardUp()) return;
+    e.stopImmediatePropagation();
+    if (!repeat) closeTopCard();
+  };
+
   /** A pad button with no menu button focused; on a menu card, where A asks for nothing, A focuses its first button. */
   function runPadCommand(button: 'confirm' | 'back' | 'pause', now: number): void {
     const command = commandForPad(deps.screen(), button);
@@ -205,8 +228,8 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         break;
       }
       case 'back':
-        // Back closes the top card: the settings, records or Hangar card when one is open, else what Esc does on the card for the screen.
-        if (deps.covers().some((cover) => CARD_COVERS.includes(cover))) deps.closeCard();
+        // B closes the top cover card when one is up, else does what Esc does on the screen.
+        if (cardUp()) closeTopCard();
         else runPadCommand('back', now);
         break;
       case 'pause':
@@ -222,6 +245,7 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
   const demoEnders = swallowDemoEnders(win, () => deps.interrupt(), hideNavFocus);
   const unlisteners = [
     demoEnders.dispose,
+    listen(win, 'keydown', onEscape, true),
     attachFullscreenKey(win, {
       toggle: () => {
         applyCommand(TOGGLE_FULLSCREEN, performance.now());

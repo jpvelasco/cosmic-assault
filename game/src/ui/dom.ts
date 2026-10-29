@@ -135,6 +135,41 @@ export function withTestId<T extends HTMLElement>(el: T, testId: string): T {
   return el;
 }
 
+/**
+ * Gives `host` a key worn in its right padding, drawn only: the button's name stays its label, and `aria-keyshortcuts`
+ * names its keys. The padding is the button's whether a key shows or not, so no key moves or resizes it. Returns the
+ * setter for the key shown; an empty key hides the mark.
+ */
+export function wearKey(host: HTMLElement): (key: string) => void {
+  host.classList.add('wears-key');
+  const mark = element('span', 'key-hint');
+  mark.setAttribute('aria-hidden', 'true');
+  host.append(mark);
+  return (key) => {
+    mark.textContent = key;
+    mark.hidden = key === '';
+  };
+}
+
+/**
+ * Wraps `line` with a copy of each text it may show (`texts`), stacked in one grid cell with it and never seen, so the
+ * wrap is as large as the largest of them whatever `line` shows, or when it hides: a card keeps its size, and its
+ * buttons their places, when the input kind changes its words. CSS draws the copies from `data-text`, so no reader,
+ * search or text match finds them. Add the wrap where `line` would go; hide the wrap to drop the line.
+ */
+export function reserveSpace(line: HTMLElement, texts: readonly string[]): HTMLElement {
+  const wrap = element('div', 'reserve');
+  for (const text of new Set(texts)) {
+    if (text === '') continue;
+    const copy = element('span', `${line.className} reserve__copy`);
+    copy.dataset['text'] = text;
+    copy.setAttribute('aria-hidden', 'true');
+    wrap.append(copy);
+  }
+  wrap.append(line);
+  return wrap;
+}
+
 /** A glass chip with the classes `chip` and `className` and a test id (the class unless given). */
 export function chip(className: string, onClick: () => void, testId = className): HTMLButtonElement {
   return withTestId(button(`chip ${className}`, '', onClick), testId);

@@ -37,7 +37,7 @@ function boardRow(entry: RankEntry, place: number): HTMLElement {
  * imported. Back or Esc closes it. `update` redraws the board only when it changed, as after another tab posts a run.
  */
 export function createRecordsCard(root: HTMLElement, back: () => void): RecordsCard {
-  const cover = createCoverCard(root, 'records', 'Records', back);
+  const cover = createCoverCard(root, 'records', 'Records');
   withTestId(cover.card, 'records');
   const board = element('ol', 'records-board');
   const empty = element('p', 'hint', 'No Rank runs yet: finish or lose one and its score goes here.');

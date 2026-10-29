@@ -94,10 +94,10 @@ function shakeChoices(onShake: (shake: ScreenShake) => void): { group: HTMLEleme
 
 /**
  * The settings screen: a glass card over the title, mode select or pause card that opened it. Controls report through
- * `actions` and are refreshed by `update`; Esc anywhere closes it, even from a focused slider.
+ * `actions` and are refreshed by `update`; Esc and pad B close it from any focus, even a focused slider.
  */
 export function createSettingsCard(root: HTMLElement, actions: SettingsCardActions): SettingsCard {
-  const cover = createCoverCard(root, 'settings', 'Settings', actions.done);
+  const cover = createCoverCard(root, 'settings', 'Settings');
   const music = volumeSlider('Music volume', 'settings-music', (musicVolume) => {
     actions.change({ musicVolume });
   });
