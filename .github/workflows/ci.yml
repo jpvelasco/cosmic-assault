@@ -143,10 +143,11 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # Report only: the bots' many-seed boss kill rates and clear rates (game/tests/balance), one Dimension a job, each
-  # running its own d<N>-*.test.ts files. They are not required checks and deploy does not need them.
+  # Report only: the bots' many-seed boss kill rates and clear rates (game/tests/balance), one shard a job: each
+  # Dimension's d<N>-*.test.ts files, and the Daily's daily*.test.ts. A shard runs every file whose path holds its
+  # filter, which check:workflow keeps to one shard a file. They are not required checks and deploy does not need them.
   balance-dimension:
-    name: Bot balance, Dimension ${{ matrix.dimension }} (non-blocking)
+    name: Bot balance, ${{ matrix.label }} (non-blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -154,7 +155,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dimension: [1, 2, 3, 4, 5]
+        include:
+          - { shard: d1-, label: Dimension 1 }
+          - { shard: d2-, label: Dimension 2 }
+          - { shard: d3-, label: Dimension 3 }
+          - { shard: d4-, label: Dimension 4 }
+          - { shard: d5-, label: Dimension 5 }
+          - { shard: daily, label: Daily }
     defaults:
       run:
         working-directory: game
@@ -175,9 +182,9 @@ jobs:
         run: npm ci
 
       - name: Bot balance
-        run: npm run test:balance -- d${{ matrix.dimension }}-
+        run: npm run test:balance -- ${{ matrix.shard }}
 
-  # The one balance check the ruleset sees, however many shards there are: it passes only if every Dimension's did.
+  # The one balance check the ruleset sees, however many shards there are: it passes only if every shard did.
   balance:
     name: Bot balance (non-blocking)
     needs: [balance-dimension]
@@ -187,7 +194,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Every Dimension passed
+      - name: Every shard passed
         env:
           SHARDS: ${{ needs.balance-dimension.result }}
         run: test "$SHARDS" = success

@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Command } from '../../src/app/commands';
 import { GAME_OVER_GUARD_MS } from '../../src/app/gameOverGuard';
-import { actsUnder, commandActs, coversFor, inputForCommand, type Cover, type RoutedInput } from '../../src/app/inputRouting';
+import { actsUnder, anyCoverUp, commandActs, coversFor, createInputRouter, inputForCommand, type Cover, type RoutedInput } from '../../src/app/inputRouting';
+import { createKeyLatch } from '../../src/input/keyLatch';
+import { pad } from '../helpers/padSnapshot';
 
-const UNCOVERED = { settings: false, records: false, rotate: false, crash: false };
+const UNCOVERED = { settings: false, records: false, hangar: false, rotate: false, crash: false };
 const NO_COVER = coversFor(UNCOVERED);
 
 describe('coversFor', () => {
@@ -15,25 +17,27 @@ describe('coversFor', () => {
     expect(coversFor({ ...UNCOVERED, settings: true })).toEqual(['settings']);
     expect(coversFor({ ...UNCOVERED, settings: true, rotate: true })).toEqual(['settings', 'rotate']);
     expect(coversFor({ ...UNCOVERED, records: true, rotate: true })).toEqual(['records', 'rotate']);
+    expect(coversFor({ ...UNCOVERED, hangar: true })).toEqual(['hangar']);
+    expect(coversFor({ ...UNCOVERED, hangar: true, rotate: true })).toEqual(['hangar', 'rotate']);
     expect(coversFor({ ...UNCOVERED, rotate: true, crash: true })).toEqual(['rotate', 'crash']);
   });
 });
 
 describe('actsUnder', () => {
   // The review's matrix, row by row: which inputs act under which cover.
-  it.each<[RoutedInput, none: boolean, settings: boolean, records: boolean, rotate: boolean, crash: boolean]>([
-    ['start', true, false, false, false, false],
-    ['resume', true, false, false, false, false],
-    ['pause', true, false, false, true, false],
-    ['leave', true, false, false, true, false],
-    ['toggleMute', true, true, true, true, false],
-    ['toggleFullscreen', true, true, true, true, true],
-    ['navigate', true, true, true, false, false],
-    ['pressFocused', true, true, true, false, false],
-    ['closeCard', true, true, true, false, false],
-  ])('%s: none %s, settings %s, records %s, rotate %s, crash %s', (input, none, settings, records, rotate, crash) => {
+  it.each<[RoutedInput, none: boolean, settings: boolean, records: boolean, hangar: boolean, rotate: boolean, crash: boolean]>([
+    ['start', true, false, false, false, false, false],
+    ['resume', true, false, false, false, false, false],
+    ['pause', true, false, false, false, true, false],
+    ['leave', true, false, false, false, true, false],
+    ['toggleMute', true, true, true, true, true, false],
+    ['toggleFullscreen', true, true, true, true, true, true],
+    ['navigate', true, true, true, true, false, false],
+    ['pressFocused', true, true, true, true, false, false],
+    ['closeCard', true, true, true, true, false, false],
+  ])('%s: none %s, settings %s, records %s, hangar %s, rotate %s, crash %s', (input, none, settings, records, hangar, rotate, crash) => {
     const under = (cover: Cover) => actsUnder(input, [cover]);
-    expect([under('none'), under('settings'), under('records'), under('rotate'), under('crash')]).toEqual([none, settings, records, rotate, crash]);
+    expect([under('none'), under('settings'), under('records'), under('hangar'), under('rotate'), under('crash')]).toEqual([none, settings, records, hangar, rotate, crash]);
   });
 
   it('needs every cover that is up to allow the input', () => {
@@ -41,6 +45,7 @@ describe('actsUnder', () => {
     expect(actsUnder('toggleMute', ['settings', 'rotate'])).toBe(true);
     expect(actsUnder('closeCard', ['settings', 'rotate'])).toBe(false);
     expect(actsUnder('closeCard', ['records', 'rotate'])).toBe(false);
+    expect(actsUnder('closeCard', ['hangar', 'rotate'])).toBe(false);
     // Leaving a card acts under the rotate prompt alone, but not when the settings card is open beneath it.
     expect(actsUnder('leave', ['settings', 'rotate'])).toBe(false);
   });
@@ -96,5 +101,205 @@ describe('commandActs', () => {
       expect(commandActs(retry, screen, NO_COVER, GAME_OVER_GUARD_MS - 1)).toBe(false);
       expect(commandActs(retry, screen, NO_COVER, GAME_OVER_GUARD_MS)).toBe(true);
     }
+  });
+});
+
+const PAD_A = 0;
+
+/** A key event as a browser dispatches it, on a window stand-in. */
+function keyEvent(type: 'keydown' | 'keyup', code: string, { repeat = false, ctrlKey = false, metaKey = false, altKey = false } = {}): Event {
+  return Object.assign(new Event(type, { cancelable: true }), { code, repeat, ctrlKey, metaKey, altKey });
+}
+
+/**
+ * A router on a window stand-in, with a demo playing until the first input ends it; `later` is a listener added after
+ * the router's, as the game's own key and pointer handling are, which sees whatever the router lets through.
+ */
+function demoRouter() {
+  vi.stubGlobal('document', { body: { classList: { add: vi.fn(), remove: vi.fn() } }, activeElement: null });
+  const win = new EventTarget();
+  let demoPlaying = true;
+  const interrupt = vi.fn(() => {
+    const ended = demoPlaying;
+    demoPlaying = false;
+    return ended;
+  });
+  const run = { flow: vi.fn(), pause: vi.fn(), resume: vi.fn(), toggleMute: vi.fn(), toggleFullscreen: vi.fn() };
+  const router = createInputRouter(win as unknown as Window, {
+    keyboard: { held: new Set(), drainPressed: () => [], dispose: () => undefined },
+    startKeys: createKeyLatch(),
+    run,
+    screen: () => 'title',
+    covers: () => ['none'],
+    msSinceRunEnd: () => Number.POSITIVE_INFINITY,
+    menuControls: () => [],
+    closeCard: () => undefined,
+    interrupt,
+  });
+  const later = vi.fn();
+  for (const type of ['keydown', 'keyup', 'pointerdown', 'mousedown', 'mouseup', 'click']) win.addEventListener(type, later);
+  /** Dispatches `event`; true if it got past the router to `later`. */
+  const reaches = (event: Event): boolean => {
+    later.mockClear();
+    win.dispatchEvent(event);
+    return later.mock.calls.length > 0;
+  };
+  return { win, router, run, interrupt, reaches, startDemo: () => (demoPlaying = true) };
+}
+
+describe('the input that ends an attract demo', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('swallows the key press, its repeats and its release, so a held key never reaches the next screen; the next press acts', () => {
+    const { reaches, interrupt } = demoRouter();
+    const press = keyEvent('keydown', 'Enter');
+    expect(reaches(press)).toBe(false);
+    expect(press.defaultPrevented).toBe(true);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    const repeat = keyEvent('keydown', 'Enter', { repeat: true });
+    expect(reaches(repeat)).toBe(false);
+    expect(repeat.defaultPrevented).toBe(true);
+    const release = keyEvent('keyup', 'Enter');
+    expect(reaches(release)).toBe(false);
+    expect(release.defaultPrevented).toBe(true);
+    const next = keyEvent('keydown', 'Enter');
+    expect(reaches(next)).toBe(true);
+    expect(next.defaultPrevented).toBe(false);
+  });
+
+  it('keeps F from changing full screen when it ends the demo', () => {
+    const { win, run } = demoRouter();
+    win.dispatchEvent(keyEvent('keydown', 'KeyF'));
+    expect(run.toggleFullscreen).not.toHaveBeenCalled();
+    win.dispatchEvent(keyEvent('keyup', 'KeyF'));
+    win.dispatchEvent(keyEvent('keydown', 'KeyF'));
+    expect(run.toggleFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a key through when no demo plays, still restarting the idle count', () => {
+    const { reaches, interrupt } = demoRouter();
+    reaches(keyEvent('keydown', 'Space'));
+    const press = keyEvent('keydown', 'KeyM');
+    expect(reaches(press)).toBe(true);
+    expect(press.defaultPrevented).toBe(false);
+    expect(interrupt).toHaveBeenCalledTimes(2);
+  });
+
+  it('ends the demo on a browser shortcut but leaves the shortcut its browser action', () => {
+    const { reaches, interrupt } = demoRouter();
+    const shortcut = keyEvent('keydown', 'KeyR', { ctrlKey: true });
+    expect(reaches(shortcut)).toBe(true);
+    expect(shortcut.defaultPrevented).toBe(false);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(reaches(keyEvent('keyup', 'KeyR'))).toBe(true);
+  });
+
+  it.each(['Enter', 'NumpadEnter', 'Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])(
+    'keeps %s, which would act on the page, from its browser action as it ends the demo, with its repeat and release',
+    (code) => {
+      const { reaches } = demoRouter();
+      for (const event of [keyEvent('keydown', code), keyEvent('keydown', code, { repeat: true }), keyEvent('keyup', code)]) {
+        expect(reaches(event), event.type).toBe(false);
+        expect(event.defaultPrevented, event.type).toBe(true);
+      }
+    },
+  );
+
+  it.each(['F5', 'F11', 'F12', 'KeyW', 'KeyM'])('leaves %s its browser action as it ends the demo, but keeps it from the game', (code) => {
+    const { reaches, interrupt, run } = demoRouter();
+    for (const event of [keyEvent('keydown', code), keyEvent('keydown', code, { repeat: true }), keyEvent('keyup', code)]) {
+      expect(reaches(event), event.type).toBe(false);
+      expect(event.defaultPrevented, event.type).toBe(false);
+    }
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(run.flow).not.toHaveBeenCalled();
+  });
+
+  it.each([{ ctrlKey: true }, { metaKey: true }, { altKey: true }])('never lets Enter or Space with a modifier (%o) press the focused button as it ends the demo', (modifier) => {
+    for (const code of ['Enter', 'Space']) {
+      const { reaches, interrupt } = demoRouter();
+      const press = keyEvent('keydown', code, modifier);
+      reaches(press);
+      expect(press.defaultPrevented, code).toBe(true);
+      expect(interrupt).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('treats a fresh press of a key whose release it missed as a new press', () => {
+    const { reaches } = demoRouter();
+    reaches(keyEvent('keydown', 'Enter'));
+    expect(reaches(keyEvent('keydown', 'Enter'))).toBe(true);
+  });
+
+  it('swallows the mouse presses and the click a demo-ending pointer press leads to; the next click acts', () => {
+    const { reaches, interrupt } = demoRouter();
+    expect(reaches(new Event('pointerdown'))).toBe(true);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    for (const type of ['mousedown', 'mouseup', 'click']) {
+      const event = new Event(type, { cancelable: true });
+      expect(reaches(event), type).toBe(false);
+      expect(event.defaultPrevented, type).toBe(true);
+    }
+    expect(reaches(new Event('click'))).toBe(true);
+    reaches(new Event('pointerdown'));
+    expect(reaches(new Event('click'))).toBe(true);
+  });
+
+  it('lets a later click through after a demo-ending press that never became one, once any other input comes', () => {
+    const { reaches, router } = demoRouter();
+    reaches(new Event('pointerdown'));
+    reaches(keyEvent('keydown', 'Enter'));
+    expect(reaches(new Event('click'))).toBe(true);
+    reaches(new Event('pointerdown'));
+    router.routePad(pad([PAD_A]), [], 0);
+    expect(reaches(new Event('click'))).toBe(true);
+  });
+
+  it('swallows a pad press that ends the demo, and a button still held from it, and says so; the next press acts', () => {
+    const { router, run, interrupt } = demoRouter();
+    expect(router.routePad(pad([PAD_A]), ['confirm'], 0)).toBe(true);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(router.routePad(pad([PAD_A]), [], 0)).toBe(false);
+    router.routePad(pad(), [], 0);
+    expect(run.flow).not.toHaveBeenCalled();
+    expect(router.routePad(pad([PAD_A]), ['confirm'], 0)).toBe(false);
+    expect(run.flow).toHaveBeenCalledWith({ kind: 'start' });
+  });
+
+  it('ends the demo on a stick pushed past its dead zone, short of a menu move, and acts on the next press', () => {
+    const { router, run, interrupt } = demoRouter();
+    router.routePad(pad([], [0.3, 0, 0, 0]), [], 0);
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(interrupt).toHaveLastReturnedWith(true);
+    router.routePad(pad(), [], 0);
+    router.routePad(pad([PAD_A]), ['confirm'], 0);
+    expect(run.flow).toHaveBeenCalledWith({ kind: 'start' });
+  });
+
+  it('counts a pad at rest as no input', () => {
+    const { router, interrupt } = demoRouter();
+    router.routePad(pad(), [], 0);
+    router.routePad(null, [], 0);
+    expect(interrupt).not.toHaveBeenCalled();
+  });
+
+  it('forgets a held key and a pending click when the window loses focus', () => {
+    const { reaches, win, startDemo } = demoRouter();
+    reaches(keyEvent('keydown', 'Enter'));
+    win.dispatchEvent(new Event('blur'));
+    expect(reaches(keyEvent('keydown', 'Enter', { repeat: true }))).toBe(true);
+    startDemo();
+    reaches(new Event('pointerdown'));
+    win.dispatchEvent(new Event('blur'));
+    expect(reaches(new Event('click'))).toBe(true);
+  });
+});
+
+describe('anyCoverUp', () => {
+  it('agrees with coversFor on every cover', () => {
+    expect(anyCoverUp(UNCOVERED)).toBe(false);
+    for (const cover of Object.keys(UNCOVERED) as (keyof typeof UNCOVERED)[]) expect(anyCoverUp({ ...UNCOVERED, [cover]: true }), cover).toBe(true);
   });
 });

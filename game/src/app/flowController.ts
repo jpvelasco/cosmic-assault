@@ -1,7 +1,11 @@
 import { galaxyIdOf, type GalaxyId } from '../content/types';
+import { bestsBefore, NO_BESTS, type BestsBefore } from '../meta/bests';
+import { newlyUnlocked } from '../meta/cosmetics';
 import { forfeitRankRun, isUnlocked } from '../meta/progress';
 import { afterGameOver, startRank, type RankRun } from '../meta/rankRun';
+import type { SaveData } from '../meta/save';
 import type { SimEvent } from '../sim/events';
+import type { GalaxyMode } from '../sim/scoring';
 import type { World } from '../sim/world';
 import type { FlowCommand } from './commands';
 import { applySaveChange, INITIAL_FLOW, saveChange, toTitle, transition, type FlowAction, type FlowState, type SaveChange, type Screen } from './flow';
@@ -16,8 +20,10 @@ export const STALE_NEW_RUN_NOTICE = 'Another tab changed your Rank run; try agai
 export interface FlowControllerDeps {
   readonly store: SaveStore;
   readonly overrides: Pick<RunOverrides, 'galaxy' | 'startLives'>;
-  /** The local date, `YYYY-MM-DD`. */
+  /** The local date, `YYYY-MM-DD`, or the date `?today=` pins in e2e and dev builds. */
   today(): string;
+  /** Whether the Daily of `date` can be built; when it cannot, choosing the Daily leaves mode select up. */
+  dailyBuilds(date: string): boolean;
   /** The flow has just started a run of `flow.galaxy`: build its World. Called before `showScreen('playing')`. */
   startRun(flow: FlowState): void;
   showScreen(screen: Screen): void;
@@ -39,6 +45,11 @@ export interface FlowController {
    * `rankSeq` it asked about; true if it took a life. A run another tab has moved on since is left alone.
    */
   forfeitLeftRun(probedSeq: number): boolean;
+}
+
+/** A clear's result, naming the looks its save write unlocked. */
+function namingUnlocks(state: FlowState, before: SaveData, after: SaveData): FlowState {
+  return state.result === null ? state : { ...state, result: { ...state.result, newLooks: newlyUnlocked(before, after) } };
 }
 
 /**
@@ -94,12 +105,14 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     // On the title the player sees the run as the save has it now, other tabs' changes included; Resume plays it so.
     if (before.screen === 'title' || action.kind === 'resumeRank') knownSeq = store.save.rankSeq;
     const change = saveChange(before, action, after, () => deps.today());
+    const saveBefore = store.save;
     if (change !== null && !write(change)) {
       deps.notify(action.kind === 'startRank' ? STALE_NEW_RUN_NOTICE : STALE_RUN_NOTICE);
       show(before, toTitle(before));
       return;
     }
-    show(before, after);
+    // A debug run, whose store never writes, keeps no stars, so it names no unlock, as it names no new best.
+    show(before, action.kind === 'clear' && store.writes ? namingUnlocks(after, saveBefore, store.save) : after);
   }
 
   /** A new Rank run, at `from`; `?lives=` sets its lives. */
@@ -127,6 +140,18 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
     return state.screen === 'modeSelect' && store.save.rankRun !== null ? { kind: 'askNewRank' } : { kind: 'startRank', run: newRank() };
   }
 
+  /** The Daily of today, read once, so the date checked is the date played; none when that date's cannot be built. */
+  function chooseDaily(): FlowAction | null {
+    const date = deps.today();
+    return deps.dailyBuilds(date) ? { kind: 'playDaily', date } : null;
+  }
+
+  /** A mode card: Rank (asking first over a saved run), Free play's map, or the Daily of today. */
+  function chooseMode(mode: GalaxyMode): FlowAction | null {
+    if (mode === 'rank') return chooseRank();
+    return mode === 'daily' ? chooseDaily() : { kind: 'chooseFree' };
+  }
+
   function actionFor(command: FlowCommand): FlowAction | null {
     switch (command.kind) {
       case 'start':
@@ -134,7 +159,7 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
       case 'resumeRank':
         return resume();
       case 'chooseMode':
-        return command.mode === 'rank' ? chooseRank() : { kind: 'chooseFree' };
+        return chooseMode(command.mode);
       case 'openDimension':
         return isUnlocked(store.save, galaxyIdOf(command.dimension, 1)) ? command : null;
       case 'openGalaxy':
@@ -145,18 +170,18 @@ export function createFlowController(deps: FlowControllerDeps): FlowController {
   }
 
   /**
-   * The galaxy in play's best score as saved now, before its clear is written, for the results card's "New best!": null
-   * for a galaxy never cleared, and for a debug run (a store that never writes), whose clears are never saved.
+   * The records as saved now, before a clear or game over is written, for its "New best!". A debug run (a store that
+   * never writes) keeps none, so it never beats one.
    */
-  const bestBefore = (): number | null => (state.galaxy === null || !store.writes ? null : (store.save.galaxies[state.galaxy]?.bestScore ?? null));
+  const bests = (): BestsBefore => (store.writes ? bestsBefore(store.save, state) : NO_BESTS);
 
   function handle(events: readonly SimEvent[], world: Pick<World, 'lives' | 'weaponTier'>): void {
     for (const event of events) {
       if (event.type === 'galaxyCleared') {
         const { score, bonus, deaths, stars } = event;
-        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, weaponTier: world.weaponTier, bestBefore: bestBefore() });
+        dispatch({ kind: 'clear', report: { score, bonus, deaths, stars }, livesLeft: world.lives, weaponTier: world.weaponTier, bests: bests() });
       } else if (event.type === 'gameOver') {
-        dispatch({ kind: 'die', score: event.score, weaponTier: world.weaponTier });
+        dispatch({ kind: 'die', score: event.score, weaponTier: world.weaponTier, bests: bests() });
       } else if (event.type === 'shipHit') {
         // The tier is read after the whole step. A core taken on the hit's own step (needing a pickup at the respawn
         // point) leaves it one above what the death did; that rare case is accepted.

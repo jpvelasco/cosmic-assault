@@ -1,10 +1,12 @@
 import type { Command } from '../app/commands';
 import type { FlowState, Screen } from '../app/flow';
 import { currentBuildLabel } from '../buildLabel';
+import type { DailyGalaxy } from '../meta/dailyGalaxy';
 import type { SaveData } from '../meta/save';
 import type { RankLock } from '../app/runController';
 import { galaxyLabel } from '../content/galaxies';
 import type { InstallOffer } from '../platform/install';
+import type { RingLog } from '../platform/log';
 import type { SimEvent } from '../sim/events';
 import { createBossAnnouncer } from './bossAnnouncer';
 import { createDimensionMap } from './dimensionMap';
@@ -24,6 +26,8 @@ export interface OverlayActions {
   readonly openSettings: () => void;
   /** The Records chip on the title and mode select. */
   readonly openRecords: () => void;
+  /** The Hangar chip on the title and mode select. */
+  readonly openHangar: () => void;
   /** The title card's Install chip: shows the browser's install prompt. */
   readonly install: () => void;
 }
@@ -31,6 +35,10 @@ export interface OverlayActions {
 export interface OverlayState {
   readonly flow: FlowState;
   readonly save: SaveData;
+  /** The app's date, whose Daily mode select offers. */
+  readonly today: string;
+  /** The Daily of the run in play or on its end card; null outside the Daily. */
+  readonly daily: DailyGalaxy | null;
   /** Whether the saved Rank run is being checked, or played in another tab, so it cannot be resumed here. */
   readonly rankLock: RankLock;
   /** The galaxy's score, which the end cards show. */
@@ -38,26 +46,35 @@ export interface OverlayState {
   readonly muted: boolean;
   /** Whether the page is in full screen; null where the browser cannot, which hides the chip. */
   readonly fullscreen: boolean | null;
-  /** While another card (settings, records, or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
+  /** While another card (settings, records, Hangar or the rotate prompt) is over the screen, the cards beneath it ignore taps, keys and Tab. */
   readonly covered: boolean;
   /** Decides whether the start and restart hints name keys or taps. */
   readonly inputStyle: InputStyle;
   /** What the title card offers for installing the game: an Install chip, the iOS steps, or nothing. */
   readonly installOffer: InstallOffer;
+  /** Whether the attract demo plays behind the title, which then shows the canvas through and dims its card. */
+  readonly attract: boolean;
 }
+
+/** The chips that open a card over the title or mode select, and take focus back when it closes. */
+export type CoverChip = 'settings' | 'records' | 'hangar';
 
 export interface Overlay {
   update(state: OverlayState): void;
   /** One step's events: a boss's arrival, phases and fall are announced to screen readers. */
   handle(events: readonly SimEvent[]): void;
-  /** Puts keyboard focus on the visible card's Settings or Records chip, as the card it opened closes. */
-  focusChip(which: 'settings' | 'records'): void;
+  /** Puts keyboard focus on the visible card's Settings, Records or Hangar chip, as the card it opened closes. */
+  focusChip(which: CoverChip): void;
   /** The controls of the card for `screen` that can take focus now, in document order; none while another card covers it. */
   controls(screen: Screen): HTMLElement[];
+  /** Takes the demo's dimming and label off the title now, without an update: the game has stopped after a crash. */
+  endAttract(): void;
   dispose(): void;
 }
 
 const INSTALL_TEST_ID = 'install-offer';
+/** The title panel's class while the attract demo plays behind it. */
+const ATTRACT_CLASS = 'title--attract';
 
 /**
  * Adds `el` with `attach` while `shown` and removes it otherwise. A shown element stays where it is, so it keeps
@@ -83,10 +100,10 @@ function onTapOutsideButtons(panel: HTMLElement, onTap: () => void): void {
   });
 }
 
-function titlePanel(play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
+function titlePanel(demoLabel: HTMLElement, play: HTMLElement, resumeSlot: HTMLElement, chipRow: HTMLElement, startHint: HTMLElement, controlsHint: HTMLElement): HTMLElement {
   const { panel, card } = cardPanel('title');
   const build = withTestId(element('p', 'build', currentBuildLabel()), 'build-label');
-  card.append(element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
+  card.append(demoLabel, element('h1', 'title', 'Cosmic Assault'), play, resumeSlot, startHint, controlsHint, chipRow, build);
   return panel;
 }
 
@@ -120,7 +137,7 @@ function keepIn(host: HTMLElement | undefined, el: HTMLElement): void {
  * router's cover table and the end-card guard apply to taps as to keys. The end cards act only on their buttons, so
  * taps that were aimed at the ship cannot skip the score.
  */
-export function createOverlay(root: HTMLElement, actions: OverlayActions): Overlay {
+export function createOverlay(root: HTMLElement, actions: OverlayActions, log: Pick<RingLog, 'add'>): Overlay {
   const send: Act = (command: Command) => (): void => {
     actions.command(command);
   };
@@ -135,7 +152,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const titleResumeSlot = element('div', 'resume-slot');
   // One shared Back, moved into the menu card shown, so its test id stays unique.
   const back = withTestId(button('menu-button', 'Back', send({ kind: 'back' })), 'back');
-  const modes = createModeSelect(send);
+  const modes = createModeSelect(send, log);
   const dimensionMap = createDimensionMap(send);
   const galaxySelect = createGalaxySelect(send);
   const results = createResultsCard(send);
@@ -149,6 +166,9 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   settings.textContent = 'Settings';
   const records = chip('records-open', actions.openRecords);
   records.textContent = 'Records';
+  const hangar = chip('hangar-open', actions.openHangar);
+  hangar.textContent = 'Hangar';
+  const coverChips: Readonly<Record<CoverChip, HTMLButtonElement>> = { settings, records, hangar };
   // Only the title card offers to install, and only while the browser can (see src/platform/install.ts).
   const installChip = chip('install-chip', actions.install, INSTALL_TEST_ID);
   installChip.textContent = 'Install';
@@ -158,8 +178,28 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const chipRows: Partial<Record<Screen, HTMLElement>> = { title: titleRow, paused: pauseRow };
   const startHint = element('p', 'hint');
   const controlsHint = withTestId(element('p', 'hint'), 'controls-hint');
-  const title = titlePanel(play, titleResumeSlot, titleRow, startHint, controlsHint);
+  const demoLabel = withTestId(element('p', 'label demo-label', 'Demo'), 'demo-label');
+  demoLabel.hidden = true;
+  // Decoration over the demo behind the card: a screen reader goes straight to the title.
+  demoLabel.setAttribute('aria-hidden', 'true');
+  const title = titlePanel(demoLabel, play, titleResumeSlot, titleRow, startHint, controlsHint);
   onTapOutsideButtons(title, send({ kind: 'start' }));
+  /** The title control that had focus as the demo began, which gets it back as the demo ends. */
+  let focusBeforeDemo: Element | null = null;
+
+  /** Dims the title card over the demo and shows its label; as the demo ends, focus goes back where it was on the title. */
+  function showAttract(attract: boolean, covered: boolean): void {
+    demoLabel.hidden = !attract;
+    if (attract === title.classList.contains(ATTRACT_CLASS)) return;
+    title.classList.toggle(ATTRACT_CLASS, attract);
+    if (attract) {
+      focusBeforeDemo = document.activeElement;
+      return;
+    }
+    const before = focusBeforeDemo;
+    focusBeforeDemo = null;
+    if (before instanceof HTMLElement && title.contains(before) && !title.hidden && !covered) before.focus({ preventScroll: true });
+  }
   const panels: Partial<Record<Screen, HTMLElement>> = {
     title,
     paused: pausePanel(actions, quit, pauseRow),
@@ -173,19 +213,20 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
   const announcer = createBossAnnouncer(root);
 
   return {
-    update({ flow, save, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer }) {
+    update({ flow, save, today, daily, rankLock, score, muted, fullscreen: fullscreenState, covered, inputStyle, installOffer, attract }) {
       const { screen } = flow;
       for (const panel of all) {
         panel.hidden = panel !== panels[screen];
         panel.inert = covered;
       }
+      showAttract(attract, covered);
       const row = chipRows[screen];
       // Moved only on a card change: re-inserting a chip would drop keyboard focus after a toggle. Prepended, so they
       // stay ahead of the title's Install chip.
       if (row !== undefined && sound.parentElement !== row) row.prepend(sound, fullscreen, settings);
-      // Records sits after Settings on the title, and ahead of Back in the last row of mode select.
-      if (screen === 'title' && records.previousElementSibling !== settings) settings.after(records);
-      else if (screen === 'modeSelect' && records.parentElement !== modes.chipRow) modes.chipRow.prepend(records);
+      // Records and Hangar sit after Settings on the title, and ahead of Back in the last row of mode select.
+      if (screen === 'title' && records.previousElementSibling !== settings) settings.after(records, hangar);
+      else if (screen === 'modeSelect' && records.parentElement !== modes.chipRow) modes.chipRow.prepend(records, hangar);
       mountWhen(installOffer === 'prompt', installChip, (el) => {
         titleRow.append(el);
       });
@@ -200,7 +241,7 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       resumeGroup.hidden = save.rankRun === null;
       resumeRank.textContent = resumeLabel(save);
       resumeRank.disabled = rankLock !== 'free';
-      // On mode select Resume leads, ahead of the two mode cards.
+      // On mode select Resume leads, ahead of the mode cards.
       resumeRank.classList.toggle(PRIMARY, screen === 'modeSelect');
       savedRun.textContent = savedRunText(save);
       elsewhere.hidden = rankLock !== 'elsewhere';
@@ -210,19 +251,23 @@ export function createOverlay(root: HTMLElement, actions: OverlayActions): Overl
       controlsHint.textContent = hints.controls;
       controlsHint.hidden = hints.controls === '';
       modes.setHint(hints.choose);
+      if (screen === 'modeSelect') modes.update(save, today);
       dimensionMap.update(save);
       galaxySelect.update(flow.dimension, save);
-      results.update({ flow, score, restartHint: hints.restart });
+      results.update({ flow, score, restartHint: hints.restart, target: daily?.target ?? null });
     },
     handle(events) {
       announcer.handle(events);
     },
     focusChip(which) {
-      (which === 'settings' ? settings : records).focus();
+      coverChips[which].focus();
     },
     controls(screen) {
       const panel = panels[screen];
       return panel === undefined ? [] : focusableControls(panel);
+    },
+    endAttract() {
+      showAttract(false, true);
     },
     dispose() {
       for (const panel of all) panel.remove();

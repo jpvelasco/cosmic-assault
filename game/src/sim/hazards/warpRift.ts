@@ -6,16 +6,14 @@ import type { GalaxyEvent } from '../../content/types';
 import { ASTEROID, PLAYER } from '../config';
 import type { SimEvent } from '../events';
 import type { Field } from '../field';
-import { TIME_EPSILON } from '../math';
+import { TIME_EPSILON, type Point } from '../math';
 import type { Rng } from '../rng';
 import type { Ship } from '../ship';
 import { rescale, wrapDelta, wrapPosition } from '../wrap';
-import { zoneClearance, zoneKeepOutBoxes, type ZoneBox } from './dangerZone';
+import { clearSpots } from './placement';
 import type { Bodies, Circle, Hazard, HazardSetup, HazardState, RiftState } from './hazard';
 import { HazardSchedule, ScheduledHazard } from './schedule';
 
-/** The grid a mouth is placed on, in field units: fine enough to find a spot on any field the game plays at. */
-const GRID_STEP = 10;
 /** Random first mouths tried for an event before it gives up placing a pair. */
 const TRIES = 16;
 /** How far past its own rim a body lands from a mouth it leaves by, so it is not at once back inside it. */
@@ -26,9 +24,6 @@ const EXIT_GAP = 2;
  * that is `2·radius + 2·body + EXIT_GAP` apart.
  */
 export const MOUTH_SPACING = 2 * WARP_RIFT.radius + 2 * ASTEROID.radii[0] + EXIT_GAP;
-
-/** A spot a mouth may take. */
-type Spot = { x: number; y: number };
 
 /** A pair of mouths, as the schedule holds it: one hazard for both, its mouths at (x, y) and (toX, toY). */
 interface Pair extends RiftState {
@@ -59,26 +54,6 @@ interface Mover {
   py: number;
   vx: number;
   vy: number;
-}
-
-/**
- * The spots a mouth may take on a field: on the grid, inside the inset, clear of every keep-out circle (the centre, the
- * ship and the spot a respawn takes with nothing in the way, all `setup.keepOuts`) by the mouth's own radius, and of the
- * HUD and thumb corners by `boxClearance`: the drawn radius, so a swirl stays out from under them, or else the hitbox
- * radius alone.
- */
-function clearSpots(field: Field, circles: readonly Circle[], boxClearance: number): Spot[] {
-  const boxes = zoneKeepOutBoxes(field);
-  const spots: Spot[] = [];
-  const { inset } = WARP_RIFT;
-  for (let y = inset; y <= field.height - inset; y += GRID_STEP) {
-    for (let x = inset; x <= field.width - inset; x += GRID_STEP) {
-      if (circles.some((c) => Math.hypot(x - c.x, y - c.y) < c.r + WARP_RIFT.radius)) continue;
-      if (boxes.some((box: ZoneBox) => zoneClearance(field, box, x, y) < boxClearance)) continue;
-      spots.push({ x, y });
-    }
-  }
-  return spots;
 }
 
 /** Whether the body centred at `body`, with reach `reach`, lies within it of (x, y) across the wrap. */
@@ -183,7 +158,10 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
     const rungs: readonly (number | null)[] = hole === null ? [null] : HOLE_RUNGS;
     const layouts = rungs.map((reach) => {
       const keepOut = reach === null || hole === null ? circles : [...circles, { x: hole.x, y: hole.y, r: reach }];
-      return { drawn: clearSpots(field, keepOut, WARP_RIFT.drawn), hitbox: clearSpots(field, keepOut, WARP_RIFT.radius) };
+      // A mouth keeps out of every circle by its own radius, and of the HUD and thumb corners by its drawn radius, so a
+      // swirl stays out from under them, or else by its hitbox radius alone.
+      const spots = (corners: number): Point[] => clearSpots(field, keepOut, { inset: WARP_RIFT.inset, reach: WARP_RIFT.radius, corners });
+      return { drawn: spots(WARP_RIFT.drawn), hitbox: spots(WARP_RIFT.radius) };
     });
     const count = Math.min(event.intensity, WARP_RIFT.maxPairs);
     for (let i = 0; i < count; i++) {
@@ -199,7 +177,7 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
    * the drawn radius, then on those cleared by the hitbox radius only. A pair that fits no rung is dropped: no pair is ever
    * placed closer than `MOUTH_SPACING`.
    */
-  private placeOnLadder(elapsed: number, event: GalaxyEvent, field: Field, layouts: readonly { drawn: readonly Spot[]; hitbox: readonly Spot[] }[], placed: readonly Pair[]): Pair | null {
+  private placeOnLadder(elapsed: number, event: GalaxyEvent, field: Field, layouts: readonly { drawn: readonly Point[]; hitbox: readonly Point[] }[], placed: readonly Pair[]): Pair | null {
     for (const { drawn, hitbox } of layouts) {
       const pair = this.place(elapsed, event, field, drawn, placed) ?? this.place(elapsed, event, field, hitbox, placed);
       if (pair !== null) return pair;
@@ -211,7 +189,7 @@ export class WarpRifts extends ScheduledHazard<Pair> implements Hazard {
    * A pair drawn from the clear `spots`: its first mouth from those at least `MOUTH_SPACING` from every mouth already
    * placed, its second from those also `apart` of the field's width from the first. Null if no pair fits.
    */
-  private place(elapsed: number, event: GalaxyEvent, field: Field, spots: readonly { x: number; y: number }[], placed: readonly Pair[]): Pair | null {
+  private place(elapsed: number, event: GalaxyEvent, field: Field, spots: readonly Point[], placed: readonly Pair[]): Pair | null {
     const far = WARP_RIFT.apart * field.width;
     const free = spots.filter((s) => placed.every((p) => Math.hypot(s.x - p.x, s.y - p.y) >= MOUTH_SPACING && Math.hypot(s.x - p.toX, s.y - p.toY) >= MOUTH_SPACING));
     if (free.length === 0) return null;

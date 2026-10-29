@@ -1,14 +1,24 @@
-import type { PickupId } from '../content/types';
+import type { GalaxyId, PickupId } from '../content/types';
+import type { CacheUse } from '../render/sprites';
 import { bossTarget } from '../sim/boss/bossRules';
 import { PICKUP, STEP_SECONDS } from '../sim/config';
 import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { World } from '../sim/world';
+import type { Attract } from './attract';
 import type { Screen } from './flow';
 import type { RunController } from './runController';
 
 /** How many events of each type the run in play has produced. */
 export type EventCounts = Partial<Record<SimEvent['type'], number>>;
+
+/** Attract mode as plain data: whether it is on, the demo galaxy, the demo frames drawn, and whether a demo crash stopped it. */
+export interface AttractState {
+  readonly active: boolean;
+  readonly demo: GalaxyId | null;
+  readonly frames: number;
+  readonly halted: boolean;
+}
 
 /**
  * Hooks an e2e build hands to `createApp`; `main.ts` passes them only under `import.meta.env.MODE === 'e2e'`, so
@@ -30,8 +40,12 @@ export interface E2eHooks {
   e2eEventCounts?: EventCounts | undefined;
   /** Set by `installE2eHooks`: restarts the run's frame stats, warm-up included, so a measure can skip a settling stretch. */
   e2eRestartFrameStats?: (() => void) | undefined;
-  /** Set by `installE2eHooks`: the sprite cache's use, the sprites it holds now and how many it has evicted. */
-  e2eSpriteCache?: (() => Readonly<{ size: number; evictions: number }>) | undefined;
+  /** Set by `installE2eHooks`: the sprite cache's use, the sprites it holds now with their keys, and how many it has evicted. */
+  e2eSpriteCache?: (() => CacheUse) | undefined;
+  /** Set by `installE2eHooks`: counts the title's idle stretch as over, so the next frame on the bare title starts the attract demo. */
+  e2eAttractNow?: (() => void) | undefined;
+  /** Set by `installE2eHooks`: attract mode's state now. */
+  e2eAttractState?: (() => AttractState) | undefined;
 }
 
 export interface E2eHookDeps {
@@ -44,11 +58,13 @@ export interface E2eHookDeps {
   /** Forgets the frame times measured so far, warm-up included. */
   restartFrameStats(): void;
   /** The sprite cache's use now. */
-  spriteCache(): Readonly<{ size: number; evictions: number }>;
+  spriteCache(): CacheUse;
+  readonly attract: Pick<Attract, 'active' | 'demo' | 'frames' | 'halted' | 'dueNow'>;
 }
 
 /**
- * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally, frame-stats restart, sprite-cache use), in an e2e build only:
+ * Sets the e2e hooks (fast-forward, boss damage, pickup grant, event tally, frame-stats restart, sprite-cache use, attract
+ * now and attract state), in an e2e build only:
  * a release build compiles this to nothing, which `check:no-bridge` proves by finding no hook name in `dist/`.
  */
 export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): void {
@@ -94,6 +110,11 @@ export function installE2eHooks(e2e: E2eHooks | undefined, deps: E2eHookDeps): v
     deps.restartFrameStats();
   };
   e2e.e2eSpriteCache = () => deps.spriteCache();
+  const { attract } = deps;
+  e2e.e2eAttractNow = () => {
+    attract.dueNow();
+  };
+  e2e.e2eAttractState = () => ({ active: attract.active, demo: attract.demo?.galaxy ?? null, frames: attract.frames, halted: attract.halted });
   let counted: World | null = null;
   e2e.e2eEvents = (events, world) => {
     if (world !== counted) {

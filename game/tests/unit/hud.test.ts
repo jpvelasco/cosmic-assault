@@ -291,6 +291,66 @@ describe('createHud', () => {
     expect(measured()).toBe(4);
   });
 
+  it('labels a galaxy that has a label by it alone, not by the galaxy it is built on', () => {
+    const hud = createHud(DRIFT);
+    const { ctx, texts } = fakeContext();
+    hud.resize(1280, 720);
+    const daily = new World({ seed: 1, field: { width: 1280, height: 720 }, rules: { kind: 'galaxy', galaxy: { ...galaxyById('1-3'), label: 'Daily' }, mode: 'daily' } });
+    hud.draw(ctx, daily, daily.score);
+    expect(texts).toContain('Daily');
+    expect(texts).not.toContain('1-3');
+    expect(texts).not.toContain('GALAXY');
+    // "Daily" (50 px) inside 12 px of padding each side, at scale 1.5.
+    expect(hud.pill('galaxy')?.width).toBe(50 + 2 * 12 * 1.5);
+  });
+
+  describe("a Daily's target", () => {
+    /** The fake context, also noting the fill style each pill is filled with, in order. */
+    function fillingContext(): { ctx: CanvasRenderingContext2D; texts: string[]; fills: unknown[] } {
+      const base = fakeContext();
+      const fills: unknown[] = [];
+      let fillStyle: unknown = '';
+      const ctx = new Proxy(base.ctx, {
+        get: (target, name): unknown => (name === 'fill' ? () => fills.push(fillStyle) : name === 'fillStyle' ? fillStyle : Reflect.get(target, name)),
+        set: (_target, name, value) => {
+          if (name === 'fillStyle') fillStyle = value;
+          return true;
+        },
+      });
+      return { ctx, texts: base.texts, fills };
+    }
+
+    it('shows in the score pill, which widens to hold it', () => {
+      const hud = createHud(DRIFT);
+      const { ctx, texts } = fakeContext();
+      hud.resize(844, 390);
+      hud.draw(ctx, galaxyWorld(), 1200);
+      const plain = hud.pill('score')?.width ?? 0;
+      hud.setTarget(14500);
+      hud.draw(ctx, galaxyWorld(), 1200);
+      expect(texts).toContain(`/ ${new Intl.NumberFormat().format(14500)}`);
+      // "/ 14,500" (80 px) and a 6 px gap after the score.
+      expect(hud.pill('score')?.width).toBe(Math.max(122, 48 + 12 + 50 + 6 + 80));
+      expect(hud.pill('score')?.width).toBeGreaterThan(plain);
+      hud.setTarget(null);
+      hud.draw(ctx, galaxyWorld(), 1200);
+      expect(hud.pill('score')?.width).toBe(plain);
+    });
+
+    it('lights the score pill once the score reaches the target, and not before', () => {
+      const hud = createHud(DRIFT);
+      hud.resize(844, 390);
+      hud.setTarget(14500);
+      const below = fillingContext();
+      hud.draw(below.ctx, galaxyWorld(), 14499);
+      const at = fillingContext();
+      hud.draw(at.ctx, galaxyWorld(), 14500);
+      // The score pill is filled first: glass below the target, the accent gradient from it on.
+      expect(typeof below.fills[0]).toBe('string');
+      expect(typeof at.fills[0]).toBe('object');
+    });
+  });
+
   it('runs a thin timer bar under the galaxy pill, as wide as its straight edge', () => {
     const hud = createHud(DRIFT);
     const { ctx } = fakeContext();

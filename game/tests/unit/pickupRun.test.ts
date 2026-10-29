@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { GalaxyMode } from '../../src/sim/scoring';
 import { galaxyById, tierOf } from '../../src/content/galaxies';
 import { noEffects } from '../../src/content/pickups';
 import type { GalaxyDef, PickupId, WeaponTier } from '../../src/content/types';
@@ -19,7 +20,7 @@ const STEPS = Math.round(1 / STEP_SECONDS);
 /** Faces +x along y = 360, so its shots run through the rocks a scenario puts there. */
 const SHOOTER = { x: 200, y: 360, angle: 0 };
 
-type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: 'rank' | 'free'; readonly galaxy?: GalaxyDef };
+type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: GalaxyMode; readonly galaxy?: GalaxyDef };
 
 function galaxyWorld(opts: Scenario = {}): World {
   const { mode = 'free', seed = 1, galaxy = calmGalaxy('2-1'), ...rest } = opts;
@@ -414,8 +415,8 @@ describe('losing a life', () => {
     expect(w.weaponTier).toBe(0);
   });
 
-  it('in Free play keeps the tier, which only resets with the next galaxy', () => {
-    const w = hitWorld(['weaponCore', 'weaponCore'], { mode: 'free' });
+  it.each(['free', 'daily'] as const)('in %s play keeps the tier, which only resets with the next galaxy', (mode) => {
+    const w = hitWorld(['weaponCore', 'weaponCore'], { mode });
     stepUntil(w, NO_CONTROLS, (e) => e.some((x) => x.type === 'shipHit'));
     expect(w.weaponTier).toBe(2);
   });
@@ -440,6 +441,8 @@ describe('the starting weapon tier', () => {
     expect(galaxyWorld({ mode: 'rank' }).weaponTier).toBe(0);
     expect(galaxyWorld({ mode: 'free', startTier: 0 }).weaponTier).toBe(0);
     expect(() => galaxyWorld({ mode: 'free', startTier: 1 })).toThrow(/Free play always starts at weapon tier 0.*rank/);
+    expect(galaxyWorld({ mode: 'daily', startTier: 0 }).weaponTier).toBe(0);
+    expect(() => galaxyWorld({ mode: 'daily', startTier: 2 })).toThrow(/The Daily always starts at weapon tier 0.*rank/);
   });
 
   it.each([-1, 4, 1.5, Number.NaN])('refuses a tier of %s, saying what is allowed', (startTier) => {

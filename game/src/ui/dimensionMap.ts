@@ -1,10 +1,8 @@
-import { DIMENSION_NUMBERS, DIMENSIONS, GALAXY_INDEXES } from '../content/galaxies';
+import { ALL_STARS, DIMENSION_NUMBERS, DIMENSIONS, GALAXY_INDEXES, STARS_PER_DIMENSION } from '../content/galaxies';
 import { galaxyIdOf, type Dimension, type GalaxyIndex } from '../content/types';
 import { dimensionStars, isUnlocked } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import { button, element, lockIcon, menuCard, spokenGalaxy, withTestId, type Act, type MenuCard } from './dom';
-
-const STARS_PER_DIMENSION = 3 * GALAXY_INDEXES.length;
 
 export interface DimensionMap extends MenuCard {
   update(save: SaveData): void;
@@ -63,7 +61,7 @@ export function createDimensionMap(act: Act): DimensionMap {
         );
         for (const { g, el: pip } of pips) pip.classList.toggle('pip--lit', (save.galaxies[galaxyIdOf(d, g)]?.stars ?? 0) > 0);
       }
-      total.textContent = `★ ${String(won)}/${String(STARS_PER_DIMENSION * DIMENSION_NUMBERS.length)}`;
+      total.textContent = `★ ${String(won)}/${String(ALL_STARS)}`;
     },
   };
 }

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, expectMode, gameState, nextFrames, openGame, test } from './fixtures';
+import { PHONE_VIEWPORT } from './seeds';
 
 interface Box {
   readonly x: number;
@@ -49,7 +50,7 @@ test('the HUD stays inside the viewport and clear of the pause button', async ({
 });
 
 test.describe('on an 844×390 phone', () => {
-  test.use({ viewport: { width: 844, height: 390 } });
+  test.use({ viewport: PHONE_VIEWPORT });
 
   test('the HUD stays inside the viewport and clear of the pause button', async ({ page }) => {
     await expectHudClearOfPause(page);

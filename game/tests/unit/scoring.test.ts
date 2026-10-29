@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clearBonuses, clearReport, Combo, galaxyBestScore, galaxyPoints, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor } from '../../src/sim/scoring';
+import { clearBonuses, clearReport, Combo, galaxyBestScore, galaxyPoints, COMBO_WINDOW_SECONDS, comboMultiplier, dimensionMultiplier, starsFor, startsFresh } from '../../src/sim/scoring';
 
 describe('comboMultiplier', () => {
   it.each([
@@ -79,6 +79,14 @@ describe('clearBonuses', () => {
   });
 });
 
+describe('startsFresh', () => {
+  it('starts Free play and the Daily afresh, and only Rank carries a run on', () => {
+    expect(startsFresh('free')).toBe(true);
+    expect(startsFresh('daily')).toBe(true);
+    expect(startsFresh('rank')).toBe(false);
+  });
+});
+
 describe('clearReport', () => {
   it('pays 250 per Dimension to clear, and 500 per Dimension more without a death', () => {
     expect(clearReport({ score: 1000, deaths: 0, dimension: 3, mode: 'free' })).toEqual({ score: 1000 + 750 + 1500, bonus: 2250, deaths: 0, stars: 3 });
@@ -89,6 +97,7 @@ describe('clearReport', () => {
   it('multiplies the total by the Dimension multiplier in Rank only, rounded', () => {
     expect(clearReport({ score: 1235, deaths: 0, dimension: 4, mode: 'rank' }).score).toBe(Math.round((1235 + 1000 + 2000) * 1.3));
     expect(clearReport({ score: 1235, deaths: 0, dimension: 4, mode: 'free' }).score).toBe(1235 + 1000 + 2000);
+    expect(clearReport({ score: 1235, deaths: 0, dimension: 2, mode: 'daily' }).score).toBe(1235 + 500 + 1000);
     expect(clearReport({ score: 1235, deaths: 0, dimension: 1, mode: 'rank' }).score).toBe(1235 + 250 + 500);
   });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type E2eHooks, installE2eHooks } from '../../src/app/e2eHooks';
+import { type E2eHookDeps, type E2eHooks, installE2eHooks } from '../../src/app/e2eHooks';
 import { galaxyById } from '../../src/content/galaxies';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -20,9 +20,15 @@ const worldOf = (): World => new World({ seed: 1, field: FIELD, rules: { kind: '
 
 /** Hooks installed over `world`, with `step` driving it the way the run controller does: its events go to the tally. */
 /** The sprite-cache use the hooks' renderer stand-in reports. */
-const CACHE_USE = { size: 12, evictions: 3 };
+const CACHE_USE = { size: 12, evictions: 3, keys: ['glow|#ffffff|24'] };
 
-function hooksFor(world: World | null, restartFrameStats: () => void = () => undefined): { hooks: E2eHooks; step: () => readonly SimEvent[] } {
+/** An attract mode stand-in, playing the 2-2 demo or, with `active` false, off. */
+function attractStandIn(active = true) {
+  const standIn = { active, demo: active ? { galaxy: '2-2' as const, seed: 1 } : null, frames: 40, halted: false, dueNow: vi.fn<() => void>() };
+  return standIn satisfies E2eHookDeps['attract'];
+}
+
+function hooksFor(world: World | null, restartFrameStats: () => void = () => undefined, attract = attractStandIn()): { hooks: E2eHooks; step: () => readonly SimEvent[] } {
   const hooks: E2eHooks = {};
   const step = (): readonly SimEvent[] => {
     if (world === null) return [];
@@ -30,7 +36,7 @@ function hooksFor(world: World | null, restartFrameStats: () => void = () => und
     hooks.e2eEvents?.(events, world);
     return events;
   };
-  installE2eHooks(hooks, { run: { world, step: () => void step() }, mode: () => 'playing', controls: () => NO_CONTROLS, redraw: () => undefined, restartFrameStats, spriteCache: () => CACHE_USE });
+  installE2eHooks(hooks, { run: { world, step: () => void step() }, mode: () => 'playing', controls: () => NO_CONTROLS, redraw: () => undefined, restartFrameStats, spriteCache: () => CACHE_USE, attract });
   return { hooks, step };
 }
 
@@ -120,6 +126,21 @@ describe('the e2e sprite-cache use', () => {
   it('reads the renderer\'s sprite cache as it stands now', () => {
     const { hooks } = hooksFor(worldOf());
     expect(hooks.e2eSpriteCache?.()).toEqual(CACHE_USE);
+  });
+});
+
+describe('the e2e attract hooks', () => {
+  it('count the idle stretch as over, and read attract mode as plain data', () => {
+    const attract = attractStandIn();
+    const { hooks } = hooksFor(null, undefined, attract);
+    hooks.e2eAttractNow?.();
+    expect(attract.dueNow).toHaveBeenCalledTimes(1);
+    expect(hooks.e2eAttractState?.()).toEqual({ active: true, demo: '2-2', frames: 40, halted: false });
+  });
+
+  it('read no demo while attract mode is off', () => {
+    const { hooks } = hooksFor(null, undefined, attractStandIn(false));
+    expect(hooks.e2eAttractState?.()).toEqual({ active: false, demo: null, frames: 40, halted: false });
   });
 });
 

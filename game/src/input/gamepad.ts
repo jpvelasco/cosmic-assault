@@ -81,6 +81,11 @@ export function controlsFromPad(pad: PadSnapshot | null): Controls {
   };
 }
 
+/** Whether the player is touching the pad: any button held, or the left stick pushed past its dead zone. */
+export function padInUse(pad: PadSnapshot | null): boolean {
+  return pad !== null && (Math.hypot(...leftStick(pad)) > STICK_DEAD_ZONE || pad.pressed.includes(true));
+}
+
 /** The edges a pad is holding: its menu buttons, and the direction the left stick is pushed (its stronger axis, past the threshold). */
 function heldEdges(pad: PadSnapshot | null): ReadonlySet<PadEdge> {
   const held = new Set<PadEdge>();

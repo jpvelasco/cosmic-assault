@@ -23,8 +23,8 @@ export function zoneClearance(field: Field, zone: ZoneBox, x: number, y: number)
 
 /** Random places a zone tries, its largest side shrinking toward the smallest as it goes, before it searches a grid. */
 const TRIES = 64;
-/** The step of that grid, in field units: it finds a spot for a smallest zone wherever one fits. */
-const GRID_STEP = 10;
+/** The step of the grid a zone searches once its random tries fail, in field units: fine enough to fit one on any field the game plays at. */
+export const GRID_STEP = 10;
 
 /** Whether two zone-shaped boxes overlap. */
 export const boxesOverlap = (a: ZoneBox, b: ZoneBox): boolean => Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;

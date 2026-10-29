@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 //        check-no-bridge.mjs --e2e [dist-e2e] fails if the e2e build lacks a mark, which would blind the first check.
 const MARKS = [
   { text: '__COSMIC_ASSAULT_TEST_API__', what: 'the e2e test bridge', owner: 'src/main.ts' },
-  { text: '__E2E_QUERY__', what: 'the e2e ?seed=, ?lives=, ?quality= and ?galaxy= parsing', owner: 'src/app/seed.ts' },
+  { text: '__E2E_QUERY__', what: 'the e2e ?seed=, ?lives=, ?quality=, ?galaxy=, ?storm= and ?today= parsing', owner: 'src/app/seed.ts' },
   { text: 'e2eBeforeFrame', what: 'the e2e frame hook', owner: 'src/app/game.ts' },
   { text: 'e2eFastForward', what: 'the e2e fast-forward hook', owner: 'src/app/e2eHooks.ts' },
   { text: 'e2eDamageBoss', what: 'the e2e boss-damage hook', owner: 'src/app/e2eHooks.ts' },
@@ -14,6 +14,8 @@ const MARKS = [
   { text: 'e2eEvents', what: 'the e2e event-tally hook', owner: 'src/app/e2eHooks.ts' },
   { text: 'e2eRestartFrameStats', what: 'the e2e frame-stats-restart hook', owner: 'src/app/e2eHooks.ts' },
   { text: 'e2eSpriteCache', what: 'the e2e sprite-cache hook', owner: 'src/app/e2eHooks.ts' },
+  { text: 'e2eAttractNow', what: 'the e2e attract-now hook', owner: 'src/app/e2eHooks.ts' },
+  { text: 'e2eAttractState', what: 'the e2e attract-state hook', owner: 'src/app/e2eHooks.ts' },
 ];
 
 const e2e = process.argv[2] === '--e2e';
@@ -44,4 +46,4 @@ if (problems.length > 0) {
   for (const problem of problems) console.error(problem);
   process.exit(1);
 }
-console.log(`e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant, event-tally, frame-stats-restart and sprite-cache hooks ${e2e ? 'present' : 'absent'}`);
+console.log(`e2e bridge, query parsing and the frame, fast-forward, boss-damage, pickup-grant, event-tally, frame-stats-restart, sprite-cache, attract-now and attract-state hooks ${e2e ? 'present' : 'absent'}`);

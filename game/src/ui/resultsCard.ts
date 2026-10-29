@@ -1,6 +1,9 @@
-import { freeNext, type FlowState } from '../app/flow';
-import { galaxyById, galaxyLabel } from '../content/galaxies';
-import { clearBonuses, dimensionMultiplier, galaxyBestScore, galaxyPoints } from '../sim/scoring';
+import type { EndCommandKind } from '../app/commands';
+import { freeNext, runDef, type ClearResult, type FlowState } from '../app/flow';
+import { galaxyLabel } from '../content/galaxies';
+import type { NewBest } from '../meta/bests';
+import { clearBonuses, dimensionMultiplier, galaxyPoints } from '../sim/scoring';
+import { DAILY_CLEARED, dailyTitle, targetLine } from './dailyCopy';
 import { button, cardPanel, element, PRIMARY, starRow, withTestId, type Act } from './dom';
 
 export interface ResultsState {
@@ -9,6 +12,8 @@ export interface ResultsState {
   readonly score: number;
   /** The line on how to play again after a game over, for keys or taps. */
   readonly restartHint: string;
+  /** The score the run set to beat (a Daily's target); null for none. */
+  readonly target: number | null;
 }
 
 export interface ResultsCard {
@@ -34,18 +39,59 @@ function line(): { el: HTMLElement; set(label: string, amount: string): void } {
 }
 
 /**
- * The "New best!" badge's text, or '' when the clear set none. In Rank it names the number that was recorded, the
- * galaxy's best at Free play scale, which is not the multiplied score the card shows beside it.
+ * The "New best!" badge's text, or '' when the run beat no record. It names the recorded number whenever that differs
+ * from the `shown` score, as a Rank galaxy's best (at Free play scale) does beside the multiplied total.
  */
-export function newBestLabel({ galaxy, mode, result }: Pick<FlowState, 'galaxy' | 'mode' | 'result'>): string {
-  if (result === null || !result.newBest) return '';
-  if (mode !== 'rank' || galaxy === null) return 'New best!';
-  return `New best! ${String(galaxyBestScore(result.report, galaxyById(galaxy).dimension, mode))}`;
+export function newBestText(newBest: NewBest | null, shown: number): string {
+  if (newBest === null) return '';
+  return newBest.score === shown ? 'New best!' : `New best! ${String(newBest.score)}`;
 }
 
+/** The line naming the looks the clear unlocked, or '' when it unlocked none. */
+export function newLookLabel(result: ClearResult | null): string {
+  const names = result?.newLooks ?? [];
+  return names.length === 0 ? '' : `New look unlocked: ${names.join(', ')}`;
+}
+
+/** The end card's heading. */
+export function endHeading({ screen, mode }: FlowState): string {
+  if (screen === 'results') return mode === 'daily' ? DAILY_CLEARED : 'Galaxy cleared';
+  return screen === 'rankComplete' ? 'Rank complete' : 'Game over';
+}
+
+/** The line over the heading: the Daily's title, or the galaxy played. */
+export function endLabel({ galaxy, daily }: FlowState): string {
+  if (daily !== null) return dailyTitle(daily);
+  return galaxy === null ? '' : `Galaxy ${galaxyLabel(galaxy)}`;
+}
+
+/** Stars show for a galaxy cleared; a Daily shows its target instead. */
+export const showsStars = ({ screen, result, mode }: FlowState): boolean => screen !== 'gameOver' && result !== null && mode !== 'daily';
+
+interface EndButton {
+  readonly kind: EndCommandKind;
+  readonly label: string;
+  readonly testId: string;
+  readonly shows: (flow: FlowState) => boolean;
+}
+
+/** The end card's buttons, in order; Enter and pad A take the first one shown. */
+const END_BUTTONS: readonly EndButton[] = [
+  { kind: 'next', label: 'Next', testId: 'results-next', shows: (flow) => flow.screen === 'results' && (flow.mode === 'rank' || freeNext(flow) !== null) },
+  { kind: 'continue', label: 'Continue', testId: 'rank-continue', shows: (flow) => flow.screen === 'gameOver' && flow.mode === 'rank' },
+  // The Daily's Retry plays the same date again.
+  { kind: 'retry', label: 'Retry', testId: 'results-retry', shows: (flow) => flow.mode !== 'rank' && flow.screen !== 'rankComplete' },
+  { kind: 'map', label: 'Map', testId: 'results-map', shows: (flow) => flow.mode === 'free' && flow.screen !== 'rankComplete' },
+  { kind: 'title', label: 'Title', testId: 'rank-title', shows: (flow) => flow.mode === 'rank' },
+  { kind: 'title', label: 'Title', testId: 'daily-title', shows: (flow) => flow.mode === 'daily' },
+];
+
+/** The test ids of the buttons the end card shows for `flow`, in order. */
+export const endButtons = (flow: FlowState): string[] => END_BUTTONS.filter(({ shows }) => shows(flow)).map(({ testId }) => testId);
+
 /**
- * The end of a run: the galaxy, the heading, the stars won (lit one after another as the card pops in), the score, a
- * "New best!" badge, the bonus lines, the Rank run's total, and the buttons for what comes next. Enter and pad A take
+ * The end of a run: the galaxy (or the Daily), the heading, the stars won (lit one after another as the card pops in), the
+ * score, a Daily's target, a "New best!" badge, the bonus lines, the Rank run's total, and the buttons for what comes next. Enter and pad A take
  * the first button shown, so that one wears the primary style.
  */
 export function createResultsCard(act: Act): ResultsCard {
@@ -56,40 +102,38 @@ export function createResultsCard(act: Act): ResultsCard {
   const stars = starRow('stars--big');
   const score = element('p', 'score');
   const newBest = element('p', 'badge new-best');
+  const newLook = element('p', 'hint new-look');
   const points = line();
   const clearBonus = line();
   const noDeathBonus = line();
   const rankFactor = line();
   const runTotal = line();
   runTotal.el.classList.add('end-line--total');
+  const target = withTestId(element('p', 'end-target'), 'end-target');
   const hint = element('p', 'hint');
-  const buttons: readonly [HTMLButtonElement, (flow: FlowState) => boolean][] = [
-    [withTestId(button('menu-button', 'Next', act({ kind: 'next' })), 'results-next'), (flow) => flow.screen === 'results' && (flow.mode === 'rank' || freeNext(flow) !== null)],
-    [withTestId(button('menu-button', 'Continue', act({ kind: 'continue' })), 'rank-continue'), (flow) => flow.screen === 'gameOver' && flow.mode === 'rank'],
-    [withTestId(button('menu-button', 'Retry', act({ kind: 'retry' })), 'results-retry'), (flow) => flow.mode === 'free' && flow.screen !== 'rankComplete'],
-    [withTestId(button('menu-button', 'Map', act({ kind: 'map' })), 'results-map'), (flow) => flow.mode === 'free' && flow.screen !== 'rankComplete'],
-    [withTestId(button('menu-button', 'Title', act({ kind: 'title' })), 'rank-title'), (flow) => flow.mode === 'rank'],
-  ];
+  const buttons = END_BUTTONS.map(({ kind, label, testId, shows }) => [withTestId(button('menu-button', label, act({ kind })), testId), shows] as const);
   const row = element('div', 'end-buttons');
   row.append(...buttons.map(([el]) => el));
   const receipt = element('div', 'end-lines');
   receipt.append(points.el, clearBonus.el, noDeathBonus.el, rankFactor.el, runTotal.el);
-  card.append(galaxy, heading, stars.el, score, newBest, receipt, hint, row);
+  card.append(galaxy, heading, stars.el, score, target, newBest, newLook, receipt, hint, row);
 
   /**
    * The clear's bonuses and, in Rank, the Dimension's multiplier and the run total. After a game over only a Rank run
    * has a line: its total, the score it carried in plus this galaxy's `score`, as the board posted it.
    */
-  function setLines({ screen, result, galaxy: id, mode, rankRun }: FlowState, score: number): void {
+  function setLines(flow: FlowState, score: number): void {
+    const { screen, result, mode, rankRun } = flow;
     const rank = mode === 'rank';
-    if (screen === 'gameOver' || result === null || id === null) {
+    const played = runDef(flow);
+    if (screen === 'gameOver' || result === null || played === null) {
       for (const part of [points, clearBonus, noDeathBonus, rankFactor]) part.set('', '');
       runTotal.set('Run total', rank && screen === 'gameOver' && rankRun !== null ? String(rankRun.score + score) : '');
       receipt.hidden = runTotal.el.hidden;
       return;
     }
     receipt.hidden = false;
-    const { dimension } = galaxyById(id);
+    const { dimension } = played;
     const { clear, noDeath } = clearBonuses(dimension, result.report.deaths);
     const factor = dimensionMultiplier(dimension);
     // What the score is made of: the kills, the bonuses, then in Rank the Dimension's multiplier over both.
@@ -102,16 +146,20 @@ export function createResultsCard(act: Act): ResultsCard {
 
   return {
     panel,
-    update({ flow, score: value, restartHint }) {
+    update({ flow, score: value, restartHint, target: toBeat }) {
       const { screen, result } = flow;
       const won = screen !== 'gameOver' && result !== null;
-      heading.textContent = screen === 'results' ? 'Galaxy cleared' : screen === 'rankComplete' ? 'Rank complete' : 'Game over';
-      galaxy.textContent = flow.galaxy === null ? '' : `Galaxy ${galaxyLabel(flow.galaxy)}`;
-      stars.el.hidden = !won;
+      heading.textContent = endHeading(flow);
+      galaxy.textContent = endLabel(flow);
+      stars.el.hidden = !showsStars(flow);
       stars.set(won ? result.report.stars : 0);
       score.textContent = `Score ${String(value)}`;
-      newBest.textContent = won ? newBestLabel(flow) : '';
+      target.textContent = toBeat === null ? '' : targetLine(toBeat, value);
+      target.hidden = toBeat === null;
+      newBest.textContent = newBestText(flow.newBest, value);
       newBest.hidden = newBest.textContent === '';
+      newLook.textContent = won ? newLookLabel(result) : '';
+      newLook.hidden = newLook.textContent === '';
       setLines(flow, value);
       hint.textContent = screen === 'gameOver' ? restartHint : '';
       hint.hidden = hint.textContent === '';

@@ -64,7 +64,7 @@ export interface KindRamp {
 export interface GalaxyEvent {
   /** Seconds into the galaxy. */
   readonly at: number;
-  readonly type: 'meteorShower' | 'gravityWell' | 'dangerZone' | 'repulsionField' | 'warpRift' | 'blackHole';
+  readonly type: 'meteorShower' | 'gravityWell' | 'gravityStorm' | 'dangerZone' | 'repulsionField' | 'warpRift' | 'blackHole';
   readonly intensity: 1 | 2 | 3;
 }
 
@@ -73,6 +73,9 @@ export type HazardType = Exclude<GalaxyEvent['type'], 'meteorShower'>;
 
 /** The hazards that only push and pull: a gravity well draws bodies in, a repulsion field drives them out. */
 export type ForceKind = Extract<HazardType, 'gravityWell' | 'repulsionField'>;
+
+/** What a well's events name: a force field, or the gravity storm whose wells all warn, open and end together. */
+export type WellKind = ForceKind | 'gravityStorm';
 
 export interface GalaxyDef {
   readonly id: GalaxyId;
@@ -91,4 +94,9 @@ export interface GalaxyDef {
   /** The look it is drawn in, and the theme it plays: one per Dimension. */
   readonly palette: PaletteId;
   readonly theme: MusicThemeId;
+  /**
+   * What the HUD and the cards name it, for a galaxy built on another's id rather than one of the table's own (the
+   * Daily's `'Daily'`); a table galaxy has none and is named by its id.
+   */
+  readonly label?: string;
 }

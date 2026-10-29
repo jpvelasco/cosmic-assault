@@ -9,7 +9,7 @@ import { NO_CONTROLS } from '../../src/sim/controls';
 import type { SimEvent } from '../../src/sim/events';
 import type { Field } from '../../src/sim/field';
 import { FoePool, type Foe } from '../../src/sim/foes/foe';
-import { ForceField } from '../../src/sim/hazards/forceField';
+import { ForceField, inBand } from '../../src/sim/hazards/forceField';
 import type { HazardState, Pullable } from '../../src/sim/hazards/hazard';
 import { wellAcceleration } from '../../src/sim/hazards/pull';
 import { shipPullAt, type ShipPull } from '../../src/sim/hazards/shipPull';
@@ -36,7 +36,8 @@ const WELL_SECONDS = HAZARD_RULES.gravityWell.seconds;
 
 function forceField(events: readonly GalaxyEvent[], seed = 1, kind: 'gravityWell' | 'repulsionField' = 'gravityWell'): ForceField {
   let last = 0;
-  return new ForceField(kind, { events: eventsOfType(events, kind), rng: createRng(seed), nextId: () => ++last, keepOuts: () => [], inPlay: () => [] });
+  const rng = createRng(seed);
+  return new ForceField(kind, { events: eventsOfType(events, kind), rng, nextId: () => ++last, keepOuts: () => [], inPlay: () => [] }, inBand(kind, rng));
 }
 
 const stateOf = (w: ForceField): HazardState | null => w.states[0] ?? null;

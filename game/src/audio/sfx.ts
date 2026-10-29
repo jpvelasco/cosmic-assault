@@ -1,5 +1,5 @@
 import type { Screen } from '../app/flow';
-import type { FoeKind, ForceKind } from '../content/types';
+import type { FoeKind, WellKind } from '../content/types';
 import { isWarpClear, type SimEvent } from '../sim/events';
 
 /** Every sound effect, in the order voices.ts defines them. */
@@ -35,6 +35,7 @@ export const SFX_NAMES = [
   'wellWarn',
   'wellOpen',
   'wellClose',
+  'stormSting',
   'deflect',
   'partCrack',
   'partBreak',
@@ -102,9 +103,9 @@ const ARRIVAL_BY_FOE = { splitter: null, drone: 'droneSwarm', gunship: null, min
  * The most times a sound starts in one frame; the rest are dropped. Held fire plus a hit-stop catch-up would stack shot
  * blips, and a drone group arrives in one step, three to five at once, which is heard as one swarm. A spread volley
  * glancing off a shielded core is heard as one tick. Foes' bolts are heard two at a time, and a boss's volley of bolts, a
- * dozen at once, as one zap.
+ * dozen at once, as one zap. A gravity storm's wells warn, open and end in one step, each heard once.
  */
-export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1 };
+export const PER_FRAME_CAPS: Readonly<Partial<Record<SfxName, number>>> = { shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1, stormSting: 1, wellOpen: 1, wellClose: 1 };
 
 /** Whether a step's events include a boss going down, which holds back that step's warp sounds. */
 export function isBossKill(events: readonly SimEvent[]): boolean {
@@ -112,12 +113,13 @@ export function isBossKill(events: readonly SimEvent[]): boolean {
 }
 
 /**
- * Each force field's warning, start and end sounds, and whether it hums while it is active: a gravity well hums, a
- * repulsion field has its own sounds and no hum.
+ * Each well's warning, start and end sounds, and whether it hums while it is active: a gravity well hums, a repulsion
+ * field has its own sounds and no hum, and a gravity storm's wells warn with one sting and otherwise sound like wells.
  */
-const FORCE_SOUNDS: Readonly<Record<ForceKind, { readonly warn: SfxName; readonly open: SfxName; readonly close: SfxName; readonly hum: boolean }>> = {
+const FORCE_SOUNDS: Readonly<Record<WellKind, { readonly warn: SfxName; readonly open: SfxName; readonly close: SfxName; readonly hum: boolean }>> = {
   gravityWell: { warn: 'wellWarn', open: 'wellOpen', close: 'wellClose', hum: true },
   repulsionField: { warn: 'repulseWarn', open: 'repulseOpen', close: 'repulseClose', hum: false },
+  gravityStorm: { warn: 'stormSting', open: 'wellOpen', close: 'wellClose', hum: true },
 };
 
 /** The sound an event makes, or null for a silent one; the cleared galaxy's fanfare belongs to its results card instead. */
@@ -243,39 +245,30 @@ function soundOf(event: SimEvent): SfxName | null {
 export const HUM_NAMES = ['well', 'zone', 'hole'] as const;
 export type HumName = (typeof HUM_NAMES)[number];
 
-/** How an event changes the hums: one starts or stops, or every one falls silent. */
-export type HumChange = Readonly<{ hum: HumName; on: boolean }> | 'silence';
-
-const HUM_CHANGES = {
-  wellOn: { hum: 'well', on: true },
-  wellOff: { hum: 'well', on: false },
-  zoneOn: { hum: 'zone', on: true },
-  zoneOff: { hum: 'zone', on: false },
-  holeOn: { hum: 'hole', on: true },
-  holeOff: { hum: 'hole', on: false },
-} as const satisfies Readonly<Record<string, HumChange>>;
+/**
+ * How an event changes the hums: the hazard `holder` starts or stops holding one, or every one falls silent. A hum plays
+ * while any hazard holds it.
+ */
+export type HumChange = Readonly<{ hum: HumName; on: boolean; holder: number }> | 'silence';
 
 /**
- * How `event` changes the looped hums, or null to leave them be. A well's runs from `wellStart` to `wellEnd`, a zone's
- * from `zoneStart` to `zoneEnd` and a hole's from `holeStart` to `holeEnd`, each on its own, so one ending never cuts
- * another. A galaxy that ends with one on
- * (warp or game over) ends it with no end event, so those silence every hum, as does a new galaxy starting.
+ * How `event` changes the looped hums, or null to leave them be. A well holds the well's hum from its `wellStart` to its
+ * `wellEnd`, a zone the zone's from `zoneStart` to `zoneEnd` and a hole the hole's from `holeStart` to `holeEnd`, each by
+ * its own id, so one ending never cuts another still running. A galaxy that ends with one on (warp or game over) ends it
+ * with no end event, so those silence every hum, as does a new galaxy starting.
  */
 export function humFor(event: SimEvent): HumChange | null {
   switch (event.type) {
-    // Only a force field whose sounds hum starts the well's hum: a repulsion field leaves it be.
+    // Only a force field whose sounds hum holds the well's hum: a repulsion field leaves it be.
     case 'wellStart':
-      return FORCE_SOUNDS[event.kind].hum ? HUM_CHANGES.wellOn : null;
     case 'wellEnd':
-      return FORCE_SOUNDS[event.kind].hum ? HUM_CHANGES.wellOff : null;
+      return FORCE_SOUNDS[event.kind].hum ? { hum: 'well', on: event.type === 'wellStart', holder: event.id } : null;
     case 'zoneStart':
-      return HUM_CHANGES.zoneOn;
     case 'zoneEnd':
-      return HUM_CHANGES.zoneOff;
+      return { hum: 'zone', on: event.type === 'zoneStart', holder: event.id };
     case 'holeStart':
-      return HUM_CHANGES.holeOn;
     case 'holeEnd':
-      return HUM_CHANGES.holeOff;
+      return { hum: 'hole', on: event.type === 'holeStart', holder: event.id };
     case 'warpOut':
     case 'gameOver':
     case 'galaxyStart':

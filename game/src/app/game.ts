@@ -1,6 +1,7 @@
 import { createAudioEngine, needsSoundGesture, type AudioState } from '../audio/engine';
 import type { ThemeId } from '../audio/themes';
 import { currentBuildLabel } from '../buildLabel';
+import type { Look } from '../content/cosmetics';
 import type { GalaxyDef, PaletteId } from '../content/types';
 import { controlsFromPad, createPadFireLatch, createPadReader, padEdges, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import { controlsFromKeys } from '../input/keyboard';
@@ -12,6 +13,7 @@ import { createCrashGuard } from '../platform/crashGuard';
 import { createFullscreen } from '../platform/fullscreen';
 import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
+import { effectiveLook } from '../meta/cosmetics';
 import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { paletteFor } from '../render/palette';
@@ -19,21 +21,23 @@ import { createRenderer } from '../render/renderer';
 import type { VisualScale } from '../render/visualScale';
 import { NO_CONTROLS, type Controls } from '../sim/controls';
 import { fieldForViewport, type Field } from '../sim/field';
-import { createFixedStepLoop } from '../sim/loop';
+import { createFixedStepLoop, visualFrameSeconds } from '../sim/loop';
 import { applyAccents } from '../ui/accents';
 import { createCrashCard } from '../ui/crashCard';
 import { listen } from '../ui/dom';
 import { SOUND_GESTURE_HINT } from '../ui/hints';
-import { createOverlay } from '../ui/overlay';
+import { createOverlay, type CoverChip } from '../ui/overlay';
 import { createRotatePrompt } from '../ui/rotatePrompt';
 import { createToast } from '../ui/toast';
 import type { CardToggleDeps } from './cardToggle';
+import { createAttract } from './attract';
 import { TOGGLE_FULLSCREEN, type Command } from './commands';
 import { installE2eHooks, type E2eHooks } from './e2eHooks';
 import { END_SCREENS, MENU_SCREENS, type Screen } from './flow';
 import { FrameMonitor, type FrameSummary } from './frameMonitor';
 import { HitStop } from './hitStop';
-import { coversFor, createInputRouter, type Cover } from './inputRouting';
+import { anyCoverUp, coversFor, createInputRouter, type Cover } from './inputRouting';
+import { createHangar } from './hangar';
 import { createRunController, type RunController } from './runController';
 import { runOverrides } from './seed';
 import { browserStorage, loadSettings, type Settings } from './settings';
@@ -44,8 +48,8 @@ import { createRecords } from './records';
 export interface App {
   /** The screen shown. */
   readonly mode: Screen;
-  /** The run: its World (null on the menu screens), the screen flow, the save in memory and the run total. */
-  readonly run: Pick<RunController, 'world' | 'flow' | 'save' | 'runTotal'>;
+  /** The run: its World (null on the menu screens), the screen flow, the save in memory, the run total and the Daily in play. */
+  readonly run: Pick<RunController, 'world' | 'flow' | 'save' | 'runTotal' | 'daily'>;
   /** The HUD pills drawn last, in CSS px. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
@@ -64,6 +68,8 @@ export interface App {
   readonly musicTheme: ThemeId;
   /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
   readonly settings: Settings;
+  /** The skin and trail the ship draws: the chosen ones where unlocked, the defaults otherwise. */
+  readonly look: Look;
   /** The motion rules in force once reduced motion and the shake setting are combined. */
   readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or tap creates the audio context. */
@@ -78,9 +84,6 @@ export interface App {
   quit(): void;
   dispose(): void;
 }
-
-/** Caps the visual step after a stalled frame, so stars and particles never jump. */
-const MAX_VISUAL_STEP_SECONDS = 0.1;
 
 export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2eHooks): App {
   const renderer = createRenderer(canvas);
@@ -164,8 +167,11 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     openRecords: () => {
       records.show();
     },
+    openHangar: () => {
+      hangar.show();
+    },
     install: installPrompt.install,
-  });
+  }, log);
   // After the overlay, so the settings card is drawn over the title and pause cards it opens from.
   const prefs = createSettingsController(root, {
     storage,
@@ -178,22 +184,43 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     ...coverCardDeps('settings'),
   });
   const records = createRecords(root, coverCardDeps('records'));
+  const hangar = createHangar(root, coverCardDeps('hangar'), prefs.choose);
   const rotatePrompt = createRotatePrompt(root);
   const crashCard = createCrashCard(root, {
     report: () => log.report({ build: currentBuildLabel(), userAgent: navigator.userAgent, mode }),
     toast,
   });
   const guard = createCrashGuard(log, stopAfterCrash);
+  /** The cards a player opens over the title, mode select or pause; the menu keys go to the one that is up. */
+  const coverCards = [prefs, records, hangar] as const;
+  const attract = createAttract({
+    renderer,
+    log,
+    field: () => field,
+    screen: () => mode,
+    covered: () => anyCoverUp(coversUp()) || installPrompt.prompting,
+    visible: () => document.visibilityState === 'visible',
+    reducedMotion: () => renderer.effects.reducedMotion,
+    portrait: () => view.portrait(),
+    now: () => performance.now(),
+    demoStarted: () => {
+      scaler.startRun();
+    },
+    activeChanged: syncView,
+  });
   const view = createViewSync(root, {
     overlay,
     settingsCard: prefs.card,
     records,
+    hangar,
     rotatePrompt,
     touch,
     renderer,
     read: () => ({
       flow: run.flow,
       save: run.save,
+      today: run.today(),
+      daily: run.daily,
       rankLock: run.rankLock,
       score: run.world?.score ?? 0,
       muted: audio.muted,
@@ -201,6 +228,8 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       installOffer: installPrompt.offer,
       settings: prefs.settings,
       settingsOpen: prefs.open,
+      look: look(),
+      attract: attract.active,
     }),
     screen: () => mode,
     tripped: () => guard.tripped,
@@ -221,24 +250,42 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     screen: () => mode,
     covers,
     msSinceRunEnd: (now) => now - runEndedAt,
-    menuControls: () => (prefs.open ? prefs.card.controls() : records.open ? records.card.controls() : overlay.controls(mode)),
+    menuControls: () => coverCards.find((cover) => cover.open)?.card.controls() ?? overlay.controls(mode),
     closeCard: () => {
       prefs.closeSettings();
       records.close();
+      hangar.close();
     },
+    interrupt: () => attract.interrupt(),
   });
 
-  /** What the settings or records card needs to open and close over the screens, its focus going back to its chip. */
-  function coverCardDeps(chip: 'settings' | 'records'): Omit<CardToggleDeps, 'opensOn'> {
+  /** What the settings, records or Hangar card needs to open and close over the screens, its focus going back to its chip. */
+  function coverCardDeps(chip: CoverChip): Omit<CardToggleDeps, 'opensOn'> {
     const focusOpener = (): void => {
       overlay.focusChip(chip);
     };
     return { screen: () => mode, covers, syncView, focusOpener };
   }
 
+  /** Which covers are up right now, refilled in place, so the attract demo can ask on every frame. */
+  const up = { settings: false, records: false, hangar: false, rotate: false, crash: false };
+  function coversUp(): typeof up {
+    up.settings = prefs.open;
+    up.records = records.open;
+    up.hangar = hangar.open;
+    up.rotate = view.needsRotation();
+    up.crash = guard.tripped;
+    return up;
+  }
+
   /** What covers the cards right now, for the router's table. */
   function covers(): Cover[] {
-    return coversFor({ settings: prefs.open, records: records.open, rotate: view.needsRotation(), crash: guard.tripped });
+    return coversFor(coversUp());
+  }
+
+  /** The look the ship draws: the chosen one where the save's stars unlock it. */
+  function look(): Look {
+    return effectiveLook(prefs.settings, run.save);
   }
 
   function syncView(): void {
@@ -274,21 +321,30 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     renderer.resize(clientWidth, clientHeight, field);
     view.syncHudBounds();
     run.world?.resize(field);
+    attract.resize(field);
     redrawPending = true;
   }
 
-  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette) and frame stats for it. */
-  function onRunStarted(galaxy: GalaxyDef): void {
+  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette, with its target) and frame stats for it. */
+  function onRunStarted(galaxy: GalaxyDef, target: number | null): void {
     startKeys.latch(keyboard.held);
     padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
     renderer.setPalette(galaxy.palette);
+    renderer.setTarget(target);
     applyAccents(document.documentElement.style, paletteFor(galaxy.palette));
     renderer.reset();
     monitor.reset();
     scaler.startRun();
     audio.play('uiClick');
+  }
+
+  /** Feeds a busy frame (play, or the attract demo) to the quality scaler, applying the level it steps to. */
+  function sampleQuality(frameMs: number): void {
+    const levelBefore = scaler.index;
+    scaler.sample(frameMs);
+    if (scaler.index !== levelBefore) applyQuality();
   }
 
   /** Pauses a run in play; returns whether it did. */
@@ -341,6 +397,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
   /** Stops the game for good and shows the recovery card. Silences audio without touching the saved sound setting. */
   function stopAfterCrash(error: unknown): void {
     cancelAnimationFrame(frameId);
+    // No demo carries on, dimmed, under the card; the view no longer syncs, so the title is told at once.
+    attract.stop();
+    overlay.endAttract();
     // A crashed tab can no longer play its Rank galaxy, so it stops answering for it.
     run.dispose();
     touch.show(false);
@@ -369,23 +428,22 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     const pad = readPad();
     const edges = padEdges(previousPad, pad);
     previousPad = pad;
-    router.routePad(edges, now);
-    hintSoundGesture(edges);
+    // The press that ends a demo does nothing else, and spends no hint.
+    if (!router.routePad(pad, edges, now)) hintSoundGesture(edges);
     router.routeKeys(now);
     // A re-bake that lands after a resize repaints a still frame (paused, game over) with it.
     if (renderer.consumeRedrawRequest()) redrawPending = true;
     const settling = END_SCREENS.includes(mode) && renderer.hasActiveParticles();
     // Still screens cost next to nothing, so their frame interval is the display's own rate.
-    if (mode !== 'playing' && !settling) scaler.sampleIdle(frameMs);
+    if (mode !== 'playing' && !settling && !attract.active) scaler.sampleIdle(frameMs);
+    if (attract.frame(frameSeconds)) sampleQuality(frameMs);
     const { world } = run;
     if (world === null) return;
     // Visuals run on real frame time rather than sim time, so they keep moving through a hit-stop freeze.
-    const visualSeconds = Math.min(Math.max(frameSeconds, 0), MAX_VISUAL_STEP_SECONDS);
+    const visualSeconds = visualFrameSeconds(frameSeconds);
     if (mode === 'playing') {
       monitor.sample(frameMs);
-      const levelBefore = scaler.index;
-      scaler.sample(frameMs);
-      if (scaler.index !== levelBefore) applyQuality();
+      sampleQuality(frameMs);
       const frozen = hitStop.frozen;
       stepRun(readControls(pad), frameSeconds);
       renderer.advance(visualSeconds, world, frozen);
@@ -416,6 +474,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       monitor.reset();
     },
     spriteCache: () => renderer.spriteCache,
+    attract,
   });
 
   /** The frame to run, chosen once: a release build has no hook to look for on each frame. */
@@ -437,7 +496,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     view.sync();
   };
   const onVisibilityChange = (): void => {
-    if (document.visibilityState === 'hidden') pause();
+    if (document.visibilityState !== 'hidden') return;
+    pause();
+    attract.interrupt();
   };
 
   const unlisteners = [
@@ -484,6 +545,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     get settings() {
       return prefs.settings;
     },
+    get look() {
+      return look();
+    },
     get motion() {
       return { reducedMotion: renderer.effects.reducedMotion, shake: renderer.effects.shakeEnabled };
     },
@@ -507,6 +571,7 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
       overlay.dispose();
       prefs.dispose();
       records.card.dispose();
+      hangar.card.dispose();
       rotatePrompt.dispose();
       toast.dispose();
       crashCard.dispose();

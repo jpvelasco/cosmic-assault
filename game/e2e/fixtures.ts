@@ -1,7 +1,12 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import { ATTRACT_IDLE_SECONDS } from '../src/app/attract';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
+import { SETTINGS_KEY } from '../src/app/settings';
+import type { Look } from '../src/content/cosmetics';
+import { GALAXIES } from '../src/content/galaxies';
 import type { GalaxyId, PickupId } from '../src/content/types';
-import { SAVE_KEY, type SaveData } from '../src/meta/save';
+import { RANK_START_LIVES } from '../src/meta/rankRun';
+import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { BRIDGE_VERSION } from '../src/testBridge';
 import { BOSS_GALAXY, E2E_GALAXY, GAME_OVER_GALAXY, seedFor } from './seeds';
@@ -48,17 +53,20 @@ export interface GameQuery {
   readonly quality?: string;
   /** The galaxy the title's Play jumps straight into; null for the normal flow through mode select. */
   readonly galaxy?: string | null;
+  /** Seconds into that galaxy at which a gravity storm is added to it (see src/app/seed.ts). */
+  readonly storm?: number;
 }
 
 /**
  * Opens the e2e build (the 'lanes-clear' seed and galaxy E2E_GALAXY unless overridden) and waits for the test bridge, which
  * loads after an `import()`. Any of these switches makes it a debug run, which never writes the save.
  */
-export async function openGame(page: Page, { seed = seedFor('lanes-clear'), lives, quality, galaxy = E2E_GALAXY }: GameQuery = {}): Promise<void> {
+export async function openGame(page: Page, { seed = seedFor('lanes-clear'), lives, quality, galaxy = E2E_GALAXY, storm }: GameQuery = {}): Promise<void> {
   const query = new URLSearchParams({ seed: String(seed) });
   if (galaxy !== null) query.set('galaxy', galaxy);
   if (lives !== undefined) query.set('lives', String(lives));
   if (quality !== undefined) query.set('quality', quality);
+  if (storm !== undefined) query.set('storm', String(storm));
   await page.goto(`/?${query.toString()}`);
   await waitForBridge(page);
 }
@@ -66,6 +74,12 @@ export async function openGame(page: Page, { seed = seedFor('lanes-clear'), live
 /** Opens the e2e build with no switches: the normal flow, whose runs write the real save. */
 export async function openFreshGame(page: Page): Promise<void> {
   await page.goto('/');
+  await waitForBridge(page);
+}
+
+/** Opens the e2e build with `?today=` alone, which makes `date` today: not a debug run, so its runs write the save. */
+export async function openDaily(page: Page, date: string): Promise<void> {
+  await page.goto(`/?${new URLSearchParams({ today: date }).toString()}`);
   await waitForBridge(page);
 }
 
@@ -102,10 +116,39 @@ export function seedSave(page: Page, save: SaveData, options: { once?: boolean }
   return seedStorage(page, JSON.stringify(save), options);
 }
 
+/** A save with three stars in each galaxy of `ids`, and nothing else won. */
+export const threeStarSave = (ids: readonly GalaxyId[]): SaveData => ({
+  ...defaultSave(),
+  galaxies: Object.fromEntries(ids.map((id) => [id, { bestScore: 1000, stars: 3 }])),
+});
+
+/** Three stars in every galaxy, which unlocks every look. */
+export const ALL_STARS_SAVE: SaveData = threeStarSave(GALAXIES.map(({ id }) => id));
+
+/** Stores settings that choose `look`, before the page loads; the ship draws it only where the save's stars unlock it. */
+export async function seedLook(page: Page, look: Look): Promise<void> {
+  await page.addInitScript(([key, value]) => {
+    localStorage.setItem(key, value);
+  }, [SETTINGS_KEY, JSON.stringify(look)] as const);
+}
+
 /** The save as `localStorage` holds it, parsed; empty before anything is written. */
 export async function storedSave(page: Page): Promise<Partial<SaveData>> {
   const text = await page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
   return text === null ? {} : (JSON.parse(text) as Partial<SaveData>);
+}
+
+/** Title → mode select, by a click (or, on a touch screen, a tap) on Play. */
+export async function openModeSelect(page: Page, press: 'click' | 'tap' = 'click'): Promise<void> {
+  await page.getByTestId('play')[press]();
+  await expectMode(page, 'modeSelect');
+}
+
+/** Title → mode select → the Daily card, by clicks or taps; the Daily is in play on return. */
+export async function playDaily(page: Page, press: 'click' | 'tap' = 'click'): Promise<void> {
+  await openModeSelect(page, press);
+  await page.getByTestId('mode-daily')[press]();
+  await expectMode(page, 'playing');
 }
 
 /** Title → Free play → Dimension `dimension`, as a player taps it; the galaxy select is showing on return. */
@@ -185,6 +228,21 @@ export function grantPickup(page: Page, kind: PickupId): Promise<void> {
   }, kind);
 }
 
+/** Makes the page report itself hidden or visible, and tells it, as a tab sent to the background and back would. */
+export function setPageHidden(page: Page, hidden: boolean): Promise<void> {
+  return page.evaluate((h) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (h ? 'hidden' : 'visible') });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
+/** Drops `kind` onto the ship and steps once, which collects it. */
+export async function collectPickup(page: Page, kind: PickupId): Promise<void> {
+  await grantPickup(page, kind);
+  await fastForward(page, STEP_SECONDS);
+}
+
 /** Restarts the frame stats, warm-up included (see `restartFrameStats` in src/testApi.d.ts). */
 export function restartFrameStats(page: Page): Promise<void> {
   return page.evaluate(() => {
@@ -231,6 +289,21 @@ export function openGameOverRun(page: Page): Promise<void> {
   return openGame(page, { seed: seedFor('one-life-death'), lives: 1, galaxy: GAME_OVER_GALAXY });
 }
 
+/** Starts the one-life Rank run of the game-over galaxy, by a tap on a phone, Space at a desk; its game over card offers Continue and Title. */
+export async function startOneLifeRun(page: Page, isMobile = false): Promise<void> {
+  await openGameOverRun(page);
+  await startRun(page, isMobile);
+  expect((await gameState(page)).lives).toBe(1);
+}
+
+/** Continue replays the galaxy with fresh lives, the score reset and the run marked. */
+export async function expectContinued(page: Page): Promise<void> {
+  await expectMode(page, 'playing');
+  const { lives, rankRun, score } = await gameState(page);
+  expect({ lives, score }).toEqual({ lives: RANK_START_LIVES, score: 0 });
+  expect(rankRun).toMatchObject({ score: 0, lives: RANK_START_LIVES, continued: true });
+}
+
 /**
  * Shots `damageBoss` lands to beat any boss: each goes where it does harm, so this must cover the shots that break a
  * shielded boss's parts as well as its HP. The Monolith's are up to `SHARD_COUNTS[1] - EXPOSED_AT` shards of `SHARD_HP`
@@ -248,6 +321,38 @@ export function openBossGame(page: Page): Promise<void> {
 /** Waits for the idle ship's only life to go (about 7 s of sim time; a starved renderer runs slower). */
 export async function waitForGameOver(page: Page): Promise<void> {
   await expect.poll(async () => (await gameState(page)).mode, { timeout: 20000 }).toBe('gameOver');
+}
+
+/** Attract mode's state on the bridge; null only before the hooks are in. */
+export async function attractState(page: Page): Promise<NonNullable<CosmicAssaultTestState['attract']>> {
+  const { attract } = await gameState(page);
+  if (attract === null) throw new Error('The bridge reports no attract state: open the e2e build with openGame() first');
+  return attract;
+}
+
+/** Counts the title's idle stretch as over (see `attractNow` in src/testApi.d.ts): the next frame on the bare title starts the demo. */
+export function askForAttract(page: Page): Promise<void> {
+  return page.evaluate(() => {
+    const api = window.__COSMIC_ASSAULT_TEST_API__;
+    if (api === undefined) throw new Error('Test bridge missing; open the e2e build with openGame() first');
+    api.attractNow();
+  });
+}
+
+/** How long a spec waits for the attract demo to start by itself: the idle stretch, with room for a slow host. */
+export const ATTRACT_IDLE_TIMEOUT_MS = (ATTRACT_IDLE_SECONDS + 15) * 1000;
+
+/** Starts the attract demo on the bare title now, as ATTRACT_IDLE_SECONDS without input would, and waits until it has drawn a few frames. */
+export async function startAttract(page: Page): Promise<void> {
+  await askForAttract(page);
+  await expect.poll(async () => (await attractState(page)).frames).toBeGreaterThan(5);
+}
+
+/** Waits for the input just sent to end the demo, then gives the next frames the chance to act on it, which they must not. */
+export async function expectDemoEndedOnTitle(page: Page): Promise<void> {
+  await expect.poll(async () => (await attractState(page)).active).toBe(false);
+  await nextFrames(page, 3);
+  expect((await gameState(page)).screen).toBe('title');
 }
 
 /** Deliberate wait: lets the game-over guard lapse so the card's inputs are live. */

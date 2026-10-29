@@ -22,7 +22,7 @@ import { PickupField, type Pickup } from '../pickups/pickups';
 import type { Arena, Spawner } from '../rules';
 import type { Ship } from '../ship';
 import type { ShotRules } from '../shots';
-import { clearReport, Combo, type GalaxyMode } from '../scoring';
+import { clearReport, Combo, startsFresh, type GalaxyMode } from '../scoring';
 import { GalaxyDirector, SIZE_COST } from './director';
 import { phaseAt, type Phase } from './pacing';
 import { Showers, type ShowerState } from './showers';
@@ -222,8 +222,8 @@ export class GalaxyRun implements Spawner {
     this.combo.reset();
     this.announceCombo();
     this.mercyUntil = this.arena.elapsed() + MERCY_SECONDS;
-    // Rank punishes a death with a tier; Free play only resets the tier with the next galaxy.
-    this.loadout.die(this.arena.events, this.mode === 'rank');
+    // Rank punishes a death with a tier; Free play and the Daily only reset the tier with the next galaxy.
+    this.loadout.die(this.arena.events, !startsFresh(this.mode));
   }
 
   /** A kill may drop a pickup, unless the rock was a pass-through one (a meteor, a shard or a splitter's fragment). */

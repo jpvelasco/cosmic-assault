@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 import { SOUND_GESTURE_HINT } from '../src/ui/hints';
 import { TOAST_MS } from '../src/ui/toast';
 import { defaultSave } from '../src/meta/save';
-import { expect, expectMode, gameState, nextFrames, openGame, seedSave, shipState, test, toastOf } from './fixtures';
+import { DAILY_GAME_OVER_SECONDS, dateFor, PHONE_PORTRAIT_VIEWPORT } from './seeds';
+import { expect, expectDemoEndedOnTitle, expectMode, fastForward, gameState, nextFrames, openDaily, openGame, seedSave, shipState, startAttract, test, threeStarSave, toastOf, waitOutGameOverGuard } from './fixtures';
 
 /** Standard-mapping button indices. */
 const A = 0;
@@ -57,6 +58,13 @@ async function tap(page: Page, index: number): Promise<void> {
   await nextFrames(page);
   await setButton(page, index, false);
   await nextFrames(page);
+}
+
+/** Pushes the left stick to `x` across, centred up and down. */
+function setStickX(page: Page, x: number): Promise<void> {
+  return page.evaluate((value) => {
+    (window as unknown as { __fakePad: FakePad }).__fakePad.axes[0] = value;
+  }, x);
 }
 
 function disconnect(page: Page): Promise<void> {
@@ -121,6 +129,28 @@ test('the left stick points the ship where it is pushed and thrusts, like the to
   await expect.poll(async () => (await shipState(page)).thrusting).toBe(true);
 });
 
+test('pad A ends the attract demo and presses nothing, held or let go; the next A plays', { tag: '@desktop' }, async ({ page }) => {
+  await startAttract(page);
+  await setButton(page, A, true);
+  await expectDemoEndedOnTitle(page);
+  await setButton(page, A, false);
+  await nextFrames(page);
+  expect((await gameState(page)).screen).toBe('title');
+  // The press that ended the demo spent nothing: the one-time sound hint waits for the A that plays.
+  expect(await toastOf(page).textContent()).toBe('');
+  await startRun(page);
+  await expect(toastOf(page)).toHaveText(SOUND_GESTURE_HINT);
+});
+
+test('a stick pushed just past its dead zone ends the attract demo and moves nothing; the next A plays', { tag: '@desktop' }, async ({ page }) => {
+  await startAttract(page);
+  await setStickX(page, 0.3);
+  await expectDemoEndedOnTitle(page);
+  await setStickX(page, 0);
+  await nextFrames(page);
+  await startRun(page);
+});
+
 test('Start pauses and resumes, and B resumes from the pause card', { tag: '@desktop' }, async ({ page }) => {
   await startRun(page);
 
@@ -173,6 +203,39 @@ test('the D-pad walks from Play down to Settings and across to Records, A opens 
   await expectMode(page, 'title');
 });
 
+test('the D-pad reaches the Hangar after Records, A opens it, the D-pad moves within it, A picks a look, and B closes it', { tag: '@desktop' }, async ({ page }) => {
+  // Fifteen stars: the Comet trail is unlocked, and not yet chosen.
+  await seedSave(page, threeStarSave(['1-1', '1-2', '1-3', '1-4', '1-5']));
+  await openGame(page);
+  await tap(page, DPAD_DOWN);
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('settings-open')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('records-open')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('hangar-open')).toBeFocused();
+  await tap(page, A);
+  const hangar = page.getByTestId('hangar');
+  await expect(hangar).toBeVisible();
+  await expect(page.getByTestId('hangar-skin-classic')).toBeFocused();
+  await tap(page, DPAD_DOWN);
+  await expect(page.getByTestId('hangar-trail-standard')).toBeFocused();
+  // The D-pad moves focus onto the Comet without choosing it, so only A can.
+  await tap(page, DPAD_RIGHT);
+  const comet = page.getByTestId('hangar-trail-comet');
+  await expect(comet).toBeFocused();
+  expect((await gameState(page)).settings.trail).toBe('standard');
+  await tap(page, A);
+  await expect.poll(async () => (await gameState(page)).settings.trail).toBe('comet');
+  await expect(comet).toBeChecked();
+  await expect(hangar).toBeVisible();
+  // B closes the card with focus back on its chip.
+  await tap(page, B);
+  await expect(hangar).toBeHidden();
+  await expect(page.getByTestId('hangar-open')).toBeFocused();
+  await expectMode(page, 'title');
+});
+
 test('in settings the D-pad adjusts a slider and B closes the card', { tag: '@desktop' }, async ({ page }) => {
   await page.getByTestId('settings-open').click();
   const music = page.getByTestId('settings-music');
@@ -217,7 +280,7 @@ test('on mode select A focuses the first button, A presses it, and B goes back a
   await tap(page, A);
   await expect(page.getByTestId('mode-rank')).toBeFocused();
   await expectMode(page, 'modeSelect');
-  // The two mode cards sit side by side.
+  // Free play's card sits to the right of Rank's.
   await tap(page, DPAD_RIGHT);
   await expect(page.getByTestId('mode-free')).toBeFocused();
   await tap(page, A);
@@ -227,6 +290,27 @@ test('on mode select A focuses the first button, A presses it, and B goes back a
   await expectMode(page, 'modeSelect');
   await tap(page, B);
   await expectMode(page, 'title');
+});
+
+test('the D-pad reaches the Daily card, A plays it, and A after its game over plays the same date again', { tag: '@desktop' }, async ({ page }) => {
+  const date = dateFor('daily-game-over');
+  await openDaily(page, date);
+  await tap(page, A);
+  await expectMode(page, 'modeSelect');
+  await tap(page, A);
+  await tap(page, DPAD_RIGHT);
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await tap(page, A);
+  await expectMode(page, 'playing');
+  expect((await gameState(page)).daily?.date).toBe(date);
+
+  await fastForward(page, DAILY_GAME_OVER_SECONDS);
+  await expectMode(page, 'gameOver');
+  await waitOutGameOverGuard(page);
+  await tap(page, A);
+  await expectMode(page, 'playing');
+  expect((await gameState(page)).daily?.date).toBe(date);
 });
 
 test('behind the settings card the pad can only reach the card, and Start does not begin a run', { tag: '@desktop' }, async ({ page }) => {
@@ -244,7 +328,7 @@ test('behind the settings card the pad can only reach the card, and Start does n
 });
 
 test('the rotate prompt covers every card: the pad focuses nothing and cannot start a run', { tag: '@phone' }, async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize(PHONE_PORTRAIT_VIEWPORT);
   await expect(page.getByTestId('rotate-prompt')).toBeVisible();
 
   await tap(page, DPAD_DOWN);
@@ -255,7 +339,7 @@ test('the rotate prompt covers every card: the pad focuses nothing and cannot st
   await expectMode(page, 'title');
 });
 
-test('the D-pad walks the side-by-side mode cards and the row of Dimensions, skipping the locked ones', { tag: '@desktop' }, async ({ page }) => {
+test('the D-pad walks the three side-by-side mode cards and the row of Dimensions, skipping the locked ones', { tag: '@desktop' }, async ({ page }) => {
   await seedSave(page, { ...defaultSave(), frontier: '2-1' });
   await openGame(page, { galaxy: null });
   await tap(page, A);
@@ -263,6 +347,12 @@ test('the D-pad walks the side-by-side mode cards and the row of Dimensions, ski
   await tap(page, A);
   await expect(page.getByTestId('mode-rank')).toBeFocused();
   await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-free')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await tap(page, DPAD_RIGHT);
+  await expect(page.getByTestId('mode-daily')).toBeFocused();
+  await tap(page, DPAD_LEFT);
   await expect(page.getByTestId('mode-free')).toBeFocused();
   await tap(page, DPAD_LEFT);
   await expect(page.getByTestId('mode-rank')).toBeFocused();

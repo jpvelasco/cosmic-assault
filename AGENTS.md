@@ -14,7 +14,7 @@
 - `game/` is a separate npm package: the work-in-progress TypeScript build (Vite,
   Vitest, ESLint, Playwright). Its `dist/` build is deployed to `/next/` on the
   Pages site. Its scripts include `build:e2e` (an e2e build in `dist-e2e/` that
-  carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=` URL overrides,
+  carries the test bridge and the `?seed=`/`?lives=`/`?quality=`/`?galaxy=`/`?storm=`/`?today=` URL overrides,
   and checks that it does), `check:no-bridge` (fails if the release `dist/`
   contains the bridge or that URL parsing), and `record:parity` (records the
   parity traces), `icons` (re-renders the committed PNG icons in
@@ -23,40 +23,56 @@
   (re-picks an e2e seed: every seed a Playwright spec depends on is listed with its
   claim in `game/e2e/seeds.ts`, a unit test guards each claim, and a failing guard
   prints the `npm run find-seeds -- <claim>` command to run; a new seed gets a
-  table entry plus a claim check in `game/tests/helpers/seedClaims.ts`). Dev builds also
+  table entry plus a claim check in `game/tests/helpers/seedClaims.ts`). The same
+  file holds a date table (`E2E_DATES`): a Daily's World seed comes from its date, so a
+  spec that plays a Daily picks a date, each with a claim (`daily-clears`,
+  `daily-streak`, `daily-game-over`) that `find-seeds` re-picks by scanning dates from
+  `DATE_EPOCH`. Each attract demo's seed carries an `attract-<level>` claim (the
+  expert loses no life in its first `DEMO_SECONDS` at 16:9, 4:3 and 21:9), which the guard checks
+  and `find-seeds` re-picks too. Dev builds also
   honour the URL overrides; release builds never parse them, and `check:no-bridge`
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
-  tally, frame-stats restart, sprite-cache use) reaches `dist/`. Each hook lives in
+  tally, frame-stats restart, sprite-cache use, attract now, attract state) reaches
+  `dist/`. The bridge (`testBridge.ts`, typed in `testApi.d.ts`) carries a
+  `BRIDGE_VERSION`, now 8, raised whenever its state changes shape; the specs wait for
+  that version. Each hook lives in
   `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
   and a case in `tests/unit/checkNoBridge.test.ts`; a new hook needs all three.
-  `?galaxy=` jumps straight into a level (see `app/seed.ts`). A run started with `?galaxy=`,
-  `?seed=` or `?lives=` never writes the save.
+  `?galaxy=` jumps straight into a level and `?storm=<seconds>` adds a gravity storm to
+  the level played (see `app/seed.ts`). A run started with `?galaxy=`, `?seed=`,
+  `?lives=` or `?storm=` never writes the save. `?today=YYYY-MM-DD` pins the app's
+  date instead of the device's; it is not a debug run (a device clock can do the
+  same), so its runs write the save. `?seed=` does not apply to the Daily, whose
+  date fixes its World seed.
   Gameplay code under `game/src/sim/` is deterministic and DOM-free; ESLint
   enforces it. Ship handling is pinned to recorded traces of the live game in
   `game/tests/fixtures/parity/`; do not re-record them after `website/` changes
   without owner approval.
 - In `game/src/`, `content/` holds the level tables (levels grouped in sets,
   each set ending in a boss level), the difficulty curves, the pacing rules and
-  the bosses as typed data; `meta/` holds the pure save, unlock, star
-  and Rank rules; `app/` owns the screen flow (`flow.ts`, pure), the run
-  controller (save, World and Rank wiring), commands, hit-stop, frame monitor
-  and settings; `render/` owns drawing; `audio/` owns sound; `input/`
+  the bosses as typed data, plus the Daily's twists and the ship's looks;
+  `meta/` holds the pure save, unlock, star, Rank, calendar, Daily, "New best!"
+  and look-unlock rules; `app/` owns the screen flow (`flow.ts`, pure), the run
+  controller (save, World and Rank wiring), commands, hit-stop, frame monitor,
+  settings and attract mode; `render/` owns drawing; `audio/` owns sound; `input/`
   owns keyboard, touch and gamepad input and menu focus; `ui/` owns the DOM
   cards (title, mode select, the level map and level select, results and game
-  over, pause, settings, records, crash, rotate prompt); `platform/`
+  over, pause, settings, records, the Hangar, crash, rotate prompt); `platform/`
   owns full screen, the service worker registration, the install offer, the
   crash guard and the local log; `sw/` is the service worker itself; `bot/`
-  holds the headless bots and their level runner (`run.ts`), used by tests and
-  never shipped to players.
+  holds the bots (`create.ts` makes one of each profile) and their level runner
+  (`run.ts`). The tests and the balance suites use every profile; the expert
+  alone also ships to players, flying the attract demo behind the title, while
+  the casual, the statue and the level runner stay test-only.
   - `bot/` is pure like `sim/` (ESLint enforces it: no DOM, clock or `Math.random`). A bot reads
     a `BotView` (the World's state, refilled in place) and returns controls; it
     never changes the World. There are three profiles: `statue` sends no input
     (the baseline of what a level does to an idle ship), `casual` is a
     handicapped player (late reactions, a wobbling aim, dodges only some
-    threats), and `expert` is the full pilot, which the casual wraps. `createBot`
-    gives each run its own random stream, derived from the run's seed with
-    `deriveSeed(seed, 'bot')`; a bot draws from nothing else, so a bot run
+    threats), and `expert` is the full pilot, which the casual wraps. Each run's
+    bot draws its own random stream, `botRng(seed)` (`bot/create.ts`), derived from
+    the run's seed with `deriveSeed(seed, 'bot')`; a bot draws from nothing else, so a bot run
     replays exactly and never shifts a sim stream. A change to the expert changes
     what the casual does, so rerun the balance suites after either.
   - Pickups and weapon tiers (`sim/pickups/`, `content/pickups.ts`): a kill can
@@ -86,7 +102,11 @@
     threat budget as rocks, by cost. Foe motion draws from the `'foes'` stream.
     `HAZARD_RULES` in `content/hazards.ts` is the hazard table: each type's
     telegraph, length and first set (gravity wells, repulsion fields, danger
-    zones, warp rifts and the black hole). A level event schedules a hazard; it
+    zones, warp rifts, the black hole and the gravity storm: up to four gravity
+    wells placed together (`stormWells`), apart from each other and clear of the
+    field's centre, the respawn point and the ship, whose summed pull is capped like
+    any other; only the Daily schedules
+    it, and `?storm=` adds one in e2e and dev builds). A level event schedules a hazard; it
     shows as a harmless warning for its telegraph, then turns hostile.
     `HazardField` (`sim/hazards/`) runs one `Hazard` per type a level names,
     made by `HAZARD_FACTORIES`, each from its own stream (`hazardStreamName`:
@@ -96,8 +116,9 @@
     parts strike the ship, swallow shots, carry bodies, or move the respawn,
     which `sim/respawn.ts` keeps clear of the boss, the hole, foes, zones and
     rift mouths. Each foe kind says whether a pull moves it. Foes and hazards
-    are drawn by `render/foePass.ts` and `render/hazardPass.ts`; a well holds
-    still under reduced motion.
+    are drawn by `render/foePass.ts` and `render/hazardPass.ts` (the hazards'
+    painters are in `render/hazardArt.ts`); a well holds still under reduced
+    motion.
   - Hostile bolts (`sim/foes/bolts.ts`) come from one pool per level, fired by
     gunships and boss attacks after a telegraphed windup: a bolt flies straight,
     leaves the field rather than wrapping, and lasts `BOLT.life` seconds of the
@@ -127,6 +148,83 @@
     Cover a new boss with unit tests for its behaviour and drawer, a bot
     kill-rate case in `game/tests/balance/`, and an e2e spec that fights it
     through the bridge's `boss` state and `damageBoss`.
+  - The Daily Galaxy (`meta/dailyGalaxy.ts`, `content/daily.ts`): every local date
+    has one generated survival level, the same for every player. `dailyGalaxy(date)`
+    is pure and takes only the date: the World seed is a hash of the date, and the
+    generator draws from that seed's `'daily'` stream. It keeps the last date's
+    Daily, so mode select, the flow and the run share one build. It anchors on a real
+    Dimension 1–2 survival level (`DAILY_ANCHORS`), so the curves, tiers and clear
+    bonuses apply unchanged, and builds only from Dimension 1–2 material. Each date
+    plays one twist, a data row in `DAILY_TWISTS` (more meteor showers, a gravity
+    storm, a drone swarm, a splitter field) that the generator applies the same way as
+    every other row; no twist plays two dates running, and none changes how the ship
+    handles. Its target score comes from `TARGET_K` and the anchor's threat budget.
+    A schedule that breaks a content rule (`content/validity.ts`, shared with the
+    content tests) makes the generator throw, naming the date; a unit test builds
+    every date from 1970 through 2099 to prove none does, and a few dates are pinned
+    to their exact output. Mode `'daily'` starts like Free play and never touches
+    Rank: a Daily writes no progress (stars, frontier, unlocks, Rank and bests)
+    beyond the save's `daily` record (the streak and the best score on the latest
+    date played). It may write the notice marker `seenPickups`, as any run does: a
+    first pickup's callout is not progress. Its results show the target, not
+    stars. The date is read once as a run starts and kept for its retries, so a run
+    past midnight counts for the day it began. Mode select re-reads the date every time it shows, and a date
+    whose Daily cannot be built leaves its card unavailable (and logged) while the
+    other modes play on; choosing it then leaves mode select up and redraws the
+    card so. Every Daily string, the HUD's `Daily` label among them, lives in
+    `ui/dailyCopy.ts`, bar the twist names and blurbs in `content/daily.ts`, and a
+    test holds them all to copy that never presses or speaks of loss. `e2e/daily.spec.ts` plays it through `?today=` and the
+    bridge's `daily` state.
+  - The streak (`meta/daily.ts`): a date counts on its first Daily clear, never a
+    game over, and counting is idempotent. It runs on only when the last counted date
+    is the day before, else it starts again at 1; a date on or before the last counted
+    one changes nothing (a clock set back, a flight west). The best streak never
+    goes down, mode select shows the streak from 2, and nothing ever mentions a
+    streak ending: once it stops running it is simply not shown.
+  - Dates (`meta/calendar.ts`) are `YYYY-MM-DD` strings with pure calendar
+    arithmetic on whole days from the civil-calendar formulas, never `Date` and
+    never by adding milliseconds. Dates are injected: the app reads "today" through
+    a `() => string` and hands the date it read to what draws it (mode select, the
+    records card), and only `app/date.ts` turns a `Date` into a local date.
+  - "New best!" has one owner, `meta/bests.ts`: it needs an earlier record to beat
+    (a first clear or an empty board never shows it) and never shows on a debug
+    run. A level's best is judged at Free play scale; a Rank run's entry against the
+    board's top; a Daily against that date's earlier best. The badge names the
+    recorded number whenever it differs from the score the card shows.
+    `e2e/moments.spec.ts` covers the badge in each mode, and holds death to playing
+    again (R, Enter or a tap on the end card) under 2 s, with the end card's 0.7 s
+    input guard still holding.
+  - The ship's looks (`content/cosmetics.ts`, `meta/cosmetics.ts`): skins change
+    the hull's trim only (rim, panel lines, cockpit), never its path or its green
+    body, and engine trails change only the trail's particles, drawn from the
+    render-only random source. They are visual only: nothing in `sim/`, `bot/` or
+    the level content reads them, and a test proves a run's events are the same
+    under every look. Unlocks are worked out from the stars saved, never stored; the
+    chosen skin and trail live in the settings, and a choice no longer unlocked (a
+    save reset) draws as the default. The Hangar (`ui/hangarCard.ts`,
+    `app/hangar.ts`) is a card over the title and mode select with a radio group per
+    kind: a locked look is disabled and names its star cost, a pick writes the
+    settings at once, and focus opens on the trim drawn. The ship's sprite key is
+    `ship|<palette>:<skin>|0`, which `e2e/hangar.spec.ts` reads from the bridge's
+    `spriteCache` keys.
+  - Attract mode (`app/attract.ts`): after `ATTRACT_IDLE_SECONDS` without input on
+    the bare title, the expert bot plays a demo level behind the dimmed card
+    (`ATTRACT_DEMOS`, each for up to `DEMO_SECONDS`, `DEMO_GAP_SECONDS` apart). It never starts under `prefers-reduced-motion`, in
+    a hidden tab, upright, or with a card over the title (settings, records, the
+    Hangar, the rotate prompt, the crash card, the install prompt). It is isolated
+    by its dependencies: it has no save store, flow, notices or audio, so a demo
+    writes nothing, counts no run and plays no sound effect, and the renderer
+    draws it with `renderer.draw(world, alpha, null)`, which skips the HUD. The
+    input that ends it is swallowed in the capture phase (`app/demoEnders.ts`):
+    the key with its repeats and release, a pointer press with the clicks it leads
+    to, and a pad frame (`routePad(pad, edges, now)` says when it swallowed one, so
+    that press spends no sound hint). Only keys that would act on the page (Enter,
+    Space, Tab, the arrows) lose their browser action; F5, F12 and browser shortcuts
+    keep theirs. A throw in a demo frame, or in tidying a demo away, stops attract
+    for the session and writes the local log, with no crash card; a crash of the
+    game stops it too.
+    `e2e/attract.spec.ts` covers it, through the bridge's `attract` state and
+    `attractNow()`.
   - Ship controls (input, thrust, fire, turn, the volley and the frame loop)
     are tested with real input, never with bridge shortcuts: change any of them
     only with `e2e/keyboard.spec.ts` (every thrust, fire and turn chord, in both
@@ -149,7 +247,9 @@
     bounded LRU cache (`spriteCache.ts`, `sprites.ts`), whose
     `SPRITE_CACHE_CAPACITY` is at least 1.5 times the most sprites
     `e2e/spriteCache.spec.ts` sees in use in the last survival level and the
-    last three boss fights, and which may evict next to nothing there; glows are baked or
+    last three boss fights, and which may evict next to nothing there (the spec
+    plays them in the look that bakes the most sprites, and thrusts so the
+    trail's glows are baked too); glows are baked or
     additive sprites. Never set `shadowBlur` (ESLint bans it) or a canvas
     `filter` per frame. `fieldPen.ts` lands an upright sprite drawn at its baked
     size on whole device pixels, which a CPU-rasterized canvas copies several
@@ -183,7 +283,8 @@
   - Settings persist in `localStorage` under the key
     `cosmic-assault.v2.settings` (`app/settings.ts`): mute, music and effects
     volume, screen shake (`auto`, `on` or `off`; `auto` follows
-    `prefers-reduced-motion`) and left-handed touch controls. Loading sanitizes
+    `prefers-reduced-motion`), left-handed touch controls, and the ship's skin and
+    engine trail. Loading sanitizes
     field by field and never throws. New stored data must use the `cosmic-assault.v2.`
     prefix, because the legacy site shares the origin.
 - There is no root npm package or workspace. Run npm commands from `game/` or
@@ -222,9 +323,14 @@ Run applicable checks in this order: lint, typecheck, tests, verification.
    ruled exceptions), the casual's
    clear rate against a trend band (a few levels hold a ruled floor instead),
    the expert's clears and stars, and each boss's kill bar. Each Dimension has
-   its `d<N>-targets.test.ts`, and every balance file carries a `d<N>-` prefix,
-   which `check:workflow` guards; pass `-- d3-` to run one Dimension. Run it after any change
-   to level content, difficulty curves, pacing, boss stats or the bots, and
+   its `d<N>-targets.test.ts`, and every balance file carries a `d<N>-` prefix
+   or, for the Daily's suite (`daily.test.ts`: many dates, each on its own seed, the
+   expert clearing every one, the casual's clear rate in band for every twist, and
+   the target in reach), the `daily` prefix. A shard runs every file whose path
+   holds its filter anywhere, as Vitest filters, so `check:workflow` fails a
+   balance file that holds no shard's filter or more than one's; pass
+   `-- d3-` to run one Dimension, or `-- daily` for the Daily. Run it after any change
+   to level content, difficulty curves, pacing, boss stats, the Daily generator or the bots, and
    before changing a target; CI runs it as the non-required `balance` check. For changes to
    `website/` gameplay, UI, or the legacy tests, install Chromium with
    `npx playwright install chromium` from `tests/`, then run
@@ -270,8 +376,8 @@ and `tests/test-results/` and are ignored by Git.
   and `perf` pass, so a frame-time regression cannot ship; `npm run
   check:workflow` in `game/` guards that gate. `perf` is not a required check,
   so a pull request may merge before it passes. Job
-  `balance-dimension` runs `npm run test:balance -- d<N>-` as a matrix over
-  Dimensions 1 to 5, and job `balance` passes only if every shard did, so the
+  `balance-dimension` runs `npm run test:balance -- <shard>` as a matrix over
+  the shards `d1-` to `d5-` and `daily`, and job `balance` passes only if every shard did, so the
   ruleset sees one check. `balance` is a report: not a required check, and it
   does not gate deployment.
 - Resolve review threads only after implementing the requested change or posting

@@ -3,6 +3,11 @@ import {
   CACHE_HOLD_SECONDS,
   CACHE_LIVES,
   CLEAR_1_1_SECONDS,
+  DAILY_CLEAR_SECONDS,
+  DAILY_GAME_OVER_SECONDS,
+  DATE_EPOCH,
+  PHONE_VIEWPORT,
+  E2E_DATES,
   WATCH_LIVES,
   CRIMSON_WATCH_SECONDS,
   GUNSHIP_WATCH_SECONDS,
@@ -21,8 +26,14 @@ import {
   warnedSeconds,
   WELL_WARNING_SECONDS,
   type ClaimId,
+  type DateClaimId,
+  type DateEntry,
   type SeedEntry,
 } from '../../e2e/seeds';
+import { ATTRACT_DEMOS, DEMO_SECONDS, type AttractDemo } from '../../src/app/attract';
+import { runGalaxy } from '../../src/bot/run';
+import { nextDate } from '../../src/meta/calendar';
+import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { galaxyById } from '../../src/content/galaxies';
 import { BLACK_HOLE } from '../../src/content/hazards';
 import type { GalaxyId, HazardType } from '../../src/content/types';
@@ -31,7 +42,8 @@ import { NO_CONTROLS, type Controls } from '../../src/sim/controls';
 import { fieldForViewport, type Field } from '../../src/sim/field';
 import type { GalaxyMode } from '../../src/sim/scoring';
 import type { SimEvent } from '../../src/sim/events';
-import { World } from '../../src/sim/world';
+import { hasEnded, World } from '../../src/sim/world';
+import { datesFrom } from './dates';
 
 /** The fire assertions finish within about 1 s of a run starting; this leaves slow CI hosts headroom. */
 const GUARD_SECONDS = 2.5;
@@ -453,12 +465,121 @@ export interface FindOptions {
   readonly to?: number;
 }
 
-/** The lowest seeds from `from` for which `claim` holds in its table galaxy, lowest first. */
-export function findSeeds(claim: ClaimId, { from = 1, count = 5, to = 2000 }: FindOptions = {}): number[] {
-  const { galaxy } = entryFor(claim);
+/** The lowest numbers from `from` (and below `to`) for which `holds`, lowest first: seeds, or days after DATE_EPOCH. */
+function lowestHolding(holds: (n: number) => boolean, { from = 1, count = 5, to = 2000 }: FindOptions): number[] {
   const found: number[] = [];
-  for (let seed = from; seed < to && found.length < count; seed++) {
-    if (CLAIMS[claim].holds(seed, galaxy)) found.push(seed);
+  for (let n = from; n < to && found.length < count; n++) {
+    if (holds(n)) found.push(n);
   }
   return found;
+}
+
+/** The lowest seeds from `from` for which `claim` holds in its table galaxy, lowest first. */
+export function findSeeds(claim: ClaimId, options: FindOptions = {}): number[] {
+  const { galaxy } = entryFor(claim);
+  return lowestHolding((seed) => CLAIMS[claim].holds(seed, galaxy), options);
+}
+
+/** The claim an attract demo's seed makes, named after its galaxy. */
+export type DemoClaimId = `attract-${GalaxyId}`;
+
+/** The field shapes a demo must hold at: the 16:9 reference and the narrowest and widest the game plays at. */
+const DEMO_ASPECTS: readonly (readonly [name: string, aspect: number])[] = [
+  ['16:9', 16 / 9],
+  ['4:3', 4 / 3],
+  ['21:9', 21 / 9],
+];
+
+/** The claim of the demo of `galaxy`. */
+const demoClaimOf = (galaxy: GalaxyId): DemoClaimId => `attract-${galaxy}`;
+
+/** The claims of the attract demos, in the order they play. */
+export function demoClaimIds(): DemoClaimId[] {
+  return ATTRACT_DEMOS.map((demo) => demoClaimOf(demo.galaxy));
+}
+
+/** The galaxy a demo claim is about; throws for a claim no demo makes. */
+function demoGalaxy(claim: DemoClaimId): GalaxyId {
+  const demo = ATTRACT_DEMOS.find((candidate) => demoClaimOf(candidate.galaxy) === claim);
+  if (demo === undefined) throw new RangeError(`No attract demo makes the claim "${claim}"; the demos are in ATTRACT_DEMOS in src/app/attract.ts`);
+  return demo.galaxy;
+}
+
+/** Whether the expert, in Free play of `galaxy` on `seed` at `aspect`, loses no life and is still in play after DEMO_SECONDS. */
+function expertLivesThroughDemo(seed: number, galaxy: GalaxyId, aspect: number): boolean {
+  const result = runGalaxy({ galaxy: galaxyById(galaxy), seed, profile: 'expert', aspect, maxSeconds: DEMO_SECONDS });
+  return result.deaths === 0 && !result.cleared && result.time >= DEMO_SECONDS - STEP_SECONDS;
+}
+
+/** What a demo's seed promises, for the failure message. */
+const demoPromise = (galaxy: GalaxyId): string =>
+  `keeps the expert in a Free play run of ${galaxy} alive on its first life for the attract demo's ${String(DEMO_SECONDS)} s, at ${DEMO_ASPECTS.map(([name]) => name).join(', ')}`;
+
+/** Whether `seed` keeps the demo claim of `galaxy` on every demo aspect. */
+export function demoClaimHolds(seed: number, galaxy: GalaxyId): boolean {
+  return DEMO_ASPECTS.every(([, aspect]) => expertLivesThroughDemo(seed, galaxy, aspect));
+}
+
+/** The failure message for a demo whose seed no longer keeps its claim: what broke, and the command that re-picks the seed. */
+export function unmetDemoClaimMessage({ seed, galaxy }: AttractDemo): string {
+  const claim = demoClaimOf(galaxy);
+  return `seed ${String(seed)} no longer ${demoPromise(galaxy)}, because the expert bot, spawning, pacing or balance changed; run: npm run find-seeds -- ${claim}, then set the ${galaxy} demo's seed in ATTRACT_DEMOS (game/src/app/attract.ts) to the lowest one it lists`;
+}
+
+/** The lowest seeds from `from` that keep a demo claim, lowest first. */
+export function findDemoSeeds(claim: DemoClaimId, options: FindOptions = {}): number[] {
+  const galaxy = demoGalaxy(claim);
+  return lowestHolding((seed) => demoClaimHolds(seed, galaxy), options);
+}
+
+/** The field of a phone on its side, where the Daily spec plays its phone clear. */
+const PHONE_DAILY_FIELD = fieldForViewport(PHONE_VIEWPORT.width, PHONE_VIEWPORT.height);
+
+/** An idle ship in the Daily of `date`, on its own World seed, on `field`, played until it ends or `seconds` pass. */
+function idleDaily(date: string, seconds: number, field: Field = DESKTOP_FIELD): World {
+  const { seed, def } = dailyGalaxy(date);
+  const world = new World({ seed, field, rules: { kind: 'galaxy', galaxy: def, mode: 'daily' } });
+  run(world, seconds, () => hasEnded(world.status));
+  return world;
+}
+
+/** Whether an idle ship clears the Daily of `date` on `field`. */
+const idleClearsDaily = (date: string, field: Field = DESKTOP_FIELD): boolean => idleDaily(date, DAILY_CLEAR_SECONDS, field).status === 'cleared';
+
+interface DateClaim {
+  /** What the date promises, for the failure message. */
+  readonly promise: (date: string) => string;
+  readonly holds: (date: string) => boolean;
+}
+
+export const DATE_CLAIMS: Readonly<Record<DateClaimId, DateClaim>> = {
+  'daily-clears': {
+    promise: (date) => `lets an idle ship clear the Daily Galaxy of ${date} on the desktop field and on a phone's at 844×390`,
+    holds: (date) => [DESKTOP_FIELD, PHONE_DAILY_FIELD].every((field) => idleClearsDaily(date, field)),
+  },
+  'daily-streak': {
+    promise: (date) => `lets an idle ship clear the Daily Galaxies of ${date} and of the day after on the desktop field`,
+    holds: (date) => [date, nextDate(date)].every((day) => idleClearsDaily(day)),
+  },
+  'daily-game-over': {
+    promise: (date) => `ends an idle run of the Daily Galaxy of ${date} within ${String(DAILY_GAME_OVER_SECONDS)} s on the desktop field`,
+    holds: (date) => idleDaily(date, DAILY_GAME_OVER_SECONDS).status === 'gameOver',
+  },
+};
+
+/** The failure message for a date whose claim no longer holds: what broke, and the command that re-picks the date. */
+export function unmetDateClaimMessage({ date, claim }: DateEntry): string {
+  return `${date} no longer ${DATE_CLAIMS[claim].promise(date)}, because the Daily generator, spawning, pacing or balance changed; run: npm run find-seeds -- ${claim}, then set the "${claim}" date in game/e2e/seeds.ts to the earliest one it lists`;
+}
+
+/** The date claims the table lists, in table order. */
+export function dateClaimIds(): DateClaimId[] {
+  return E2E_DATES.map((entry) => entry.claim);
+}
+
+/** The earliest dates `from` days after DATE_EPOCH (and before day `to`) whose Daily keeps `claim`, earliest first. */
+export function findDates(claim: DateClaimId, { from = 0, count = 5, to = 2000 }: FindOptions = {}): string[] {
+  const dates = datesFrom(DATE_EPOCH, to);
+  const dateOn = (day: number): string => dates[day] ?? DATE_EPOCH;
+  return lowestHolding((day) => DATE_CLAIMS[claim].holds(dateOn(day)), { from, count, to }).map(dateOn);
 }

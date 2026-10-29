@@ -1,4 +1,5 @@
-import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
+import type { BotProfile } from '../../src/bot/create';
+import { runGalaxy, type RunResult } from '../../src/bot/run';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
 
@@ -17,3 +18,12 @@ export function botRuns(id: GalaxyId, profile: BotProfile, maxSeconds?: number, 
 export const BOT_RUN_TIMEOUT_MS = 60_000;
 
 export const clears = (results: readonly RunResult[]): number => results.filter((r) => r.cleared).length;
+
+export const percent = (count: number, of: number): number => (100 * count) / of;
+export const fixed = (value: number, digits = 1): string => value.toFixed(digits);
+
+/** A table of `head` over `body`, each column padded to its widest cell, the cells split by bars. */
+export function formatColumns(head: readonly string[], body: readonly (readonly string[])[]): string {
+  const widths = head.map((h, i) => Math.max(h.length, ...body.map((cells) => cells[i]?.length ?? 0)));
+  return [head, ...body].map((cells) => cells.map((c, i) => c.padEnd(widths[i] ?? 0)).join(' | ')).join('\n');
+}

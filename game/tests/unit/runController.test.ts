@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Screen } from '../../src/app/flow';
+import { localDate } from '../../src/app/date';
+import { TWISTS_BY_ID } from '../../src/content/daily';
 import { galaxyById } from '../../src/content/galaxies';
-import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunControllerDeps } from '../../src/app/runController';
+import { dailyGalaxy } from '../../src/meta/dailyGalaxy';
+import { DAILY_LABEL, twistToast } from '../../src/ui/dailyCopy';
+import { createRunController, LEFT_RUN_NOTICE, RECHECK_MS, type RunController, type RunControllerDeps } from '../../src/app/runController';
+import type { PickupId } from '../../src/content/types';
 import type { RunOverrides } from '../../src/app/seed';
 import type { StorageEvents } from '../../src/app/saveStore';
 import { setRankRun } from '../../src/meta/progress';
@@ -9,28 +14,36 @@ import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
+import { World } from '../../src/sim/world';
 import { RingLog } from '../../src/platform/log';
 import { createTabPresence, type TabPresence } from '../../src/platform/tabPresence';
+import { NO_EVENTS } from '../helpers/flowRig';
 import { memoryStorage } from '../helpers/memoryStorage';
 import { seedFor } from '../../e2e/seeds';
 import { CALLOUT_MS, TOAST_MS } from '../../src/ui/toast';
 
 const FIELD = { width: 1280, height: 720 };
-const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
-const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined };
+const NONE: RunOverrides = { seed: undefined, startLives: undefined, quality: undefined, galaxy: undefined, storm: undefined, today: undefined };
 
 /** A presence where no other tab ever answers, unless `owner` is set: then one owns every run. */
 function fakePresence(owner = false): TabPresence {
   return { probe: () => Promise.resolve(owner), own: () => () => undefined, dispose: () => undefined };
 }
 
-function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['field'] = () => FIELD, save?: SaveData, presence = fakePresence(), events: StorageEvents = NO_EVENTS) {
+function setup(
+  overrides: Partial<RunOverrides> = {},
+  field: RunControllerDeps['field'] = () => FIELD,
+  save?: SaveData,
+  presence = fakePresence(),
+  events: StorageEvents = NO_EVENTS,
+  create = createRunController,
+) {
   const storage = memoryStorage(save);
   const refresh = vi.fn();
   const screens: Screen[] = [];
   const onRunStarted = vi.fn();
   const notify = vi.fn<(text: string, ms?: number) => void>();
-  const run = createRunController({
+  const run = create({
     storage,
     overrides: { ...NONE, ...overrides },
     log: new RingLog(),
@@ -45,6 +58,18 @@ function setup(overrides: Partial<RunOverrides> = {}, field: RunControllerDeps['
   });
   return { run, storage, screens, onRunStarted, refresh, notify };
 }
+
+/** Lays a pickup of `kind` on the ship of the run in play, as a drop would, and steps once, which collects it. */
+function collectOnShip(run: RunController, kind: PickupId): void {
+  const world = run.world;
+  if (world === null) throw new Error('the run must have started');
+  const { x, y } = world.ship;
+  world['run']?.['pickupField'].list.push({ id: 90, kind, x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
+  run.step(STEP_SECONDS, NO_CONTROLS);
+}
+
+/** The save as `storage` holds it. */
+const storedIn = (storage: ReturnType<typeof memoryStorage>): SaveData => JSON.parse(storage.items.get(SAVE_KEY) ?? '{}') as SaveData;
 
 describe('createRunController', () => {
   it('loads the save and imports the classic score once, writing only outside debug runs', () => {
@@ -63,7 +88,7 @@ describe('createRunController', () => {
     expect(run.world?.galaxy?.id).toBe('2-3');
     expect(run.world?.lives).toBe(3);
     expect(onRunStarted).toHaveBeenCalledTimes(1);
-    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'));
+    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'), null);
   });
 
   it('gives a Rank run its lives', () => {
@@ -103,6 +128,92 @@ describe('createRunController', () => {
     expect(run.runTotal).toBe(run.world?.score);
   });
 
+  describe('the Daily', () => {
+    const DATE = '2026-10-26';
+    const daily = dailyGalaxy(DATE);
+    /** Whether `world` plays as a fresh World of the Daily on `seed` does: the same rocks after its first idle seconds. */
+    const playsOnSeed = (world: World | null, seed: number): boolean => {
+      const twin = new World({ seed, field: FIELD, rules: { kind: 'galaxy', galaxy: daily.def, mode: 'daily' } });
+      const rocks = (w: World) => JSON.stringify(w.asteroids.map(({ x, y }) => [x, y]));
+      for (let i = 0; i < 6 / STEP_SECONDS; i++) {
+        world?.step(STEP_SECONDS, NO_CONTROLS);
+        twin.step(STEP_SECONDS, NO_CONTROLS);
+      }
+      return world !== null && twin.asteroids.length > 0 && rocks(world) === rocks(twin);
+    };
+    const playDaily = (overrides: Partial<RunOverrides> = {}, save?: SaveData) => {
+      const tab = setup({ today: DATE, ...overrides }, undefined, save);
+      tab.run.command({ kind: 'start' });
+      tab.run.command({ kind: 'chooseMode', mode: 'daily' });
+      return tab;
+    };
+
+    it("plays the pinned date's Daily Galaxy on its own World seed, with its target, and names the twist", () => {
+      const { run, onRunStarted, notify } = playDaily();
+      expect(run.flow).toMatchObject({ screen: 'playing', mode: 'daily', daily: DATE });
+      expect(run.world?.galaxy).toEqual({ ...daily.def, label: DAILY_LABEL });
+      expect(playsOnSeed(run.world, daily.seed)).toBe(true);
+      expect(run.daily).toEqual(daily);
+      expect(onRunStarted).toHaveBeenCalledWith({ ...daily.def, label: DAILY_LABEL }, daily.target);
+      expect(notify).toHaveBeenCalledWith(twistToast(TWISTS_BY_ID[daily.twist].name));
+    });
+
+    it('ignores ?seed= for the Daily, whose date fixes its World', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const { run } = playDaily({ seed: 42 });
+      expect(playsOnSeed(run.world, daily.seed)).toBe(true);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring ?seed=42'));
+    });
+
+    it('takes today from ?today=, and writes the save, as a device clock set to that date would', () => {
+      const { run, storage } = playDaily();
+      expect(run.today()).toBe(DATE);
+      expect(storage.items.has(SAVE_KEY)).toBe(true);
+      expect(setup().run.today()).toBe(localDate(new Date()));
+    });
+
+    describe('on a date whose Daily cannot be built', () => {
+      afterEach(() => {
+        vi.doUnmock('../../src/meta/dailyGalaxy');
+        vi.resetModules();
+      });
+
+      it('stays on mode select when it is chosen, and refreshes the cards, so its card shows it as unavailable', async () => {
+        vi.resetModules();
+        vi.doMock('../../src/meta/dailyGalaxy', async (actual) => ({
+          ...(await actual<typeof import('../../src/meta/dailyGalaxy')>()),
+          tryDailyGalaxy: () => ({ daily: null, error: new Error('The Daily Galaxy cannot be built') }),
+        }));
+        const { createRunController: withoutDaily } = await import('../../src/app/runController');
+        const tab = setup({ today: DATE }, undefined, undefined, undefined, undefined, withoutDaily);
+        tab.run.command({ kind: 'start' });
+        tab.refresh.mockClear();
+        tab.run.command({ kind: 'chooseMode', mode: 'daily' });
+        expect(tab.run.flow.screen).toBe('modeSelect');
+        expect(tab.run.world).toBeNull();
+        expect(tab.screens).toEqual(['modeSelect']);
+        expect(tab.refresh).toHaveBeenCalledTimes(1);
+        tab.run.command({ kind: 'chooseMode', mode: 'free' });
+        expect(tab.run.flow.screen).toBe('map');
+      });
+    });
+
+    it('marks a first pickup seen, the one write outside the Daily record a Daily makes', () => {
+      const progress: SaveData = { ...setRankRun(defaultSave(), startRank(DATE)), frontier: '1-3', galaxies: { '1-1': { bestScore: 1800, stars: 3 } }, classicBest: 4321 };
+      const { run, storage } = playDaily({}, progress);
+      const before = storedIn(storage);
+      collectOnShip(run, 'doubleShot');
+      expect(storedIn(storage)).toEqual({ ...before, seenPickups: ['doubleShot'] });
+      expect(before).toMatchObject({ frontier: '1-3', classicBest: 4321, rankRun: progress.rankRun });
+    });
+
+    it('has no Daily outside one', () => {
+      const { run } = setup({ galaxy: '1-1' });
+      run.command({ kind: 'start' });
+      expect(run.daily).toBeNull();
+    });
+  });
+
   describe('weapon tiers and pickups', () => {
     const armed = (weaponTier: 0 | 1 | 2 | 3) => setRankRun(defaultSave(), { ...startRank('2026-10-26'), weaponTier });
     const SPIN_AND_FIRE = { ...NO_CONTROLS, turn: 1, fire: true } as const;
@@ -138,12 +249,7 @@ describe('createRunController', () => {
     it('counts a kind as seen once collected, and keeps its callout quiet after that', () => {
       const { run, notify } = setup({ galaxy: '1-1', seed: 5, startLives: 5 });
       run.command({ kind: 'start' });
-      const world = run.world;
-      if (world === null) throw new Error('the run must have started');
-      // Lay a Shield on the ship, as a drop would have.
-      const { x, y } = world.ship;
-      world['run']?.['pickupField'].list.push({ id: 90, kind: 'shield', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
-      run.step(STEP_SECONDS, NO_CONTROLS);
+      collectOnShip(run, 'shield');
       expect(run.save.seenPickups).toEqual(['shield']);
       run.step(STEP_SECONDS, NO_CONTROLS);
       expect(notify).not.toHaveBeenCalledWith(expect.stringContaining('Shield'));
@@ -157,12 +263,8 @@ describe('createRunController', () => {
     it('writes the kind to the saved game outside debug runs', () => {
       const { run, storage } = setup({}, () => FIELD, armed(0));
       run.command({ kind: 'resumeRank' });
-      const world = run.world;
-      if (world === null) throw new Error('the run must have started');
-      const { x, y } = world.ship;
-      world['run']?.['pickupField'].list.push({ id: 90, kind: 'doubleShot', x, y, px: x, py: y, vx: 0, vy: 0, expiresIn: 8 });
-      run.step(STEP_SECONDS, NO_CONTROLS);
-      expect(JSON.parse(storage.items.get(SAVE_KEY) ?? '{}')).toMatchObject({ seenPickups: ['doubleShot'] });
+      collectOnShip(run, 'doubleShot');
+      expect(storedIn(storage)).toMatchObject({ seenPickups: ['doubleShot'] });
     });
   });
 

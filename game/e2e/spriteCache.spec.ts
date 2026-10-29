@@ -2,8 +2,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Page } from '@playwright/test';
 import type { GalaxyId } from '../src/content/types';
+import { SKIN_IDS, trailCore, TRAILS, TRAIL_IDS, type Look, type TrailId } from '../src/content/cosmetics';
 import { SPRITE_CACHE_CAPACITY } from '../src/render/sprites';
-import { expect, fastForward, gameState, openGame, startRun, test } from './fixtures';
+import { ALL_STARS_SAVE, expect, fastForward, gameState, openGame, seedLook, seedSave, startRun, test } from './fixtures';
 import { CACHE_GALAXY, CACHE_HOLD_SECONDS, CACHE_LIVES, ECLIPSE_GALAXY, LEVIATHAN_GALAXY, seedFor, TO_BOSS_FIGHT_SECONDS, WARDEN_GALAXY, type ClaimId } from './seeds';
 
 /** Evictions the cache may make in a scene's steady play: a cache sized for the scene should make next to none. */
@@ -13,6 +14,23 @@ const CAPACITY_HEADROOM = 1.5;
 /** How often the spec reads the cache during a hold, in ms. */
 const SAMPLE_MS = 250;
 const REPORT_PATH = 'test-results/sprite-cache.json';
+/** How long the spec thrusts after the hold, so the engine trail bakes its glows too. */
+const THRUST_MS = 1000;
+
+/** The glow colours a trail bakes: its colours, and its core when it draws one. */
+function trailColours(id: TrailId): readonly string[] {
+  const { colors } = TRAILS[id];
+  const core = trailCore(TRAILS[id]);
+  return [...new Set(core === null ? colors : [...colors, core])];
+}
+/**
+ * The scenes are played in the look that bakes the most sprites: the trail with the most glow colours (a skin bakes
+ * one hull whichever it is), so the capacity holds for every look a player can choose.
+ */
+const HEAVIEST_LOOK: Look = {
+  skin: SKIN_IDS[SKIN_IDS.length - 1] ?? 'classic',
+  trail: TRAIL_IDS.reduce((most, id) => (trailColours(id).length > trailColours(most).length ? id : most)),
+};
 
 interface CacheScene {
   readonly name: string;
@@ -36,8 +54,11 @@ test.afterAll(() => {
   writeFileSync(REPORT_PATH, `${JSON.stringify({ capacity: SPRITE_CACHE_CAPACITY, scenes: reports }, null, 2)}\n`);
 });
 
+/** The colours of `trail` that `keys` hold a glow of (a glow's key is `glow|<colour>|<size>`). */
+const trailGlowsIn = (keys: readonly string[], trail: TrailId): string[] => trailColours(trail).filter((colour) => keys.some((key) => key.startsWith(`glow|${colour}|`)));
+
 /** The cache's use as the bridge reports it; fails in a build without the hook. */
-async function cacheUse(page: Page): Promise<{ size: number; evictions: number }> {
+async function cacheUse(page: Page): Promise<NonNullable<CosmicAssaultTestState['spriteCache']>> {
   const { spriteCache } = await gameState(page);
   if (spriteCache === null) throw new Error('The bridge reports no sprite cache: run the e2e build, which sets the e2eSpriteCache hook');
   return spriteCache;
@@ -46,7 +67,10 @@ async function cacheUse(page: Page): Promise<{ size: number; evictions: number }
 for (const scene of SCENES) {
   test(`the sprite cache holds ${scene.name} in ${scene.galaxy} without evicting what it draws`, async ({ page }) => {
     test.setTimeout(CACHE_HOLD_SECONDS * 1000 + 40_000);
+    await seedSave(page, ALL_STARS_SAVE);
+    await seedLook(page, HEAVIEST_LOOK);
     await openGame(page, { seed: seedFor(scene.claim), galaxy: scene.galaxy, lives: CACHE_LIVES });
+    expect((await gameState(page)).look, 'the scene is played in the heaviest look').toEqual(HEAVIEST_LOOK);
     await startRun(page, false);
     if (scene.skipSeconds > 0) await fastForward(page, scene.skipSeconds);
 
@@ -56,20 +80,35 @@ for (const scene of SCENES) {
     const start = await cacheUse(page);
     let peak = start.size;
     let last = start;
-    for (let held = 0; held < CACHE_HOLD_SECONDS * 1000; held += SAMPLE_MS) {
-      await page.waitForTimeout(SAMPLE_MS);
-      last = await cacheUse(page);
-      peak = Math.max(peak, last.size);
-    }
+    /** The trail colours glowing in the cache at any sample since the last reset. */
+    const glows = new Set<string>();
+    const sample = async (ms: number): Promise<void> => {
+      for (let held = 0; held < ms; held += SAMPLE_MS) {
+        await page.waitForTimeout(SAMPLE_MS);
+        last = await cacheUse(page);
+        peak = Math.max(peak, last.size);
+        for (const colour of trailGlowsIn(last.keys, HEAVIEST_LOOK.trail)) glows.add(colour);
+      }
+    };
+    await sample(CACHE_HOLD_SECONDS * 1000);
+    const { screen } = await gameState(page);
+    // The seeds hold the scene in play for the hold alone; thrusting after it draws the engine trail. A trail colour may
+    // already glow from something else in the scene, so only one the thrust adds proves the trail drew.
+    const beforeThrust = new Set(glows);
+    glows.clear();
+    await page.keyboard.down('ArrowUp');
+    await sample(THRUST_MS);
+    const trailDrew = [...glows].filter((colour) => !beforeThrust.has(colour));
+    await page.keyboard.up('ArrowUp');
     await page.keyboard.up('ArrowLeft');
     await page.keyboard.up('Space');
 
-    const { screen } = await gameState(page);
     const evictions = last.evictions - start.evictions;
-    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), holdMs: CACHE_HOLD_SECONDS * 1000, peak, evictions, endSize: last.size, screen };
+    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), look: HEAVIEST_LOOK, holdMs: CACHE_HOLD_SECONDS * 1000, thrustMs: THRUST_MS, peak, evictions, endSize: last.size, trailDrew, screen };
     console.log(`sprite cache ${scene.name}: ${JSON.stringify(reports[scene.name])}`);
 
     expect(screen, 'the scene stays in play through the hold').toBe('playing');
+    expect(trailDrew, `the thrust bakes glows in the ${HEAVIEST_LOOK.trail} trail's colours`).not.toEqual([]);
     expect(evictions, `evictions in steady play, at a capacity of ${String(SPRITE_CACHE_CAPACITY)}`).toBeLessThanOrEqual(MAX_STEADY_EVICTIONS);
     expect(peak * CAPACITY_HEADROOM, `the capacity (${String(SPRITE_CACHE_CAPACITY)}) against ${String(CAPACITY_HEADROOM)} times the peak in use`).toBeLessThanOrEqual(SPRITE_CACHE_CAPACITY);
   });

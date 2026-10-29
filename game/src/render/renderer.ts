@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK, type Look, type SkinId } from '../content/cosmetics';
 import type { PaletteId } from '../content/types';
 import type { Asteroid } from '../sim/asteroid';
 import type { SimEvent } from '../sim/events';
@@ -23,7 +24,7 @@ import { createWingmanPass } from './wingmanPass';
 import type { SceneLook } from './scene';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
-import { createSpriteBaker, type Sprite, type SpriteBaker } from './sprites';
+import { createSpriteBaker, type CacheUse, type Sprite, type SpriteBaker } from './sprites';
 import { createStarLayers } from './starfieldLayers';
 import { UNIT_VISUAL, type VisualScale } from './visualScale';
 
@@ -49,8 +50,11 @@ export interface Renderer {
    * A changed pixel ratio re-bakes after the usual resize debounce, not on the next frame.
    */
   setQuality(level: QualityLevel): void;
-  /** Draws the world `alpha` of the way from each entity's previous pose to its current one; the HUD shows `score`. */
-  draw(world: World, alpha: number, score: number): void;
+  /**
+   * Draws the world `alpha` of the way from each entity's previous pose to its current one; the HUD shows `score`. A
+   * null score draws no HUD, as the attract demo behind the title does.
+   */
+  draw(world: World, alpha: number, score: number | null): void;
   /** Frees the previous run's sprites and particles; call when a new run starts. */
   reset(): void;
   /**
@@ -61,13 +65,20 @@ export interface Renderer {
   setPalette(id: PaletteId): void;
   /** The palette in force. */
   readonly palette: PaletteId;
+  /**
+   * The ship's skin and engine trail from now on. Cosmetic only: the hull outline and the trail's particles never change
+   * how the ship flies. The app passes the look in force, with unlocks applied, whenever it changes.
+   */
+  setLook(look: Look): void;
+  /** The score the run sets to beat, which the HUD's score pill shows (a Daily's target); null for none. */
+  setTarget(target: number | null): void;
   readonly effects: Effects;
-  /** The HUD pills drawn last, in CSS px. */
+  /** The HUD pills drawn last, in CSS px: none after a frame drawn without the HUD. */
   readonly hudRects: readonly HudRect[];
   /** Frames drawn so far. */
   readonly drawCount: number;
   /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
-  readonly spriteCache: Readonly<{ size: number; evictions: number }>;
+  readonly spriteCache: CacheUse;
   /** How much larger than their field size sprites are drawn at the current layout; 1 across the board before the first `resize`. */
   readonly visualScale: VisualScale;
   /** Cancels a pending re-bake and frees every sprite and particle. */
@@ -115,6 +126,8 @@ export function shipHidden(world: Pick<World, 'ship' | 'elapsed'>): boolean {
   return world.ship.invulnerable && blinkHidden(world.elapsed);
 }
 
+const NO_HUD_RECTS: readonly HudRect[] = [];
+
 export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts = {}): Renderer {
   const ctx = get2dContext(canvas);
   let palette: Palette = DRIFT;
@@ -136,6 +149,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   let view: View | null = null;
   let quality = HIGH_QUALITY;
   let drawCount = 0;
+  let skin: SkinId = DEFAULT_LOOK.skin;
 
   function resize(cssWidth: number, cssHeight: number, field: Field): void {
     if (!isPositiveFiniteSize(cssWidth, cssHeight)) {
@@ -276,7 +290,7 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
       const length = FLAME_MIN_LENGTH + flicker.range(0, FLAME_FLICKER);
       stamp(baker.flame(palette, length), x, y, cos, sin, radius, field);
     }
-    stamp(baker.ship(palette), x, y, cos, sin, radius, field);
+    stamp(baker.ship(palette, skin), x, y, cos, sin, radius, field);
   }
 
   /** Under the rocks, so an attack's shards fly out of the core; its eye follows the ship. */
@@ -353,7 +367,10 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     }
   }
 
-  function draw(world: World, alpha: number, score: number): void {
+  /** Whether the last frame drew the HUD: a demo frame, drawn with no score, shows no pills. */
+  let hudDrawn = false;
+
+  function draw(world: World, alpha: number, score: number | null): void {
     const current = layout;
     const { bakes } = backdrop;
     if (current === null || bakes === null) {
@@ -364,12 +381,19 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     clearBars(current);
     ctx.save();
-    drawBackdrop(world, current, bakes.sky);
-    drawScene(world, a, current);
-    drawOverlays(current, bakes, world.effects.timeWarp);
-    ctx.restore();
-    ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
-    hud.draw(ctx, world, score, effects.reducedMotion);
+    // A pass that throws leaves no alpha, composite or clip behind for the next frame.
+    try {
+      drawBackdrop(world, current, bakes.sky);
+      drawScene(world, a, current);
+      drawOverlays(current, bakes, world.effects.timeWarp);
+    } finally {
+      ctx.restore();
+    }
+    hudDrawn = score !== null;
+    if (score !== null) {
+      ctx.setTransform(current.dpr, 0, 0, current.dpr, 0, 0);
+      hud.draw(ctx, world, score, effects.reducedMotion);
+    }
     drawCount++;
   }
 
@@ -422,9 +446,16 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     get palette() {
       return palette.id;
     },
+    setLook({ skin: nextSkin, trail }) {
+      skin = nextSkin;
+      effects.setTrail(trail);
+    },
+    setTarget(target) {
+      hud.setTarget(target);
+    },
     effects,
     get hudRects() {
-      return hud.rects;
+      return hudDrawn ? hud.rects : NO_HUD_RECTS;
     },
     get drawCount() {
       return drawCount;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TRAIL_IDS, TRAILS, type TrailId } from '../../src/content/cosmetics';
 import { burstFor, createEffects } from '../../src/render/effects';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool, type Particle } from '../../src/render/particles';
 import { DRIFT, ION_REACH } from '../../src/render/palette';
@@ -449,5 +450,77 @@ describe('createEffects', () => {
     fx.handle(events, w);
     for (let i = 0; i < 30; i++) fx.step(1 / 60, w);
     expect(view()).toBe(before);
+  });
+});
+
+describe('engine trails', () => {
+  /** One second of thrust from rest, the trail's particles as the pool holds them (none aged yet). */
+  function thrustTrail(trail: TrailId, { reducedMotion = false, capacity = 2000 } = {}): Particle[] {
+    const pool = new ParticlePool(capacity);
+    const fx = createEffects(pool, 7);
+    fx.setTrail(trail);
+    fx.reducedMotion = reducedMotion;
+    const w = makeWorld();
+    w.step(STEP_SECONDS, THRUST);
+    for (let i = 0; i < 60; i++) fx.step(1 / 60, w);
+    const out: Particle[] = [];
+    pool.forEach((p) => {
+      out.push({ ...p });
+    });
+    return out;
+  }
+
+  /** The part of a particle's velocity across the heading the ship starts with (the trail runs straight back from it). */
+  const sideways = (p: Particle) => {
+    const heading = makeWorld().ship.angle;
+    return Math.abs(Math.sin(heading) * p.vx - Math.cos(heading) * p.vy);
+  };
+
+  it('leaves the standard trail as it was', () => {
+    const particles = thrustTrail('standard');
+    expect(particles.length).toBeGreaterThanOrEqual(59);
+    for (const p of particles) {
+      expect(p.max).toBeGreaterThanOrEqual(0.3);
+      expect(p.max).toBeLessThanOrEqual(0.5);
+      expect(['#ffb347', '#ff6a3c']).toContain(p.color);
+    }
+  });
+
+  it('lives 1.5 times as long on the comet trail, with a white core among its flame', () => {
+    const particles = thrustTrail('comet');
+    for (const p of particles) {
+      expect(p.max).toBeGreaterThanOrEqual(0.45);
+      expect(p.max).toBeLessThanOrEqual(0.75);
+    }
+    const core = particles.filter((p) => p.color === '#ffffff').length;
+    expect(core).toBeGreaterThan(0);
+    expect(core).toBeLessThan(particles.length);
+  });
+
+  it('draws the ion trail in cyan and violet, with a sideways jitter', () => {
+    const particles = thrustTrail('ion');
+    for (const p of particles) expect(['#4fe0ff', '#b07cff']).toContain(p.color);
+    expect(Math.max(...particles.map(sideways))).toBeGreaterThan(30);
+  });
+
+  it('drops the ion jitter under reduced motion, so its particles move straight back', () => {
+    const particles = thrustTrail('ion', { reducedMotion: true });
+    // Without the jitter only the ±15 wobble every trail has is left, on each axis.
+    expect(Math.max(...particles.map(sideways))).toBeLessThanOrEqual(15 * Math.SQRT2 + 1e-9);
+  });
+
+  it('steps the prism trail through its colours in order, along the trail', () => {
+    const colors = TRAILS.prism.colors;
+    const particles = thrustTrail('prism');
+    expect(new Set(particles.map((p) => p.color))).toEqual(new Set(colors));
+    particles.forEach((p, i) => {
+      expect(p.color).toBe(colors[i % colors.length]);
+    });
+  });
+
+  it('gives every trail the same particle budget, so the pool cap still holds on a small pool', () => {
+    for (const trail of TRAIL_IDS) {
+      expect(thrustTrail(trail, { capacity: 60 }).length).toBeLessThan(thrustTrail(trail, { capacity: 1000 }).length);
+    }
   });
 });

@@ -117,8 +117,8 @@ describe('sfxFor', () => {
     expect(nameOf({ type: 'holeWarning', id: 1, x: 0, y: 0, at: 12 })).toBe('holeWarn');
     expect(nameOf({ type: 'holeStart', id: 1, x: 0, y: 0 })).toBe('holeOpen');
     expect(nameOf({ type: 'holeEnd', id: 1 })).toBe('holeClose');
-    expect(humFor({ type: 'holeStart', id: 1, x: 0, y: 0 })).toEqual({ hum: 'hole', on: true });
-    expect(humFor({ type: 'holeEnd', id: 1 })).toEqual({ hum: 'hole', on: false });
+    expect(humFor({ type: 'holeStart', id: 1, x: 0, y: 0 })).toEqual({ hum: 'hole', on: true, holder: 1 });
+    expect(humFor({ type: 'holeEnd', id: 1 })).toEqual({ hum: 'hole', on: false, holder: 1 });
   });
 
   it('gives every pickup, foe and well event a synthesized voice of its own, shared with no other event', () => {
@@ -143,13 +143,21 @@ describe('sfxFor', () => {
     expect(sfxFor({ type: 'foeSpawned', id: 1, kind: 'splitter', x: 0, y: 0 })).toBeNull();
   });
 
-  it('caps the swarm buzz, deflections and boss bolts at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
-    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1 });
+  it('caps the swarm buzz, deflections, boss bolts and a storm\'s sting, openings and closings at one a frame, foe bolts at two and shots at three (the engine applies the caps)', () => {
+    expect(PER_FRAME_CAPS).toEqual({ shoot: 3, droneSwarm: 1, deflect: 1, armourDeflect: 1, bolt: 2, bossBolt: 1, stormSting: 1, wellOpen: 1, wellClose: 1 });
   });
 
   it('keeps a foe silent when the warp or a collision with the ship destroys it (0 points)', () => {
     expect(sfxFor({ type: 'foeDestroyed', id: 1, kind: 'splitter', x: 0, y: 0, points: 0 })).toBeNull();
     expect(sfxFor({ type: 'foeDestroyed', id: 1, kind: 'drone', x: 0, y: 0, points: 0 })).toBeNull();
+  });
+
+  it('gives a storm one sting for its wells, whose warnings come in one step, a gravity well\'s opening and closing, and its hum', () => {
+    expect(nameOf({ type: 'wellWarning', id: 1, kind: 'gravityStorm', x: 0, y: 0, at: 30 })).toBe('stormSting');
+    expect(nameOf({ type: 'wellStart', id: 1, kind: 'gravityStorm' })).toBe('wellOpen');
+    expect(nameOf({ type: 'wellEnd', id: 1, kind: 'gravityStorm' })).toBe('wellClose');
+    expect(humFor({ type: 'wellStart', id: 1, kind: 'gravityStorm' })).toEqual(humFor({ type: 'wellStart', id: 1, kind: 'gravityWell' }));
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityStorm' })).toEqual(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' }));
   });
 
   it('gives a gravity well a warning, an opening and a closing of its own', () => {
@@ -262,13 +270,13 @@ describe('screenCue', () => {
 
 describe('humFor', () => {
   it('starts the gravity well hum as a well starts pulling and stops it as it lets go', () => {
-    expect(humFor({ type: 'wellStart', id: 1, kind: 'gravityWell' })).toEqual({ hum: 'well', on: true });
-    expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toEqual({ hum: 'well', on: false });
+    expect(humFor({ type: 'wellStart', id: 7, kind: 'gravityWell' })).toEqual({ hum: 'well', on: true, holder: 7 });
+    expect(humFor({ type: 'wellEnd', id: 1, kind: 'gravityWell' })).toEqual({ hum: 'well', on: false, holder: 1 });
   });
 
   it('runs a danger zone\'s hum of its own while it is lethal, so its end never cuts a well\'s', () => {
-    expect(humFor({ type: 'zoneStart', id: 1 })).toEqual({ hum: 'zone', on: true });
-    expect(humFor({ type: 'zoneEnd', id: 1 })).toEqual({ hum: 'zone', on: false });
+    expect(humFor({ type: 'zoneStart', id: 1 })).toEqual({ hum: 'zone', on: true, holder: 1 });
+    expect(humFor({ type: 'zoneEnd', id: 4 })).toEqual({ hum: 'zone', on: false, holder: 4 });
   });
 
   it('leaves the hum be for a repulsion field, so its end never cuts a well\'s hum', () => {

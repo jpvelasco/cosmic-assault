@@ -1,4 +1,4 @@
-import type { Dimension, ForceKind, HazardType } from './types';
+import type { Dimension, ForceKind, GalaxyEvent, HazardType } from './types';
 
 export interface HazardRule {
   /** Seconds it is shown as a warning, harmless, before it turns hostile. */
@@ -16,6 +16,7 @@ export const HAZARD_RULES: Readonly<Record<HazardType, HazardRule>> = {
   dangerZone: { telegraph: 2, seconds: 10, from: 3 },
   warpRift: { telegraph: 2, seconds: 16, from: 4 },
   blackHole: { telegraph: 3, seconds: 75, from: 5 },
+  gravityStorm: { telegraph: 3, seconds: 12, from: 2 },
 };
 
 /** A rectangle at one corner of the field, `width` by `height` field units, and no wider than `widthShare` of the field if given. */
@@ -81,10 +82,32 @@ export const BLACK_HOLE = {
   exitFallback: 248,
 } as const;
 
+/**
+ * A gravity storm places `baseWells` plus its intensity of gravity wells, at most `maxWells`, all at once, each of
+ * intensity 1 and pulling like one. They sit at least `spacing` of the field's width apart. (Tuning values.)
+ */
+export const GRAVITY_STORM = { baseWells: 2, maxWells: 4, spacing: 0.28 } as const;
+
+/** The wells a gravity storm of `intensity` places where the field leaves room: `baseWells` plus the intensity, at most `maxWells`. */
+export const stormWells = (intensity: GalaxyEvent['intensity']): number => Math.min(GRAVITY_STORM.baseWells + intensity, GRAVITY_STORM.maxWells);
+
+/**
+ * A gravity well's drawn radius at intensity 1, in field units; its pull reaches the whole field and has no edge. A storm
+ * keeps its wells this far inside the field and, where the field leaves room, this far clear of the HUD and thumb
+ * corners. A warning outline starts wider and closes onto the well, so its rim may still reach past either.
+ */
+export const WELL_RADIUS = 90;
+
 /** Which way each force field acts: a gravity well pulls (+1), a repulsion field pushes just as hard (-1). */
 export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1, repulsionField: -1 };
 
 export const isForceKind = (type: HazardType): type is ForceKind => type in FORCE_SIGN;
+
+/**
+ * Whether a hazard pulls or pushes the ship once active: the force fields, the gravity storm's wells and the black hole.
+ * The sim's `pullShare` applies the pulls; a test holds this list to the hazards whose active states pull the ship.
+ */
+export const pullsShip = (type: HazardType): boolean => isForceKind(type) || type === 'gravityStorm' || type === 'blackHole';
 
 /**
  * Units per second squared: the most every hazard's pull on the ship adds up to, so however many act at once a

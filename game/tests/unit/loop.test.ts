@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFixedStepLoop } from '../../src/sim/loop';
+import { createFixedStepLoop, visualFrameSeconds } from '../../src/sim/loop';
 import { STEP_SECONDS } from '../../src/sim/config';
 
 interface StepCall {
@@ -157,5 +157,15 @@ describe('createFixedStepLoop', () => {
         expect(loop.alpha()).toBeLessThan(1);
       }
     });
+  });
+});
+
+describe('visualFrameSeconds', () => {
+  it('takes a display frame as it is, none if negative or not finite, and a stalled one as a tenth of a second', () => {
+    expect(visualFrameSeconds(1 / 60)).toBe(1 / 60);
+    expect(visualFrameSeconds(0.1)).toBe(0.1);
+    expect(visualFrameSeconds(3)).toBe(0.1);
+    expect(visualFrameSeconds(-1)).toBe(0);
+    expect(visualFrameSeconds(Number.NaN)).toBe(0);
   });
 });

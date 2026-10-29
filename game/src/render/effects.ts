@@ -1,3 +1,4 @@
+import { trailCore, TRAILS, type TrailId, type TrailSpec } from '../content/cosmetics';
 import { FOES, MINE } from '../content/foes';
 import { BLACK_HOLE, WARP_RIFT } from '../content/hazards';
 import type { FoeKind } from '../content/types';
@@ -38,11 +39,12 @@ export interface Effects {
   reducedMotion: boolean;
   /** While false, shake stays 0; turning it off clears shake at once. The app sets it from `shakeEnabled(setting, reducedMotion)`. */
   shakeEnabled: boolean;
+  /** The engine trail drawn from now on; a thrusting ship's particles already flying keep theirs. */
+  setTrail(trail: TrailId): void;
 }
 
 const HIT_TINT = '#ff5a5a';
 const SMOKE_COLOR = '#5a5550';
-const FLAME_COLORS = ['#ffb347', '#ff6a3c'] as const;
 
 const MAX_SHAKE = 18;
 /** Fraction of shake left after one second. */
@@ -302,6 +304,9 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
   let reducedMotion = false;
   let shakeEnabled = true;
   let trailBudget = 0;
+  let trail: TrailSpec = TRAILS.standard;
+  /** The next colour of a trail that steps through its colours. */
+  let trailStep = 0;
 
   const kick = (spec: BurstSpec): void => {
     if (shakeEnabled) shake = Math.min(MAX_SHAKE, Math.max(shake, spec.shake));
@@ -402,19 +407,33 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
     const dy = -Math.sin(ship.angle);
     for (; trailBudget >= 1; trailBudget--) {
       const speed = rng.range(40, 110);
-      const flame = rng.pick(FLAME_COLORS);
+      const color = trailColor();
+      // A sideways push is perpendicular to the heading: (-dy, dx) for the velocity along (dx, dy).
+      const sideways = trail.jitter > 0 && !reducedMotion ? rng.range(-trail.jitter, trail.jitter) : 0;
       pool.emit(
         rng.chance(0.5) ? 'glow' : 'spark',
         ship.x + dx * TRAIL_OFFSET + rng.range(-2, 2),
         ship.y + dy * TRAIL_OFFSET + rng.range(-2, 2),
-        dx * speed + ship.vx * 0.3 + rng.range(-15, 15),
-        dy * speed + ship.vy * 0.3 + rng.range(-15, 15),
-        rng.range(0.3, 0.5),
+        dx * speed + ship.vx * 0.3 + rng.range(-15, 15) - dy * sideways,
+        dy * speed + ship.vy * 0.3 + rng.range(-15, 15) + dx * sideways,
+        rng.range(0.3, 0.5) * trail.lifeScale,
         rng.range(3, 5),
-        flame,
+        color,
         TRAIL_OPTIONS,
       );
     }
+  };
+
+  /** The colour of the next trail particle: its core's white now and then, else the next colour of the trail's steps or a pick. */
+  const trailColor = (): string => {
+    const core = trailCore(trail);
+    if (core !== null && rng.chance(trail.coreShare)) return core;
+    if (trail.cycle) {
+      const color = trail.colors[trailStep % trail.colors.length] ?? trail.core;
+      trailStep++;
+      return color;
+    }
+    return rng.pick(trail.colors);
   };
 
   return {
@@ -430,6 +449,9 @@ export function createEffects(pool: ParticlePool, seed: number, palette: Palette
     setPalette(next) {
       emitter.palette = next;
       flashColor = next.ring;
+    },
+    setTrail(next) {
+      trail = TRAILS[next];
     },
     step(dt, world, frozen = false) {
       time += dt;

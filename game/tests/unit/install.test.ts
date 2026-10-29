@@ -200,6 +200,19 @@ describe('createInstallPrompt', () => {
     expect(event.prompt).toHaveBeenCalledTimes(2);
   });
 
+  it('says the prompt is up from install until the player answers it, as a card over the title', async () => {
+    const win = fakeWindow();
+    const { install } = make(win);
+    let answer: () => void = () => undefined;
+    win.dispatchEvent(promptEvent(() => new Promise<void>((resolve) => (answer = resolve)), 'dismissed'));
+    expect(install.prompting).toBe(false);
+    install.install();
+    expect(install.prompting).toBe(true);
+    answer();
+    await settle();
+    expect(install.prompting).toBe(false);
+  });
+
   it('does nothing on install while it holds no prompt', () => {
     const { install, onChange } = make(fakeWindow());
     install.install();

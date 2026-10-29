@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { runGalaxy, type BotProfile, type RunResult } from '../../src/bot/run';
+import type { BotProfile } from '../../src/bot/create';
+import { runGalaxy, type RunResult } from '../../src/bot/run';
 import { DIMENSION_NUMBERS, GALAXIES, GALAXY_INDEXES, galaxyById, galaxyLabel, galaxyOrdinal } from '../../src/content/galaxies';
 import { galaxyIdOf, type BossId, type Dimension, type GalaxyId } from '../../src/content/types';
 import { BOSS_APPROACH_SECONDS, BOSS_INTRO_SECONDS } from '../../src/content/pacingRules';
 import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT } from '../../src/sim/config';
-import { BALANCE_SEEDS } from '../helpers/botRuns';
+import { BALANCE_SEEDS, fixed, formatColumns, percent } from '../helpers/botRuns';
 
 /**
  * The difficulty targets every galaxy is tuned to, played by the bots over 40 seeds a galaxy. Each Dimension has a test
@@ -91,9 +92,7 @@ export interface Row {
 /** The casual clear rate the trend line expects of galaxy `id`, in percent. */
 export const trendAt = (id: GalaxyId): number => TREND_FROM + ((TREND_TO - TREND_FROM) * galaxyOrdinal(id)) / galaxyOrdinal('5-6');
 
-const percent = (count: number, of: number): number => (100 * count) / of;
 const mean = (values: readonly number[]): number => values.reduce((sum, v) => sum + v, 0) / values.length;
-const fixed = (value: number, digits = 1): string => value.toFixed(digits);
 
 interface Played {
   readonly result: RunResult;
@@ -144,8 +143,7 @@ export function formatTable(rows: readonly Row[]): string {
     `${String(r.expertThreeStars)}/40`,
     r.bossKills === undefined ? '' : `${String(r.bossKills)}/40 <= ${String(r.killBar ?? 0)} s (${fixed(r.slowestKill ?? 0, 0)} s)`,
   ]);
-  const widths = head.map((h, i) => Math.max(h.length, ...body.map((cells) => cells[i]?.length ?? 0)));
-  return [head, ...body].map((cells) => cells.map((c, i) => c.padEnd(widths[i] ?? 0)).join(' | ')).join('\n');
+  return formatColumns(head, body);
 }
 
 /** Report only: the expert's summed clear time of each Dimension all six of whose rows are in `rows`, in minutes. */

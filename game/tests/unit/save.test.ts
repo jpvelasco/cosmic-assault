@@ -18,18 +18,31 @@ const GOOD: SaveData = {
   classicBest: 4400,
   classicImported: true,
   seenPickups: ['doubleShot', 'shield'],
+  daily: { lastCleared: '2026-10-26', streak: 2, bestStreak: 4, best: { date: '2026-10-26', score: 1200 } },
 };
 
 describe('defaults', () => {
   it('start at 1-1 with nothing cleared', () => {
     expect(SAVE_KEY).toBe('cosmic-assault.v2');
-    expect(defaultSave()).toEqual({ version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false, seenPickups: [] });
+    expect(defaultSave()).toEqual({
+      version: 1,
+      frontier: '1-1',
+      galaxies: {},
+      rankRun: null,
+      rankSeq: 0,
+      rankBoard: [],
+      classicBest: null,
+      classicImported: false,
+      seenPickups: [],
+      daily: { lastCleared: null, streak: 0, bestStreak: 0, best: null },
+    });
   });
 
   it('are a fresh copy each time', () => {
     expect(defaultSave()).not.toBe(defaultSave());
     expect(defaultSave().galaxies).not.toBe(defaultSave().galaxies);
     expect(defaultSave().seenPickups).not.toBe(defaultSave().seenPickups);
+    expect(defaultSave().daily).not.toBe(defaultSave().daily);
   });
 });
 
@@ -113,6 +126,7 @@ describe('sanitizeSave', () => {
         { ...RUN, continued: 'no' },
         { ...RUN, startedAt: 'yesterday' },
         { ...RUN, startedAt: 20261026 },
+        { ...RUN, startedAt: '2026-02-30' },
         { ...RUN, inGalaxy: 'yes' },
         { score: 1 },
         null,
@@ -221,6 +235,10 @@ describe('sanitizeSave', () => {
       expect(sanitizeSave({ rankBoard: [boss] }).rankBoard).toEqual([boss]);
     });
 
+    it('drops an entry whose date is not a real day', () => {
+      expect(sanitizeSave({ rankBoard: [{ ...ENTRY, date: '2026-02-30' }] }).rankBoard).toEqual([]);
+    });
+
     it('sorts the board and keeps the best ten', () => {
       const rankBoard = Array.from({ length: 14 }, (_, i) => ({ ...ENTRY, score: i * 3 }));
       const board = sanitizeSave({ rankBoard }).rankBoard;
@@ -242,6 +260,84 @@ describe('sanitizeSave', () => {
       expect(sanitizeSave({ classicImported: true }).classicImported).toBe(true);
       expect(sanitizeSave({ classicImported: 'yes' }).classicImported).toBe(false);
     });
+  });
+});
+
+describe('sanitizeSave daily', () => {
+  const daily = (raw: unknown): ReturnType<typeof sanitizeSave>['daily'] => sanitizeSave({ daily: raw }).daily;
+  const EMPTY = { lastCleared: null, streak: 0, bestStreak: 0, best: null };
+
+  it('keeps a valid record as it is', () => {
+    expect(daily(GOOD.daily)).toEqual(GOOD.daily);
+  });
+
+  it.each([null, 'streak', 4, [], [GOOD.daily], {}])('gives the default for %j', (raw) => {
+    expect(daily(raw)).toEqual(EMPTY);
+  });
+
+  it.each(['2026-02-30', '2026-10-27T00:00', 'yesterday', 20261027, null, {}])('drops a lastCleared of %j, and with it the streak', (lastCleared) => {
+    expect(daily({ ...GOOD.daily, lastCleared })).toMatchObject({ lastCleared: null, streak: 0, bestStreak: 4 });
+  });
+
+  it('keeps the streak only with a lastCleared', () => {
+    expect(daily({ lastCleared: null, streak: 4, bestStreak: 4, best: null }).streak).toBe(0);
+  });
+
+  it('keeps a stored streak of 1 or more with a lastCleared', () => {
+    expect(daily({ ...GOOD.daily, streak: 3 }).streak).toBe(3);
+  });
+
+  it('floors a stored streak of 0 at 1 when there is a lastCleared, since that date was cleared', () => {
+    expect(daily({ ...GOOD.daily, streak: 0 })).toEqual({ ...GOOD.daily, streak: 1, bestStreak: 4 });
+  });
+
+  it.each([-1, 2.5, 'three', null, 2 ** 53])('floors a streak of %j at 1 with a lastCleared, keeping the rest', (streak) => {
+    expect(daily({ ...GOOD.daily, streak })).toEqual({ ...GOOD.daily, streak: 1, bestStreak: 4 });
+  });
+
+  it('takes a corrupt streak and a corrupt bestStreak as 1 and 1 with a lastCleared', () => {
+    expect(daily({ ...GOOD.daily, streak: 'x', bestStreak: 'y' })).toEqual({ ...GOOD.daily, streak: 1, bestStreak: 1 });
+  });
+
+  it('raises a best streak below the streak to the streak', () => {
+    expect(daily({ ...GOOD.daily, streak: 5, bestStreak: 3 })).toMatchObject({ streak: 5, bestStreak: 5 });
+  });
+
+  it.each([-3, 'many', null])('falls back to the streak for a bestStreak of %j', (bestStreak) => {
+    expect(daily({ ...GOOD.daily, bestStreak })).toMatchObject({ streak: 2, bestStreak: 2 });
+  });
+
+  it.each([
+    { date: '2026-02-30', score: 100 },
+    { date: '2026-10-27', score: -1 },
+    { date: '2026-10-27' },
+    { score: 100 },
+    { date: 'today', score: 100 },
+    'best',
+    [],
+  ])('drops a best of %j, keeping the streak', (best) => {
+    expect(daily({ ...GOOD.daily, best })).toEqual({ ...GOOD.daily, best: null });
+  });
+
+  it('does not cost the other fields of the save', () => {
+    expect(sanitizeSave({ ...GOOD, daily: 'bad' })).toEqual({ ...GOOD, daily: EMPTY });
+  });
+});
+
+describe('a save from before the Daily', () => {
+  it('loads at version 1 with the default daily record and keeps everything else', () => {
+    const older = {
+      version: 1,
+      frontier: '2-3',
+      galaxies: { '1-1': { bestScore: 700, stars: 2 } },
+      rankRun: null,
+      rankSeq: 2,
+      rankBoard: [ENTRY],
+      classicBest: 4400,
+      classicImported: true,
+      seenPickups: ['shield'],
+    };
+    expect(parseSave(JSON.stringify(older))).toEqual({ ...older, daily: { lastCleared: null, streak: 0, bestStreak: 0, best: null } });
   });
 });
 

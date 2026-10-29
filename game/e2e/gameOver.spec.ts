@@ -1,34 +1,6 @@
 import type { Page } from '@playwright/test';
-import { RANK_START_LIVES } from '../src/meta/rankRun';
-import {
-  expect,
-  expectMode,
-  fastForward,
-  gameState,
-  nextFrames,
-  openGame,
-  openGameOverRun,
-  test,
-  waitForGameOver,
-  waitOutGameOverGuard,
-} from './fixtures';
+import { expect, expectContinued, expectMode, fastForward, gameState, nextFrames, openGame, startOneLifeRun, test, waitForGameOver, waitOutGameOverGuard } from './fixtures';
 import { FREE_GAME_OVER_SECONDS, GAME_OVER_GALAXY, seedFor } from './seeds';
-
-/** Starts the one-life Rank run of the game-over galaxy; its game over card offers Continue and Title. */
-async function startOneLifeRun(page: Page): Promise<void> {
-  await openGameOverRun(page);
-  await page.keyboard.press('Space');
-  await expectMode(page, 'playing');
-  expect((await gameState(page)).lives).toBe(1);
-}
-
-/** Continue replays the galaxy with fresh lives, the score reset and the run marked. */
-async function expectContinued(page: Page): Promise<void> {
-  await expectMode(page, 'playing');
-  const { lives, rankRun, score } = await gameState(page);
-  expect({ lives, score }).toEqual({ lives: RANK_START_LIVES, score: 0 });
-  expect(rankRun).toMatchObject({ score: 0, lives: RANK_START_LIVES, continued: true });
-}
 
 /**
  * Presses R (keydown and keyup) in the same frame the card opens, from inside the page, so the

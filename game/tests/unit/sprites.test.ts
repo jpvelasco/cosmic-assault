@@ -9,9 +9,12 @@ import {
   snapFlameLength,
   snapGlowDiameter,
 } from '../../src/render/sprites';
+import { SKIN_IDS, SKINS, type SkinId } from '../../src/content/cosmetics';
+import { rgba } from '../../src/render/color';
 import { createAsteroid, type AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID } from '../../src/sim/config';
 import { createRng } from '../../src/sim/rng';
+import { recordingContext } from '../helpers/fakeCanvas';
 
 interface Point {
   readonly x: number;
@@ -123,17 +126,7 @@ interface FakeCanvas {
 }
 
 /** A Canvas 2D stand-in that accepts every call, so the baker's sizing and caching run in Node. */
-function fakeContext(): unknown {
-  const gradient = { addColorStop: () => undefined };
-  return new Proxy(
-    {},
-    {
-      get: (_target, name) =>
-        name === 'createLinearGradient' || name === 'createRadialGradient' ? () => gradient : () => undefined,
-      set: () => true,
-    },
-  );
-}
+const fakeContext = (): unknown => recordingContext();
 
 describe('createSpriteBaker', () => {
   let created: FakeCanvas[];
@@ -213,20 +206,23 @@ describe('createSpriteBaker', () => {
     expect(baker.ship(DRIFT)).not.toBe(ship);
   });
 
-  it('reports how many sprites it holds and how many it has evicted to stay within its capacity', () => {
+  it('reports the sprites it holds by key, and how many it has evicted to stay within its capacity', () => {
     const baker = createSpriteBaker(2);
-    expect(baker.cacheUse).toEqual({ size: 0, evictions: 0 });
+    expect(baker.cacheUse).toEqual({ size: 0, evictions: 0, keys: [] });
     baker.ship(DRIFT);
     baker.shot(DRIFT);
-    expect(baker.cacheUse).toEqual({ size: 2, evictions: 0 });
+    expect(baker.cacheUse).toMatchObject({ size: 2, evictions: 0 });
+    expect(baker.cacheUse.keys).toHaveLength(2);
+    expect(baker.cacheUse.keys[0]).toMatch(/^ship\|drift:classic\|/);
     baker.glow('#5b8cff', 24);
-    expect(baker.cacheUse).toEqual({ size: 2, evictions: 1 });
+    expect(baker.cacheUse).toMatchObject({ size: 2, evictions: 1 });
+    expect(baker.cacheUse.keys[1]).toMatch(/^glow\|#5b8cff\|/);
   });
 
   it('holds at least 256 sprites by default', () => {
     const baker = createSpriteBaker();
     for (let id = 1; id <= 256; id++) baker.asteroid(rock(id), DRIFT);
-    expect(baker.cacheUse).toEqual({ size: 256, evictions: 0 });
+    expect(baker.cacheUse).toMatchObject({ size: 256, evictions: 0 });
   });
 
   it('returns the cached sprite for the same key, including snapped glow and flame sizes', () => {
@@ -251,16 +247,12 @@ describe('createSpriteBaker', () => {
 
   it('paints the shot and the asteroid in each palette\'s own colours', () => {
     const painted: string[] = [];
-    const recording = new Proxy(
-      {},
-      {
-        get: (_target, name) => (name === 'createLinearGradient' || name === 'createRadialGradient' ? () => ({ addColorStop: (_at: number, color: string) => painted.push(color) }) : () => undefined),
-        set: (_target, name, value) => {
-          if (name === 'fillStyle' || name === 'strokeStyle') painted.push(String(value));
-          return true;
-        },
+    const recording = recordingContext({
+      stop: (_at, color) => painted.push(color),
+      set: (name, value) => {
+        if (name === 'fillStyle' || name === 'strokeStyle') painted.push(String(value));
       },
-    );
+    });
     vi.stubGlobal('document', { createElement: (): FakeCanvas => ({ width: 0, height: 0, getContext: () => recording }) });
     const all = PALETTE_IDS.map(paletteFor);
     const a = rock(5);
@@ -384,20 +376,10 @@ describe('createSpriteBaker', () => {
         createElement: () => {
           const log: string[] = [];
           calls.push(log);
-          const gradient = { addColorStop: () => undefined };
-          const ctx = new Proxy(
-            {},
-            {
-              get: (_target, name) => {
-                if (name === 'createLinearGradient' || name === 'createRadialGradient') return () => gradient;
-                return (...args: unknown[]) => log.push(`${String(name)}(${args.map((arg) => (typeof arg === 'number' ? String(arg) : 'canvas')).join(',')})`);
-              },
-              set: (_target, name, value) => {
-                log.push(`${String(name)}=${String(value)}`);
-                return true;
-              },
-            },
-          );
+          const ctx = recordingContext({
+            call: (name, args) => log.push(`${name}(${args.map((arg) => (typeof arg === 'number' ? String(arg) : 'canvas')).join(',')})`),
+            set: (name, value) => log.push(`${name}=${String(value)}`),
+          });
           const canvas = { width: 0, height: 0, getContext: () => ctx };
           canvases.push(canvas);
           return canvas;
@@ -491,5 +473,76 @@ describe('createSpriteBaker', () => {
     expect(() => {
       baker.setScale(1, Number.POSITIVE_INFINITY);
     }).toThrow(RangeError);
+  });
+});
+
+describe('ship skins', () => {
+  const PATH_OPS: readonly string[] = ['beginPath', 'moveTo', 'lineTo', 'closePath', 'bezierCurveTo', 'arc', 'ellipse', 'clip'];
+
+  /** A canvas whose context logs each path op and fill with its arguments; a gradient logs its stops. */
+  function recordingCanvas(ops: string[]): { getContext(kind: string): unknown } {
+    let fillStyle: unknown = '';
+    let strokeStyle: unknown = '';
+    const ctx = recordingContext({
+      call: (name, args) => {
+        if (name === 'fill') ops.push(`fill ${JSON.stringify(fillStyle)}`);
+        else if (name === 'stroke') ops.push(`stroke ${String(strokeStyle)}`);
+        else if (PATH_OPS.includes(name)) ops.push(`${name} ${args.map(String).join(' ')}`);
+      },
+      set: (name, value) => {
+        if (name === 'fillStyle') fillStyle = value;
+        if (name === 'strokeStyle') strokeStyle = value;
+      },
+    });
+    return { getContext: () => ctx };
+  }
+
+  /** The ops a ship bake makes with `skin`, from a fresh baker, with the fills and strokes that are not the hull's. */
+  function bakeOps(skin: SkinId, palette: Palette = DRIFT) {
+    const ops: string[] = [];
+    vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, ...recordingCanvas(ops) }) });
+    createSpriteBaker().ship(palette, skin);
+    vi.unstubAllGlobals();
+    return ops;
+  }
+
+  it('keys the ship by palette and skin, so a skin change misses the cache once and leaves the others', () => {
+    vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: fakeContext }) });
+    const baker = createSpriteBaker();
+    const classic = baker.ship(DRIFT);
+    const ember = baker.ship(DRIFT, 'ember');
+    expect(ember).not.toBe(classic);
+    expect(baker.cached('ship|drift:ember|0')).toBe(ember);
+    expect(baker.ship(DRIFT)).toBe(classic);
+    expect(baker.ship(DRIFT, 'ember')).toBe(ember);
+    vi.unstubAllGlobals();
+  });
+
+  it('draws the hull path identically for every skin, so a skin trims the hull and never reshapes it', () => {
+    const hullOf = (ops: readonly string[]) => ops.slice(0, ops.indexOf(ops.find((op) => op.startsWith('fill')) ?? ''));
+    const classic = hullOf(bakeOps('classic'));
+    expect(classic.length).toBeGreaterThan(4);
+    expect(hullOf(bakeOps('ember'))).toEqual(classic);
+    expect(hullOf(bakeOps('nova'))).toEqual(classic);
+  });
+
+  /** The hero's green, which every palette's ship body is built around and no trim may change. */
+  const HERO_GREEN = '#39ff14';
+
+  it.each(PALETTE_IDS)('fills the body with the hero green under every trim in the %s palette', (id) => {
+    const palette = paletteFor(id);
+    const bodyFill = (ops: readonly string[]) => ops.find((op) => op.startsWith('fill')) ?? '';
+    const stops = JSON.stringify({ stops: palette.ship.map((color, i) => `${String([0, 0.5, 1][i])}:${color}`) });
+    expect(palette.ship[1]).toBe(HERO_GREEN);
+    for (const skin of SKIN_IDS) expect(bodyFill(bakeOps(skin, palette)), skin).toBe(`fill ${stops}`);
+  });
+
+  it('rims the hull in the skin\'s colour and adds the panel lines only to a skin that has them', () => {
+    const strokes = (ops: readonly string[]) => ops.filter((op) => op.startsWith('stroke'));
+    expect(strokes(bakeOps('classic'))[0]).toBe(`stroke ${rgba('#ffffff', 0.7)}`);
+    expect(strokes(bakeOps('ember'))[0]).toBe(`stroke ${rgba(SKINS.ember.rim, 0.7)}`);
+    // The rim, the glint and the cockpit's outline, plus the panel lines when the skin has them.
+    expect(strokes(bakeOps('classic'))).toHaveLength(3);
+    expect(strokes(bakeOps('ember'))).toHaveLength(4);
   });
 });

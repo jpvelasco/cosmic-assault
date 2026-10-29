@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { E2eHooks } from '../../src/app/e2eHooks';
 import type { App } from '../../src/app/game';
 import { galaxyById } from '../../src/content/galaxies';
+import { dailyGalaxy, type DailyGalaxy } from '../../src/meta/dailyGalaxy';
 import { defaultSave } from '../../src/meta/save';
 import { STEP_SECONDS } from '../../src/sim/config';
 import { NO_CONTROLS } from '../../src/sim/controls';
@@ -12,12 +13,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }, hooks: E2eHooks = {}) {
+function bridgeFor(world: World | null, look: { palette: string; musicTheme: string } = { palette: 'drift', musicTheme: 'drift' }, hooks: E2eHooks = {}, daily: DailyGalaxy | null = null) {
   const fakeWindow: { __COSMIC_ASSAULT_TEST_API__?: CosmicAssaultTestApi } = {};
   vi.stubGlobal('window', fakeWindow);
   const app = {
     mode: 'playing',
-    run: { world, flow: { galaxy: null, rankRun: null }, save: defaultSave() },
+    run: { world, flow: { galaxy: null, rankRun: null }, save: defaultSave(), daily },
     hudRects: [],
     drawCount: 0,
     visualScale: { ship: 1, rock: 1, shot: 1, effect: 1 },
@@ -26,6 +27,7 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
     muted: false,
     ...look,
     settings: {},
+    look: { skin: 'ember', trail: 'ion' },
     motion: { reducedMotion: false, shake: true },
     audioState: 'none',
     log: { size: 0 },
@@ -38,11 +40,37 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 }
 
 describe('the test bridge look and music', () => {
-  it('reports the palette and the music theme in force, beside the version-4 fields', () => {
+  it('reports the palette and the music theme in force, beside the version-8 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(4);
+    expect(api.version).toBe(8);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
+  });
+});
+
+describe('the test bridge Daily', () => {
+  it("reports the Daily in play as its date, twist and target, and null outside one", () => {
+    expect(bridgeFor(null).getState().daily).toBeNull();
+    const daily = dailyGalaxy('2026-10-26');
+    const state = bridgeFor(null, undefined, {}, daily).getState();
+    expect(state.daily).toEqual({ date: '2026-10-26', twist: daily.twist, target: daily.target });
+    expect(Object.isFrozen(state.daily)).toBe(true);
+  });
+});
+
+describe('the test bridge sprite cache', () => {
+  it('reports the cache\'s use with the keys it holds, and null without the hook', () => {
+    expect(bridgeFor(null).getState().spriteCache).toBeNull();
+    const use = { size: 1, evictions: 0, keys: ['glow|#ffffff|24'] };
+    expect(bridgeFor(null, undefined, { e2eSpriteCache: () => use }).getState().spriteCache).toEqual(use);
+  });
+});
+
+describe('the test bridge ship look', () => {
+  it('reports the skin and trail the ship draws, as a copy a spec cannot change', () => {
+    const state = bridgeFor(null).getState();
+    expect(state.look).toEqual({ skin: 'ember', trail: 'ion' });
+    expect(Object.isFrozen(state.look)).toBe(true);
   });
 });
 
@@ -96,6 +124,20 @@ describe('the test bridge boss view', () => {
     expect(boss?.liveParts).toBeGreaterThanOrEqual(8);
     expect(boss?.hp).toBe(boss?.maxHp);
     expect(Object.keys(boss ?? {}).sort()).toEqual(['active', 'hp', 'id', 'liveParts', 'maxHp', 'phase', 'state', 'target', 'vulnerable', 'windup']);
+  });
+});
+
+describe('the test bridge attract mode', () => {
+  it("reports the hook's attract state, and null before the hooks are in", () => {
+    expect(bridgeFor(null).getState().attract).toBeNull();
+    const attract = { active: true, demo: '1-4', frames: 12, halted: false } as const;
+    expect(bridgeFor(null, undefined, { e2eAttractState: () => attract }).getState().attract).toEqual(attract);
+  });
+
+  it('hands attractNow to the hook', () => {
+    const e2eAttractNow = vi.fn();
+    bridgeFor(null, undefined, { e2eAttractNow }).attractNow();
+    expect(e2eAttractNow).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -18,6 +18,7 @@ import { WINGMAN } from '../../src/sim/config';
 import { CRACK_SECONDS } from '../../src/render/pickupPass';
 import type { Bolt } from '../../src/sim/foes/bolts';
 import { foeAt } from '../helpers/foeAt';
+import { type DrawCall, fakeCanvas, type FakeCanvas } from '../helpers/fakeCanvas';
 import type { Foe } from '../../src/sim/foes/foe';
 import type { HazardState } from '../../src/sim/hazards/hazard';
 import type { Pickup } from '../../src/sim/pickups/pickups';
@@ -26,84 +27,6 @@ import type { World, WorldStatus } from '../../src/sim/world';
 const FIELD = { width: 1280, height: 720 };
 /** Time Warp's tint, as the vignette's gradient stops write it. */
 const TIME_WARP_RGB = '111,156,255';
-
-interface DrawCall {
-  readonly image: unknown;
-  /** The transform's x scale when the image was drawn: the field scale, times the sprite's own turn and scale. */
-  readonly a: number;
-  /** The transform's x skew when the image was drawn: the sine of the sprite's turn, times its scale. */
-  readonly b: number;
-  /** The transform's x and y offset when the image was drawn. */
-  readonly e: number;
-  readonly f: number;
-  /** The globalAlpha in force. */
-  readonly alpha: number;
-  readonly smoothing: boolean;
-}
-
-interface FakeCanvas {
-  width: number;
-  height: number;
-  readonly style: Record<string, string>;
-  readonly draws: DrawCall[];
-  /** The colour of every gradient stop added so far. */
-  readonly stops: string[];
-  /** Arcs begun so far; the stars are the only thing drawn as arcs in the stub scene. */
-  arcs: number;
-  /** Every point a line or curve was drawn to, with the alpha then. */
-  readonly lines: { x: number; y: number; alpha: number }[];
-  getContext(kind: string): unknown;
-}
-
-/** A canvas whose 2D context accepts every call and logs each drawImage with the transform offset in force. */
-function fakeCanvas(): FakeCanvas {
-  const draws: DrawCall[] = [];
-  let a = 1;
-  let b = 0;
-  let e = 0;
-  let f = 0;
-  let alpha = 1;
-  let smoothing = true;
-  const fake: FakeCanvas = { width: 0, height: 0, style: {}, draws, stops: [], arcs: 0, lines: [], getContext: () => ctx };
-  const gradient = { addColorStop: (_at: number, color: string) => fake.stops.push(color) };
-  const ctx = new Proxy(
-    {},
-    {
-      get: (_target, name) => {
-        switch (name) {
-          case 'setTransform':
-            return (nextA: number, nextB: number, _c: number, _d: number, nextE: number, nextF: number) => {
-              a = nextA;
-              b = nextB;
-              e = nextE;
-              f = nextF;
-            };
-          case 'drawImage':
-            return (image: unknown) => draws.push({ image, a, b, e, f, alpha, smoothing });
-          case 'arc':
-            return () => fake.arcs++;
-          case 'lineTo':
-            return (x: number, y: number) => fake.lines.push({ x, y, alpha });
-          case 'quadraticCurveTo':
-            return (_cx: number, _cy: number, x: number, y: number) => fake.lines.push({ x, y, alpha });
-          case 'createLinearGradient':
-          case 'createRadialGradient':
-            return () => gradient;
-          case 'measureText':
-            return (text: string) => ({ width: text.length * 10 });
-          default:
-            return () => undefined;
-        }
-      },
-      set: (_target, name, value) => {
-        if (name === 'globalAlpha') alpha = value as number;
-        if (name === 'imageSmoothingEnabled') smoothing = value as boolean;
-        return true;
-      },
-    },
-  );
-  return fake;
-}
 
 interface Stub {
   status: WorldStatus;
@@ -260,6 +183,25 @@ describe('createRenderer', () => {
     expect(shipDrawn()).toBe(true);
     stub.status = 'gameOver';
     expect(shipDrawn()).toBe(false);
+  });
+
+  describe('setLook', () => {
+    it('hulls the ship in the chosen skin, and the classic one before any choice', () => {
+      renderer.resize(1280, 720, FIELD);
+      const { world } = stubWorld();
+      drawFrame(world, 1);
+      expect(drawsOf(baker.ship(DRIFT, 'classic').canvas)).toHaveLength(1);
+      renderer.setLook({ skin: 'ember', trail: 'standard' });
+      drawFrame(world, 1);
+      expect(drawsOf(baker.ship(DRIFT, 'ember').canvas)).toHaveLength(1);
+      expect(drawsOf(baker.ship(DRIFT, 'classic').canvas)).toHaveLength(0);
+    });
+
+    it('hands the trail to the effects', () => {
+      const setTrail = vi.spyOn(renderer.effects, 'setTrail');
+      renderer.setLook({ skin: 'classic', trail: 'ion' });
+      expect(setTrail).toHaveBeenLastCalledWith('ion');
+    });
   });
 
   describe('setPalette', () => {
@@ -1040,6 +982,29 @@ describe('createRenderer', () => {
     expect(renderer.hasActiveParticles()).toBe(true);
     for (let i = 0; i < 40; i++) renderer.settle(0.1, world);
     expect(renderer.hasActiveParticles()).toBe(false);
+  });
+
+  it('draws no HUD for a null score, as the attract demo asks, and the HUD again for a score', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { world } = stubWorld();
+    renderer.draw(world, 1, null);
+    expect(renderer.drawCount).toBe(1);
+    expect(renderer.hudRects).toEqual([]);
+    renderer.draw(world, 1, 0);
+    expect(renderer.hudRects.length).toBeGreaterThan(0);
+    // A demo frame after a run shows none of the run's pills.
+    renderer.draw(world, 1, null);
+    expect(renderer.hudRects).toEqual([]);
+  });
+
+  it('restores the canvas state after a pass throws, so the next frame starts clean', () => {
+    renderer.resize(1280, 720, FIELD);
+    const { stub, world } = stubWorld();
+    stub.asteroids = [null as never];
+    expect(() => {
+      renderer.draw(world, 1, 0);
+    }).toThrow();
+    expect(canvas.saved).toBe(0);
   });
 
   it('counts the frames it draws', () => {

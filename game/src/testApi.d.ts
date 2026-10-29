@@ -42,10 +42,12 @@ interface CosmicAssaultTestState {
   readonly screen: import('./app/flow').Screen;
   /** The galaxy in play or just played (on its end card); null before the first run. */
   readonly galaxy: import('./content/types').GalaxyId | null;
-  /** A frozen copy of the save in memory. A debug run (`?galaxy=`, `?seed=` or `?lives=`) keeps it in memory only. */
+  /** A frozen copy of the save in memory. A debug run (`?galaxy=`, `?seed=`, `?lives=` or `?storm=`) keeps it in memory only; `?today=` is not one. */
   readonly save: import('./meta/save').SaveData;
   /** The Rank run as carried into the galaxy in play (on results, into the next one); null outside Rank. A frozen copy. */
   readonly rankRun: import('./meta/rankRun').RankRun | null;
+  /** The Daily in play or on its end card: its date, twist and target score; null outside the Daily. */
+  readonly daily: { readonly date: string; readonly twist: import('./content/daily').DailyTwistId; readonly target: number } | null;
   /** Score, lives and counts are 0 and ship is null while no run exists (title and menu screens). */
   readonly score: number;
   readonly lives: number;
@@ -93,6 +95,8 @@ interface CosmicAssaultTestState {
   readonly musicTheme: import('./audio/themes').ThemeId;
   /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
   readonly settings: import('./app/settings').Settings;
+  /** The skin and engine trail the ship draws: the chosen ones where unlocked, the defaults otherwise. */
+  readonly look: import('./content/cosmetics').Look;
   /** The motion rules in force: reduced motion (the browser's setting) and whether shake is on once the shake setting is applied. */
   readonly motion: { readonly reducedMotion: boolean; readonly shake: boolean };
   /** 'none' until the first key press or pointer press creates the audio context. */
@@ -101,12 +105,17 @@ interface CosmicAssaultTestState {
   readonly logSize: number;
   /** Whether the page is in full screen (`document.fullscreenElement` is set). */
   readonly fullscreen: boolean;
-  /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
-  readonly spriteCache: { readonly size: number; readonly evictions: number } | null;
+  /** The sprite cache's use: the sprites it holds now and their keys (`kind|name|size`, a ship's name `palette:skin`), and how many it has evicted to stay within its capacity. */
+  readonly spriteCache: import('./render/sprites').CacheUse | null;
+  /**
+   * The attract demo behind the title: whether it is on (a demo playing, or the pause before the next), the galaxy of the
+   * demo, the demo frames drawn since it turned on, and whether a demo crash has stopped it for the session.
+   */
+  readonly attract: import('./app/e2eHooks').AttractState | null;
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 4;
+  readonly version: 8;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event
@@ -127,6 +136,8 @@ interface CosmicAssaultTestApi {
   grantPickup(kind: import('./content/types').PickupId): void;
   /** Restarts `frameStats` as a run start does, its 3 s warm-up included, leaving the run and the quality level alone. */
   restartFrameStats(): void;
+  /** Counts the title's idle stretch as over, so the next frame on the bare title starts the attract demo, as ATTRACT_IDLE_SECONDS without input would. */
+  attractNow(): void;
   /** Makes the next guarded frame throw `Error(DELIBERATE_CRASH)` (src/testBridge.ts), which shows the recovery card. */
   crash(): void;
 }

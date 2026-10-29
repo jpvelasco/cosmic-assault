@@ -24,6 +24,8 @@ export interface SettingsControllerDeps extends Omit<CardToggleDeps, 'opensOn'> 
 
 export interface SettingsController {
   readonly settings: Settings;
+  /** Puts a change into effect and saves it at once, for a choice made outside the settings card (the Hangar's). */
+  readonly choose: (patch: Partial<Settings>) => void;
   /** Whether the settings card is over the title or pause card; the run behind it, if any, stays as it was. */
   readonly open: boolean;
   readonly card: SettingsCard;
@@ -74,6 +76,13 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     persistSettings();
   }
 
+  /** A change made outside the settings card: applied, saved and shown at once. */
+  function choose(patch: Partial<Settings>): void {
+    applySettings(patch);
+    persistSettings();
+    deps.syncView();
+  }
+
   const card = createSettingsCard(root, {
     change: applySettings,
     save: persistSettings,
@@ -93,6 +102,7 @@ export function createSettingsController(root: HTMLElement, deps: SettingsContro
     get settings() {
       return settings;
     },
+    choose,
     get open() {
       return toggle.open;
     },

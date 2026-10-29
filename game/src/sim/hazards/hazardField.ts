@@ -1,6 +1,6 @@
 import { eventsOfType } from '../../content/curves';
 import { WELL_SPEED_CAP } from '../../content/hazards';
-import type { GalaxyEvent, HazardType } from '../../content/types';
+import type { ForceKind, GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { SimEvent } from '../events';
@@ -11,18 +11,26 @@ import { createRng, deriveSeed, type Rng } from '../rng';
 import type { Ship } from '../ship';
 import { BlackHole } from './blackHole';
 import { DangerZones } from './dangerZone';
-import { ForceField } from './forceField';
+import { ForceField, inBand } from './forceField';
+import { stormLayout } from './gravityStorm';
 import type { Bodies, Circle, Hazard, HazardBolts, HazardFactory, HazardFoes, HazardState } from './hazard';
 import { shipPullAt } from './shipPull';
 import { WarpRifts } from './warpRift';
 
+/** A force field of `kind`, naming it once: each event shows one well of that kind in the field's middle band. */
+const forceField =
+  (kind: ForceKind): HazardFactory =>
+  (setup) =>
+    new ForceField(kind, setup, inBand(kind, setup.rng));
+
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
-  gravityWell: (setup) => new ForceField('gravityWell', setup),
-  repulsionField: (setup) => new ForceField('repulsionField', setup),
+  gravityWell: forceField('gravityWell'),
+  repulsionField: forceField('repulsionField'),
   dangerZone: (setup) => new DangerZones(setup),
   warpRift: (setup) => new WarpRifts(setup),
   blackHole: (setup) => new BlackHole(setup),
+  gravityStorm: (setup) => new ForceField('gravityStorm', setup, stormLayout(setup)),
 };
 
 /** The stream a hazard type draws from: the gravity wells keep the `'hazards'` stream they first drew from, so Ion Reach does not move. */

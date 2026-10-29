@@ -30,6 +30,11 @@ export class SpriteCache<V> {
     return this.entries.size;
   }
 
+  /** The keys held now, oldest set first. */
+  keys(): string[] {
+    return [...this.entries.keys()];
+  }
+
   /** Entries dropped so far to stay within the capacity; a replace, a delete or a clear is not one. */
   get evictions(): number {
     return this.evicted;

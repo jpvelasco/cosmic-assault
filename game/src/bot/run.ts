@@ -3,15 +3,10 @@ import { FIELD_HEIGHT, MAX_ASPECT, MIN_ASPECT, STEP_SECONDS } from '../sim/confi
 import type { Controls } from '../sim/controls';
 import type { SimEvent } from '../sim/events';
 import type { Field } from '../sim/field';
-import { createRng, deriveSeed } from '../sim/rng';
 import type { GalaxyMode, Stars } from '../sim/scoring';
 import { hasEnded, World } from '../sim/world';
-import { createCasual } from './casual';
-import { createExpert } from './expert';
-import { STATUE } from './statue';
-import { createView, readView, type Bot } from './view';
-
-export type BotProfile = 'statue' | 'casual' | 'expert';
+import { createBot, type BotProfile } from './create';
+import { createView, readView } from './view';
 
 /** The 1280×720 reference field. */
 const REFERENCE_ASPECT = 16 / 9;
@@ -19,20 +14,13 @@ const REFERENCE_ASPECT = 16 / 9;
 const SURVIVAL_OVERRUN_SECONDS = 5;
 const BOSS_FIGHT_SECONDS = 300;
 
-/** A bot of `profile` for a run with `seed`, drawing only from that seed's 'bot' stream. */
-export function createBot(profile: BotProfile, seed: number): Bot {
-  if (profile === 'statue') return STATUE;
-  const rng = createRng(deriveSeed(seed, 'bot'));
-  return profile === 'expert' ? createExpert(rng) : createCasual(rng);
-}
-
 export interface RunOptions {
   readonly galaxy: GalaxyDef;
   readonly seed: number;
   readonly profile: BotProfile;
-  /** Defaults to 'free'. */
+  /** 'rank', 'free' or 'daily'; defaults to 'free'. */
   readonly mode?: GalaxyMode;
-  /** Rank only, 1–5; Free play always starts with 3. */
+  /** Rank only, 1–5; Free play and the Daily always start with 3. */
   readonly startLives?: number;
   /** When to give up on a run still going; past its timer by a little for a survival galaxy, 300 s of fight for a boss one. */
   readonly maxSeconds?: number;

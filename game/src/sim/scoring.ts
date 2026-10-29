@@ -7,8 +7,20 @@ const MAX_MULTIPLIER = 5;
 const CLEAR_BONUS = 250;
 const NO_DEATH_BONUS = 500;
 
-export type GalaxyMode = 'rank' | 'free';
+/** Rank's one run through every Dimension, Free play's replay of a galaxy, or the Daily Galaxy. */
+export type GalaxyMode = 'rank' | 'free' | 'daily';
+/** The modes whose galaxy runs start afresh: see `startsFresh`. */
+export type FreshMode = Exclude<GalaxyMode, 'rank'>;
 export type Stars = 1 | 2 | 3;
+
+/**
+ * Whether a galaxy run in `mode` starts afresh, with 3 lives and the weapon tier at 0, and keeps its tier through a death:
+ * Free play and the Daily do. Only Rank carries lives and a tier from galaxy to galaxy, and drops a tier with a death.
+ */
+export const startsFresh = (mode: GalaxyMode): mode is FreshMode => mode !== 'rank';
+
+/** What the World's checks call each mode that starts afresh. */
+export const FRESH_MODE_NAMES: Readonly<Record<FreshMode, string>> = { free: 'Free play', daily: 'The Daily' };
 
 /** What a kill's points are multiplied by after `combo` chained kills, this one included. */
 export function comboMultiplier(combo: number): number {

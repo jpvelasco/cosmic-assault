@@ -1,17 +1,17 @@
-import type { PadEdge } from '../input/gamepad';
+import { padInUse, type PadEdge, type PadSnapshot } from '../input/gamepad';
 import type { KeyboardSource } from '../input/keyboardSource';
 import { isFormControlTarget } from '../input/keyEvent';
 import type { KeyLatch } from '../input/keyLatch';
 import { arrowDirection, type FocusDirection } from '../input/menuFocus';
 import { attachFullscreenKey } from '../platform/fullscreen';
-import { listen } from '../ui/dom';
 import { focusedControl, moveFocus, nudgeSlider } from '../ui/menuNav';
 import { commandForKey, commandForPad, TOGGLE_FULLSCREEN, type Command, type FlowCommand } from './commands';
+import { swallowDemoEnders } from './demoEnders';
 import type { Screen } from './flow';
 import { passesGameOverGuard } from './gameOverGuard';
 
-/** What can sit over the game's cards: nothing, the settings or records card, the rotate prompt or the crash card. */
-export type Cover = 'none' | 'settings' | 'records' | 'rotate' | 'crash';
+/** What can sit over the game's cards: nothing, the settings, records or Hangar card, the rotate prompt or the crash card. */
+export type Cover = 'none' | 'settings' | 'records' | 'hangar' | 'rotate' | 'crash';
 
 /** The inputs the router hands on: the commands, grouped (and a pause toggle split by screen), and the menu's own inputs. */
 export type RoutedInput =
@@ -27,7 +27,7 @@ export type RoutedInput =
   | 'navigate'
   /** Pad A pressing the focused control. */
   | 'pressFocused'
-  /** Esc, pad Back, Done or Back closing the settings or records card. */
+  /** Esc, pad Back, Done or Back closing the settings, records or Hangar card. */
   | 'closeCard';
 
 const Y = true;
@@ -38,24 +38,36 @@ const N = false;
  * every cover that is up allows it. Under the crash card the loop is dead, so only the synchronous F key still runs.
  */
 const ACTS_UNDER: Readonly<Record<RoutedInput, Readonly<Record<Cover, boolean>>>> = {
-  start: { none: Y, settings: N, records: N, rotate: N, crash: N },
-  resume: { none: Y, settings: N, records: N, rotate: N, crash: N },
-  pause: { none: Y, settings: N, records: N, rotate: Y, crash: N },
-  leave: { none: Y, settings: N, records: N, rotate: Y, crash: N },
-  toggleMute: { none: Y, settings: Y, records: Y, rotate: Y, crash: N },
-  toggleFullscreen: { none: Y, settings: Y, records: Y, rotate: Y, crash: Y },
-  navigate: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
-  pressFocused: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
-  closeCard: { none: Y, settings: Y, records: Y, rotate: N, crash: N },
+  start: { none: Y, settings: N, records: N, hangar: N, rotate: N, crash: N },
+  resume: { none: Y, settings: N, records: N, hangar: N, rotate: N, crash: N },
+  pause: { none: Y, settings: N, records: N, hangar: N, rotate: Y, crash: N },
+  leave: { none: Y, settings: N, records: N, hangar: N, rotate: Y, crash: N },
+  toggleMute: { none: Y, settings: Y, records: Y, hangar: Y, rotate: Y, crash: N },
+  toggleFullscreen: { none: Y, settings: Y, records: Y, hangar: Y, rotate: Y, crash: Y },
+  navigate: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
+  pressFocused: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
+  closeCard: { none: Y, settings: Y, records: Y, hangar: Y, rotate: N, crash: N },
 };
 
 /** The cover cards a player opens and closes: pad Back closes the one that is up. */
-const CARD_COVERS: readonly Cover[] = ['settings', 'records'];
+const CARD_COVERS: readonly Cover[] = ['settings', 'records', 'hangar'];
+
+/** Every cover, bottom first. */
+const COVERS = ['settings', 'records', 'hangar', 'rotate', 'crash'] as const;
+
+/** Which covers are up. */
+export type CoversUp = Readonly<Record<Exclude<Cover, 'none'>, boolean>>;
 
 /** The covers that are up, bottom first; `['none']` when the cards are uncovered. */
-export function coversFor(up: Readonly<Record<Exclude<Cover, 'none'>, boolean>>): Cover[] {
-  const covers = (['settings', 'records', 'rotate', 'crash'] as const).filter((cover) => up[cover]);
+export function coversFor(up: CoversUp): Cover[] {
+  const covers = COVERS.filter((cover) => up[cover]);
   return covers.length === 0 ? ['none'] : covers;
+}
+
+/** Whether any cover is up; unlike `coversFor`, it builds nothing, so a frame can ask. */
+export function anyCoverUp(up: CoversUp): boolean {
+  for (const cover of COVERS) if (up[cover]) return true;
+  return false;
 }
 
 export function actsUnder(input: RoutedInput, covers: readonly Cover[]): boolean {
@@ -105,6 +117,11 @@ export interface InputRouterDeps {
   menuControls(): HTMLElement[];
   /** Closes the settings or records card, whichever is open. */
   closeCard(): void;
+  /**
+   * Hears every key press, pointer press and pad touch: restarts the attract demo's idle count, and ends a demo that is
+   * playing. True if it ended one, so the input that did it must do nothing else.
+   */
+  interrupt(): boolean;
 }
 
 export interface InputRouter {
@@ -112,8 +129,11 @@ export interface InputRouter {
   applyCommand(command: Command, now: number): void;
   /** Acts on the key presses since the last frame. */
   routeKeys(now: number): void;
-  /** Acts on this frame's pad presses. */
-  routePad(edges: readonly PadEdge[], now: number): void;
+  /**
+   * Acts on this frame's pad presses (`edges`, from the snapshot `pad` read this frame). True when the frame ended an
+   * attract demo instead, so its presses must do nothing else.
+   */
+  routePad(pad: PadSnapshot | null, edges: readonly PadEdge[], now: number): boolean;
   dispose(): void;
 }
 
@@ -122,8 +142,9 @@ const NAV_KEYS_CLASS = 'nav-keys';
 
 /**
  * Turns keys, pad presses and the synchronous F key into commands and menu moves, through the one cover table.
- * Listens on `win` for F (full screen must be asked for inside the key handler) and for the pointer press that hides
- * the pad's focus ring.
+ * Listens on `win` for F (full screen must be asked for inside the key handler), for the pointer press that hides the
+ * pad's focus ring, and, ahead of every other handler, for the key, pointer or pad input that ends an attract demo,
+ * which it swallows (`swallowDemoEnders`).
  */
 export function createInputRouter(win: Window, deps: InputRouterDeps): InputRouter {
   const { keyboard, startKeys, run } = deps;
@@ -184,7 +205,7 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         break;
       }
       case 'back':
-        // Back closes the top card: the settings or records card when one is open, else what Esc does on the card for the screen.
+        // Back closes the top card: the settings, records or Hangar card when one is open, else what Esc does on the card for the screen.
         if (deps.covers().some((cover) => CARD_COVERS.includes(cover))) deps.closeCard();
         else runPadCommand('back', now);
         break;
@@ -197,8 +218,10 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
     }
   }
 
+  // Listens in the capture phase, so a demo-ending F is swallowed before the F key's own (bubble-phase) listener sees it.
+  const demoEnders = swallowDemoEnders(win, () => deps.interrupt(), hideNavFocus);
   const unlisteners = [
-    listen(win, 'pointerdown', hideNavFocus),
+    demoEnders.dispose,
     attachFullscreenKey(win, {
       toggle: () => {
         applyCommand(TOGGLE_FULLSCREEN, performance.now());
@@ -221,8 +244,10 @@ export function createInputRouter(win: Window, deps: InputRouterDeps): InputRout
         if (command !== null) applyCommand(command, now);
       }
     },
-    routePad(edges, now) {
+    routePad(pad, edges, now) {
+      if (padInUse(pad) && demoEnders.padTouched()) return true;
       for (const edge of edges) routePadEdge(edge, now);
+      return false;
     },
     dispose() {
       for (const unlisten of unlisteners) unlisten();

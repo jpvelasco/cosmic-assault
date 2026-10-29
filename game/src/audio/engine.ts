@@ -114,8 +114,8 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
   let musicLevel: MusicLevel = 'menu';
   /** How many times each capped sound has started this frame. */
   const startedThisFrame: Partial<Record<SfxName, number>> = {};
-  /** Which hums the hazards ask for, as the events last told; and whether the screen is play, where they are heard. */
-  const humWanted: Record<HumName, boolean> = { well: false, zone: false, hole: false };
+  /** The hazards holding each hum, by id, as the events last told; and whether the screen is play, where they are heard. */
+  const humHolders: Record<HumName, Set<number>> = { well: new Set(), zone: new Set(), hole: new Set() };
   let inPlay = false;
   const hums: Record<HumName, Loop | null> = { well: null, zone: null, hole: null };
   /** The bus the open screen's own sound (the clear fanfare) plays through, so leaving the screen can fade it out. */
@@ -192,20 +192,22 @@ export function createAudioEngine(initial: Settings, onFailure: (message: string
 
   /** Every hum falls silent, whatever the hazards last asked for: the run is over or left. */
   function silenceHums(): void {
-    for (const name of HUM_NAMES) humWanted[name] = false;
+    for (const name of HUM_NAMES) humHolders[name].clear();
   }
 
   function changeHum(change: HumChange | null): void {
+    if (change === null) return;
     if (change === 'silence') silenceHums();
-    else if (change !== null) humWanted[change.hum] = change.on;
+    else if (change.on) humHolders[change.hum].add(change.holder);
+    else humHolders[change.hum].delete(change.holder);
   }
 
-  /** Starts each hum its hazard asks for in play while sound is audible, and stops it as soon as any of those ends. */
+  /** Starts each hum a hazard holds in play while sound is audible, and stops it once none does or any of those ends. */
   function syncHum(): void {
     const current = graph;
     const live = inPlay && current !== null && audible();
     for (const name of HUM_NAMES) {
-      if (humWanted[name] && live) {
+      if (humHolders[name].size > 0 && live) {
         if (hums[name] === null) {
           guard(() => {
             hums[name] = startHum(current.bed, current.sfx, name);

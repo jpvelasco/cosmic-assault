@@ -1,12 +1,10 @@
-import { eventsOfType, showerSeconds } from '../../content/curves';
+import { eventsOfType, SHOWER_WARNING_SECONDS, showerSeconds } from '../../content/curves';
 import type { GalaxyEvent } from '../../content/types';
 import { EDGE_COUNT, type Edge } from '../asteroid';
 import type { SimEvent } from '../events';
 import { TIME_EPSILON } from '../math';
 import type { Rng } from '../rng';
 import { assertFieldArea, REFERENCE_AREA } from './director';
-
-export const SHOWER_WARNING_SECONDS = 3;
 
 /** Bearings from the field centre to the top, right, bottom and left edges; y grows downwards. */
 export const EDGE_BEARINGS: readonly [number, number, number, number] = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];

@@ -32,6 +32,14 @@ export function kindProbability(ramp: KindRamp, t: number): number {
   return clamp(base + Math.max(0, finite(t, 'tier') - from) * step, 0, max);
 }
 
+/** Seconds a meteor shower is warned before its rocks fall. */
+export const SHOWER_WARNING_SECONDS = 3;
+
+/** Seconds `event` is warned before it starts: a shower's warning, or a hazard's telegraph by its rule. */
+export function warningSeconds({ type }: Pick<GalaxyEvent, 'type'>): number {
+  return type === 'meteorShower' ? SHOWER_WARNING_SECONDS : HAZARD_RULES[type].telegraph;
+}
+
 /** Seconds a meteor shower of `intensity` falls for, after its warning. */
 export function showerSeconds(intensity: GalaxyEvent['intensity']): number {
   return Math.min(12, 6 + 3 * intensity);

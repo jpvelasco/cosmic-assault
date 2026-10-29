@@ -6,7 +6,6 @@ import type { Bot } from './view';
 
 /** How late a casual player acts on what it sees. */
 export const REACTION_SECONDS = 0.3;
-const DELAY_STEPS = Math.round(REACTION_SECONDS / STEP_SECONDS);
 /** Radians a casual player's aim strays either way. */
 const AIM_WOBBLE = 0.25;
 /** The share of danger episodes a casual player dodges at all. */
@@ -42,7 +41,9 @@ export function createCasualPilot(rng: Rng): Pilot {
 export function createCasual(rng: Rng): Bot {
   const pilot = createCasualPilot(rng);
   const hands = new Hands();
-  const line: Intent[] = Array.from({ length: DELAY_STEPS }, idleIntent);
+  // Worked out here, not at load, so a bundle that never makes a casual carries none of it.
+  const delaySteps = Math.round(REACTION_SECONDS / STEP_SECONDS);
+  const line: Intent[] = Array.from({ length: delaySteps }, idleIntent);
   const due = idleIntent();
   let head = 0;
   return {
@@ -50,7 +51,7 @@ export function createCasual(rng: Rng): Bot {
       const slot = line[head] as Intent;
       copyIntent(slot, due);
       pilot.plan(view, slot);
-      head = (head + 1) % DELAY_STEPS;
+      head = (head + 1) % delaySteps;
       return hands.apply(due, view.ship.angle);
     },
   };

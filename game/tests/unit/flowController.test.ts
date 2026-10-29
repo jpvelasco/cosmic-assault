@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FlowState, Screen } from '../../src/app/flow';
-import { createFlowController, STALE_NEW_RUN_NOTICE, STALE_RUN_NOTICE, type FlowControllerDeps } from '../../src/app/flowController';
-import { createSaveStore, type StorageEvents } from '../../src/app/saveStore';
+import { STALE_NEW_RUN_NOTICE, STALE_RUN_NOTICE } from '../../src/app/flowController';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyId } from '../../src/content/types';
+import type { NewBest } from '../../src/meta/bests';
 import { setRankRun } from '../../src/meta/progress';
 import { startRank } from '../../src/meta/rankRun';
 import { defaultSave, type SaveData } from '../../src/meta/save';
@@ -11,31 +10,13 @@ import { STEP_SECONDS } from '../../src/sim/config';
 import type { SimEvent } from '../../src/sim/events';
 import { NO_CONTROLS } from '../../src/sim/controls';
 import { World } from '../../src/sim/world';
+import { flowRig, type FlowRigOptions } from '../helpers/flowRig';
 import { memoryStorage } from '../helpers/memoryStorage';
 
 const TODAY = '2026-10-26';
 const FIELD = { width: 1280, height: 720 };
-const NO_EVENTS: StorageEvents = { addEventListener: () => undefined, removeEventListener: () => undefined };
-
-type Backing = Pick<Storage, 'getItem' | 'setItem'>;
-
-/** A tab: its own store over `storage` (shared between tabs to model two), and its flow. */
-function setup(options: { save?: SaveData; storage?: Backing; galaxy?: GalaxyId; startLives?: number; writes?: boolean } = {}) {
-  const store = createSaveStore({ storage: options.storage ?? memoryStorage(options.save), events: NO_EVENTS, writes: options.writes ?? true });
-  store.load();
-  const started: FlowState[] = [];
-  const screens: Screen[] = [];
-  const notify = vi.fn<(text: string) => void>();
-  const deps: FlowControllerDeps = {
-    store,
-    overrides: { galaxy: options.galaxy, startLives: options.startLives },
-    today: () => TODAY,
-    startRun: (flow) => started.push(flow),
-    showScreen: (screen) => screens.push(screen),
-    notify,
-  };
-  return { flow: createFlowController(deps), store, started, screens, notify };
-}
+/** A tab on TODAY: its own store over `storage` (shared between tabs to model two), and its flow. */
+const setup = (options: Omit<FlowRigOptions, 'today'> = {}) => flowRig({ ...options, today: TODAY });
 
 /**
  * Steps a World of `id` idle, feeding `flow` the events `heard` lets through, until the flow leaves play; the seed
@@ -146,22 +127,82 @@ describe('createFlowController: events', () => {
       flow.command({ kind: 'openDimension', dimension: 1 });
       flow.command({ kind: 'openGalaxy', id: '1-1' });
       playUntilEnd(flow, '1-1');
-      return flow.state.result;
+      return flow.state;
     };
     // A first clear has no best to beat.
     const first = cleared({});
-    expect(first?.newBest).toBe(false);
-    const score = first?.report.score ?? 0;
-    expect(cleared({ '1-1': { bestScore: score - 1, stars: 1 } })?.newBest).toBe(true);
+    expect(first.newBest).toBeNull();
+    const score = first.result?.report.score ?? 0;
+    expect(cleared({ '1-1': { bestScore: score - 1, stars: 1 } }).newBest).toEqual({ kind: 'galaxy', score });
     // The idle replay scores the same again: equal is no new best.
-    expect(cleared({ '1-1': { bestScore: score, stars: 1 } })?.newBest).toBe(false);
+    expect(cleared({ '1-1': { bestScore: score, stars: 1 } }).newBest).toBeNull();
   });
 
-  it('never calls a debug run a new best: its store never writes, so it keeps no record to beat', () => {
-    const { flow } = setup({ save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1', writes: false });
+  it('names the look a clear unlocks on its result, and only on the clear that unlocks it', () => {
+    // Eight stars saved elsewhere: whatever the clear of 1-1 wins (one to three), the total reaches Ember's nine.
+    const save: SaveData = { ...defaultSave(), galaxies: { '1-2': { bestScore: 1, stars: 3 }, '1-3': { bestScore: 1, stars: 3 }, '1-4': { bestScore: 1, stars: 2 } } };
+    const { flow } = setup({ save });
+    flow.command({ kind: 'start' });
+    flow.command({ kind: 'chooseMode', mode: 'free' });
+    flow.command({ kind: 'openDimension', dimension: 1 });
+    flow.command({ kind: 'openGalaxy', id: '1-1' });
+    playUntilEnd(flow, '1-1');
+    expect(flow.state.result?.newLooks).toEqual(['Ember trim']);
+
+    flow.command({ kind: 'retry' });
+    playUntilEnd(flow, '1-1');
+    expect(flow.state.result?.newLooks).toEqual([]);
+  });
+
+  it('names no look on a debug run\'s clear: its store never writes, so the stars it wins are not kept', () => {
+    const save: SaveData = { ...defaultSave(), galaxies: { '1-2': { bestScore: 1, stars: 3 }, '1-3': { bestScore: 1, stars: 3 }, '1-4': { bestScore: 1, stars: 2 } } };
+    const { flow } = setup({ save, galaxy: '1-1', writes: false });
     flow.command({ kind: 'start' });
     playUntilEnd(flow, '1-1');
-    expect(flow.state.result?.newBest).toBe(false);
+    expect(flow.state.screen).toBe('results');
+    expect(flow.state.result?.newLooks ?? []).toEqual([]);
+  });
+
+  describe.each<{ readonly kind: NewBest['kind']; readonly rig: Omit<FlowRigOptions, 'today'>; readonly play: (flow: ReturnType<typeof setup>['flow']) => void }>([
+    {
+      kind: 'galaxy',
+      rig: { save: { ...defaultSave(), galaxies: { '1-1': { bestScore: 1, stars: 1 } } }, galaxy: '1-1' },
+      play: (flow) => {
+        flow.command({ kind: 'start' });
+        flow.handle([{ type: 'galaxyCleared', score: 500, bonus: 0, deaths: 0, stars: 1 }], { lives: 3, weaponTier: 0 });
+      },
+    },
+    {
+      kind: 'rankRun',
+      rig: { save: { ...defaultSave(), rankBoard: [{ score: 1, reached: 'D1 · G1', date: TODAY, continued: false }] } },
+      play: (flow) => {
+        flow.command({ kind: 'start' });
+        flow.command({ kind: 'chooseMode', mode: 'rank' });
+        flow.handle([{ type: 'gameOver', score: 500 }], { lives: 0, weaponTier: 0 });
+      },
+    },
+    {
+      kind: 'daily',
+      rig: { save: { ...defaultSave(), daily: { lastCleared: TODAY, streak: 1, bestStreak: 1, best: { date: TODAY, score: 1 } } } },
+      play: (flow) => {
+        flow.command({ kind: 'start' });
+        flow.command({ kind: 'chooseMode', mode: 'daily' });
+        flow.handle([{ type: 'galaxyCleared', score: 500, bonus: 0, deaths: 0, stars: 1 }], { lives: 3, weaponTier: 0 });
+      },
+    },
+  ])('a $kind record the score beats', ({ kind, rig, play }) => {
+    it('is a new best in a run that saves', () => {
+      const { flow } = setup(rig);
+      play(flow);
+      expect(flow.state.newBest?.kind).toBe(kind);
+    });
+
+    it('is never a new best in a debug run, whose store never writes and so keeps no record to beat', () => {
+      const { flow } = setup({ ...rig, writes: false });
+      play(flow);
+      expect(['results', 'gameOver']).toContain(flow.state.screen);
+      expect(flow.state.newBest).toBeNull();
+    });
   });
 
   it('Resume Rank works from mode select too', () => {
@@ -252,13 +293,11 @@ describe('createFlowController: a Rank galaxy left unfinished', () => {
   });
 
   it('a live Rank galaxy keeps answering for the run as each hit moves its rankSeq on', () => {
-    const live: (number | null)[] = [];
-    const tab = setup();
-    const flow = createFlowController({ store: tab.store, overrides: { galaxy: undefined, startLives: undefined }, today: () => TODAY, startRun: () => undefined, showScreen: () => undefined, notify: () => undefined, liveRun: (seq) => live.push(seq) });
+    const { flow, store, live } = setup();
     flow.command({ kind: 'start' });
     flow.command({ kind: 'chooseMode', mode: 'rank' });
     flow.handle([{ type: 'shipHit', x: 0, y: 0, livesLeft: 2 }], { lives: 2, weaponTier: 0 });
-    expect(live.at(-1)).toBe(tab.store.save.rankSeq);
+    expect(live.at(-1)).toBe(store.save.rankSeq);
     expect(live.at(-1)).toBeGreaterThan(live.at(-2) ?? Number.POSITIVE_INFINITY);
   });
 

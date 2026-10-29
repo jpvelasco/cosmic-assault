@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { GalaxyMode } from '../../src/sim/scoring';
 import { eventsOfType } from '../../src/content/curves';
 import { galaxyById } from '../../src/content/galaxies';
 import type { GalaxyDef, GalaxyId } from '../../src/content/types';
@@ -27,7 +28,7 @@ const PINNED_3_5_PEAK = 30;
 /** Galaxy `id` whose director never spawns, keeping its showers. */
 const showering = (id: GalaxyId): GalaxyDef => ({ ...calmGalaxy(id), events: galaxyById(id).events });
 
-type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: 'rank' | 'free' };
+type Scenario = Omit<WorldOptions, 'field' | 'seed' | 'rules'> & { readonly seed?: number; readonly mode?: GalaxyMode };
 
 function galaxyWorld(galaxy: GalaxyDef, opts: Scenario = {}): World {
   const { mode = 'free', seed = 1, ...rest } = opts;
@@ -92,6 +93,11 @@ describe('a galaxy run', () => {
     expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'free' }).lives).toBe(3);
     expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'free', startLives: 3 }).lives).toBe(3);
     expect(() => galaxyWorld(calmGalaxy('1-1'), { mode: 'free', startLives })).toThrow(/Free play always starts with 3 lives.*rank/);
+  });
+
+  it.each([1, 2, 4, 5])('always starts the Daily with 3 lives, as Free play, refusing startLives %i', (startLives) => {
+    expect(galaxyWorld(calmGalaxy('1-1'), { mode: 'daily' }).lives).toBe(3);
+    expect(() => galaxyWorld(calmGalaxy('1-1'), { mode: 'daily', startLives })).toThrow(/The Daily always starts with 3 lives.*rank/);
   });
 
   it('refuses rules and practiceLevel together, saying which to keep', () => {

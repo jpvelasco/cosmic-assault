@@ -1,6 +1,8 @@
 import { furthest, GALAXIES, isGalaxyId } from '../content/galaxies';
 import { canonicalPickups, isPickupId } from '../content/pickups';
 import type { GalaxyId, PickupId } from '../content/types';
+import { isCalendarDate } from './calendar';
+import { defaultDaily, mergeDaily, type DailyBest, type DailySave } from './daily';
 import { addEntry, mergeBoards, type RankEntry } from './rankBoard';
 import { compareRuns, RANK_MAX_LIVES, type RankRun } from './rankRun';
 
@@ -27,13 +29,14 @@ export interface SaveData {
   readonly classicImported: boolean;
   /** The pickups the player has collected, for the first-drop callouts; in `PICKUP_IDS` order. */
   readonly seenPickups: readonly PickupId[];
+  /** The Daily streak and the best Daily score. */
+  readonly daily: DailySave;
 }
 
 export function defaultSave(): SaveData {
-  return { version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false, seenPickups: [] };
+  return { version: 1, frontier: '1-1', galaxies: {}, rankRun: null, rankSeq: 0, rankBoard: [], classicBest: null, classicImported: false, seenPickups: [], daily: defaultDaily() };
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const REACHED = /^D[1-5] · (?:G[1-5]|★)$/;
 const WEAPON_TIERS: readonly RankRun['weaponTier'][] = [0, 1, 2, 3];
 
@@ -43,10 +46,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function isCount(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
-}
-
-function isDate(value: unknown): value is string {
-  return typeof value === 'string' && DATE.test(value);
 }
 
 function sanitizeStars(value: unknown): GalaxyProgress['stars'] {
@@ -68,7 +67,7 @@ function sanitizeRankRun(raw: unknown): RankRun | null {
   const { next, score, lives, weaponTier, continued, startedAt, inGalaxy = false } = run;
   const tier = WEAPON_TIERS.find((t) => t === weaponTier);
   if (!isGalaxyId(next) || !isCount(score) || !isCount(lives) || lives > RANK_MAX_LIVES) return null;
-  if (tier === undefined || typeof continued !== 'boolean' || !isDate(startedAt) || typeof inGalaxy !== 'boolean') return null;
+  if (tier === undefined || typeof continued !== 'boolean' || !isCalendarDate(startedAt) || typeof inGalaxy !== 'boolean') return null;
   return { next, score, lives, weaponTier: tier, continued, startedAt, inGalaxy };
 }
 
@@ -81,8 +80,28 @@ function sanitizeEntry(raw: unknown): RankEntry | null {
   const entry = asRecord(raw);
   if (entry === null) return null;
   const { score, reached, date, continued } = entry;
-  if (!isCount(score) || typeof reached !== 'string' || !REACHED.test(reached) || !isDate(date) || typeof continued !== 'boolean') return null;
+  if (!isCount(score) || typeof reached !== 'string' || !REACHED.test(reached) || !isCalendarDate(date) || typeof continued !== 'boolean') return null;
   return { score, reached, date, continued };
+}
+
+function sanitizeDailyBest(raw: unknown): DailyBest | null {
+  const best = asRecord(raw);
+  if (best === null) return null;
+  const { date, score } = best;
+  return isCalendarDate(date) && isCount(score) ? { date, score } : null;
+}
+
+/**
+ * Each field falls back on its own. With no last clear the streak is 0; with one, the streak is at least 1,
+ * since the last clear's own date was cleared.
+ */
+function sanitizeDaily(raw: unknown): DailySave {
+  const daily = asRecord(raw);
+  if (daily === null) return defaultDaily();
+  const lastCleared = isCalendarDate(daily['lastCleared']) ? daily['lastCleared'] : null;
+  const streak = lastCleared === null ? 0 : Math.max(1, isCount(daily['streak']) ? daily['streak'] : 0);
+  const bestStreak = isCount(daily['bestStreak']) ? Math.max(daily['bestStreak'], streak) : streak;
+  return { lastCleared, streak, bestStreak, best: sanitizeDailyBest(daily['best']) };
 }
 
 function sanitizeBoard(raw: unknown): readonly RankEntry[] {
@@ -108,6 +127,7 @@ export function sanitizeSave(raw: unknown): SaveData {
     classicBest: isCount(classicBest) ? classicBest : null,
     classicImported: classicImported === true,
     seenPickups: sanitizeSeen(saved['seenPickups']),
+    daily: sanitizeDaily(saved['daily']),
   };
 }
 
@@ -144,7 +164,7 @@ function mergeRankRuns(a: SaveData, b: SaveData): RankRun | null {
 
 /**
  * Two saves as one that loses nothing from either, so a tab with a stale copy cannot undo another's
- * progress: the furthest frontier, the best of each galaxy, both boards' entries and the newer Rank run.
+ * progress: the furthest frontier, the best of each galaxy, both boards' entries, the newer Rank run and the Daily record.
  */
 export function mergeSaves(a: SaveData, b: SaveData): SaveData {
   return {
@@ -157,5 +177,6 @@ export function mergeSaves(a: SaveData, b: SaveData): SaveData {
     classicBest: a.classicBest === null || b.classicBest === null ? (a.classicBest ?? b.classicBest) : Math.max(a.classicBest, b.classicBest),
     classicImported: a.classicImported || b.classicImported,
     seenPickups: canonicalPickups([...a.seenPickups, ...b.seenPickups]),
+    daily: mergeDaily(a.daily, b.daily),
   };
 }

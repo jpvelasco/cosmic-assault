@@ -21,7 +21,7 @@ function summarizeError(error: unknown): string {
 }
 
 /** Message and stack. Only V8 starts its stack with the message, so Firefox and Safari get it added. */
-function describeError(error: unknown): string {
+export function describeError(error: unknown): string {
   if (!(error instanceof Error) || !error.stack) return summarizeError(error);
   return error.stack.includes(error.message) ? error.stack : `${summarizeError(error)}\n${error.stack}`;
 }
