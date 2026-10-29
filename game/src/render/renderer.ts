@@ -24,7 +24,7 @@ import { createWingmanPass } from './wingmanPass';
 import type { SceneLook } from './scene';
 import { DEFAULT_PARTICLE_CAPACITY, ParticlePool } from './particles';
 import { HIGH_QUALITY, type QualityLevel } from './quality';
-import { createSpriteBaker, type Sprite, type SpriteBaker } from './sprites';
+import { createSpriteBaker, type CacheUse, type Sprite, type SpriteBaker } from './sprites';
 import { createStarLayers } from './starfieldLayers';
 import { UNIT_VISUAL, type VisualScale } from './visualScale';
 
@@ -78,7 +78,7 @@ export interface Renderer {
   /** Frames drawn so far. */
   readonly drawCount: number;
   /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
-  readonly spriteCache: Readonly<{ size: number; evictions: number }>;
+  readonly spriteCache: CacheUse;
   /** How much larger than their field size sprites are drawn at the current layout; 1 across the board before the first `resize`. */
   readonly visualScale: VisualScale;
   /** Cancels a pending re-bake and frees every sprite and particle. */

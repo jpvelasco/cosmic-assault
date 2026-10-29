@@ -1,6 +1,6 @@
 import type { JSHandle, Page } from '@playwright/test';
 import { PLAYER } from '../src/sim/config';
-import { expect, expectMode, gameState, grantPickup, openGame, shipState, shotsPerVolley, speed, test } from './fixtures';
+import { expect, expectMode, gameState, grantPickup, nextFrames, openGame, shipState, shotsPerVolley, speed, test } from './fixtures';
 
 /** Starts a run with Space, then releases it so the start-key latch lets Space fire again. */
 async function startWithSpace(page: Page): Promise<void> {
@@ -169,6 +169,8 @@ for (const [thrust, fire, left, right] of [
 /** The shots one trigger fires while `keys` are held, counted through the bridge's shot events. */
 async function volleyHolding(page: Page, keys: readonly string[]): Promise<number> {
   for (const key of keys) await page.keyboard.down(key);
+  // A frame drains the fresh presses, which lets go of a start key still latched; the fast-forward reads controls but drains none.
+  await nextFrames(page, 2);
   const shots = await shotsPerVolley(page);
   for (const key of [...keys].reverse()) await page.keyboard.up(key);
   return shots;

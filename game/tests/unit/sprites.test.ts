@@ -9,7 +9,7 @@ import {
   snapFlameLength,
   snapGlowDiameter,
 } from '../../src/render/sprites';
-import { SKINS } from '../../src/content/cosmetics';
+import { SKIN_IDS, SKINS, type SkinId } from '../../src/content/cosmetics';
 import { rgba } from '../../src/render/color';
 import { createAsteroid, type AsteroidSize } from '../../src/sim/asteroid';
 import { ASTEROID } from '../../src/sim/config';
@@ -215,20 +215,23 @@ describe('createSpriteBaker', () => {
     expect(baker.ship(DRIFT)).not.toBe(ship);
   });
 
-  it('reports how many sprites it holds and how many it has evicted to stay within its capacity', () => {
+  it('reports the sprites it holds by key, and how many it has evicted to stay within its capacity', () => {
     const baker = createSpriteBaker(2);
-    expect(baker.cacheUse).toEqual({ size: 0, evictions: 0 });
+    expect(baker.cacheUse).toEqual({ size: 0, evictions: 0, keys: [] });
     baker.ship(DRIFT);
     baker.shot(DRIFT);
-    expect(baker.cacheUse).toEqual({ size: 2, evictions: 0 });
+    expect(baker.cacheUse).toMatchObject({ size: 2, evictions: 0 });
+    expect(baker.cacheUse.keys).toHaveLength(2);
+    expect(baker.cacheUse.keys[0]).toMatch(/^ship\|drift:classic\|/);
     baker.glow('#5b8cff', 24);
-    expect(baker.cacheUse).toEqual({ size: 2, evictions: 1 });
+    expect(baker.cacheUse).toMatchObject({ size: 2, evictions: 1 });
+    expect(baker.cacheUse.keys[1]).toMatch(/^glow\|#5b8cff\|/);
   });
 
   it('holds at least 256 sprites by default', () => {
     const baker = createSpriteBaker();
     for (let id = 1; id <= 256; id++) baker.asteroid(rock(id), DRIFT);
-    expect(baker.cacheUse).toEqual({ size: 256, evictions: 0 });
+    expect(baker.cacheUse).toMatchObject({ size: 256, evictions: 0 });
   });
 
   it('returns the cached sprite for the same key, including snapped glow and flame sizes', () => {
@@ -528,10 +531,10 @@ describe('ship skins', () => {
   }
 
   /** The ops a ship bake makes with `skin`, from a fresh baker, with the fills and strokes that are not the hull's. */
-  function bakeOps(skin: 'classic' | 'ember' | 'nova') {
+  function bakeOps(skin: SkinId, palette: Palette = DRIFT) {
     const ops: string[] = [];
     vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, ...recordingCanvas(ops) }) });
-    createSpriteBaker().ship(DRIFT, skin);
+    createSpriteBaker().ship(palette, skin);
     vi.unstubAllGlobals();
     return ops;
   }
@@ -556,10 +559,15 @@ describe('ship skins', () => {
     expect(hullOf(bakeOps('nova'))).toEqual(classic);
   });
 
-  it('fills the body from the palette\'s ship colours for every skin', () => {
+  /** The hero's green, which every palette's ship body is built around and no trim may change. */
+  const HERO_GREEN = '#39ff14';
+
+  it.each(PALETTE_IDS)('fills the body with the hero green under every trim in the %s palette', (id) => {
+    const palette = paletteFor(id);
     const bodyFill = (ops: readonly string[]) => ops.find((op) => op.startsWith('fill')) ?? '';
-    const stops = JSON.stringify({ stops: DRIFT.ship.map((color, i) => `${String([0, 0.5, 1][i])}:${color}`) });
-    for (const skin of ['classic', 'ember', 'nova'] as const) expect(bodyFill(bakeOps(skin))).toBe(`fill ${stops}`);
+    const stops = JSON.stringify({ stops: palette.ship.map((color, i) => `${String([0, 0.5, 1][i])}:${color}`) });
+    expect(palette.ship[1]).toBe(HERO_GREEN);
+    for (const skin of SKIN_IDS) expect(bodyFill(bakeOps(skin, palette)), skin).toBe(`fill ${stops}`);
   });
 
   it('rims the hull in the skin\'s colour and adds the panel lines only to a skin that has them', () => {

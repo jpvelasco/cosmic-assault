@@ -40,9 +40,9 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 }
 
 describe('the test bridge look and music', () => {
-  it('reports the palette and the music theme in force, beside the version-7 fields', () => {
+  it('reports the palette and the music theme in force, beside the version-8 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(7);
+    expect(api.version).toBe(8);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
   });
@@ -55,6 +55,14 @@ describe('the test bridge Daily', () => {
     const state = bridgeFor(null, undefined, {}, daily).getState();
     expect(state.daily).toEqual({ date: '2026-10-26', twist: daily.twist, target: daily.target });
     expect(Object.isFrozen(state.daily)).toBe(true);
+  });
+});
+
+describe('the test bridge sprite cache', () => {
+  it('reports the cache\'s use with the keys it holds, and null without the hook', () => {
+    expect(bridgeFor(null).getState().spriteCache).toBeNull();
+    const use = { size: 1, evictions: 0, keys: ['glow|#ffffff|24'] };
+    expect(bridgeFor(null, undefined, { e2eSpriteCache: () => use }).getState().spriteCache).toEqual(use);
   });
 });
 

@@ -133,6 +133,8 @@ export const DATE_EPOCH = '2026-01-01';
 const DATE_ENTRIES = [
   // The Daily spec's clear: the idle ship lives to the warp on the desktop and phone fields, and the clear writes the Daily record.
   { date: '2026-01-04', claim: 'daily-clears' },
+  // The Daily spec's streak: the idle ship clears this date and the next on the desktop field, so two clears run a streak of 2.
+  { date: '2027-10-06', claim: 'daily-streak' },
   // The Daily spec's game over: the idle ship loses its three lives within DAILY_GAME_OVER_SECONDS.
   { date: '2026-01-01', claim: 'daily-game-over' },
 ] as const satisfies readonly { readonly date: string; readonly claim: string }[];

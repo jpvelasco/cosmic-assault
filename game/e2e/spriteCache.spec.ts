@@ -18,14 +18,14 @@ const REPORT_PATH = 'test-results/sprite-cache.json';
 const THRUST_MS = 1000;
 
 /** The glow colours a trail bakes: its colours, and its core when it draws one. */
-const trailColours = (id: TrailId): number => new Set([...TRAILS[id].colors, ...(TRAILS[id].coreShare > 0 ? [TRAILS[id].core] : [])]).size;
+const trailColours = (id: TrailId): readonly string[] => [...new Set([...TRAILS[id].colors, ...(TRAILS[id].coreShare > 0 ? [TRAILS[id].core] : [])])];
 /**
  * The scenes are played in the look that bakes the most sprites: the trail with the most glow colours (a skin bakes
  * one hull whichever it is), so the capacity holds for every look a player can choose.
  */
 const HEAVIEST_LOOK: Look = {
   skin: SKIN_IDS[SKIN_IDS.length - 1] ?? 'classic',
-  trail: TRAIL_IDS.reduce((most, id) => (trailColours(id) > trailColours(most) ? id : most)),
+  trail: TRAIL_IDS.reduce((most, id) => (trailColours(id).length > trailColours(most).length ? id : most)),
 };
 
 interface CacheScene {
@@ -50,8 +50,11 @@ test.afterAll(() => {
   writeFileSync(REPORT_PATH, `${JSON.stringify({ capacity: SPRITE_CACHE_CAPACITY, scenes: reports }, null, 2)}\n`);
 });
 
+/** The colours of `trail` that `keys` hold a glow of (a glow's key is `glow|<colour>|<size>`). */
+const trailGlowsIn = (keys: readonly string[], trail: TrailId): string[] => trailColours(trail).filter((colour) => keys.some((key) => key.startsWith(`glow|${colour}|`)));
+
 /** The cache's use as the bridge reports it; fails in a build without the hook. */
-async function cacheUse(page: Page): Promise<{ size: number; evictions: number }> {
+async function cacheUse(page: Page): Promise<NonNullable<CosmicAssaultTestState['spriteCache']>> {
   const { spriteCache } = await gameState(page);
   if (spriteCache === null) throw new Error('The bridge reports no sprite cache: run the e2e build, which sets the e2eSpriteCache hook');
   return spriteCache;
@@ -73,29 +76,35 @@ for (const scene of SCENES) {
     const start = await cacheUse(page);
     let peak = start.size;
     let last = start;
+    /** The trail colours glowing in the cache at any sample since the last reset. */
+    const glows = new Set<string>();
     const sample = async (ms: number): Promise<void> => {
       for (let held = 0; held < ms; held += SAMPLE_MS) {
         await page.waitForTimeout(SAMPLE_MS);
         last = await cacheUse(page);
         peak = Math.max(peak, last.size);
+        for (const colour of trailGlowsIn(last.keys, HEAVIEST_LOOK.trail)) glows.add(colour);
       }
     };
     await sample(CACHE_HOLD_SECONDS * 1000);
     const { screen } = await gameState(page);
-    // The seeds hold the scene in play for the hold alone; thrusting after it draws the engine trail.
-    const beforeThrust = last.size;
+    // The seeds hold the scene in play for the hold alone; thrusting after it draws the engine trail. A trail colour may
+    // already glow from something else in the scene, so only one the thrust adds proves the trail drew.
+    const beforeThrust = new Set(glows);
+    glows.clear();
     await page.keyboard.down('ArrowUp');
     await sample(THRUST_MS);
+    const trailDrew = [...glows].filter((colour) => !beforeThrust.has(colour));
     await page.keyboard.up('ArrowUp');
     await page.keyboard.up('ArrowLeft');
     await page.keyboard.up('Space');
 
     const evictions = last.evictions - start.evictions;
-    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), look: HEAVIEST_LOOK, holdMs: CACHE_HOLD_SECONDS * 1000, thrustMs: THRUST_MS, peak, evictions, endSize: last.size, screen };
+    reports[scene.name] = { galaxy: scene.galaxy, seed: seedFor(scene.claim), look: HEAVIEST_LOOK, holdMs: CACHE_HOLD_SECONDS * 1000, thrustMs: THRUST_MS, peak, evictions, endSize: last.size, trailDrew, screen };
     console.log(`sprite cache ${scene.name}: ${JSON.stringify(reports[scene.name])}`);
 
     expect(screen, 'the scene stays in play through the hold').toBe('playing');
-    expect(peak, 'the thrust bakes the trail\'s glows').toBeGreaterThan(beforeThrust);
+    expect(trailDrew, `the thrust bakes glows in the ${HEAVIEST_LOOK.trail} trail's colours`).not.toEqual([]);
     expect(evictions, `evictions in steady play, at a capacity of ${String(SPRITE_CACHE_CAPACITY)}`).toBeLessThanOrEqual(MAX_STEADY_EVICTIONS);
     expect(peak * CAPACITY_HEADROOM, `the capacity (${String(SPRITE_CACHE_CAPACITY)}) against ${String(CAPACITY_HEADROOM)} times the peak in use`).toBeLessThanOrEqual(SPRITE_CACHE_CAPACITY);
   });

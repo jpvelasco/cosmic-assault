@@ -1,4 +1,5 @@
 import type { GalaxyId, PickupId } from '../content/types';
+import type { CacheUse } from '../render/sprites';
 import { bossTarget } from '../sim/boss/bossRules';
 import { PICKUP, STEP_SECONDS } from '../sim/config';
 import type { Controls } from '../sim/controls';
@@ -39,8 +40,8 @@ export interface E2eHooks {
   e2eEventCounts?: EventCounts | undefined;
   /** Set by `installE2eHooks`: restarts the run's frame stats, warm-up included, so a measure can skip a settling stretch. */
   e2eRestartFrameStats?: (() => void) | undefined;
-  /** Set by `installE2eHooks`: the sprite cache's use, the sprites it holds now and how many it has evicted. */
-  e2eSpriteCache?: (() => Readonly<{ size: number; evictions: number }>) | undefined;
+  /** Set by `installE2eHooks`: the sprite cache's use, the sprites it holds now with their keys, and how many it has evicted. */
+  e2eSpriteCache?: (() => CacheUse) | undefined;
   /** Set by `installE2eHooks`: counts the title's idle stretch as over, so the next frame on the bare title starts the attract demo. */
   e2eAttractNow?: (() => void) | undefined;
   /** Set by `installE2eHooks`: attract mode's state now. */
@@ -57,7 +58,7 @@ export interface E2eHookDeps {
   /** Forgets the frame times measured so far, warm-up included. */
   restartFrameStats(): void;
   /** The sprite cache's use now. */
-  spriteCache(): Readonly<{ size: number; evictions: number }>;
+  spriteCache(): CacheUse;
   readonly attract: Pick<Attract, 'active' | 'demo' | 'frames' | 'halted' | 'dueNow'>;
 }
 

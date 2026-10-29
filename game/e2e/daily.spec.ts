@@ -1,8 +1,10 @@
 import type { Page } from '@playwright/test';
 import { TWISTS_BY_ID } from '../src/content/daily';
+import { nextDate } from '../src/meta/calendar';
 import { dailyGalaxy } from '../src/meta/dailyGalaxy';
 import { defaultSave, type SaveData } from '../src/meta/save';
 import { DAILY_CLEARED, dailyCardLine, dailyTitle, targetLine, twistToast } from '../src/ui/dailyCopy';
+import { PRESSURE } from '../tests/helpers/pressure';
 import { DAILY_CLEAR_SECONDS, DAILY_GAME_OVER_SECONDS, dateFor } from './seeds';
 import {
   clickPastGuard,
@@ -11,10 +13,13 @@ import {
   fastForward,
   gameState,
   openDaily,
+  openModeSelect,
+  playDaily,
   seedSave,
   storedSave,
   test,
   toastOf,
+  waitForBridge,
   waitOutGameOverGuard,
 } from './fixtures';
 
@@ -35,12 +40,6 @@ const PROGRESS: SaveData = {
 const outsideDaily = (save: Partial<SaveData>): Record<string, unknown> => Object.fromEntries(Object.entries(save).filter(([key]) => key !== 'daily'));
 
 const dailyCard = (page: Page) => page.getByTestId('mode-daily');
-
-/** Title → mode select, by a click on Play. */
-async function openModeSelect(page: Page, press: 'click' | 'tap' = 'click'): Promise<void> {
-  await page.getByTestId('play')[press]();
-  await expectMode(page, 'modeSelect');
-}
 
 /** What every mode card's box and text make of the viewport: a card outside it, or a card whose text spills out of it. */
 function cardProblems(page: Page): Promise<string[]> {
@@ -87,9 +86,7 @@ test('a Daily clear shows its target and no stars, writes the Daily record alone
   await seedSave(page, PROGRESS);
   // Played on the project's own 1280×720 field, where the date's idle ship clears it.
   await openDaily(page, CLEAR_DATE);
-  await openModeSelect(page);
-  await dailyCard(page).click();
-  await expectMode(page, 'playing');
+  await playDaily(page);
 
   await fastForward(page, DAILY_CLEAR_SECONDS);
   await expectMode(page, 'results');
@@ -98,6 +95,8 @@ test('a Daily clear shows its target and no stars, writes the Daily record alone
   await expect(page.getByText(dailyTitle(CLEAR_DATE))).toBeVisible();
   await expect(page.getByTestId('end-target')).toHaveText(targetLine(daily.target, score));
   await expect(page.locator('.overlay--game-over .stars')).toBeHidden();
+  // The date's first clear has no earlier best to beat.
+  await expect(page.locator('.new-best')).toBeHidden();
   for (const hidden of ['results-next', 'results-map', 'rank-continue']) await expect(page.getByTestId(hidden)).toBeHidden();
   await expect(page.getByTestId('results-retry')).toBeVisible();
   await expect(page.getByTestId('rank-title')).toBeVisible();
@@ -115,8 +114,7 @@ test('a Daily clear shows its target and no stars, writes the Daily record alone
 test('a Daily game over writes nothing; R plays the same date again and Escape goes to the title @desktop', async ({ page }) => {
   await seedSave(page, PROGRESS);
   await openDaily(page, GAME_OVER_DATE);
-  await openModeSelect(page);
-  await dailyCard(page).click();
+  await playDaily(page);
   await fastForward(page, DAILY_GAME_OVER_SECONDS);
   await expectMode(page, 'gameOver');
   await expect(page.getByText(dailyTitle(GAME_OVER_DATE))).toBeVisible();
@@ -170,12 +168,61 @@ test('held upright, a phone shows the rotate prompt over mode select @phone', as
 test('the Daily results card fits a phone on its side @phone', async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await openDaily(page, CLEAR_DATE);
-  await openModeSelect(page, 'tap');
-  await dailyCard(page).tap();
+  await playDaily(page, 'tap');
   await fastForward(page, DAILY_CLEAR_SECONDS);
   await expectMode(page, 'results');
   await expect(page.getByRole('heading', { name: DAILY_CLEARED })).toBeVisible();
   const retry = await page.getByTestId('results-retry').boundingBox();
   expect((retry?.y ?? Infinity) + (retry?.height ?? 0)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: test.info().outputPath('daily-results-844x390.png') });
+});
+
+/** The Rank part of a save, which no Daily touches. */
+const rankPart = (save: Partial<SaveData>) => ({ rankBoard: save.rankBoard, rankSeq: save.rankSeq, rankRun: save.rankRun });
+
+/** Mode select → the Daily card → its clear, by fast-forward; the results card is up on return. */
+async function clearDailyFromModeSelect(page: Page): Promise<void> {
+  await playDaily(page);
+  await fastForward(page, DAILY_CLEAR_SECONDS);
+  await expectMode(page, 'results');
+}
+
+/** What the player can read on the page now, which must never press or speak of loss. */
+async function expectNoPressure(page: Page): Promise<void> {
+  expect(await page.evaluate(() => document.body.innerText)).not.toMatch(PRESSURE);
+}
+
+test('a clear starts the streak, the next date\'s clear runs it to 2, and two dates later it is simply not shown, with nothing pressing @desktop', async ({ page }) => {
+  const first = dateFor('daily-streak');
+  const second = nextDate(first);
+  const later = nextDate(nextDate(second));
+  await seedSave(page, PROGRESS, { once: true });
+  const rankBefore = rankPart(PROGRESS);
+
+  await openDaily(page, first);
+  await clearDailyFromModeSelect(page);
+  await page.reload();
+  await waitForBridge(page);
+  await page.getByTestId('records-open').click();
+  await expect(page.getByTestId('records-daily')).toContainText('Streak 1');
+  await page.keyboard.press('Escape');
+  expect(rankPart(await storedSave(page))).toEqual(rankBefore);
+
+  await openDaily(page, second);
+  await clearDailyFromModeSelect(page);
+  expect((await storedSave(page)).daily).toMatchObject({ lastCleared: second, streak: 2, bestStreak: 2 });
+  await clickPastGuard(page, 'rank-title', 'title');
+  await openModeSelect(page);
+  await expect(page.getByTestId('daily-streak')).toHaveText('Streak 2');
+  expect(rankPart(await storedSave(page))).toEqual(rankBefore);
+
+  await openDaily(page, later);
+  await openModeSelect(page);
+  await expect(page.getByTestId('daily-streak')).toBeHidden();
+  await expectNoPressure(page);
+  await page.getByTestId('records-open').click();
+  await expect(page.getByTestId('records-daily')).toContainText('Best streak 2');
+  expect(await page.locator('.records-daily__line').allTextContents()).not.toContainEqual(expect.stringMatching(/^Streak \d+$/));
+  await expectNoPressure(page);
+  expect(rankPart(await storedSave(page))).toEqual(rankBefore);
 });

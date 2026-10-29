@@ -17,6 +17,16 @@ describe('SpriteCache', () => {
     expect(cache.size).toBe(2);
   });
 
+  it('lists the keys it holds, which an eviction drops', () => {
+    const { cache } = makeCache(2);
+    expect(cache.keys()).toEqual([]);
+    cache.set('a', 1);
+    cache.set('b', 2);
+    expect(cache.keys()).toEqual(['a', 'b']);
+    cache.set('c', 3);
+    expect(cache.keys()).toEqual(['b', 'c']);
+  });
+
   it('evicts the least recently used entry through onEvict when over capacity', () => {
     const { cache, evicted } = makeCache(2);
     cache.set('a', 1);

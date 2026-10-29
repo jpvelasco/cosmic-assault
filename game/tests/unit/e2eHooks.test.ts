@@ -20,7 +20,7 @@ const worldOf = (): World => new World({ seed: 1, field: FIELD, rules: { kind: '
 
 /** Hooks installed over `world`, with `step` driving it the way the run controller does: its events go to the tally. */
 /** The sprite-cache use the hooks' renderer stand-in reports. */
-const CACHE_USE = { size: 12, evictions: 3 };
+const CACHE_USE = { size: 12, evictions: 3, keys: ['glow|#ffffff|24'] };
 
 /** An attract mode stand-in, playing the 2-2 demo or, with `active` false, off. */
 function attractStandIn(active = true) {

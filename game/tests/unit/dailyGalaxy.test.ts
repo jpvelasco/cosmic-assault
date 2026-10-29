@@ -22,7 +22,12 @@ const anchorOf = (d: DailyGalaxy): GalaxyDef => galaxyById(d.def.id);
 const eventsOf = (d: DailyGalaxy, type: GalaxyEvent['type']): GalaxyEvent[] => d.def.events.filter((e) => e.type === type);
 /** A thousand dates take about a second to build and check. */
 const SWEEP_TIMEOUT_MS = 20_000;
-/** Eleven years of dates take a few seconds. */
+/**
+ * Every date a device clock plausibly shows: from the Unix epoch, where a clock that lost its time starts, to the end of
+ * the century. Its 47,482 dates take a few seconds to build and check.
+ */
+const RANGE_FIRST = '1970-01-01';
+const RANGE_LAST = '2099-12-31';
 const RANGE_TIMEOUT_MS = 60_000;
 
 /** The D1–D2 survival galaxies, the only material a Daily may use. */
@@ -213,14 +218,14 @@ describe('dailyGalaxy', () => {
     expect(play()).toEqual(play());
   }, SWEEP_TIMEOUT_MS);
 
-  it('builds every date from 2026 through 2036, and gives every Gravity storm Daily its storm', () => {
+  it(`builds every date from ${RANGE_FIRST} through ${RANGE_LAST}, and gives every Gravity storm Daily its storm`, () => {
     let built = 0;
-    for (let date = '2026-01-01'; compareDates(date, '2036-12-31') <= 0; date = nextDate(date)) {
+    for (let date = RANGE_FIRST; compareDates(date, RANGE_LAST) <= 0; date = nextDate(date)) {
       const d = dailyGalaxy(date);
       if (d.twist === 'gravityStorm') expect(eventsOf(d, 'gravityStorm'), date).toHaveLength(1);
       built++;
     }
-    expect(built).toBe(dayNumber('2036-12-31') - dayNumber('2026-01-01') + 1);
+    expect(built).toBe(dayNumber(RANGE_LAST) - dayNumber(RANGE_FIRST) + 1);
   }, RANGE_TIMEOUT_MS);
 });
 

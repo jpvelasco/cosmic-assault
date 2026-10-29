@@ -1,9 +1,11 @@
 import { test as base, expect, type Page } from '@playwright/test';
+import { ATTRACT_IDLE_SECONDS } from '../src/app/attract';
 import { GAME_OVER_GUARD_MS } from '../src/app/gameOverGuard';
 import { SETTINGS_KEY } from '../src/app/settings';
 import type { Look } from '../src/content/cosmetics';
 import { GALAXIES } from '../src/content/galaxies';
 import type { GalaxyId, PickupId } from '../src/content/types';
+import { RANK_START_LIVES } from '../src/meta/rankRun';
 import { defaultSave, SAVE_KEY, type SaveData } from '../src/meta/save';
 import { STEP_SECONDS } from '../src/sim/config';
 import { BRIDGE_VERSION } from '../src/testBridge';
@@ -133,6 +135,19 @@ export async function storedSave(page: Page): Promise<Partial<SaveData>> {
   return text === null ? {} : (JSON.parse(text) as Partial<SaveData>);
 }
 
+/** Title → mode select, by a click (or, on a touch screen, a tap) on Play. */
+export async function openModeSelect(page: Page, press: 'click' | 'tap' = 'click'): Promise<void> {
+  await page.getByTestId('play')[press]();
+  await expectMode(page, 'modeSelect');
+}
+
+/** Title → mode select → the Daily card, by clicks or taps; the Daily is in play on return. */
+export async function playDaily(page: Page, press: 'click' | 'tap' = 'click'): Promise<void> {
+  await openModeSelect(page, press);
+  await page.getByTestId('mode-daily')[press]();
+  await expectMode(page, 'playing');
+}
+
 /** Title → Free play → Dimension `dimension`, as a player taps it; the galaxy select is showing on return. */
 export async function openGalaxySelect(page: Page, dimension: number): Promise<void> {
   await page.getByTestId('play').click();
@@ -256,6 +271,21 @@ export function openGameOverRun(page: Page): Promise<void> {
   return openGame(page, { seed: seedFor('one-life-death'), lives: 1, galaxy: GAME_OVER_GALAXY });
 }
 
+/** Starts the one-life Rank run of the game-over galaxy, by a tap on a phone, Space at a desk; its game over card offers Continue and Title. */
+export async function startOneLifeRun(page: Page, isMobile = false): Promise<void> {
+  await openGameOverRun(page);
+  await startRun(page, isMobile);
+  expect((await gameState(page)).lives).toBe(1);
+}
+
+/** Continue replays the galaxy with fresh lives, the score reset and the run marked. */
+export async function expectContinued(page: Page): Promise<void> {
+  await expectMode(page, 'playing');
+  const { lives, rankRun, score } = await gameState(page);
+  expect({ lives, score }).toEqual({ lives: RANK_START_LIVES, score: 0 });
+  expect(rankRun).toMatchObject({ score: 0, lives: RANK_START_LIVES, continued: true });
+}
+
 /**
  * Shots `damageBoss` lands to beat any boss: each goes where it does harm, so this must cover the shots that break a
  * shielded boss's parts as well as its HP. The Monolith's are up to `SHARD_COUNTS[1] - EXPOSED_AT` shards of `SHARD_HP`
@@ -290,6 +320,9 @@ export function askForAttract(page: Page): Promise<void> {
     api.attractNow();
   });
 }
+
+/** How long a spec waits for the attract demo to start by itself: the idle stretch, with room for a slow host. */
+export const ATTRACT_IDLE_TIMEOUT_MS = (ATTRACT_IDLE_SECONDS + 15) * 1000;
 
 /** Starts the attract demo on the bare title now, as 10 s without input would, and waits until it has drawn a few frames. */
 export async function startAttract(page: Page): Promise<void> {

@@ -145,18 +145,30 @@ describe('saveChange: the Daily is sealed off from every other record', () => {
     expect(written(FULL_SAVE, dailyOn('playing'), clear()).save.daily).toEqual({ lastCleared: DATE, streak: 4, bestStreak: 5, best: { date: DATE, score: REPORT.score } });
   });
 
-  it('a debug run (?seed=) writes nothing to storage, and has no record to beat', () => {
-    const storage = memoryStorage(FULL_SAVE);
-    const before = storage.items.get(SAVE_KEY);
-    const store = createSaveStore({ storage, events: NO_EVENTS, writes: false });
+  /** Clears the Daily of DATE from mode select on a store over `save`, saving (a normal run) or not (a debug run). */
+  function clearDailyOn(save: SaveData, writes: boolean) {
+    const storage = memoryStorage(save);
+    const store = createSaveStore({ storage, events: NO_EVENTS, writes });
     store.load();
     const flow = createFlowController({ store, overrides: { galaxy: undefined, startLives: undefined }, today: () => DATE, startRun: vi.fn(), showScreen: vi.fn(), notify: vi.fn() });
     flow.command({ kind: 'start' });
     flow.command({ kind: 'chooseMode', mode: 'daily' });
     flow.handle([{ type: 'galaxyCleared', score: REPORT.score, bonus: REPORT.bonus, deaths: REPORT.deaths, stars: REPORT.stars }], { lives: 2, weaponTier: 1 });
     expect(flow.state.screen).toBe('results');
+    return { flow, storage };
+  }
+
+  /** FULL_SAVE with a best on DATE that the clear beats, so only the debug gate keeps a debug clear from a "New best!". */
+  const BEATABLE: SaveData = { ...FULL_SAVE, daily: { ...FULL_SAVE.daily, best: { date: DATE, score: REPORT.score - 1 } } };
+
+  it('a debug run (?seed=) writes nothing to storage, and has no record to beat', () => {
+    const { flow, storage } = clearDailyOn(BEATABLE, false);
     expect(flow.state.newBest).toBeNull();
-    expect(storage.items.get(SAVE_KEY)).toBe(before);
+    expect(storage.items.get(SAVE_KEY)).toBe(JSON.stringify(BEATABLE));
+  });
+
+  it('the same clear in a normal run beats that best', () => {
+    expect(clearDailyOn(BEATABLE, true).flow.state.newBest).toEqual({ kind: 'daily', score: REPORT.score });
   });
 });
 

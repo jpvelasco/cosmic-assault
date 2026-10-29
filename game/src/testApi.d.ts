@@ -105,8 +105,8 @@ interface CosmicAssaultTestState {
   readonly logSize: number;
   /** Whether the page is in full screen (`document.fullscreenElement` is set). */
   readonly fullscreen: boolean;
-  /** The sprite cache's use: the sprites it holds now, and how many it has evicted to stay within its capacity. */
-  readonly spriteCache: { readonly size: number; readonly evictions: number } | null;
+  /** The sprite cache's use: the sprites it holds now and their keys (`kind|name|size`, a ship's name `palette:skin`), and how many it has evicted to stay within its capacity. */
+  readonly spriteCache: import('./render/sprites').CacheUse | null;
   /**
    * The attract demo behind the title: whether it is on (a demo playing, or the second before the next), the galaxy of the
    * demo, the demo frames drawn since it turned on, and whether a demo crash has stopped it for the session.
@@ -115,7 +115,7 @@ interface CosmicAssaultTestState {
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 7;
+  readonly version: 8;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event

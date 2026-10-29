@@ -15,6 +15,13 @@ export interface Sprite {
   readonly halfH: number;
 }
 
+/** A sprite cache's use: the sprites it holds and their keys (`kind|name|size`), and how many it has evicted. */
+export interface CacheUse {
+  readonly size: number;
+  readonly evictions: number;
+  readonly keys: readonly string[];
+}
+
 export interface SpriteBaker {
   /** Additive radial glow; `diameter` (field units) snaps to a multiple of 4. */
   glow(color: string, diameter: number): Sprite;
@@ -65,8 +72,8 @@ export interface SpriteBaker {
    * anything that outlives a frame holds a key and looks it up each time it draws.
    */
   cached(key: string): Sprite | undefined;
-  /** The sprites cached now, and how many have been evicted to stay within the capacity since it was made. */
-  readonly cacheUse: Readonly<{ size: number; evictions: number }>;
+  /** The sprites cached now, their keys, and how many have been evicted to stay within the capacity since it was made. */
+  readonly cacheUse: CacheUse;
   /** Frees every baked sprite, for example when a new run starts. */
   clear(): void;
 }
@@ -622,7 +629,7 @@ export function createSpriteBaker(capacity = SPRITE_CACHE_CAPACITY): SpriteBaker
     },
     cached: cachedSprite,
     get cacheUse() {
-      return { size: cache.size, evictions: cache.evictions };
+      return { size: cache.size, evictions: cache.evictions, keys: cache.keys() };
     },
     clear() {
       cache.clear();

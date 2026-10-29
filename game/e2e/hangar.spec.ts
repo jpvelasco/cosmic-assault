@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { defaultSave, type SaveData } from '../src/meta/save';
-import { expect, expectMode, gameState, openFreshGame, seedLook, seedSave, test, waitForBridge } from './fixtures';
+import { expect, expectMode, gameState, openFreshGame, openGame, seedLook, seedSave, test, waitForBridge } from './fixtures';
 
 const openChip = (page: Page) => page.getByTestId('hangar-open');
 const card = (page: Page) => page.getByTestId('hangar');
@@ -43,22 +43,37 @@ function pillProblems(page: Page): Promise<string[]> {
   });
 }
 
-/** Three stars in each of eight galaxies: 24 stars, enough for Ember and Glacier, short of Aurora's 45. */
-const TWENTY_FOUR: SaveData = {
+/** Three stars in each of ten galaxies: 30 stars, enough for Ember, Glacier and the Comet trail, short of Ion's 36 and Aurora's 45. */
+const THIRTY: SaveData = {
   ...defaultSave(),
-  galaxies: Object.fromEntries((['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '2-1', '2-2'] as const).map((id) => [id, { bestScore: 1000, stars: 3 }])),
+  galaxies: Object.fromEntries((['1-1', '1-2', '1-3', '1-4', '1-5', '1-6', '2-1', '2-2', '2-3', '2-4'] as const).map((id) => [id, { bestScore: 1000, stars: 3 }])),
 };
 
+/** Waits for the card's pop-in to end, so what is measured or shot is the card at rest, not scaled mid-animation. */
+async function settled(page: Page): Promise<void> {
+  await card(page).evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+}
+
+/** Play on the title, which `?galaxy=` takes straight into its galaxy; a click, as Esc left focus on the Hangar chip. */
+async function playFromTitle(page: Page): Promise<void> {
+  await page.getByTestId('play').click();
+  await expectMode(page, 'playing');
+}
+
+/** The sprite cache holds the ship drawn in `palette` with `skin`: its sprite's key, `ship|<palette>:<skin>|0`. */
+const shipSpriteKey = (palette: string, skin: string) => `ship|${palette}:${skin}|0`;
+
 test('the Hangar opens from the title, dims the looks the stars have not reached, and keys pick, save and close it @desktop', async ({ page }) => {
-  await seedSave(page, TWENTY_FOUR);
+  await seedSave(page, THIRTY);
   await openFreshGame(page);
   await expect(card(page)).toBeHidden();
 
   await openChip(page).click();
   await expect(card(page)).toBeVisible();
+  await settled(page);
   await page.screenshot({ path: test.info().outputPath('hangar-desktop.png') });
   await expect(card(page).getByRole('heading', { name: 'Hangar' })).toBeVisible();
-  await expect(card(page).getByText('Stars won: 24 of 90')).toBeVisible();
+  await expect(card(page).getByText('Stars won: 30 of 90')).toBeVisible();
   await expect(trim(page, 'ember')).toBeEnabled();
   await expect(trim(page, 'glacier')).toBeEnabled();
   // A look still locked is disabled, says so, and names its cost.
@@ -82,6 +97,12 @@ test('the Hangar opens from the title, dims the looks the stars have not reached
   await expectMode(page, 'title');
   await expect(card(page)).toBeVisible();
 
+  // A press on a locked pill chooses nothing.
+  await trim(page, 'aurora').locator('..').click({ force: true });
+  await expect(trim(page, 'aurora')).not.toBeChecked();
+  await expect(trim(page, 'glacier')).toBeChecked();
+  expect((await settingsOf(page)).skin).toBe('glacier');
+
   // Esc closes the card, back to its chip, and the choice holds across a reload.
   await page.keyboard.press('Escape');
   await expect(card(page)).toBeHidden();
@@ -90,13 +111,15 @@ test('the Hangar opens from the title, dims the looks the stars have not reached
   await waitForBridge(page);
   await openChip(page).click();
   await expect(trim(page, 'glacier')).toBeChecked();
+  // Focus lands on the trim drawn, so the arrows step on from it.
+  await expect(trim(page, 'glacier')).toBeFocused();
   expect(await settingsOf(page)).toMatchObject({ skin: 'glacier' });
   await page.keyboard.press('Escape');
   await expect(card(page)).toBeHidden();
 });
 
 test('the Hangar opens from mode select as well, and Esc returns focus to its chip there @desktop', async ({ page }) => {
-  await seedSave(page, TWENTY_FOUR);
+  await seedSave(page, THIRTY);
   await openFreshGame(page);
   await page.getByTestId('play').click();
   await expectMode(page, 'modeSelect');
@@ -121,12 +144,13 @@ test('a trim the save no longer unlocks draws as the classic one, and the Hangar
 });
 
 test('a phone taps the Hangar open, picks a trim, and taps Back @phone', async ({ page }) => {
-  await seedSave(page, TWENTY_FOUR);
+  await seedSave(page, THIRTY);
   await openFreshGame(page);
   await openChip(page).tap();
   await expect(card(page)).toBeVisible();
   await trim(page, 'ember').tap();
   await expect.poll(async () => (await settingsOf(page)).skin).toBe('ember');
+  await settled(page);
   await page.screenshot({ path: test.info().outputPath('hangar-ember-phone.png') });
   await back(page).tap();
   await expect(card(page)).toBeHidden();
@@ -143,11 +167,12 @@ const PHONE_VIEWPORTS = [
 for (const viewport of PHONE_VIEWPORTS) {
   const size = `${String(viewport.width)}x${String(viewport.height)}`;
   test(`the Hangar fits a phone at ${size} without scrolling, with Back in reach @phone`, async ({ page }) => {
-    await seedSave(page, TWENTY_FOUR);
+    await seedSave(page, THIRTY);
     await page.setViewportSize(viewport);
     await openFreshGame(page);
     await openChip(page).tap();
     await expect(card(page)).toBeVisible();
+    await settled(page);
     await page.screenshot({ path: test.info().outputPath(`hangar-${size}.png`) });
     const box = await back(page).boundingBox();
     expect(box).not.toBeNull();
@@ -156,3 +181,26 @@ for (const viewport of PHONE_VIEWPORTS) {
     expect(await pillProblems(page)).toEqual([]);
   });
 }
+
+test('the ship draws the trim the Hangar chose, and its sprite follows a new choice into the next run @desktop', async ({ page }) => {
+  await seedSave(page, THIRTY);
+  await openGame(page);
+  await openChip(page).click();
+  await trim(page, 'glacier').check();
+  await page.keyboard.press('Escape');
+  await playFromTitle(page);
+  const { palette } = await gameState(page);
+  await expect.poll(async () => (await gameState(page)).spriteCache?.keys ?? []).toContain(shipSpriteKey(palette, 'glacier'));
+
+  await page.keyboard.press('Escape');
+  await expectMode(page, 'paused');
+  await page.getByTestId('quit').click();
+  await expectMode(page, 'title');
+  await openChip(page).click();
+  await trim(page, 'ember').check();
+  await page.keyboard.press('Escape');
+  await playFromTitle(page);
+  const keys = async () => (await gameState(page)).spriteCache?.keys ?? [];
+  await expect.poll(keys).toContain(shipSpriteKey(palette, 'ember'));
+  expect(await keys()).not.toContain(shipSpriteKey(palette, 'glacier'));
+});

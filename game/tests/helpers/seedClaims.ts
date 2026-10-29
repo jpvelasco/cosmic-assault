@@ -541,6 +541,9 @@ function idleDaily(date: string, seconds: number, field: Field = DESKTOP_FIELD):
   return world;
 }
 
+/** Whether an idle ship clears the Daily of `date` on `field`. */
+const idleClearsDaily = (date: string, field: Field = DESKTOP_FIELD): boolean => idleDaily(date, DAILY_CLEAR_SECONDS, field).status === 'cleared';
+
 interface DateClaim {
   /** What the date promises, for the failure message. */
   readonly promise: (date: string) => string;
@@ -550,7 +553,11 @@ interface DateClaim {
 export const DATE_CLAIMS: Readonly<Record<DateClaimId, DateClaim>> = {
   'daily-clears': {
     promise: (date) => `lets an idle ship clear the Daily Galaxy of ${date} on the desktop field and on a phone's at 844×390`,
-    holds: (date) => [DESKTOP_FIELD, PHONE_DAILY_FIELD].every((field) => idleDaily(date, DAILY_CLEAR_SECONDS, field).status === 'cleared'),
+    holds: (date) => [DESKTOP_FIELD, PHONE_DAILY_FIELD].every((field) => idleClearsDaily(date, field)),
+  },
+  'daily-streak': {
+    promise: (date) => `lets an idle ship clear the Daily Galaxies of ${date} and of the day after on the desktop field`,
+    holds: (date) => [date, nextDate(date)].every((day) => idleClearsDaily(day)),
   },
   'daily-game-over': {
     promise: (date) => `ends an idle run of the Daily Galaxy of ${date} within ${String(DAILY_GAME_OVER_SECONDS)} s on the desktop field`,
