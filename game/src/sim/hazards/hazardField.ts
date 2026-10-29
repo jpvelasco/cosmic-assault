@@ -1,6 +1,6 @@
 import { eventsOfType } from '../../content/curves';
 import { WELL_SPEED_CAP } from '../../content/hazards';
-import type { GalaxyEvent, HazardType } from '../../content/types';
+import type { ForceKind, GalaxyEvent, HazardType } from '../../content/types';
 import type { Asteroid } from '../asteroid';
 import { ASTEROID } from '../config';
 import type { SimEvent } from '../events';
@@ -17,10 +17,16 @@ import type { Bodies, Circle, Hazard, HazardBolts, HazardFactory, HazardFoes, Ha
 import { shipPullAt } from './shipPull';
 import { WarpRifts } from './warpRift';
 
+/** A force field of `kind`, naming it once: each event shows one well of that kind in the field's middle band. */
+const forceField =
+  (kind: ForceKind): HazardFactory =>
+  (setup) =>
+    new ForceField(kind, setup, inBand(kind, setup.rng));
+
 /** How each hazard type is made; a type the schedule names needs an entry here. */
 export const HAZARD_FACTORIES: Readonly<Partial<Record<HazardType, HazardFactory>>> = {
-  gravityWell: (setup) => new ForceField('gravityWell', setup, inBand('gravityWell', setup.rng)),
-  repulsionField: (setup) => new ForceField('repulsionField', setup, inBand('repulsionField', setup.rng)),
+  gravityWell: forceField('gravityWell'),
+  repulsionField: forceField('repulsionField'),
   dangerZone: (setup) => new DangerZones(setup),
   warpRift: (setup) => new WarpRifts(setup),
   blackHole: (setup) => new BlackHole(setup),

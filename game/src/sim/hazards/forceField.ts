@@ -31,9 +31,9 @@ interface Current extends PointHazardState {
  * A galaxy's gravity wells (sign +1), repulsion fields (sign -1) or gravity storms, in order: drawn as a warning for their
  * telegraph, then pulling (or pushing) for their length. Its `layout` places each event's wells: a force field shows one
  * well in the field's middle band (`inBand`); a storm shows a set of gravity wells of intensity 1 (`stormLayout`), marked
- * as its own, which warn, open and end together. The force is an external nudge to the velocity of the rocks and the foes it pulls, each well's own; the ship's is
- * `shipPullAt`'s, summed with every other hazard's and capped. It never touches `stepShip`, whose arithmetic the parity
- * traces pin.
+ * as its own, which warn, open and end together. The force is an external nudge to the velocity of the rocks and the
+ * foes it pulls, each well's own; the ship's is `shipPullAt`'s, summed with every other hazard's and capped. It never
+ * touches `stepShip`, whose arithmetic the parity traces pin.
  */
 export class ForceField extends ScheduledHazard<Current> implements Hazard {
   /** The schedule, holding the wells of the event warning or active, if any. */

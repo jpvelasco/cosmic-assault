@@ -103,7 +103,10 @@ export const FORCE_SIGN: Readonly<Record<ForceKind, 1 | -1>> = { gravityWell: 1,
 
 export const isForceKind = (type: HazardType): type is ForceKind => type in FORCE_SIGN;
 
-/** Whether a hazard pulls or pushes the ship once active: the force fields, the gravity storm's wells and the black hole. */
+/**
+ * Whether a hazard pulls or pushes the ship once active: the force fields, the gravity storm's wells and the black hole.
+ * The sim's `pullShare` applies the pulls; a test holds this list to the hazards whose active states pull the ship.
+ */
 export const pullsShip = (type: HazardType): boolean => isForceKind(type) || type === 'gravityStorm' || type === 'blackHole';
 
 /**
