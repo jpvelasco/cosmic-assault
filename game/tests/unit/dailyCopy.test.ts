@@ -7,6 +7,10 @@ import { dailyCardView } from '../../src/ui/modeSelect';
 import { dailyRecordLines } from '../../src/ui/recordsCard';
 import { PRESSURE } from '../helpers/pressure';
 
+/** The numbers below as this host groups them, which the copy follows, so the tests pass in any locale. */
+const TARGET = new Intl.NumberFormat().format(14500);
+const BEST = new Intl.NumberFormat().format(12345);
+
 /** Every line of `ui/dailyCopy.ts`, rendered: the record type makes a new export fail to compile until it is listed here. */
 const RENDERED: Readonly<Record<keyof typeof copy, readonly string[]>> = {
   DAILY_NAME: [copy.DAILY_NAME],
@@ -40,21 +44,21 @@ describe('the Daily copy', () => {
 
   it('reads as the cards show it', () => {
     expect(copy.dailyTitle('2026-10-26')).toBe('Daily Galaxy · 2026-10-26');
-    expect(copy.dailyCardLine('Gravity storm', 14500)).toBe('Gravity storm · Target\u00a014,500');
+    expect(copy.dailyCardLine('Gravity storm', 14500)).toBe(`Gravity storm · Target\u00a0${TARGET}`);
     // A retry after midnight plays a date that is no longer today, so the toast never says "today".
     expect(copy.twistToast('Gravity storm')).toBe('Twist: Gravity storm');
     expect(copy.streakText(3)).toBe('Streak 3');
-    expect(copy.dailyBestText({ date: '2026-10-26', score: 12345 })).toBe('Best on 2026-10-26: 12,345');
+    expect(copy.dailyBestText({ date: '2026-10-26', score: 12345 })).toBe(`Best on 2026-10-26: ${BEST}`);
   });
 
   it('marks the target beaten once the score reaches it', () => {
-    expect(copy.targetLine(14500, 14499)).toBe('Target\u00a014,500');
-    expect(copy.targetLine(14500, 14500)).toBe('Target\u00a014,500 · beaten');
-    expect(copy.targetLine(14500, 20000)).toBe('Target\u00a014,500 · beaten');
+    expect(copy.targetLine(14500, 14499)).toBe(`Target\u00a0${TARGET}`);
+    expect(copy.targetLine(14500, 14500)).toBe(`Target\u00a0${TARGET} · beaten`);
+    expect(copy.targetLine(14500, 20000)).toBe(`Target\u00a0${TARGET} · beaten`);
   });
 
   it('keeps the target on one line with its number, which never wraps alone', () => {
-    expect(copy.targetText(14500)).toBe('Target\u00a014,500');
+    expect(copy.targetText(14500)).toBe(`Target\u00a0${TARGET}`);
     expect(copy.targetText(14500)).not.toMatch(/ /);
   });
 });
@@ -98,7 +102,7 @@ describe('the records card Daily block', () => {
 
   it('shows the running streak, the best streak and the latest date\'s best', () => {
     const save = withDaily({ lastCleared: '2026-10-25', streak: 3, bestStreak: 7, best: { date: '2026-10-25', score: 12345 } });
-    expect(dailyRecordLines(save, TODAY)).toEqual(['Streak 3', 'Best streak 7', 'Best on 2026-10-25: 12,345']);
+    expect(dailyRecordLines(save, TODAY)).toEqual(['Streak 3', 'Best streak 7', `Best on 2026-10-25: ${BEST}`]);
   });
 
   it('leaves the streak out once it no longer runs, keeping the best streak and best', () => {

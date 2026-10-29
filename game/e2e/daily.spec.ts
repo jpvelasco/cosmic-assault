@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { TWISTS_BY_ID } from '../src/content/daily';
-import { nextDate } from '../src/meta/calendar';
+import { nextDate, previousDate } from '../src/meta/calendar';
 import { dailyGalaxy } from '../src/meta/dailyGalaxy';
 import { defaultSave, type SaveData } from '../src/meta/save';
 import { DAILY_CLEARED, dailyCardLine, dailyTitle, targetLine, twistToast } from '../src/ui/dailyCopy';
@@ -144,13 +144,14 @@ test('a Daily game over writes nothing; R plays the same date again and Escape g
 });
 
 test('the mode select streak shows from 2, and the records card shows the Daily record @desktop', async ({ page }) => {
-  const save: SaveData = { ...PROGRESS, daily: { lastCleared: '2026-01-03', streak: 4, bestStreak: 6, best: { date: '2026-01-03', score: 12345 } } };
+  const yesterday = previousDate(CLEAR_DATE);
+  const save: SaveData = { ...PROGRESS, daily: { lastCleared: yesterday, streak: 4, bestStreak: 6, best: { date: yesterday, score: 12345 } } };
   await seedSave(page, save);
   await openDaily(page, CLEAR_DATE);
   await openModeSelect(page);
   await expect(page.getByTestId('daily-streak')).toHaveText('Streak 4');
   await page.getByTestId('records-open').click();
-  await expect(page.getByTestId('records-daily')).toHaveText(/Streak 4\s*Best streak 6\s*Best on 2026-01-03: 12,345/);
+  await expect(page.getByTestId('records-daily')).toHaveText(new RegExp(`Streak 4\\s*Best streak 6\\s*Best on ${yesterday}: 12,345`));
 });
 
 test('a tap on the Daily card plays it, and the three cards fit a phone on its side @phone', async ({ page }) => {
