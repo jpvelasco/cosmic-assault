@@ -103,7 +103,7 @@ EOF
 > **Note on required status checks:** the `required_status_checks` array above
 > is intentionally empty — GitHub only recognises job names after they've run
 > once. After the first CI run, update the ruleset via:
-> `PATCH /repos/OWNER/REPO/rulesets/{ruleset_id}`
+> `PUT /repos/OWNER/REPO/rulesets/{ruleset_id}`
 
 ---
 
@@ -121,9 +121,9 @@ EOF
 - Require review from code owners: no
 - Require conversation resolution: yes
 - Require branch up to date: yes
-- Required status checks: `Game (lint, typecheck, unit, build, e2e)`.
-  `Performance (gates deploy)` and `Bot balance (non-blocking)` run on every
-  pull request but are not required; the deploy job needs `Performance` anyway.
+- Required status checks: `Game (lint, typecheck, unit, build, e2e)` and
+  `Performance (gates deploy)`. `Bot balance (non-blocking)` runs on every pull
+  request but is not required.
 - Block force pushes: yes
 - Allow deletions: no
 - Enforce on admins: yes (no bypass actors)

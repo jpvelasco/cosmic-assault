@@ -47,9 +47,9 @@ describe('the retired preview page', () => {
     expect(html).toMatch(/<h1>Cosmic Assault has moved<\/h1>/);
     expect(html).toContain('<p>The game now lives at its main address. Taking you there…</p>');
     expect(html).toContain('<a href="../">Play Cosmic Assault</a>');
-    expect(html).toContain('<p>Installed the preview as an app? You can remove it and install the game from the main address.</p>');
+    expect(html).toContain('<p>Installed the preview as an app? It now opens the game. Keep it, because your progress may be saved inside it, and open it once while online.</p>');
     expect(text).toBe(
-      'Cosmic Assault has moved Cosmic Assault has moved The game now lives at its main address. Taking you there… Play Cosmic Assault Installed the preview as an app? You can remove it and install the game from the main address.',
+      'Cosmic Assault has moved Cosmic Assault has moved The game now lives at its main address. Taking you there… Play Cosmic Assault Installed the preview as an app? It now opens the game. Keep it, because your progress may be saved inside it, and open it once while online.',
     );
   });
 

@@ -5,7 +5,7 @@ All notable changes to Cosmic Assault are listed here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - YYYY-MM-DD
+## [2.0.0] - 2026-10-29
 
 Cosmic Assault 2.0: the game, rebuilt.
 
@@ -24,6 +24,8 @@ Cosmic Assault 2.0: the game, rebuilt.
 - Stars for every galaxy, and ship skins and engine trails to unlock with them in the Hangar. Looks never change how
   the ship handles.
 - An attract demo: a pilot flies a galaxy behind the title screen when it is left alone.
+- The same controls on every device: a Pause button on desktop and phone, one Back on every screen, hints that follow
+  whether you use keys, a touch screen or a gamepad, and hold the mouse button to fire.
 - An installable app that plays offline after one visit.
 - Gamepad support; settings for music and effects volume, screen shake and a left-handed touch layout; and screen shake
   that follows the system's reduced-motion setting.

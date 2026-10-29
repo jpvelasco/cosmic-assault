@@ -448,8 +448,8 @@ Git.
   `game-dist` artifact. Job `perf` builds both bundles and runs `npm run test:perf`.
   Job `deploy` runs only on pushes to `main`, and only after `game` and `perf`
   pass, so a frame-time regression cannot ship; `npm run
-  check:workflow` in `game/` guards that gate. `perf` is not a required check,
-  so a pull request may merge before it passes. Job
+  check:workflow` in `game/` guards that gate. `perf` is a required check, so a
+  pull request cannot merge before it passes. Job
   `balance-dimension` runs `npm run test:balance -- <shard>` as a matrix over
   the shards `d1-` to `d5-` and `daily`, and job `balance` passes only if every shard did, so the
   ruleset sees one check. `balance` is a report: not a required check, and it
