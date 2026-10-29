@@ -4,14 +4,38 @@ import { describe, expect, it } from 'vitest';
 
 /** The page left at the retired preview address, copied as is from public/ into the build. */
 const html = readFileSync(new URL('../../public/next/index.html', import.meta.url), 'utf8');
-const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
-const script = scripts[0]?.[2] ?? '';
-/** The page's text, without its tags, script and style. */
-const text = html
-  .replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '')
-  .replace(/<[^>]+>/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim();
+
+/** Each script element of `source`: its attributes and its code. */
+function scriptsOf(source: string): { attributes: string; code: string }[] {
+  const lower = source.toLowerCase();
+  const found: { attributes: string; code: string }[] = [];
+  for (let open = lower.indexOf('<script'); open >= 0; open = lower.indexOf('<script', open + 1)) {
+    const openEnd = source.indexOf('>', open);
+    const close = lower.indexOf('</script', openEnd);
+    found.push({ attributes: source.slice(open + '<script'.length, openEnd).trim(), code: source.slice(openEnd + 1, close) });
+  }
+  return found;
+}
+
+/** The text a visitor sees: what lies between tags, apart from the code of a script or style. */
+function visibleText(source: string): string {
+  const texts: string[] = [];
+  let hidden: string | null = null;
+  for (const part of source.split('<').slice(1)) {
+    const tagEnd = part.indexOf('>');
+    const name = (part.slice(0, tagEnd).split(/\s/)[0] ?? '').toLowerCase();
+    if (hidden === null && (name === 'script' || name === 'style')) hidden = name;
+    else if (hidden === name.slice(1) && name.startsWith('/')) {
+      hidden = null;
+      texts.push(part.slice(tagEnd + 1));
+    } else if (hidden === null) texts.push(part.slice(tagEnd + 1));
+  }
+  return texts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+const scripts = scriptsOf(html);
+const script = scripts[0]?.code ?? '';
+const text = visibleText(html);
 
 describe('the retired preview page', () => {
   it('keeps itself out of search results and points them at the game', () => {
@@ -35,7 +59,7 @@ describe('the retired preview page', () => {
 
   it('registers the retiring worker, asks it to update, and leaves for the game after 2 s or on any failure', () => {
     expect(scripts).toHaveLength(1);
-    expect(scripts[0]?.[1], 'an inline classic script').toBe('');
+    expect(scripts[0]?.attributes, 'an inline classic script').toBe('');
     expect(() => new Script(script)).not.toThrow();
     expect(script).toMatch(/register\('\.\/sw\.js'\)\s*\.then\(\(registration\) => registration\.update\(\)\)\s*\.catch\(leave\)/);
     expect(script).toContain("location.replace('../')");
