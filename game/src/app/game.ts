@@ -16,7 +16,7 @@ import { createFullscreen } from '../platform/fullscreen';
 import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
 import { effectiveLook } from '../meta/cosmetics';
-import { backdropSpecFor } from '../render/backdropSpec';
+import { backdropSpecFor, type BackdropSpec } from '../render/backdropSpec';
 import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { paletteFor } from '../render/palette';
@@ -67,6 +67,8 @@ export interface App {
   readonly muted: boolean;
   /** The colour look in force: the last run's galaxy's palette, the Drift's before any run. */
   readonly palette: PaletteId;
+  /** The sky in force: the spec the last run's galaxy (or Daily) is drawn with; the legacy sky before any run. */
+  readonly backdrop: BackdropSpec;
   /** The music theme chosen: a galaxy's, its boss variant once the boss appears, and the last Dimension's on a menu. */
   readonly musicTheme: ThemeId;
   /** The settings in force: loaded at start, changed from the settings card, saved when storage allows. */
@@ -560,6 +562,9 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     },
     get palette() {
       return renderer.palette;
+    },
+    get backdrop() {
+      return renderer.backdropSpec;
     },
     get musicTheme() {
       return audio.theme;
