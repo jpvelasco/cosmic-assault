@@ -65,3 +65,13 @@ export function backdropSpecFor(galaxy: GalaxyDef | null, dailySeed: number | nu
   const piece = NON_BOSS_PIECES[(galaxyOrdinal(galaxy.id) * 3 + galaxy.dimension) % NON_BOSS_PIECES.length] as NonBossPieceId;
   return place(seed, piece, false, rng);
 }
+
+/** Whether `spec` is a sky drawn exactly as before 2.0.1: the practice rules' legacy sky, which is never varied. */
+export function isLegacySky(spec: BackdropSpec): boolean {
+  return spec.piece === 'none' || spec.seed === LEGACY_SKY_SEED;
+}
+
+/** Whether two specs bake the same sky. Each galaxy's seed is its own, so the seed and piece identify the sky. */
+export function sameSky(a: BackdropSpec, b: BackdropSpec): boolean {
+  return a.seed === b.seed && a.piece === b.piece;
+}

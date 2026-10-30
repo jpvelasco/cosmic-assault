@@ -1,5 +1,6 @@
 import type { Field } from '../sim/field';
-import { createRng } from '../sim/rng';
+import { createRng, deriveSeed, type Rng } from '../sim/rng';
+import { isLegacySky, type BackdropSpec } from './backdropSpec';
 import { rgba } from './color';
 import { get2dContext } from './context';
 import type { Palette } from './palette';
@@ -7,6 +8,14 @@ import type { Palette } from './palette';
 const DUST_COUNT = 320;
 const DUST_MAX_ALPHA = 0.3;
 const SKY_STOP_POSITIONS = [0, 0.55, 1] as const;
+/** A spec moves each nebula glow's centre by up to this fraction of the field, kept between the two bounds. */
+const GLOW_SHIFT = 0.12;
+const GLOW_CENTRE_MIN = 0.05;
+const GLOW_CENTRE_MAX = 0.95;
+const GLOW_RADIUS_SCALE: readonly [number, number] = [0.85, 1.2];
+const GLOW_ALPHA_SCALE: readonly [number, number] = [0.85, 1.15];
+/** The sky gradient turns by at most this many radians either way from the field's diagonal. */
+const SKY_TURN = Math.PI / 12;
 /** The mockup's vignette: clear inside 0.35 × height, darkening to this alpha at 0.62 × width. */
 const VIGNETTE_ALPHA = 0.4;
 const VIGNETTE_INNER = 0.35;
@@ -24,22 +33,68 @@ function fieldCanvas(field: Field, pixelsPerUnit: number): { canvas: HTMLCanvasE
   return { canvas, ctx };
 }
 
+type Glow = Palette['nebula'][number];
+
+/** What a spec varies about the sky: the gradient's turn (null for the legacy diagonal) and the glows, last one last. */
+interface SkyGeometry {
+  readonly turn: number | null;
+  readonly nebula: readonly Glow[];
+}
+
+function clampCentre(value: number): number {
+  return Math.min(GLOW_CENTRE_MAX, Math.max(GLOW_CENTRE_MIN, value));
+}
+
+/** The palette's glows, each moved, resized and scaled in strength by `rng`, with one drawn last. */
+function varyGlows(nebula: readonly Glow[], rng: Rng): Glow[] {
+  const glows = nebula.map((glow) => ({
+    ...glow,
+    x: clampCentre(glow.x + rng.range(-GLOW_SHIFT, GLOW_SHIFT)),
+    y: clampCentre(glow.y + rng.range(-GLOW_SHIFT, GLOW_SHIFT)),
+    r: glow.r * rng.range(GLOW_RADIUS_SCALE[0], GLOW_RADIUS_SCALE[1]),
+    alpha: glow.alpha * rng.range(GLOW_ALPHA_SCALE[0], GLOW_ALPHA_SCALE[1]),
+  }));
+  const last = rng.pick(glows);
+  return [...glows.filter((glow) => glow !== last), last];
+}
+
+/** The sky's geometry for `spec`. The legacy sky paints the palette's own glows; any other spec varies them from its seed. */
+function geometryFor(palette: Palette, spec: BackdropSpec): SkyGeometry {
+  if (isLegacySky(spec)) return { turn: null, nebula: palette.nebula };
+  const rng = createRng(deriveSeed(spec.seed, 'sky'));
+  const turn = rng.range(-SKY_TURN, SKY_TURN);
+  return { turn, nebula: varyGlows(palette.nebula, rng) };
+}
+
+/** A gradient line through the field's centre, turned `turn` radians from its diagonal and long enough to reach every corner. */
+function turnedGradient(ctx: CanvasRenderingContext2D, field: Field, turn: number): CanvasGradient {
+  const angle = Math.atan2(field.height, field.width) + turn;
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const half = (field.width * Math.abs(ux) + field.height * Math.abs(uy)) / 2;
+  const cx = field.width / 2;
+  const cy = field.height / 2;
+  return ctx.createLinearGradient(cx - ux * half, cy - uy * half, cx + ux * half, cy + uy * half);
+}
+
 /**
- * Paints the palette's diagonal gradient, nebula glows and faint dust (placed by `seed`) onto a fresh
- * offscreen canvas covering `field`, with `pixelsPerUnit` backing pixels per logical unit so it blits 1:1.
+ * Paints the palette's diagonal gradient, nebula glows and faint dust onto a fresh offscreen canvas covering `field`, with
+ * `pixelsPerUnit` backing pixels per logical unit so it blits 1:1. A spec varies only the geometry (the glows' places,
+ * sizes and strengths, the gradient's turn) and places the dust; the colours and sky stops are always the palette's.
  * Bake once per resize and palette: it is far too costly to redraw each frame.
  */
-export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, seed: number): HTMLCanvasElement {
+export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, spec: BackdropSpec): HTMLCanvasElement {
   const { canvas, ctx } = fieldCanvas(field, pixelsPerUnit);
+  const { turn, nebula } = geometryFor(palette, spec);
 
-  const sky = ctx.createLinearGradient(0, 0, field.width, field.height);
+  const sky = turn === null ? ctx.createLinearGradient(0, 0, field.width, field.height) : turnedGradient(ctx, field, turn);
   palette.skyStops.forEach((color, i) => {
     sky.addColorStop(SKY_STOP_POSITIONS[i] as number, color);
   });
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, field.width, field.height);
 
-  for (const { x, y, r, color, alpha } of palette.nebula) {
+  for (const { x, y, r, color, alpha } of nebula) {
     const cx = x * field.width;
     const cy = y * field.height;
     const radius = r * field.height;
@@ -50,7 +105,7 @@ export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, s
     ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
   }
 
-  const rng = createRng(seed);
+  const rng = createRng(spec.seed);
   ctx.fillStyle = palette.star;
   for (let i = 0; i < DUST_COUNT; i++) {
     ctx.globalAlpha = rng.range(0, DUST_MAX_ALPHA);

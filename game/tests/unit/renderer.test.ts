@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REBAKE_DELAY_MS } from '../../src/render/layout';
+import { backdropSpecFor } from '../../src/render/backdropSpec';
 import { DRIFT, ION_REACH, paletteFor } from '../../src/render/palette';
 import { ParticlePool } from '../../src/render/particles';
 import { QUALITY_LEVELS } from '../../src/render/quality';
@@ -25,6 +26,9 @@ import type { Pickup } from '../../src/sim/pickups/pickups';
 import type { World, WorldStatus } from '../../src/sim/world';
 
 const FIELD = { width: 1280, height: 720 };
+/** The sky a practice run draws (no galaxy), and a galaxy's own sky. */
+const LEGACY = backdropSpecFor(null, null);
+const SKY = backdropSpecFor(galaxyById('1-1'), null);
 /** Time Warp's tint, as the vignette's gradient stops write it. */
 const TIME_WARP_RGB = '111,156,255';
 
@@ -207,10 +211,32 @@ describe('createRenderer', () => {
   describe('setPalette', () => {
     const slain: SimEvent = { type: 'foeDestroyed', id: 9, kind: 'drone', x: 400, y: 300, points: 100 };
 
-    it('starts in the Drift and reports the palette in force', () => {
+    it('starts in the Drift and the legacy sky, and reports the palette and sky in force', () => {
       expect(renderer.palette).toBe('drift');
-      renderer.setPalette('ionReach');
+      expect(renderer.backdropSpec).toEqual(LEGACY);
+      renderer.setPalette('ionReach', SKY);
       expect(renderer.palette).toBe('ionReach');
+      expect(renderer.backdropSpec).toEqual(SKY);
+    });
+
+    it('re-bakes for a new sky in the palette already in force, and not for the sky already in force', () => {
+      renderer.resize(1280, 720, FIELD);
+      const setScale = vi.spyOn(baker, 'setScale');
+      renderer.setPalette('drift', SKY);
+      expect(setScale).toHaveBeenCalledTimes(1);
+      expect(renderer.consumeRedrawRequest()).toBe(true);
+      renderer.setPalette('drift', SKY);
+      expect(setScale).toHaveBeenCalledTimes(1);
+      expect(renderer.consumeRedrawRequest()).toBe(false);
+    });
+
+    it('keeps the sky spec through a resize re-bake', () => {
+      renderer.resize(1280, 720, FIELD);
+      renderer.setPalette('ionReach', SKY);
+      renderer.resize(640, 360, FIELD);
+      vi.advanceTimersByTime(REBAKE_DELAY_MS);
+      expect(renderer.consumeRedrawRequest()).toBe(true);
+      expect(renderer.backdropSpec).toEqual(SKY);
     });
 
     it('re-bakes the sky once, at once, and draws every sprite kind from the new palette', () => {
@@ -219,7 +245,7 @@ describe('createRenderer', () => {
       stub.foes.push(foeAt('drone', 400, 300, { id: 9 }));
       stub.pickups.push({ id: 3, kind: 'rapidFire', x: 700, y: 300, px: 700, py: 300, vx: 0, vy: 0, expiresIn: 9 });
       const setScale = vi.spyOn(baker, 'setScale');
-      renderer.setPalette('ionReach');
+      renderer.setPalette('ionReach', LEGACY);
       expect(setScale).toHaveBeenCalledTimes(1);
       expect(renderer.consumeRedrawRequest()).toBe(true);
       drawFrame(world, 1);
@@ -240,7 +266,7 @@ describe('createRenderer', () => {
       stub.bolts.push({ id: 11, x: 500, y: 300, px: 498, py: 300, vx: 230, vy: 0, radius: 5, age: 0, source: 'boss', owner: 0, fromAttack: true });
       drawFrame(world, 1);
       expect(drawsOf(baker.cached(boltKey(DRIFT))?.canvas)).toHaveLength(1);
-      renderer.setPalette('crimsonNebula');
+      renderer.setPalette('crimsonNebula', LEGACY);
       drawFrame(world, 1);
       expect(drawsOf(baker.cached(boltKey(paletteFor('crimsonNebula')))?.canvas)).toHaveLength(1);
     });
@@ -268,7 +294,7 @@ describe('createRenderer', () => {
       const setScale = vi.spyOn(baker, 'setScale');
       let previous = DRIFT;
       for (const id of ['crimsonNebula', 'voidRift', 'singularity'] as const) {
-        renderer.setPalette(id);
+        renderer.setPalette(id, LEGACY);
         expect(renderer.palette).toBe(id);
         drawFrame(world, 1);
         const palette = paletteFor(id);
@@ -284,7 +310,7 @@ describe('createRenderer', () => {
       renderer.resize(1280, 720, FIELD);
       const { world } = stubWorld();
       Object.assign(world, { galaxy: galaxyById('2-4'), timeLeft: 40 });
-      renderer.setPalette('ionReach');
+      renderer.setPalette('ionReach', LEGACY);
       canvas.stops.length = 0;
       drawFrame(world, 1);
       expect(canvas.stops).toContain(ION_REACH.accent[2]);
@@ -294,7 +320,7 @@ describe('createRenderer', () => {
     it('re-bakes nothing for the palette already in force', () => {
       renderer.resize(1280, 720, FIELD);
       const setScale = vi.spyOn(baker, 'setScale');
-      renderer.setPalette('drift');
+      renderer.setPalette('drift', LEGACY);
       expect(setScale).not.toHaveBeenCalled();
       expect(renderer.consumeRedrawRequest()).toBe(false);
     });
@@ -302,7 +328,7 @@ describe('createRenderer', () => {
     it('colours bursts and the HUD in the new palette, and keeps the effects object the settings hold', () => {
       const { effects } = renderer;
       effects.reducedMotion = true;
-      renderer.setPalette('ionReach');
+      renderer.setPalette('ionReach', LEGACY);
       expect(renderer.effects).toBe(effects);
       expect(effects.reducedMotion).toBe(true);
       renderer.resize(1280, 720, FIELD);
@@ -320,7 +346,7 @@ describe('createRenderer', () => {
     });
 
     it('waits for the first resize when it comes before one, and then bakes in the new palette', () => {
-      renderer.setPalette('ionReach');
+      renderer.setPalette('ionReach', LEGACY);
       const setScale = vi.spyOn(baker, 'setScale');
       renderer.resize(1280, 720, FIELD);
       expect(setScale).toHaveBeenCalledTimes(1);
@@ -518,7 +544,7 @@ describe('createRenderer', () => {
       const MARKS = mineMarkKeys(CRIMSON);
       function crimsonWorld(): { stub: Stub; world: World } {
         renderer.resize(1280, 720, FIELD);
-        renderer.setPalette('crimsonNebula');
+        renderer.setPalette('crimsonNebula', LEGACY);
         return stubWorld();
       }
 

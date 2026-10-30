@@ -88,7 +88,7 @@ describe('createRunController', () => {
     expect(run.world?.galaxy?.id).toBe('2-3');
     expect(run.world?.lives).toBe(3);
     expect(onRunStarted).toHaveBeenCalledTimes(1);
-    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'), null);
+    expect(onRunStarted).toHaveBeenCalledWith(galaxyById('2-3'), null, null);
   });
 
   it('gives a Rank run its lives', () => {
@@ -154,7 +154,7 @@ describe('createRunController', () => {
       expect(run.world?.galaxy).toEqual({ ...daily.def, label: DAILY_LABEL });
       expect(playsOnSeed(run.world, daily.seed)).toBe(true);
       expect(run.daily).toEqual(daily);
-      expect(onRunStarted).toHaveBeenCalledWith({ ...daily.def, label: DAILY_LABEL }, daily.target);
+      expect(onRunStarted).toHaveBeenCalledWith({ ...daily.def, label: DAILY_LABEL }, daily.target, daily.seed);
       expect(notify).toHaveBeenCalledWith(twistToast(TWISTS_BY_ID[daily.twist].name));
     });
 

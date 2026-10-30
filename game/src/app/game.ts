@@ -16,6 +16,7 @@ import { createFullscreen } from '../platform/fullscreen';
 import { createInstallPrompt } from '../platform/install';
 import { RingLog } from '../platform/log';
 import { effectiveLook } from '../meta/cosmetics';
+import { backdropSpecFor } from '../render/backdropSpec';
 import type { HudRect } from '../render/hud';
 import { LITE_FROM_INDEX, QualityScaler, type QualityLevel } from '../render/quality';
 import { paletteFor } from '../render/palette';
@@ -340,14 +341,14 @@ export function createApp(root: HTMLElement, canvas: HTMLCanvasElement, e2e?: E2
     redrawPending = true;
   }
 
-  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette, with its target) and frame stats for it. */
-  function onRunStarted(galaxy: GalaxyDef, target: number | null): void {
+  /** A new World is in place for `galaxy`: fresh input latches, loop, renderer (in the galaxy's palette and sky, with its target) and frame stats for it. */
+  function onRunStarted(galaxy: GalaxyDef, target: number | null, dailySeed: number | null): void {
     startKeys.latch(keyboard.held);
     mouseFire.release();
     padFire.latch(previousPad);
     loop.reset();
     hitStop.clear();
-    renderer.setPalette(galaxy.palette);
+    renderer.setPalette(galaxy.palette, backdropSpecFor(galaxy, dailySeed));
     renderer.setTarget(target);
     applyAccents(document.documentElement.style, paletteFor(galaxy.palette));
     renderer.reset();

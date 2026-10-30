@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { galaxyById } from '../../src/content/galaxies';
+import { backdropSpecFor } from '../../src/render/backdropSpec';
 import { createBackdrop, layoutFor, REBAKE_DELAY_MS, type Backdrop, type Bakes } from '../../src/render/layout';
 import { DRIFT, ION_REACH } from '../../src/render/palette';
 import type { SpriteBaker } from '../../src/render/sprites';
 import { visualScaleFor } from '../../src/render/visualScale';
 
 const FIELD = { width: 1280, height: 720 };
+/** The sky a practice run draws, and a galaxy's own sky. */
+const LEGACY = backdropSpecFor(null, null);
+const SKY = backdropSpecFor(galaxyById('1-1'), null);
 
 /** A canvas whose 2D context accepts every call. */
 function fakeCanvas(): { width: number; height: number; getContext: () => unknown } {
@@ -33,7 +38,7 @@ describe('createBackdrop', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal('document', { createElement: fakeCanvas });
-    backdrop = createBackdrop({ setScale: () => undefined } as unknown as SpriteBaker, DRIFT, 1);
+    backdrop = createBackdrop({ setScale: () => undefined } as unknown as SpriteBaker, DRIFT, LEGACY);
   });
 
   afterEach(() => {
@@ -72,14 +77,22 @@ describe('createBackdrop', () => {
     const setScale = vi.fn();
     /** The colour stops painted onto the sky's linear gradient, in order, for every bake since the last reset. */
     let skyStops: string[];
+    /** The end points of every sky gradient line, for every bake since the last reset. */
+    let skyLines: number[][];
 
     beforeEach(() => {
       setScale.mockClear();
       skyStops = [];
+      skyLines = [];
       const fake = (): { width: number; height: number; getContext: () => unknown } => {
         const ctx = new Proxy({}, {
           get: (_target, name) => {
-            if (name === 'createLinearGradient') return () => ({ addColorStop: (_at: number, color: string) => skyStops.push(color) });
+            if (name === 'createLinearGradient') {
+              return (...line: number[]) => {
+                skyLines.push(line);
+                return { addColorStop: (_at: number, color: string) => skyStops.push(color) };
+              };
+            }
             if (name === 'createRadialGradient') return () => ({ addColorStop: () => undefined });
             return () => undefined;
           },
@@ -87,7 +100,7 @@ describe('createBackdrop', () => {
         return { width: 0, height: 0, getContext: () => ctx };
       };
       vi.stubGlobal('document', { createElement: fake });
-      backdrop = createBackdrop({ setScale } as unknown as SpriteBaker, DRIFT, 1);
+      backdrop = createBackdrop({ setScale } as unknown as SpriteBaker, DRIFT, LEGACY);
     });
 
     it('re-bakes the sky and vignette once, at once, in the new palette', () => {
@@ -95,7 +108,7 @@ describe('createBackdrop', () => {
       const first = current();
       skyStops.length = 0;
       setScale.mockClear();
-      backdrop.setPalette(ION_REACH);
+      backdrop.setPalette(ION_REACH, LEGACY);
       expect(setScale).toHaveBeenCalledTimes(1);
       expect(skyStops).toEqual([...ION_REACH.skyStops]);
       expect(current()).not.toBe(first);
@@ -108,7 +121,7 @@ describe('createBackdrop', () => {
       backdrop.schedule(layoutFor(1280, 720, FIELD, 2));
       const first = current();
       setScale.mockClear();
-      backdrop.setPalette(DRIFT);
+      backdrop.setPalette(DRIFT, LEGACY);
       expect(setScale).not.toHaveBeenCalled();
       expect(current()).toBe(first);
       expect(backdrop.consumeRebaked()).toBe(false);
@@ -118,14 +131,39 @@ describe('createBackdrop', () => {
       backdrop.schedule(layoutFor(1280, 720, FIELD, 2));
       backdrop.schedule(layoutFor(640, 360, FIELD, 2));
       setScale.mockClear();
-      backdrop.setPalette(ION_REACH);
+      backdrop.setPalette(ION_REACH, LEGACY);
       expect(sizeOf(current())).toEqual([1280, 720, 320, 180]);
       vi.advanceTimersByTime(REBAKE_DELAY_MS * 2);
       expect(setScale).toHaveBeenCalledTimes(1);
     });
 
+    it('re-bakes for a new sky in the palette already in force, and not for the sky already in force', () => {
+      backdrop.schedule(layoutFor(1280, 720, FIELD, 2));
+      const first = current();
+      setScale.mockClear();
+      backdrop.setPalette(DRIFT, SKY);
+      expect(setScale).toHaveBeenCalledTimes(1);
+      expect(current()).not.toBe(first);
+      expect(backdrop.consumeRebaked()).toBe(true);
+      setScale.mockClear();
+      backdrop.setPalette(DRIFT, SKY);
+      expect(setScale).not.toHaveBeenCalled();
+      expect(backdrop.consumeRebaked()).toBe(false);
+    });
+
+    it('re-bakes a resize in the sky it was given, and so the same geometry as its first bake', () => {
+      backdrop = createBackdrop({ setScale } as unknown as SpriteBaker, DRIFT, SKY);
+      backdrop.schedule(layoutFor(1280, 720, FIELD, 2));
+      const [firstLine] = skyLines;
+      expect(firstLine).not.toEqual([0, 0, FIELD.width, FIELD.height]);
+      skyLines.length = 0;
+      backdrop.schedule(layoutFor(640, 360, FIELD, 2));
+      vi.advanceTimersByTime(REBAKE_DELAY_MS);
+      expect(skyLines).toEqual([firstLine]);
+    });
+
     it('bakes later layouts in the new palette, and waits for a first layout when none has come', () => {
-      backdrop.setPalette(ION_REACH);
+      backdrop.setPalette(ION_REACH, LEGACY);
       expect(backdrop.bakes).toBeNull();
       expect(setScale).not.toHaveBeenCalled();
       backdrop.schedule(layoutFor(1280, 720, FIELD, 1));

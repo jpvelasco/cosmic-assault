@@ -33,9 +33,10 @@ export interface RunControllerDeps {
   showScreen(screen: Screen): void;
   /**
    * A new World is in place, playing `galaxy`: reset the input latches, the loop and the renderer for it, in its palette.
-   * `target` is the score a Daily sets to beat, null outside the Daily.
+   * `target` is the score a Daily sets to beat, null outside the Daily; `dailySeed` is the Daily's seed (its sky is drawn
+   * from it), null outside the Daily.
    */
-  onRunStarted(galaxy: GalaxyDef, target: number | null): void;
+  onRunStarted(galaxy: GalaxyDef, target: number | null, dailySeed: number | null): void;
   /** Tells the player something in a toast, up for `ms` (the toast's default when omitted). */
   notify(text: string, ms?: number): void;
   /** One step's events, for the hit-stop, renderer and audio; the flow hears them after. */
@@ -149,7 +150,7 @@ export function createRunController(deps: RunControllerDeps): RunController {
       startTier: rankRun?.weaponTier ?? 0,
     });
     notices.newRun();
-    deps.onRunStarted(def, daily?.target ?? null);
+    deps.onRunStarted(def, daily?.target ?? null, daily?.seed ?? null);
     if (daily !== null) deps.notify(twistToast(TWISTS_BY_ID[daily.twist].name));
   }
 
