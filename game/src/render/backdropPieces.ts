@@ -165,8 +165,8 @@ export const REACH: Record<PieceId, number> = {
   gasGiant: 1.85,
   moon: 1,
   farSun: 2.35,
-  spiralSmudge: 1.25,
-  station: 1,
+  spiralSmudge: 1.35,
+  station: 1.35,
   dustLane: 2.2,
   cometTail: 2.9,
   eclipse: 2.2,
@@ -217,36 +217,39 @@ const PIECES: Record<PieceId, Painter> = {
     const turn = rng.range(0, TAU);
     for (let arm = 0; arm < 2; arm++) {
       for (let k = 0; k < 5; k++) {
-        const dist = s.r * (0.2 + 0.16 * k);
+        const dist = s.r * (0.25 + 0.2 * k);
         const angle = turn + arm * Math.PI + k * 0.45;
         ctx.save();
         ctx.translate(s.cx + Math.cos(angle) * dist, s.cy + Math.sin(angle) * dist);
         ctx.rotate(angle + Math.PI / 2);
         ctx.scale(1, 0.45);
-        glowBlob(ctx, 0, 0, s.r * (0.38 - 0.04 * k), at(p.nebula, arm + 1).color, 0.35 - 0.03 * k);
+        glowBlob(ctx, 0, 0, s.r * (0.42 - 0.04 * k), at(p.nebula, arm + 1).color, 0.55 - 0.04 * k);
         ctx.restore();
       }
     }
-    glowBlob(ctx, s.cx, s.cy, s.r * 0.35, at(p.accent, 0), 0.45);
+    glowBlob(ctx, s.cx, s.cy, s.r * 0.35, at(p.accent, 0), 0.5);
   },
 
   station(ctx, s, p, rng) {
-    const dark = p.skyStops[0];
-    strokeRing(ctx, s, s.r, s.r * 0.3, 0, s.r * 0.14, dark, 0.55);
-    ctx.lineWidth = s.r * 0.05;
-    ctx.strokeStyle = rgba(dark, 0.55);
+    // Accent-coloured: a dark stop vanishes on the dark skies the stations sit in.
+    const bright = at(p.accent, 0);
+    const ring = s.r * 1.25;
+    const squash = 0.3;
+    strokeRing(ctx, s, ring, ring * squash, 0, s.r * 0.16, bright, 0.55);
+    ctx.lineWidth = s.r * 0.07;
+    ctx.strokeStyle = rgba(bright, 0.55);
     for (const angle of [0, TAU / 3, (2 * TAU) / 3]) {
       ctx.beginPath();
       ctx.moveTo(s.cx, s.cy);
-      ctx.lineTo(s.cx + Math.cos(angle) * s.r, s.cy + Math.sin(angle) * s.r * 0.3);
+      ctx.lineTo(s.cx + Math.cos(angle) * ring, s.cy + Math.sin(angle) * ring * squash);
       ctx.stroke();
     }
-    fillDisc(ctx, s.cx, s.cy, s.r * 0.22, dark, 0.55);
+    fillDisc(ctx, s.cx, s.cy, s.r * 0.22, at(p.accent, 1), 0.55);
     const windows = rng.int(3, 7);
     for (let i = 0; i < windows; i++) {
       const angle = rng.range(0, TAU);
-      ctx.fillStyle = rgba(at(p.accent, 0), capped(0.5));
-      ctx.fillRect(s.cx + Math.cos(angle) * s.r * 0.9, s.cy + Math.sin(angle) * s.r * 0.27, s.r * 0.04, s.r * 0.04);
+      ctx.fillStyle = rgba(bright, capped(0.55));
+      ctx.fillRect(s.cx + Math.cos(angle) * s.r * 1.15, s.cy + Math.sin(angle) * s.r * 0.35, s.r * 0.06, s.r * 0.06);
     }
   },
 

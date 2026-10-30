@@ -383,3 +383,31 @@ describe('painted reach', () => {
     expect(pieceFit(spec, ASPECTS[0] as number, false).r).toBeLessThan(0.1);
   });
 });
+
+/** The contrast and size floor a station or spiral holds: strong enough paint, and a painted radius that reads on dark skies. */
+const RIDER: readonly PieceId[] = ['station', 'spiralSmudge'];
+const RIDER_MIN_ALPHA = 0.4;
+const RIDER_MIN_PAINTED_RADIUS = 0.13;
+
+describe('stations and spirals on dark skies', () => {
+  it('paints each with some strong alpha, never in the dark sky stop, and at a painted radius that reads', () => {
+    for (const id of PALETTE_IDS) {
+      const palette = paletteFor(id);
+      const dark = hexToRgb(palette.skyStops[0]).join(',');
+      for (const piece of RIDER) {
+        for (const field of FIELDS) {
+          const spec = specFor(piece, false);
+          const coloured = coloursOf(drawnBy(spec, palette, field)).map((colour) => {
+            const match = RGBA.exec(colour);
+            return { triplet: (match ?? []).slice(1, 4).join(','), alpha: Number(match?.[4]) };
+          });
+          const strong = coloured.filter((paint) => paint.alpha >= RIDER_MIN_ALPHA);
+          expect(strong.length, `${piece} in ${id} at ${String(field.width)}`).toBeGreaterThan(0);
+          expect(strong.filter((paint) => paint.triplet === dark), `${piece} in ${id} paints dark strongly`).toEqual([]);
+          const fit = pieceFit(spec, field.width / field.height, false);
+          expect(fit.r * REACH[piece], `${piece} painted radius`).toBeGreaterThanOrEqual(RIDER_MIN_PAINTED_RADIUS - EPS);
+        }
+      }
+    }
+  });
+});
