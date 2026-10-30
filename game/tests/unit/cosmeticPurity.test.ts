@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_LOOK, SKIN_IDS, TRAIL_IDS, type Look } from '../../src/content/cosmetics';
 import { galaxyById } from '../../src/content/galaxies';
+import { backdropSpecFor } from '../../src/render/backdropSpec';
 import { createRenderer, type Renderer } from '../../src/render/renderer';
 import { createSpriteBaker, type SpriteBaker } from '../../src/render/sprites';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -48,7 +49,7 @@ describe('cosmetics are only read by the drawing and the menus', () => {
 /** The scripted thirty seconds, with the renderer taking every step (and drawing every few) when given one. */
 function playThirtySeconds(renderer: Renderer | null, look?: Look): DigestRun {
   if (renderer !== null) {
-    renderer.setPalette(galaxyById(RUN.galaxy).palette);
+    renderer.setPalette(galaxyById(RUN.galaxy).palette, backdropSpecFor(galaxyById(RUN.galaxy), null));
     if (look !== undefined) renderer.setLook(look);
     renderer.resize(FIELD.width, FIELD.height, FIELD);
   }

@@ -6,7 +6,7 @@ import type { World } from './sim/world';
 /** The error `crash()` throws, which the specs that call it allow in the console. Declared here only. */
 export const DELIBERATE_CRASH = 'e2e: deliberate crash';
 /** The bridge's shape version, raised whenever its state changes shape; the specs wait for this one. */
-export const BRIDGE_VERSION = 9;
+export const BRIDGE_VERSION = 10;
 
 function shipState({ ship }: World): CosmicAssaultTestShip {
   const { x, y, vx, vy, angle, thrusting, invulnerable } = ship;
@@ -24,6 +24,11 @@ function bossOf(world: World | null): CosmicAssaultTestState['boss'] {
   if (boss === null || boss === undefined) return null;
   const { id, state, hp, maxHp, phase, windup, active, vulnerable, parts, target } = boss;
   return { id, state, hp, maxHp, phase, windup, active, vulnerable, liveParts: parts.filter((part) => part.hp > 0).length, target: target === null ? null : { x: target.x, y: target.y } };
+}
+
+/** The sky in force as plain data: the seed it is drawn with, its set-piece and whether it is a boss galaxy's. */
+function backdropOf({ seed, piece, boss }: App['backdrop']): CosmicAssaultTestState['backdrop'] {
+  return { seed, piece, boss };
 }
 
 /** A hazard as plain data: a zone's size and a rift's second mouth with the rest. */
@@ -83,6 +88,7 @@ function snapshot(app: App, hooks: E2eHooks): CosmicAssaultTestState {
     frameStats: app.frameStats,
     muted: app.muted,
     palette: app.palette,
+    backdrop: backdropOf(app.backdrop),
     musicTheme: app.musicTheme,
     settings: Object.freeze({ ...app.settings }),
     look: Object.freeze({ ...app.look }),

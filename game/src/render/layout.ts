@@ -1,4 +1,5 @@
 import type { Field } from '../sim/field';
+import { sameSky, type BackdropSpec } from './backdropSpec';
 import type { Palette } from './palette';
 import { bakeSky, bakeTimeWarp, bakeVignette } from './sky';
 import type { SpriteBaker } from './sprites';
@@ -37,11 +38,11 @@ export interface Backdrop {
   readonly bakes: Bakes | null;
   schedule(layout: Layout): void;
   /**
-   * Bakes the sky for a new palette at once, from the latest layout (a resize still waiting out its delay is baked
-   * now, not later). Nothing happens for the palette already in force, and before the first layout the palette is
-   * just kept for it.
+   * Bakes the sky for a new palette and sky spec at once, from the latest layout (a resize still waiting out its delay is
+   * baked now, not later). Nothing happens for the palette and sky already in force, and before the first layout they are
+   * just kept for it. A resize re-bake reuses the spec it was given.
    */
-  setPalette(palette: Palette): void;
+  setPalette(palette: Palette, spec: BackdropSpec): void;
   /** True once after each deferred re-bake, so a still frame (paused, game over) is redrawn with it. Reading clears it. */
   consumeRebaked(): boolean;
   /** Cancels a pending re-bake and frees the bakes; `bakes` is null after. */
@@ -78,8 +79,9 @@ function freeBakes({ sky, vignette, timeWarp }: Bakes): void {
   }
 }
 
-export function createBackdrop(baker: SpriteBaker, initial: Palette, skySeed: number): Backdrop {
+export function createBackdrop(baker: SpriteBaker, initial: Palette, initialSpec: BackdropSpec): Backdrop {
   let palette = initial;
+  let spec = initialSpec;
   let latest: Layout | null = null;
   let bakes: Bakes | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -87,7 +89,7 @@ export function createBackdrop(baker: SpriteBaker, initial: Palette, skySeed: nu
 
   function bake({ field, scale, dpr, k, visual }: Layout): void {
     const previous = bakes;
-    bakes = { sky: bakeSky(field, k, palette, skySeed), vignette: bakeVignette(field, k), timeWarp: bakeTimeWarp(field, k) };
+    bakes = { sky: bakeSky(field, k, palette, spec), vignette: bakeVignette(field, k), timeWarp: bakeTimeWarp(field, k) };
     if (previous !== null) freeBakes(previous);
     baker.setScale(scale, dpr, visual);
   }
@@ -108,9 +110,10 @@ export function createBackdrop(baker: SpriteBaker, initial: Palette, skySeed: nu
         rebaked = true;
       }, REBAKE_DELAY_MS);
     },
-    setPalette(next) {
-      if (next.id === palette.id) return;
+    setPalette(next, nextSpec) {
+      if (next.id === palette.id && sameSky(nextSpec, spec)) return;
       palette = next;
+      spec = nextSpec;
       if (latest === null) return;
       clearTimeout(timer);
       bake(latest);

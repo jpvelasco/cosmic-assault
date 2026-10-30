@@ -11,6 +11,8 @@ export interface StarLayers {
   resize(field: Field): void;
   /** Sets `scale` times the usual star count: each layer keeps its stars where they are, dropping or adding some. */
   setCountScale(scale: number): void;
+  /** Scatters the stars afresh from `seed`, as a new sky does; the same seed keeps them. */
+  reseed(seed: number): void;
 }
 
 export interface Star {
@@ -84,7 +86,8 @@ function keepStars(current: readonly Star[], next: readonly Star[]): Star[] {
   });
 }
 
-export function createStarLayers(seed: number, initialScale: number): StarLayers {
+export function createStarLayers(initialSeed: number, initialScale: number): StarLayers {
+  let seed = initialSeed;
   let countScale = initialScale;
   let field: Field | null = null;
   let stars: Star[] = [];
@@ -111,6 +114,11 @@ export function createStarLayers(seed: number, initialScale: number): StarLayers
       if (scale === countScale) return;
       countScale = scale;
       if (field !== null) stars = keepStars(stars, seedStars(seed, countScale, field));
+    },
+    reseed(next) {
+      if (next === seed) return;
+      seed = next;
+      if (field !== null) stars = seedStars(seed, countScale, field);
     },
   };
 }

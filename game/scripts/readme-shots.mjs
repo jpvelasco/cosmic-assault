@@ -4,15 +4,12 @@
 // It builds dist-e2e/ (unless --skip-build), serves it, stages each scene through the e2e build's URL overrides and test
 // bridge, and writes one PNG per entry of SHOTS. A still over SHOT_BYTE_CAP is scaled down until it fits. Run it after
 // a visible change to the title, a palette, the HUD or a boss, and commit the PNGs.
-import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
+import { contextOptions, e2eQuery, startRunFromTitle, waitForBridge, withE2eBrowser } from './staging.mjs';
 
-const GAME_DIR = fileURLToPath(new URL('..', import.meta.url));
-const DIST_E2E = join(GAME_DIR, 'dist-e2e');
 /** Where the README links its stills from: docs/assets/screens/ at the repository root. */
 export const SHOTS_DIR = fileURLToPath(new URL('../../docs/assets/screens/', import.meta.url));
 
@@ -69,22 +66,12 @@ export const SHOTS = [
 
 /** The e2e build's query string for `shot`: its seed, galaxy and lives if it plays a galaxy, and the top quality level. */
 export function shotQuery({ seed, galaxy, lives }) {
-  const query = new URLSearchParams();
-  if (seed !== undefined) query.set('seed', String(seed));
-  if (galaxy !== undefined) query.set('galaxy', galaxy);
-  if (lives !== undefined) query.set('lives', String(lives));
-  query.set('quality', 'high');
-  return query.toString();
+  return e2eQuery({ seed, galaxy, lives });
 }
 
 /** The widths to try for a still `native` pixels wide: its own, then each smaller width of FIT_WIDTHS. */
 export function candidateWidths(native) {
   return [native, ...FIT_WIDTHS.filter((width) => width < native)];
-}
-
-/** Waits for the e2e build's test bridge, which loads after an import(). */
-async function waitForBridge(page) {
-  await page.waitForFunction(() => typeof window.__COSMIC_ASSAULT_TEST_API__?.getState === 'function', undefined, { timeout: 30_000 });
 }
 
 /** Starts the attract demo behind the title and lets it play a while; the bare title is shot if it never starts. */
@@ -125,8 +112,7 @@ function stepToScene(page, scene) {
 
 /** Starts the shot's galaxy from the title and steps the idle ship to its moment, then holds fire and a left turn; throws if the moment never comes. */
 async function stageGalaxy(page, shot) {
-  await page.keyboard.press('Space');
-  await page.waitForFunction(() => window.__COSMIC_ASSAULT_TEST_API__?.getState().screen === 'playing', undefined, { timeout: 10_000 });
+  await startRunFromTitle(page);
   const missed = await stepToScene(page, shot.scene);
   if (missed !== undefined) {
     throw new Error(
@@ -176,13 +162,6 @@ async function fitted(scratch, png, file) {
   );
 }
 
-/** The browser context each device shoots in: the e2e projects' desktop and phone, with no service worker. */
-function contextOptions(device, devices) {
-  const common = { serviceWorkers: 'block', reducedMotion: 'no-preference' };
-  if (device === 'phone') return { ...devices['Pixel 5 landscape'], deviceScaleFactor: 2, ...common };
-  return { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1, ...common };
-}
-
 async function shoot(browser, devices, scratch, url, shot, outDir) {
   const context = await browser.newContext(contextOptions(shot.device, devices));
   try {
@@ -200,30 +179,14 @@ async function shoot(browser, devices, scratch, url, shot, outDir) {
   }
 }
 
-/** Runs `npm run build:e2e` in game/, through the npm that runs this script when there is one. */
-function buildE2e() {
-  const npm = process.env['npm_execpath'];
-  const [command, args] = npm === undefined ? ['npm', []] : [process.execPath, [npm]];
-  execFileSync(command, [...args, 'run', 'build:e2e'], { cwd: GAME_DIR, stdio: 'inherit' });
-}
-
 async function main() {
   const { values } = parseArgs({ options: { 'skip-build': { type: 'boolean', default: false }, out: { type: 'string' } } });
   const outDir = resolve(values.out ?? SHOTS_DIR);
-  if (!values['skip-build']) buildE2e();
-  if (!existsSync(join(DIST_E2E, 'index.html'))) throw new Error(`${DIST_E2E} holds no build; run npm run build:e2e, or drop --skip-build`);
-  const { chromium, devices } = await import('@playwright/test');
-  const { createPagesServer } = await import('./serve-pages.mjs');
-  const server = await createPagesServer({ mounts: [{ dir: DIST_E2E, at: './' }] });
-  const browser = await chromium.launch();
-  try {
+  await withE2eBrowser({ skipBuild: values['skip-build'] }, async ({ browser, devices, url }) => {
     await mkdir(outDir, { recursive: true });
     const scratch = await browser.newPage();
-    for (const shot of SHOTS) await shoot(browser, devices, scratch, server.url, shot, outDir);
-  } finally {
-    await browser.close();
-    await server.close();
-  }
+    for (const shot of SHOTS) await shoot(browser, devices, scratch, url, shot, outDir);
+  });
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

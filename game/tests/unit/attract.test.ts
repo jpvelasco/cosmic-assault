@@ -13,6 +13,7 @@ import type { Screen } from '../../src/app/flow';
 import { createBot } from '../../src/bot/create';
 import { createView, readView } from '../../src/bot/view';
 import { galaxyById } from '../../src/content/galaxies';
+import { type BackdropSpec, backdropSpecFor } from '../../src/render/backdropSpec';
 import type { PaletteId } from '../../src/content/types';
 import { RingLog } from '../../src/platform/log';
 import { STEP_SECONDS } from '../../src/sim/config';
@@ -22,6 +23,8 @@ import { World } from '../../src/sim/world';
 const FIELD: Field = { width: 1280, height: 720 };
 /** The palette in force before the demos: the last run's, which none of the demos uses. */
 const RUN_PALETTE: PaletteId = 'singularity';
+/** The sky the title is drawn with, which a demo must hand back. */
+const RUN_SPEC: BackdropSpec = backdropSpecFor(galaxyById('3-1'), null);
 /** One display frame at 60 Hz. */
 const FRAME = 1 / 60;
 
@@ -59,13 +62,15 @@ describe('attractDue', () => {
 function fakeRenderer() {
   const renderer = {
     palette: RUN_PALETTE,
+    backdropSpec: RUN_SPEC,
     handle: vi.fn<AttractDeps['renderer']['handle']>(),
     advance: vi.fn<AttractDeps['renderer']['advance']>(),
     settle: vi.fn<AttractDeps['renderer']['settle']>(),
     draw: vi.fn<AttractDeps['renderer']['draw']>(),
     reset: vi.fn<AttractDeps['renderer']['reset']>(),
-    setPalette: vi.fn((id: PaletteId) => {
+    setPalette: vi.fn((id: PaletteId, spec: BackdropSpec) => {
       renderer.palette = id;
+      renderer.backdropSpec = spec;
     }),
   };
   return renderer;
@@ -128,7 +133,7 @@ describe('the attract demo', () => {
     expect(h.started).toHaveBeenCalledTimes(1);
     const first = ATTRACT_DEMOS[0];
     if (first === undefined) throw new Error('no demos');
-    expect(h.renderer.setPalette).toHaveBeenLastCalledWith(galaxyById(first.galaxy).palette);
+    expect(h.renderer.setPalette).toHaveBeenLastCalledWith(galaxyById(first.galaxy).palette, backdropSpecFor(galaxyById(first.galaxy), null));
     // A null score draws the scene without the HUD.
     expect(h.renderer.draw.mock.lastCall?.[2]).toBeNull();
     expect(drawnWorld(h).galaxy?.id).toBe(first.galaxy);
@@ -166,6 +171,7 @@ describe('the attract demo', () => {
     expect(h.attract.frame(FRAME)).toBe(false);
     expect(h.attract.active).toBe(false);
     expect(h.renderer.palette).toBe(RUN_PALETTE);
+    expect(h.renderer.backdropSpec).toEqual(RUN_SPEC);
     Object.assign(h.scene, restore);
     h.frames(ATTRACT_IDLE_SECONDS - 1);
     expect(h.attract.active).toBe(false);
@@ -201,6 +207,7 @@ describe('the attract demo', () => {
     expect(h.attract.demo).toBeNull();
     expect(world.status).toBe('gameOver');
     expect(h.renderer.palette).toBe(RUN_PALETTE);
+    expect(h.renderer.backdropSpec).toEqual(RUN_SPEC);
     expect(h.renderer.reset).toHaveBeenCalledTimes(2);
     expect(h.changed).toHaveBeenCalledTimes(2);
     expect(h.attract.interrupt()).toBe(false);

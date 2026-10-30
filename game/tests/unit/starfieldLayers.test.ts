@@ -120,6 +120,36 @@ describe('createStarLayers', () => {
   });
 });
 
+/** The centre of every star the layers draw, in draw order. */
+function starPoints(layers: ReturnType<typeof createStarLayers>): number[][] {
+  const points: number[][] = [];
+  const ctx = { globalAlpha: 1, fillStyle: '', beginPath: () => undefined, arc: (x: number, y: number) => points.push([x, y]), fill: () => undefined };
+  layers.draw(ctx as unknown as CanvasRenderingContext2D, 0, '#ffffff');
+  return points;
+}
+
+describe('createStarLayers.reseed', () => {
+  it('scatters the stars afresh from a new seed, and keeps them for the same one', () => {
+    const layers = createStarLayers(3, 1);
+    layers.resize(FIELD);
+    const before = starPoints(layers);
+    layers.reseed(3);
+    expect(starPoints(layers)).toEqual(before);
+    layers.reseed(4);
+    const after = starPoints(layers);
+    expect(after).toHaveLength(before.length);
+    expect(after).not.toEqual(before);
+  });
+
+  it('seeds the field it is resized to from the new seed when called before a resize', () => {
+    const layers = createStarLayers(3, 1);
+    layers.reseed(9);
+    expect(starPoints(layers)).toEqual([]);
+    layers.resize(FIELD);
+    expect(starPoints(layers)).toEqual(seedStars(9, 1, FIELD).map((star) => [star.x, star.y]));
+  });
+});
+
 describe('createStarLayers.setCountScale', () => {
   const countFor = (setup: (layers: ReturnType<typeof createStarLayers>) => void): number => {
     let arcs = 0;

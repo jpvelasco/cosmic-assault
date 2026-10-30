@@ -26,6 +26,7 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
     frameStats: { count: 0, p50: 0, p95: 0, longFrames: 0, slowShare: 0 },
     muted: false,
     ...look,
+    backdrop: { seed: 7, piece: 'moon', boss: false, side: 'left', slot: 2 },
     settings: {},
     look: { skin: 'ember', trail: 'ion' },
     motion: { reducedMotion: false, shake: true },
@@ -42,9 +43,15 @@ function bridgeFor(world: World | null, look: { palette: string; musicTheme: str
 describe('the test bridge look and music', () => {
   it('reports the palette and the music theme in force, beside the version-8 fields', () => {
     const api = bridgeFor(null);
-    expect(api.version).toBe(9);
+    expect(api.version).toBe(10);
     expect(api.getState()).toMatchObject({ palette: 'drift', musicTheme: 'drift' });
     expect(bridgeFor(null, { palette: 'ionReach', musicTheme: 'ionReachBoss' }).getState()).toMatchObject({ palette: 'ionReach', musicTheme: 'ionReachBoss' });
+  });
+});
+
+describe('the test bridge sky', () => {
+  it('reports the seed, set-piece and boss flag of the sky in force, and not the placement', () => {
+    expect(bridgeFor(null).getState().backdrop).toEqual({ seed: 7, piece: 'moon', boss: false });
   });
 });
 

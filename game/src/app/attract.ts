@@ -5,6 +5,7 @@ import { galaxyById } from '../content/galaxies';
 import type { GalaxyId, PaletteId } from '../content/types';
 import { describeError } from '../platform/crashGuard';
 import type { RingLog } from '../platform/log';
+import { backdropSpecFor, type BackdropSpec } from '../render/backdropSpec';
 import type { Renderer } from '../render/renderer';
 import type { Field } from '../sim/field';
 import { createFixedStepLoop, visualFrameSeconds } from '../sim/loop';
@@ -60,7 +61,7 @@ export function attractDue(state: Readonly<IdleState>): boolean {
 
 /** What attract mode needs: the renderer to draw the demo with, the log for a crash, and the screen's state. No save, flow, notices or audio. */
 export interface AttractDeps {
-  readonly renderer: Pick<Renderer, 'handle' | 'advance' | 'settle' | 'draw' | 'reset' | 'setPalette' | 'palette'>;
+  readonly renderer: Pick<Renderer, 'handle' | 'advance' | 'settle' | 'draw' | 'reset' | 'setPalette' | 'palette' | 'backdropSpec'>;
   readonly log: Pick<RingLog, 'add'>;
   /** The play field, or null before the page has a size. */
   field(): Field | null;
@@ -141,6 +142,7 @@ export function createAttract(deps: AttractDeps): Attract {
   let frames = 0;
   /** The palette in force before the demos, put back when they stop. */
   let paletteBefore: PaletteId = renderer.palette;
+  let specBefore: BackdropSpec = renderer.backdropSpec;
 
   function readState(): Readonly<IdleState> {
     state.screen = deps.screen();
@@ -161,7 +163,7 @@ export function createAttract(deps: AttractDeps): Attract {
     const galaxy = galaxyById(demo.galaxy);
     const world = new World({ seed: demo.seed, field, rules: { kind: 'galaxy', galaxy, mode: 'free' } });
     renderer.reset();
-    renderer.setPalette(galaxy.palette);
+    renderer.setPalette(galaxy.palette, backdropSpecFor(galaxy, null));
     loop.reset();
     deps.demoStarted();
     return new DemoRun(demo, world, renderer);
@@ -171,6 +173,7 @@ export function createAttract(deps: AttractDeps): Attract {
     active = true;
     frames = 0;
     paletteBefore = renderer.palette;
+    specBefore = renderer.backdropSpec;
     deps.activeChanged();
   }
 
@@ -184,7 +187,7 @@ export function createAttract(deps: AttractDeps): Attract {
     deps.activeChanged();
     ended?.world.endRun();
     renderer.reset();
-    renderer.setPalette(paletteBefore);
+    renderer.setPalette(paletteBefore, specBefore);
   }
 
   /** Steps the demo for `dt`, or holds it still through the pause after it, then draws it without the HUD. */

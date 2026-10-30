@@ -6,8 +6,10 @@ import { isPositiveFiniteSize, type Field } from '../sim/field';
 import { enemyTimeScale } from '../sim/pickups/effects';
 import { createRng, deriveSeed } from '../sim/rng';
 import { hasEnded, type World } from '../sim/world';
+import { backdropSpecFor, isLegacySky, sameSky, type BackdropSpec } from './backdropSpec';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
+import { RENDER_SEED } from './renderSeed';
 import { createFieldPen } from './fieldPen';
 import { createBoltPass } from './boltPass';
 import { createFoePass } from './foePass';
@@ -58,13 +60,16 @@ export interface Renderer {
   /** Frees the previous run's sprites and particles; call when a new run starts. */
   reset(): void;
   /**
-   * Redraws everything in palette `id`: the sky and vignette re-bake at once, the sprites bake under the new palette's
-   * keys (the old ones are never looked up again), and bursts, the HUD, the stars and the foe, hazard, pickup and boss
-   * art take its colours. Nothing happens for the palette already in force. Call it when a run starts.
+   * Redraws everything in palette `id` under sky `spec`: the sky and vignette re-bake at once, the stars reseed from the
+   * spec, the sprites bake under the new palette's keys (the old ones are never looked up again), and bursts, the HUD and
+   * the foe, hazard, pickup and boss art take its colours. Nothing happens when both the palette and the spec's sky (seed
+   * and piece) are already in force. Call it when a run starts.
    */
-  setPalette(id: PaletteId): void;
+  setPalette(id: PaletteId, spec: BackdropSpec): void;
   /** The palette in force. */
   readonly palette: PaletteId;
+  /** The sky spec in force. */
+  readonly backdropSpec: BackdropSpec;
   /**
    * The ship's skin and engine trail from now on. Cosmetic only: the hull outline and the trail's particles never change
    * how the ship flies. The app passes the look in force, with unlocks applied, whenever it changes.
@@ -98,11 +103,6 @@ export interface RendererParts {
   readonly particles?: ParticlePool;
 }
 
-/**
- * Render-only randomness; the sim never reads it. Each consumer derives its own stream, so the
- * sky dust, stars, flame flicker and bursts never line up with one another.
- */
-const RENDER_SEED = 0x57a7f1e1;
 const BLINK_HZ = 10;
 
 // Glow looks from the mockup's renderGlossy.
@@ -128,16 +128,22 @@ export function shipHidden(world: Pick<World, 'ship' | 'elapsed'>): boolean {
 
 const NO_HUD_RECTS: readonly HudRect[] = [];
 
+/** The stars' seed: the legacy sky keeps the stars it always had, and any other sky scatters its own. */
+function starSeedFor(spec: BackdropSpec): number {
+  return isLegacySky(spec) ? deriveSeed(RENDER_SEED, 'stars') : deriveSeed(spec.seed, 'stars');
+}
+
 export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts = {}): Renderer {
   const ctx = get2dContext(canvas);
   let palette: Palette = DRIFT;
+  let spec: BackdropSpec = backdropSpecFor(null, null);
   const baker = parts.baker ?? createSpriteBaker();
   const particles = parts.particles ?? new ParticlePool(DEFAULT_PARTICLE_CAPACITY);
   const hitFlash = createHitFlash(baker);
   const effects = createEffects(particles, deriveSeed(RENDER_SEED, 'effects'), palette);
-  const stars = createStarLayers(deriveSeed(RENDER_SEED, 'stars'), HIGH_QUALITY.starScale);
+  const stars = createStarLayers(starSeedFor(spec), HIGH_QUALITY.starScale);
   const flicker = createRng(deriveSeed(RENDER_SEED, 'flame'));
-  const backdrop = createBackdrop(baker, palette, deriveSeed(RENDER_SEED, 'sky'));
+  const backdrop = createBackdrop(baker, palette, spec);
   const pen = createFieldPen(ctx);
   const particlePass = createParticlePass(ctx, pen, baker, particles);
   const hud = createHud(palette);
@@ -213,13 +219,20 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
   });
   let passes = passesFor(palette);
 
-  function setPalette(id: PaletteId): void {
-    if (id === palette.id) return;
-    palette = paletteFor(id);
-    effects.setPalette(palette);
-    hud.setPalette(palette);
-    backdrop.setPalette(palette);
-    passes = passesFor(palette);
+  function setPalette(id: PaletteId, next: BackdropSpec): void {
+    const skyChanged = !sameSky(next, spec);
+    if (id === palette.id && !skyChanged) return;
+    if (id !== palette.id) {
+      palette = paletteFor(id);
+      effects.setPalette(palette);
+      hud.setPalette(palette);
+      passes = passesFor(palette);
+    }
+    if (skyChanged) {
+      spec = next;
+      stars.reseed(starSeedFor(spec));
+    }
+    backdrop.setPalette(palette, spec);
   }
 
   /** Writes the asteroid's interpolated pose into `pose` and returns its drawn glow's reach, which covers its body too. */
@@ -445,6 +458,9 @@ export function createRenderer(canvas: HTMLCanvasElement, parts: RendererParts =
     setPalette,
     get palette() {
       return palette.id;
+    },
+    get backdropSpec() {
+      return spec;
     },
     setLook({ skin: nextSkin, trail }) {
       skin = nextSkin;

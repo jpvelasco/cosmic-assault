@@ -91,6 +91,8 @@ interface CosmicAssaultTestState {
   readonly muted: boolean;
   /** The colour look in force: the last run's galaxy's palette ('drift' before any run). */
   readonly palette: import('./content/types').PaletteId;
+  /** The sky in force: the seed it is drawn with, its set-piece, and whether the galaxy is a boss galaxy's (the legacy sky before any run). */
+  readonly backdrop: { readonly seed: number; readonly piece: import('./render/backdropSpec').PieceId; readonly boss: boolean };
   /** The music theme chosen (it changes at the next bar line): a galaxy's, its boss variant from the boss intro, the last Dimension's on a menu. */
   readonly musicTheme: import('./audio/themes').ThemeId;
   /** The settings in force (volumes 0–1, shake mode, touch layout); saved under `cosmic-assault.v2.settings`. */
@@ -115,7 +117,7 @@ interface CosmicAssaultTestState {
 }
 
 interface CosmicAssaultTestApi {
-  readonly version: 9;
+  readonly version: 10;
   getState(): CosmicAssaultTestState;
   /**
    * Steps the run in play by fixed sim steps for `seconds`, with the controls held now, through the same event
