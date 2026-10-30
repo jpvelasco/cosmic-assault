@@ -112,7 +112,8 @@ Phones play in landscape; the game asks you to rotate if you hold it upright.
 | 5 · Singularity | Everything, mixed | A black hole at the centre that pulls on everything | Nova, Time Warp | **Eclipse**: a finale that remixes the other bosses' moves |
 
 Survival galaxies run from 90 seconds in the Drift to 150 in the Singularity. Difficulty follows the galaxy you are
-in, not your score, and each galaxy builds, eases off and surges on a set script.
+in, not your score, and each galaxy builds, eases off and surges on a set script. Every galaxy has its own sky and
+set-piece, in its Dimension's colours.
 
 ## 🏆 Modes
 

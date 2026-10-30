@@ -14,7 +14,9 @@
   (builds the e2e build and re-renders the README's stills in
   `docs/assets/screens/` with Playwright's Chromium, each kept under the byte cap
   that `tests/unit/readmeShots.test.ts` checks; run it after a visible change to
-  the title, a palette, the HUD or a boss shown there, and commit the PNGs), and `find-seeds`
+  the title, a palette, the HUD or a boss shown there, and commit the PNGs), `backdrop-sheet`
+  (builds the e2e build and renders the contact sheet of every galaxy's sky into `game/backdrop-sheet/`,
+  not committed; it shares its browser staging with `readme-shots` through `scripts/staging.mjs`), and `find-seeds`
   (re-picks an e2e seed: every seed a Playwright spec depends on is listed with its
   claim in `game/e2e/seeds.ts`, a unit test guards each claim, and a failing guard
   prints the `npm run find-seeds -- <claim>` command to run; a new seed gets a
@@ -29,8 +31,8 @@
   also fails if an e2e hook (frame, fast-forward, boss damage, pickup grant, event
   tally, frame-stats restart, sprite-cache use, attract now, attract state) reaches
   `dist/`. The bridge (`testBridge.ts`, typed in `testApi.d.ts`) carries a
-  `BRIDGE_VERSION`, now 9, raised whenever its state changes shape; the specs wait for
-  that version. Each hook lives in
+  `BRIDGE_VERSION`, now 10, raised whenever its state changes shape; the specs wait for
+  that version. Its state carries `backdrop: { seed, piece, boss }`, the sky in force. Each hook lives in
   `app/e2eHooks.ts`, is set only under
   `import.meta.env.MODE === 'e2e'`, and has a mark in `scripts/check-no-bridge.mjs`
   and a case in `tests/unit/checkNoBridge.test.ts`; a new hook needs all three.
@@ -316,6 +318,11 @@
     onto its own canvas and draws that upright until its angle moves its corners
     half a pixel. Effects (`effects.ts`) drive a pooled particle system,
     shake and flash, and honour `prefers-reduced-motion`.
+  - Backdrops (`render/backdropSpec.ts`, `backdropPieces.ts`, `sky.ts`): `backdropSpecFor(galaxy, dailySeed)` is the one
+    place that picks a galaxy's sky (seed, set-piece, boss flag, side and slot); the palette stays the Dimension's;
+    pieces are painted into the baked sky canvas, never per frame, colours come from the palette only, alphas are
+    capped at `PIECE_ALPHA_MAX`, and the centre and top corners are `KEEP_OUT`; practice (`null`) keeps the legacy sky
+    byte for byte; `scripts/backdrop-sheet.mjs` renders the contact sheet of every galaxy's sky (not committed).
   - `render/quality.ts` steps through `QUALITY_LEVELS` from measured frame
     time with hysteresis, judged against the display's own frame interval as
     measured on idle screens (so a 30 Hz-capped display is not read as

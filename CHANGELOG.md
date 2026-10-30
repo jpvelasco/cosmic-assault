@@ -5,6 +5,14 @@ All notable changes to Cosmic Assault are listed here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-MM-DD
+
+### Changed
+
+- Every galaxy has its own sky: the stars, the nebula and one set-piece (a planet, moon, sun, station or similar) are
+  drawn from the galaxy, in its Dimension's colours. Bosses get a larger set-piece, and the Daily Galaxy has its own sky
+  for its date.
+
 ## [2.0.0] - 2026-10-29
 
 Cosmic Assault 2.0: the game, rebuilt.
@@ -43,4 +51,5 @@ Cosmic Assault 2.0: the game, rebuilt.
   tag.
 - The preview address: `/next/` now leads to the main address, and the preview's offline copy removes itself.
 
+[2.0.1]: https://github.com/jpvelasco/cosmic-assault/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/jpvelasco/cosmic-assault/compare/v1.0.0...v2.0.0
