@@ -47,31 +47,57 @@ const BAND_TOP = TOP_CORNER_BOTTOM;
 const BAND_BOTTOM = 0.95;
 /** A small piece's diameter in field heights; its width is the same in field units, so it stays round at any aspect. */
 const SMALL_DIAMETER = 0.2;
-const BOSS_SCALE = 2.2;
+const BOSS_SCALE = 1.7;
 const TAU = Math.PI * 2;
+
+/** Float error allowed on an edge: a box that touches a keep-out edge is clear, even when its computed edge lands a hair inside. */
+const EDGE_EPS = 1e-9;
 
 /** Whether `box` clears every keep-out rectangle (touching an edge is clear). */
 export function clearsKeepOut(box: FractionBox): boolean {
-  return KEEP_OUT.every((zone) => !(box.x0 < zone.x1 && box.x1 > zone.x0 && box.y0 < zone.y1 && box.y1 > zone.y0));
+  return KEEP_OUT.every(
+    (zone) => box.x0 >= zone.x1 - EDGE_EPS || box.x1 <= zone.x0 + EDGE_EPS || box.y0 >= zone.y1 - EDGE_EPS || box.y1 <= zone.y0 + EDGE_EPS,
+  );
+}
+
+/** A piece's centre (fractions of the field) and radius (in field heights, so it stays round at any aspect). */
+export interface PieceFit {
+  readonly cx: number;
+  readonly cy: number;
+  readonly r: number;
+}
+
+/** How far a piece's paint reaches from its centre on each axis, in fractions of the field: `factor` (its `REACH`) times r. */
+function reachOf(factor: number, r: number, aspect: number): { readonly x: number; readonly y: number } {
+  return { x: (factor * r) / aspect, y: factor * r };
 }
 
 /**
- * The box a piece occupies, as fractions of the field, for a field of width/height `aspect`. The piece is centred on its
- * side band's row (the band is cut into `PIECE_SLOTS` equal rows). A boss piece is larger and anchored to the band's inner
- * edge, so it runs off the outer edge like a horizon limb; its top is held below the top corners.
+ * Where a piece sits and how big it is, for a field of width/height `aspect`. The piece is centred on its side band's row
+ * (the band is cut into `PIECE_SLOTS` equal rows), with its radius at the nominal size. Its painted box (`pieceBox`) must
+ * fit its paint band: if that box is still too large the radius shrinks to the band, `r = min(nominal, band / (2 × reach))`
+ * on the limiting axis, and the centre moves in until the box fits. A boss piece is anchored so its inner edge lands on the
+ * band's inner edge; its outer side may run off the field, as a horizon limb does.
  */
-export function pieceBox(spec: BackdropSpec, aspect: number, boss: boolean): FractionBox {
+export function pieceFit(spec: BackdropSpec, aspect: number, boss: boolean): PieceFit {
+  const band = paintBandFor(spec, boss);
+  const factor = REACH[spec.piece];
+  const nominal = (SMALL_DIAMETER / 2) * (boss ? BOSS_SCALE : 1);
+  const across = boss ? Infinity : ((band.x1 - band.x0) * aspect) / (2 * factor);
+  const r = Math.min(nominal, across, (band.y1 - band.y0) / (2 * factor));
+  const reach = reachOf(factor, r, aspect);
   const [left, right] = spec.side === 'left' ? BAND_LEFT : BAND_RIGHT;
-  const diameter = SMALL_DIAMETER * (boss ? BOSS_SCALE : 1);
-  const width = diameter / aspect;
   const row = (ROW_BOTTOM - ROW_TOP) / PIECE_SLOTS;
-  let cx = (left + right) / 2;
-  let cy = ROW_TOP + (spec.slot + 0.5) * row;
-  if (boss) {
-    cx = spec.side === 'left' ? right - width / 2 : left + width / 2;
-    cy = Math.max(cy, TOP_CORNER_BOTTOM + diameter / 2);
-  }
-  return { x0: cx - width / 2, y0: cy - diameter / 2, x1: cx + width / 2, y1: cy + diameter / 2 };
+  const cy = clamp(ROW_TOP + (spec.slot + 0.5) * row, band.y0 + reach.y, band.y1 - reach.y);
+  if (boss) return { cx: spec.side === 'left' ? band.x1 - reach.x : band.x0 + reach.x, cy, r };
+  return { cx: clamp((left + right) / 2, band.x0 + reach.x, band.x1 - reach.x), cy, r };
+}
+
+/** The box a piece's paint covers, as fractions of the field: `pieceFit`'s centre with its reach on each axis. */
+export function pieceBox(spec: BackdropSpec, aspect: number, boss: boolean): FractionBox {
+  const { cx, cy, r } = pieceFit(spec, aspect, boss);
+  const reach = reachOf(REACH[spec.piece], r, aspect);
+  return { x0: cx - reach.x, y0: cy - reach.y, x1: cx + reach.x, y1: cy + reach.y };
 }
 
 /**
@@ -87,6 +113,10 @@ export function paintBandFor(spec: BackdropSpec, boss: boolean): FractionBox {
 /** The painters' colour source: the palette's nebula, accent and sky stops only, never the ship, the hostile or the shot. */
 function at<T>(items: readonly T[], i: number): T {
   return items[i % items.length] as T;
+}
+
+function clamp(value: number, lo: number, hi: number): number {
+  return Math.min(Math.max(value, lo), hi);
 }
 
 const capped = (alpha: number): number => Math.min(alpha, PIECE_ALPHA_MAX);
@@ -123,6 +153,24 @@ function strokeRing(ctx: CanvasRenderingContext2D, s: PieceShape, rx: number, ry
 
 /** One painter: draws a piece into `shape` (field units) from the palette and the piece's own stream. */
 type Painter = (ctx: CanvasRenderingContext2D, shape: PieceShape, palette: Palette, rng: Rng, boss: boolean) => void;
+
+/**
+ * How far each piece's paint lands from its centre, in units of r, on either axis: the farthest circle's centre plus its
+ * radius (strokes add their half-width). `pieceFit` sizes r so this box fits the band. The painter tests hold every entry at
+ * or above what its painter's shapes measure, so a painter that grows past its entry fails the suite.
+ */
+export const REACH: Record<PieceId, number> = {
+  none: 0,
+  ringedPlanet: 2,
+  gasGiant: 1.85,
+  moon: 1,
+  farSun: 2.35,
+  spiralSmudge: 1.25,
+  station: 1,
+  dustLane: 2.2,
+  cometTail: 2.9,
+  eclipse: 2.2,
+};
 
 const PIECES: Record<PieceId, Painter> = {
   none: () => undefined,
@@ -244,18 +292,14 @@ const PIECES: Record<PieceId, Painter> = {
 };
 
 /**
- * Paints `spec`'s set-piece into the sky: its box from `pieceBox`, its painter from `PIECES`, all clipped to its paint
- * band so a painter's glow, ring or tail that overshoots its box never reaches the centre. `none` paints nothing. The
- * `rng` is the caller's piece stream, so the same spec always draws the same piece.
+ * Paints `spec`'s set-piece into the sky: its centre and radius from `pieceFit`, its painter from `PIECES`, all clipped to
+ * its paint band as a safety net (`pieceFit` keeps the painted box inside it, so nothing visible is cut). `none` paints
+ * nothing. The `rng` is the caller's piece stream, so the same spec always draws the same piece.
  */
 export function drawPiece(ctx: CanvasRenderingContext2D, spec: BackdropSpec, palette: Palette, field: Field, rng: Rng): void {
   if (spec.piece === 'none') return;
-  const box = pieceBox(spec, field.width / field.height, spec.boss);
-  const shape: PieceShape = {
-    cx: ((box.x0 + box.x1) / 2) * field.width,
-    cy: ((box.y0 + box.y1) / 2) * field.height,
-    r: ((box.y1 - box.y0) * field.height) / 2,
-  };
+  const fit = pieceFit(spec, field.width / field.height, spec.boss);
+  const shape: PieceShape = { cx: fit.cx * field.width, cy: fit.cy * field.height, r: fit.r * field.height };
   const band = paintBandFor(spec, spec.boss);
   ctx.save();
   ctx.beginPath();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES } from '../../src/content/galaxies';
-import { type BackdropSpec, type PieceId, backdropSpecFor } from '../../src/render/backdropSpec';
-import { type FractionBox, KEEP_OUT, PIECE_ALPHA_MAX, clearsKeepOut, drawPiece, paintBandFor, pieceBox } from '../../src/render/backdropPieces';
+import { type BackdropSpec, PIECE_SLOTS, type PieceId, backdropSpecFor } from '../../src/render/backdropSpec';
+import { type FractionBox, KEEP_OUT, PIECE_ALPHA_MAX, REACH, clearsKeepOut, drawPiece, paintBandFor, pieceBox, pieceFit } from '../../src/render/backdropPieces';
 import { hexToRgb } from '../../src/render/color';
 import { PALETTE_IDS, paletteFor, type Palette } from '../../src/render/palette';
 import type { Field } from '../../src/sim/field';
@@ -19,11 +19,52 @@ const RGBA = /^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/;
 
 type Call = unknown[];
 
-/** A context that logs every call, property set and gradient stop a painter makes, in order. */
-function recordingContext(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
+/** A 2D affine matrix as `setTransform` takes it: a, b, c, d, e, f. */
+type Mat = readonly [number, number, number, number, number, number];
+const IDENTITY: Mat = [1, 0, 0, 1, 0, 0];
+/** Where a circle or ellipse lands in field units: its centre and its half-extent on each axis, after the transform. */
+interface Shape {
+  readonly cx: number;
+  readonly cy: number;
+  readonly hx: number;
+  readonly hy: number;
+}
+
+/** `m` then `n`, as the canvas composes a transform with the next op. */
+function times(m: Mat, n: Mat): Mat {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ];
+}
+
+/** The transform each state op adds to the current matrix. */
+const OPS: Record<string, (a: readonly number[]) => Mat> = {
+  translate: ([x = 0, y = 0]) => [1, 0, 0, 1, x, y],
+  rotate: ([t = 0]) => [Math.cos(t), Math.sin(t), -Math.sin(t), Math.cos(t), 0, 0],
+  scale: ([sx = 1, sy = 1]) => [sx, 0, 0, sy, 0, 0],
+};
+
+/**
+ * A context that logs every call, property set and gradient stop a painter makes, in order, and records each round shape
+ * (arc, ellipse, radial gradient) with the transform in force, so a test can see where it lands.
+ */
+function recordingContext(): { ctx: CanvasRenderingContext2D; calls: Call[]; shapes: Shape[] } {
   const calls: Call[] = [];
+  const shapes: Shape[] = [];
+  const saved: Mat[] = [];
+  let matrix: Mat = IDENTITY;
+  const round = (x: number, y: number, rx: number, ry: number): void => {
+    const [a, b, c, d, e, f] = matrix;
+    shapes.push({ cx: a * x + c * y + e, cy: b * x + d * y + f, hx: Math.hypot(a * rx, c * ry), hy: Math.hypot(b * rx, d * ry) });
+  };
   const gradient = (kind: string, args: unknown[]) => {
     calls.push([kind, ...args]);
+    if (kind === 'createRadialGradient') round(Number(args[3]), Number(args[4]), Number(args[5]), Number(args[5]));
     return {
       addColorStop: (at: number, colour: string) => {
         calls.push(['stop', at, colour]);
@@ -39,6 +80,14 @@ function recordingContext(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
         }
         return (...args: unknown[]) => {
           calls.push([String(name), ...args]);
+          const nums = args as number[];
+          const op = OPS[String(name)];
+          if (op !== undefined) matrix = times(matrix, op(nums));
+          else if (name === 'save') saved.push(matrix);
+          else if (name === 'restore') matrix = saved.pop() ?? IDENTITY;
+          else if (name === 'setTransform') matrix = nums as unknown as Mat;
+          else if (name === 'arc') round(nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0, nums[2] ?? 0);
+          else if (name === 'ellipse') round(nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0, nums[3] ?? 0);
           return undefined;
         };
       },
@@ -48,14 +97,19 @@ function recordingContext(): { ctx: CanvasRenderingContext2D; calls: Call[] } {
       },
     },
   );
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls, shapes };
+}
+
+/** What `piece` draws in `palette` on `field`, from the stream a sky gives it, and the round shapes it lands. */
+function paintedBy(spec: BackdropSpec, palette: Palette, field: Field): { calls: Call[]; shapes: Shape[] } {
+  const { ctx, calls, shapes } = recordingContext();
+  drawPiece(ctx, spec, palette, field, createRng(deriveSeed(spec.seed, 'piece')));
+  return { calls, shapes };
 }
 
 /** What `piece` draws in `palette` on `field`, from the stream a sky gives it. */
 function drawnBy(spec: BackdropSpec, palette: Palette, field: Field): Call[] {
-  const { ctx, calls } = recordingContext();
-  drawPiece(ctx, spec, palette, field, createRng(deriveSeed(spec.seed, 'piece')));
-  return calls;
+  return paintedBy(spec, palette, field).calls;
 }
 
 const specFor = (piece: PieceId, boss: boolean, seed = 7): BackdropSpec => ({ seed, piece, boss, side: 'right', slot: 1 });
@@ -163,14 +217,14 @@ describe('piece placement', () => {
     expect((box.y0 + box.y1) / 2).toBeCloseTo(0.2 + 0.5 * ((0.85 - 0.2) / 4));
   });
 
-  it('runs a boss piece off its outer edge only, and keeps its top below the top corners', () => {
+  it('anchors a boss piece\'s painted inner edge to its band and lets its outer side run off the field, with its top below the top corners', () => {
     const left = pieceBox({ seed: 1, piece: 'eclipse', boss: true, side: 'left', slot: 0 }, ASPECTS[0] as number, true);
     expect(left.x1).toBeCloseTo(0.28);
     expect(left.x0).toBeLessThan(0);
-    expect(left.y0).toBeGreaterThanOrEqual(0.12);
+    expect(left.y0).toBeGreaterThanOrEqual(0.12 - EPS);
     const right = pieceBox({ seed: 1, piece: 'eclipse', boss: true, side: 'right', slot: 3 }, ASPECTS[2] as number, true);
     expect(right.x0).toBeCloseTo(0.72);
-    expect(right.x1).toBeLessThanOrEqual(1);
+    expect(right.x1).toBeGreaterThan(1);
   });
 });
 
@@ -225,13 +279,14 @@ describe('set-piece clipping', () => {
     }
   });
 
-  it('keeps every band clear of the keep-out, and every piece centre inside its band, at 4:3, 16:9 and 21:9', () => {
+  it('keeps every band clear of the keep-out, and every small piece centre inside its band, at 4:3, 16:9 and 21:9', () => {
     for (const galaxy of GALAXIES) {
       const spec = backdropSpecFor(galaxy, null);
       const band = paintBandFor(spec, spec.boss);
       expect(clearsKeepOut(band), `${galaxy.id} band`).toBe(true);
+      if (spec.boss) continue;
       for (const aspect of ASPECTS) {
-        const box = pieceBox(spec, aspect, spec.boss);
+        const box = pieceBox(spec, aspect, false);
         expect(containsPoint(band, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2), `${galaxy.id} at aspect ${aspect.toFixed(2)}`).toBe(true);
       }
     }
@@ -248,5 +303,83 @@ describe('set-piece clipping', () => {
     const [centre, inBand] = calls.filter((call) => call[0] === 'arc');
     expect(within(arcBox(centre as Call, field), band)).toBe(false);
     expect(within(arcBox(inBand as Call, field), band)).toBe(true);
+  });
+});
+
+/** The box a recorded shape covers, as fractions of the field. */
+function shapeBox(shape: Shape, field: Field): FractionBox {
+  return {
+    x0: (shape.cx - shape.hx) / field.width,
+    y0: (shape.cy - shape.hy) / field.height,
+    x1: (shape.cx + shape.hx) / field.width,
+    y1: (shape.cy + shape.hy) / field.height,
+  };
+}
+
+/** A piece's band with its outer side open for a boss: the field's edge is the only limit there, and the canvas clips it. */
+function paintableBand(spec: BackdropSpec): FractionBox {
+  const band = paintBandFor(spec, spec.boss);
+  if (!spec.boss) return band;
+  return spec.side === 'left' ? { ...band, x0: -Infinity } : { ...band, x1: Infinity };
+}
+
+describe('painted reach', () => {
+  it('lands every painted circle and ellipse inside its band, for every galaxy at 4:3, 16:9 and 21:9', () => {
+    const palette = paletteFor('ionReach');
+    for (const galaxy of GALAXIES) {
+      const spec = backdropSpecFor(galaxy, null);
+      for (const field of FIELDS) {
+        const band = paintableBand(spec);
+        for (const shape of paintedBy(spec, palette, field).shapes) {
+          expect(within(shapeBox(shape, field), band), `${galaxy.id} at ${String(field.width)}x${String(field.height)}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('sets each REACH to at least the farthest any of its painter\'s shapes lands from the piece centre, in units of r', () => {
+    const palette = paletteFor('ionReach');
+    for (const piece of PIECES) {
+      let worst = 0;
+      for (const boss of [false, true]) {
+        for (const field of FIELDS) {
+          const aspect = field.width / field.height;
+          for (let seed = 1; seed <= 40; seed++) {
+            const side: BackdropSpec['side'] = seed % 2 === 0 ? 'left' : 'right';
+            const spec: BackdropSpec = { ...specFor(piece, boss, seed), slot: seed % PIECE_SLOTS, side };
+            const fit = pieceFit(spec, aspect, boss);
+            const cx = fit.cx * field.width;
+            const cy = fit.cy * field.height;
+            const unit = fit.r * field.height;
+            for (const shape of paintedBy(spec, palette, field).shapes) {
+              const reach = Math.max(Math.abs(shape.cx - cx) + shape.hx, Math.abs(shape.cy - cy) + shape.hy) / unit;
+              worst = Math.max(worst, reach);
+            }
+          }
+        }
+      }
+      expect(REACH[piece], piece).toBeGreaterThanOrEqual(worst - EPS);
+    }
+  });
+
+  it('places every piece\'s painted box inside its band, so the fit holds for every galaxy and aspect', () => {
+    for (const galaxy of GALAXIES) {
+      const spec = backdropSpecFor(galaxy, null);
+      for (const aspect of ASPECTS) {
+        expect(within(pieceBox(spec, aspect, spec.boss), paintableBand(spec)), `${galaxy.id} at ${aspect.toFixed(2)}`).toBe(true);
+      }
+    }
+  });
+
+  it('shrinks r to the closed formula when a piece\'s reach would leave its band, and keeps the nominal r when it fits', () => {
+    const spec: BackdropSpec = { seed: 1, piece: 'cometTail', boss: false, side: 'left', slot: 0 };
+    const band = paintBandFor(spec, false);
+    for (const aspect of ASPECTS) {
+      const reach = REACH.cometTail;
+      const expected = Math.min(0.1, ((band.x1 - band.x0) * aspect) / (2 * reach), (band.y1 - band.y0) / (2 * reach));
+      expect(pieceFit(spec, aspect, false).r, `aspect ${aspect.toFixed(2)}`).toBeCloseTo(expected, 12);
+    }
+    expect(pieceFit(spec, ASPECTS[2] as number, false).r).toBeCloseTo(0.1, 12);
+    expect(pieceFit(spec, ASPECTS[0] as number, false).r).toBeLessThan(0.1);
   });
 });
