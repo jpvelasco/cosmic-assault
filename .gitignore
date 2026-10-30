@@ -30,3 +30,4 @@ game/dist/
 game/dist-e2e/
 game/test-results/
 game/playwright-report/
+game/backdrop-sheet/

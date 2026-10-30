@@ -22,6 +22,7 @@
     "check:no-bridge": "node scripts/check-no-bridge.mjs",
     "check:pages": "node scripts/check-pages.mjs",
     "check:workflow": "node scripts/check-workflow.mjs",
+    "backdrop-sheet": "node scripts/backdrop-sheet.mjs",
     "find-seeds": "node scripts/find-seeds.mjs",
     "icons": "node scripts/render-icons.mjs",
     "readme-shots": "node scripts/readme-shots.mjs"
