@@ -54,6 +54,7 @@ class RecordingContext {
   readonly quadraticCurveTo = (): void => undefined;
   readonly stroke = (): void => undefined;
   readonly fill = (): void => undefined;
+  readonly rect = (): void => undefined;
   readonly clip = (): void => undefined;
 
   fillRect(...args: number[]): void {

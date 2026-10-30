@@ -33,8 +33,11 @@ export const KEEP_OUT: readonly FractionBox[] = [
   { x0: 0.7, y0: 0, x1: 1, y1: 0.12 },
 ];
 
-const BAND_LEFT: readonly [number, number] = [0.06, 0.28];
-const BAND_RIGHT: readonly [number, number] = [0.72, 0.94];
+/** The inner edges of the side bands: the centre keep-out's left and right sides. */
+const INNER_LEFT = 0.28;
+const INNER_RIGHT = 0.72;
+const BAND_LEFT: readonly [number, number] = [0.06, INNER_LEFT];
+const BAND_RIGHT: readonly [number, number] = [INNER_RIGHT, 0.94];
 const BAND_TOP = 0.2;
 const BAND_BOTTOM = 0.85;
 const TOP_CORNER_BOTTOM = 0.12;
@@ -65,6 +68,16 @@ export function pieceBox(spec: BackdropSpec, aspect: number, boss: boolean): Fra
     cy = Math.max(cy, TOP_CORNER_BOTTOM + diameter / 2);
   }
   return { x0: cx - width / 2, y0: cy - diameter / 2, x1: cx + width / 2, y1: cy + diameter / 2 };
+}
+
+/**
+ * The region a piece may paint in, as fractions of the field: its side's strip from the outer edge to the inner edge
+ * (x 0 to 0.28 on the left, 0.72 to 1 on the right), y 0.2 to 0.85. A boss piece runs down to the bottom edge. Every
+ * strip lies outside the centre keep-out and the top corners, so `KEEP_OUT` holds for any painter that stays inside it.
+ */
+export function paintBandFor(spec: BackdropSpec, boss: boolean): FractionBox {
+  const x = spec.side === 'left' ? { x0: 0, x1: INNER_LEFT } : { x0: INNER_RIGHT, x1: 1 };
+  return { ...x, y0: BAND_TOP, y1: boss ? 1 : BAND_BOTTOM };
 }
 
 /** The painters' colour source: the palette's nebula, accent and sky stops only, never the ship, the hostile or the shot. */
@@ -227,7 +240,8 @@ const PIECES: Record<PieceId, Painter> = {
 };
 
 /**
- * Paints `spec`'s set-piece into the sky: its box from `pieceBox`, its painter from `PIECES`. `none` paints nothing. The
+ * Paints `spec`'s set-piece into the sky: its box from `pieceBox`, its painter from `PIECES`, all clipped to its paint
+ * band so a painter's glow, ring or tail that overshoots its box never reaches the centre. `none` paints nothing. The
  * `rng` is the caller's piece stream, so the same spec always draws the same piece.
  */
 export function drawPiece(ctx: CanvasRenderingContext2D, spec: BackdropSpec, palette: Palette, field: Field, rng: Rng): void {
@@ -238,5 +252,11 @@ export function drawPiece(ctx: CanvasRenderingContext2D, spec: BackdropSpec, pal
     cy: ((box.y0 + box.y1) / 2) * field.height,
     r: ((box.y1 - box.y0) * field.height) / 2,
   };
+  const band = paintBandFor(spec, spec.boss);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(band.x0 * field.width, band.y0 * field.height, (band.x1 - band.x0) * field.width, (band.y1 - band.y0) * field.height);
+  ctx.clip();
   PIECES[spec.piece](ctx, shape, palette, rng, spec.boss);
+  ctx.restore();
 }

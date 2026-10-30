@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GALAXIES } from '../../src/content/galaxies';
 import { type BackdropSpec, type PieceId, backdropSpecFor } from '../../src/render/backdropSpec';
-import { KEEP_OUT, PIECE_ALPHA_MAX, clearsKeepOut, drawPiece, pieceBox } from '../../src/render/backdropPieces';
+import { type FractionBox, KEEP_OUT, PIECE_ALPHA_MAX, clearsKeepOut, drawPiece, paintBandFor, pieceBox } from '../../src/render/backdropPieces';
 import { hexToRgb } from '../../src/render/color';
 import { PALETTE_IDS, paletteFor, type Palette } from '../../src/render/palette';
 import type { Field } from '../../src/sim/field';
@@ -171,5 +171,82 @@ describe('piece placement', () => {
     const right = pieceBox({ seed: 1, piece: 'eclipse', boss: true, side: 'right', slot: 3 }, ASPECTS[2] as number, true);
     expect(right.x0).toBeCloseTo(0.72);
     expect(right.x1).toBeLessThanOrEqual(1);
+  });
+});
+
+/** A rectangle in field units, as `ctx.rect` takes it. */
+type Rect = readonly [number, number, number, number];
+
+/** The field-unit rectangle a fraction box covers. */
+function fieldRect(box: FractionBox, field: Field): Rect {
+  return [box.x0 * field.width, box.y0 * field.height, (box.x1 - box.x0) * field.width, (box.y1 - box.y0) * field.height];
+}
+
+const EPS = 1e-9;
+
+/** Whether `box` lies inside `band`, with a tolerance for the float error of computed edges. */
+function within(box: FractionBox, band: FractionBox): boolean {
+  return box.x0 >= band.x0 - EPS && box.x1 <= band.x1 + EPS && box.y0 >= band.y0 - EPS && box.y1 <= band.y1 + EPS;
+}
+
+/** Whether the point (x, y), in fractions of the field, lies inside `band`. */
+function containsPoint(band: FractionBox, x: number, y: number): boolean {
+  return x >= band.x0 - EPS && x <= band.x1 + EPS && y >= band.y0 - EPS && y <= band.y1 + EPS;
+}
+
+/** The fraction box of a recorded `arc` call's circle (the centre and radius, as the painter passed them). */
+function arcBox(call: Call, field: Field): FractionBox {
+  const [, x, y, r] = call as [string, number, number, number];
+  return { x0: (x - r) / field.width, y0: (y - r) / field.height, x1: (x + r) / field.width, y1: (y + r) / field.height };
+}
+
+describe('set-piece clipping', () => {
+  it('bands each side: from the outer edge to the centre keep-out, down to y 0.85, boss pieces to the bottom edge', () => {
+    const left = { ...specFor('moon', false), side: 'left' as const };
+    expect(paintBandFor(left, false)).toEqual({ x0: 0, y0: 0.2, x1: 0.28, y1: 0.85 });
+    expect(paintBandFor(left, true)).toEqual({ x0: 0, y0: 0.2, x1: 0.28, y1: 1 });
+    expect(paintBandFor(specFor('moon', false), false)).toEqual({ x0: 0.72, y0: 0.2, x1: 1, y1: 0.85 });
+  });
+
+  it('clips each piece to its band once, before it paints, inside one save and restore', () => {
+    const palette = paletteFor('ionReach');
+    for (const field of FIELDS) {
+      for (const galaxy of GALAXIES) {
+        const spec = backdropSpecFor(galaxy, null);
+        const calls = drawnBy(spec, palette, field);
+        const band = fieldRect(paintBandFor(spec, spec.boss), field);
+        expect(calls.slice(0, 2), galaxy.id).toEqual([['save'], ['beginPath']]);
+        const rect = calls[2] as Call;
+        expect(rect[0], galaxy.id).toBe('rect');
+        expect(rect.slice(1), galaxy.id).toEqual(band);
+        expect(calls[3], galaxy.id).toEqual(['clip']);
+        expect(calls.at(-1), galaxy.id).toEqual(['restore']);
+      }
+    }
+  });
+
+  it('keeps every band clear of the keep-out, and every piece centre inside its band, at 4:3, 16:9 and 21:9', () => {
+    for (const galaxy of GALAXIES) {
+      const spec = backdropSpecFor(galaxy, null);
+      const band = paintBandFor(spec, spec.boss);
+      expect(clearsKeepOut(band), `${galaxy.id} band`).toBe(true);
+      for (const aspect of ASPECTS) {
+        const box = pieceBox(spec, aspect, spec.boss);
+        expect(containsPoint(band, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2), `${galaxy.id} at aspect ${aspect.toFixed(2)}`).toBe(true);
+      }
+    }
+  });
+
+  it('flags a drawn circle that lies outside its band, and passes one inside it', () => {
+    const field = FIELDS[1] as Field;
+    const spec = specFor('moon', false);
+    const band = paintBandFor(spec, false);
+    const { ctx, calls } = recordingContext();
+    ctx.beginPath();
+    ctx.arc(field.width / 2, field.height / 2, 20, 0, Math.PI * 2);
+    ctx.arc(field.width * 0.9, field.height * 0.5, 20, 0, Math.PI * 2);
+    const [centre, inBand] = calls.filter((call) => call[0] === 'arc');
+    expect(within(arcBox(centre as Call, field), band)).toBe(false);
+    expect(within(arcBox(inBand as Call, field), band)).toBe(true);
   });
 });
