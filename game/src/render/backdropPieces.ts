@@ -38,9 +38,13 @@ const INNER_LEFT = 0.28;
 const INNER_RIGHT = 0.72;
 const BAND_LEFT: readonly [number, number] = [0.06, INNER_LEFT];
 const BAND_RIGHT: readonly [number, number] = [INNER_RIGHT, 0.94];
-const BAND_TOP = 0.2;
-const BAND_BOTTOM = 0.85;
 const TOP_CORNER_BOTTOM = 0.12;
+/** The rows a small piece is centred in, in the side bands (see `pieceBox`). */
+const ROW_TOP = 0.2;
+const ROW_BOTTOM = 0.85;
+/** The region a painter may paint in (see `paintBandFor`): wider than the rows, so no painter is cut by its row. */
+const BAND_TOP = TOP_CORNER_BOTTOM;
+const BAND_BOTTOM = 0.95;
 /** A small piece's diameter in field heights; its width is the same in field units, so it stays round at any aspect. */
 const SMALL_DIAMETER = 0.2;
 const BOSS_SCALE = 2.2;
@@ -60,9 +64,9 @@ export function pieceBox(spec: BackdropSpec, aspect: number, boss: boolean): Fra
   const [left, right] = spec.side === 'left' ? BAND_LEFT : BAND_RIGHT;
   const diameter = SMALL_DIAMETER * (boss ? BOSS_SCALE : 1);
   const width = diameter / aspect;
-  const row = (BAND_BOTTOM - BAND_TOP) / PIECE_SLOTS;
+  const row = (ROW_BOTTOM - ROW_TOP) / PIECE_SLOTS;
   let cx = (left + right) / 2;
-  let cy = BAND_TOP + (spec.slot + 0.5) * row;
+  let cy = ROW_TOP + (spec.slot + 0.5) * row;
   if (boss) {
     cx = spec.side === 'left' ? right - width / 2 : left + width / 2;
     cy = Math.max(cy, TOP_CORNER_BOTTOM + diameter / 2);
@@ -72,7 +76,7 @@ export function pieceBox(spec: BackdropSpec, aspect: number, boss: boolean): Fra
 
 /**
  * The region a piece may paint in, as fractions of the field: its side's strip from the outer edge to the inner edge
- * (x 0 to 0.28 on the left, 0.72 to 1 on the right), y 0.2 to 0.85. A boss piece runs down to the bottom edge. Every
+ * (x 0 to 0.28 on the left, 0.72 to 1 on the right), y 0.12 to 0.95: down to the top corners' edge and nearly to the bottom. A boss piece runs down to the bottom edge. Every
  * strip lies outside the centre keep-out and the top corners, so `KEEP_OUT` holds for any painter that stays inside it.
  */
 export function paintBandFor(spec: BackdropSpec, boss: boolean): FractionBox {

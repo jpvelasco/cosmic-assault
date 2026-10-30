@@ -201,11 +201,11 @@ function arcBox(call: Call, field: Field): FractionBox {
 }
 
 describe('set-piece clipping', () => {
-  it('bands each side: from the outer edge to the centre keep-out, down to y 0.85, boss pieces to the bottom edge', () => {
+  it('bands each side: outer edge to the centre keep-out, y 0.12 to 0.95, boss pieces to the bottom edge', () => {
     const left = { ...specFor('moon', false), side: 'left' as const };
-    expect(paintBandFor(left, false)).toEqual({ x0: 0, y0: 0.2, x1: 0.28, y1: 0.85 });
-    expect(paintBandFor(left, true)).toEqual({ x0: 0, y0: 0.2, x1: 0.28, y1: 1 });
-    expect(paintBandFor(specFor('moon', false), false)).toEqual({ x0: 0.72, y0: 0.2, x1: 1, y1: 0.85 });
+    expect(paintBandFor(left, false)).toEqual({ x0: 0, y0: 0.12, x1: 0.28, y1: 0.95 });
+    expect(paintBandFor(left, true)).toEqual({ x0: 0, y0: 0.12, x1: 0.28, y1: 1 });
+    expect(paintBandFor(specFor('moon', false), false)).toEqual({ x0: 0.72, y0: 0.12, x1: 1, y1: 0.95 });
   });
 
   it('clips each piece to its band once, before it paints, inside one save and restore', () => {
