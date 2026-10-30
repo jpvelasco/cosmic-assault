@@ -8,6 +8,7 @@ import { createRng, deriveSeed } from '../sim/rng';
 import { hasEnded, type World } from '../sim/world';
 import { get2dContext } from './context';
 import { createEffects, type Effects } from './effects';
+import { RENDER_SEED } from './renderSeed';
 import { createFieldPen } from './fieldPen';
 import { createBoltPass } from './boltPass';
 import { createFoePass } from './foePass';
@@ -98,11 +99,6 @@ export interface RendererParts {
   readonly particles?: ParticlePool;
 }
 
-/**
- * Render-only randomness; the sim never reads it. Each consumer derives its own stream, so the
- * sky dust, stars, flame flicker and bursts never line up with one another.
- */
-const RENDER_SEED = 0x57a7f1e1;
 const BLINK_HZ = 10;
 
 // Glow looks from the mockup's renderGlossy.
