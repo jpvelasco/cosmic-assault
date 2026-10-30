@@ -1,6 +1,7 @@
 import type { Field } from '../sim/field';
 import { createRng, deriveSeed, type Rng } from '../sim/rng';
 import { isLegacySky, type BackdropSpec } from './backdropSpec';
+import { drawPiece } from './backdropPieces';
 import { rgba } from './color';
 import { get2dContext } from './context';
 import type { Palette } from './palette';
@@ -104,6 +105,8 @@ export function bakeSky(field: Field, pixelsPerUnit: number, palette: Palette, s
     ctx.fillStyle = glow;
     ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
   }
+
+  if (!isLegacySky(spec)) drawPiece(ctx, spec, palette, field, createRng(deriveSeed(spec.seed, 'piece')));
 
   const rng = createRng(spec.seed);
   ctx.fillStyle = palette.star;

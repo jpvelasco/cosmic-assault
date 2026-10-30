@@ -40,6 +40,22 @@ class RecordingContext {
     this.calls.push(['setTransform', ...args]);
   }
 
+  /** The path and state calls the set-piece painters make; the sky's checks do not inspect them. */
+  readonly save = (): void => undefined;
+  readonly restore = (): void => undefined;
+  readonly translate = (): void => undefined;
+  readonly rotate = (): void => undefined;
+  readonly scale = (): void => undefined;
+  readonly beginPath = (): void => undefined;
+  readonly arc = (): void => undefined;
+  readonly ellipse = (): void => undefined;
+  readonly moveTo = (): void => undefined;
+  readonly lineTo = (): void => undefined;
+  readonly quadraticCurveTo = (): void => undefined;
+  readonly stroke = (): void => undefined;
+  readonly fill = (): void => undefined;
+  readonly clip = (): void => undefined;
+
   fillRect(...args: number[]): void {
     const style = typeof this.fillStyle === 'string' ? this.fillStyle : this.gradients.indexOf(this.fillStyle);
     this.calls.push(['fillRect', style, this.globalAlpha, ...args]);
@@ -61,11 +77,14 @@ function bake(palette: Palette, spec: BackdropSpec): RecordingContext {
   return ctx;
 }
 
-/** The sky's own gradient (made first) and the glows' (made after it), in the order a bake draws them. */
-function skyAndGlows(ctx: RecordingContext): { sky: Gradient; glows: Gradient[] } {
-  const [sky, ...glows] = ctx.gradients;
+/**
+ * The sky's own gradient (made first) and the palette's glows (made next, in order). Set pieces are drawn after the glows,
+ * so the gradients they make come after these and are left out.
+ */
+function skyAndGlows(ctx: RecordingContext, palette: Palette): { sky: Gradient; glows: Gradient[] } {
+  const [sky, ...rest] = ctx.gradients;
   if (sky === undefined) throw new Error('the sky made no gradient');
-  return { sky, glows };
+  return { sky, glows: rest.slice(0, palette.nebula.length) };
 }
 
 /** The sky as it was painted before 2.0.1, copied from that code: the legacy spec must reproduce its calls exactly. */
@@ -125,7 +144,7 @@ describe('sky variation', () => {
   it('never changes the sky stops, and keeps every glow in its palette colour', () => {
     for (const { galaxy, spec } of [...SAMPLE, { galaxy: DAILY, spec: DAILY_SPEC }]) {
       const palette = paletteFor(galaxy.palette);
-      const { sky, glows } = skyAndGlows(bake(palette, spec));
+      const { sky, glows } = skyAndGlows(bake(palette, spec), palette);
       expect(sky.stops.map(([, color]) => color), galaxy.id).toEqual([...palette.skyStops]);
       expect(glows, galaxy.id).toHaveLength(palette.nebula.length);
       const glowRgbs = palette.nebula.map((glow) => hexToRgb(glow.color).join(','));
@@ -137,7 +156,7 @@ describe('sky variation', () => {
 
   it('keeps every glow centre on the field, inside the clamp', () => {
     for (const { galaxy, spec } of SAMPLE) {
-      const { glows } = skyAndGlows(bake(paletteFor(galaxy.palette), spec));
+      const { glows } = skyAndGlows(bake(paletteFor(galaxy.palette), spec), paletteFor(galaxy.palette));
       for (const glow of glows) {
         const [cx = Number.NaN, cy = Number.NaN] = glow.args;
         expect(cx / FIELD.width, galaxy.id).toBeGreaterThanOrEqual(0.05);
@@ -153,7 +172,7 @@ describe('sky variation', () => {
     const second = SAMPLE[1];
     if (first === undefined || second === undefined) throw new Error('sample too small');
     const geometry = ({ galaxy, spec }: (typeof SAMPLE)[number]) => {
-      const { sky, glows } = skyAndGlows(bake(paletteFor(galaxy.palette), spec));
+      const { sky, glows } = skyAndGlows(bake(paletteFor(galaxy.palette), spec), paletteFor(galaxy.palette));
       return { sky: sky.args, glows: glows.map((glow) => glow.args) };
     };
     const a = geometry(first);
@@ -171,9 +190,9 @@ describe('sky variation', () => {
   });
 
   it('turns the sky gradient off the field diagonal, but never for the legacy sky', () => {
-    const { sky: legacy } = skyAndGlows(bake(DRIFT, backdropSpecFor(null, null)));
+    const { sky: legacy } = skyAndGlows(bake(DRIFT, backdropSpecFor(null, null)), DRIFT);
     expect(legacy.args).toEqual([0, 0, FIELD.width, FIELD.height]);
-    const { sky: varied } = skyAndGlows(bake(DRIFT, backdropSpecFor(galaxyById('1-1'), null)));
+    const { sky: varied } = skyAndGlows(bake(DRIFT, backdropSpecFor(galaxyById('1-1'), null)), DRIFT);
     expect(varied.args).not.toEqual([0, 0, FIELD.width, FIELD.height]);
   });
 
